@@ -9,14 +9,14 @@ import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
-import { headerBandEnd, moveAddr, type GridMove } from "../../lib/controlledListGrid";
+import { commitAndReload, gestureFromKey, gestureSavesEdit, headerBandEnd, moveAddr, moveTab, placedCells, type EditGesture, type GridMove } from "../../lib/controlledListGrid";
+import { useAuthStore } from "../../store/authStore";
+import { useSiteStore } from "../../store/siteStore";
 import { isLocationLine } from "../../lib/folderPath";
 import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
 import {
-  columnIndex,
   columnLetter,
-  parseAddr,
   listOptions,
   parseEdited,
   toneFill,
@@ -91,40 +91,6 @@ function dateInputValue(value: string | number | null | undefined): string {
   return "";
 }
 
-function mergeOrigin(merges: string[]): Map<string, { cols: number; rows: number }> {
-  const origins = new Map<string, { cols: number; rows: number }>();
-  for (const merge of merges) {
-    const [start, end] = merge.split(":");
-    if (!start || !end) continue;
-    const a = parseAddr(start);
-    const b = parseAddr(end);
-    origins.set(start, {
-      cols: Math.max(1, columnIndex(b.col) - columnIndex(a.col) + 1),
-      rows: Math.max(1, b.row - a.row + 1),
-    });
-  }
-  return origins;
-}
-
-function coveredCells(merges: string[]): Set<string> {
-  const covered = new Set<string>();
-  for (const merge of merges) {
-    const [start, end] = merge.split(":");
-    if (!start || !end) continue;
-    const a = parseAddr(start);
-    const b = parseAddr(end);
-    const c1 = columnIndex(a.col);
-    const c2 = columnIndex(b.col);
-    for (let row = a.row; row <= b.row; row += 1) {
-      for (let col = c1; col <= c2; col += 1) {
-        const addr = `${columnLetter(col)}${row}`;
-        if (addr !== start) covered.add(addr);
-      }
-    }
-  }
-  return covered;
-}
-
 function SheetGrid({
   sheet,
   listKey,
@@ -142,6 +108,7 @@ function SheetGrid({
   onPick,
   onChange,
   onRename,
+  onLeave,
 }: {
   sheet: StoredSheet;
   listKey: ControlledListKey;
@@ -159,92 +126,83 @@ function SheetGrid({
   onPick: (row: number, addr: string, extend: boolean) => void;
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
+  onLeave: (target: EventTarget | null, gesture?: EditGesture) => void;
 }) {
-  const origins = mergeOrigin(sheet.merges);
-  const covered = coveredCells(sheet.merges);
   const long = !band && sheet.maxRow > 200;
   const headerRow = Math.max(1, dataStart - 1);
-  const cells = [];
-  for (let row = fromRow; row <= toRow; row += 1) {
-    for (let col = 1; col <= sheet.maxCol; col += 1) {
-      const addr = `${columnLetter(col)}${row}`;
-      if (covered.has(addr)) continue;
-      const cell = sheet.cells[addr];
-      const span = origins.get(addr);
-      const shown = shownCell(sheet, addr);
-      const fill = toneFill(sheet, addr, shown.text);
-      const legacyFill = fill === "FFFF0000" || fill === "FFB8DCAB";
-      const toneHex = fill && !legacyFill ? `#${fill.slice(-6)}` : undefined;
-      const toneInk = toneHex ? inkOnFill(toneHex) : undefined;
-      const formula = cell?.kind === "formula" || Boolean(cell?.f);
-      const columnTitle = row === headerRow;
-      const editable = canEdit && !formula && (columnTitle ? canEditStructure : true);
-      const choices = editable && !columnTitle ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= dataStart ? statuses : listOptions(sheet, addr)) : null;
-      const date = Boolean(editable && !columnTitle && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
-      const rowSpan = Math.min(span?.rows ?? 1, toRow - row + 1);
-      cells.push(
-        <div
-          key={addr}
-          className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
-          data-addr={addr}
-          data-header={row < dataStart ? "true" : undefined}
-          data-active={activeAddr === addr ? "true" : undefined}
-          data-row-selected={selectedRows.includes(row) ? "true" : undefined}
-          data-fill={fill === "FFFF0000" ? "open" : fill === "FFB8DCAB" ? "closed" : fill ? "tone" : undefined}
-          data-size={cell?.size ?? undefined}
-          title={cell?.comment ?? (formula ? "Calculated from a formula" : undefined)}
-          onMouseDown={(event) => onPick(row, addr, event.shiftKey)}
-          style={{
-            ...(band
-              ? {
-                  flex: (span?.cols ?? 1) >= sheet.maxCol ? "1 1 100%" : `${Math.max(span?.cols ?? 1, 1)} 1 11rem`,
-                  minWidth: (span?.cols ?? 1) >= sheet.maxCol ? "100%" : "11rem",
-                  maxWidth: "100%",
-                }
-              : {
-                  gridColumn: `${col} / span ${span?.cols ?? 1}`,
-                  gridRow: `${row - fromRow + 1} / span ${rowSpan}`,
-                }),
-            fontFamily: cell?.font,
-            fontWeight: cell?.bold ? 700 : undefined,
-            fontSize: cell?.size ? `${cell.size}px` : "11px",
-            color: toneInk ?? (cell?.color ? `#${cell.color.slice(-6)}` : undefined),
-            ["--cell-fill" as string]: toneHex,
-            ["--cell-ink" as string]: toneInk,
-            justifyContent: cell?.align === "center" ? "center" : cell?.align === "right" ? "flex-end" : "flex-start",
-            textAlign: cell?.align === "center" ? "center" : cell?.align === "right" ? "right" : "left",
-            whiteSpace: band || cell?.wrap ? "pre-wrap" : "nowrap",
-          }}
-        >
-          {formula ? (
-            <span className="controlled-list-formula">{shown.text}</span>
-          ) : (
-            <CellBody
-              addr={addr}
-              column={columnLetter(col)}
-              cell={cell}
-              text={shown.text}
-              editable={editable}
-              columnTitle={columnTitle}
-              choices={choices}
-              date={date}
-              wrap={band}
-              quiet={long && editing !== addr}
-              onOpen={() => onOpen(addr)}
-              onChange={onChange}
-              onRename={onRename}
-            />
-          )}
-        </div>,
-      );
-    }
-  }
+  const cells = placedCells(sheet.merges, sheet.maxCol, fromRow, toRow).map((place) => {
+    const { addr, col, row, cols, rows } = place;
+    const cell = sheet.cells[addr];
+    const shown = shownCell(sheet, addr);
+    const fill = toneFill(sheet, addr, shown.text);
+    const legacyFill = fill === "FFFF0000" || fill === "FFB8DCAB";
+    const toneHex = fill && !legacyFill ? `#${fill.slice(-6)}` : undefined;
+    const toneInk = toneHex ? inkOnFill(toneHex) : undefined;
+    const formula = cell?.kind === "formula" || Boolean(cell?.f);
+    const columnTitle = row === headerRow;
+    const editable = canEdit && !formula && (columnTitle ? canEditStructure : true);
+    const choices = editable && !columnTitle ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= dataStart ? statuses : listOptions(sheet, addr)) : null;
+    const date = Boolean(editable && !columnTitle && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
+    return (
+      <div
+        key={addr}
+        className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
+        data-addr={addr}
+        data-header={row < dataStart ? "true" : undefined}
+        data-active={activeAddr === addr ? "true" : undefined}
+        data-row-selected={selectedRows.includes(row) ? "true" : undefined}
+        data-fill={fill === "FFFF0000" ? "open" : fill === "FFB8DCAB" ? "closed" : fill ? "tone" : undefined}
+        data-size={cell?.size ?? undefined}
+        title={cell?.comment ?? (formula ? "Calculated from a formula" : undefined)}
+        onMouseDown={(event) => {
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && !event.currentTarget.contains(active)) onLeave(active, "click");
+          onPick(row, addr, event.shiftKey);
+        }}
+        style={{
+          gridColumn: `${col} / span ${cols}`,
+          gridRow: `${row - fromRow + 1} / span ${rows}`,
+          fontFamily: cell?.font,
+          fontWeight: cell?.bold ? 700 : undefined,
+          fontSize: cell?.size ? `${cell.size}px` : "11px",
+          color: toneInk ?? (cell?.color ? `#${cell.color.slice(-6)}` : undefined),
+          ["--cell-fill" as string]: toneHex,
+          ["--cell-ink" as string]: toneInk,
+          justifyContent: cell?.align === "center" ? "center" : cell?.align === "right" ? "flex-end" : "flex-start",
+          textAlign: cell?.align === "center" ? "center" : cell?.align === "right" ? "right" : "left",
+          whiteSpace: band || cell?.wrap ? "pre-wrap" : "nowrap",
+        }}
+      >
+        {formula ? (
+          <span className="controlled-list-formula">{shown.text}</span>
+        ) : (
+          <CellBody
+            addr={addr}
+            column={columnLetter(col)}
+            cell={cell}
+            text={shown.text}
+            editable={editable}
+            columnTitle={columnTitle}
+            choices={choices}
+            date={date}
+            wrap={band}
+            quiet={long && editing !== addr}
+            onOpen={() => onOpen(addr)}
+            onChange={onChange}
+            onRename={onRename}
+            onLeave={onLeave}
+          />
+        )}
+      </div>
+    );
+  });
   const rowCount = Math.max(0, toRow - fromRow + 1);
   return (
     <div
       className={band ? "controlled-list-sheet controlled-list-header-band" : long ? "controlled-list-sheet controlled-list-long" : "controlled-list-sheet"}
       data-testid={band ? `controlled-list-header-${sheet.name.trim()}` : `controlled-list-${sheet.name.trim()}`}
       data-paste-grid=""
+      data-sheet={sheet.name}
       role="grid"
       aria-label={band ? `${sheet.name.trim()} header` : sheet.name.trim()}
       style={{
@@ -275,6 +233,7 @@ function CellBody({
   onOpen,
   onChange,
   onRename,
+  onLeave,
 }: {
   addr: string;
   column: string;
@@ -289,6 +248,7 @@ function CellBody({
   onOpen: () => void;
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
+  onLeave: (target: EventTarget | null) => void;
 }) {
   const stored = typeof cell?.v === "string" || typeof cell?.v === "number" ? String(cell.v) : "";
   const [draft, setDraft] = useState(columnTitle || (wrap && date) ? (columnTitle ? stored : text) : stored);
@@ -317,15 +277,23 @@ function CellBody({
         <input
           className="controlled-list-editor"
           aria-label={`${addr} column title`}
+          data-column-title="true"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => {
+          onBlur={(event) => {
+            onLeave(event.currentTarget);
             const next = draft.trim();
             if (next && next !== stored) onRename(column, next);
           }}
         />
       ) : choices ? (
-        <select className="controlled-list-editor" aria-label={addr} value={current === "" ? "" : String(current)} onChange={(event) => onChange(addr, event.target.value || null)}>
+        <select
+          className="controlled-list-editor"
+          aria-label={addr}
+          value={current === "" ? "" : String(current)}
+          onChange={(event) => onChange(addr, event.target.value || null)}
+          onBlur={(event) => onLeave(event.currentTarget)}
+        >
           <option value="" />
           {options.map((option) => (
             <option key={option} value={option}>
@@ -334,7 +302,15 @@ function CellBody({
           ))}
         </select>
       ) : date && !wrap ? (
-        <input className="controlled-list-editor" aria-label={addr} type="date" data-value-kind="date" value={dateInputValue(cell?.v)} onChange={(event) => onChange(addr, event.target.value || null)} />
+        <input
+          className="controlled-list-editor"
+          aria-label={addr}
+          type="date"
+          data-value-kind="date"
+          value={dateInputValue(cell?.v)}
+          onChange={(event) => onChange(addr, event.target.value || null)}
+          onBlur={(event) => onLeave(event.currentTarget)}
+        />
       ) : wrap ? (
         <textarea
           ref={area}
@@ -346,12 +322,7 @@ function CellBody({
             if (date) setDraft(event.target.value);
             else onChange(addr, parseEdited(event.target.value, cell?.nf));
           }}
-          onBlur={() => {
-            if (!date) return;
-            const next = parseEdited(draft, cell?.nf);
-            const previous = cell?.v ?? null;
-            if (next !== previous) onChange(addr, next);
-          }}
+          onBlur={(event) => onLeave(event.currentTarget)}
         />
       ) : (
         <input
@@ -359,6 +330,7 @@ function CellBody({
           aria-label={addr}
           value={current === null ? "" : String(current)}
           onChange={(event) => onChange(addr, parseEdited(event.target.value, cell?.nf))}
+          onBlur={(event) => onLeave(event.currentTarget)}
         />
       )}
     </>
@@ -420,6 +392,9 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const timer = useRef<number | null>(null);
   const saveSeq = useRef(0);
   const viewRef = useRef<ControlledListView | null>(null);
+  const inflightBody = useRef<Array<{ name: string; cells: Record<string, CellPatch> }> | null>(null);
+  const lastCommit = useRef<string | null>(null);
+  const mounted = useRef(true);
   viewRef.current = view;
 
   useEffect(() => {
@@ -428,23 +403,45 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     setSheetName((current) => current || list.data.sheets[0]?.name || "");
   }, [list.data]);
 
-  useEffect(() => {
-    return () => {
-      if (timer.current != null) window.clearTimeout(timer.current);
-    };
-  }, []);
+  function takePending() {
+    const sheets = [...pending.current.entries()].map(([name, cells]) => ({ name, cells: { ...cells } }));
+    pending.current = new Map();
+    return sheets;
+  }
+
+  function sendKeepalive(sheets: Array<{ name: string; cells: Record<string, CellPatch> }>) {
+    if (sheets.length === 0) return;
+    const token = useAuthStore.getState().accessToken;
+    const siteId = useSiteStore.getState().currentSiteId;
+    const base = apiClient.defaults.baseURL ?? "/api";
+    void fetch(`${base}/controlled-lists/${listKey}`, {
+      method: "PUT",
+      keepalive: true,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-AccuQual-Csrf": "1",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(siteId != null ? { "X-AccuQual-Site": String(siteId) } : {}),
+      },
+      body: JSON.stringify({ sheets }),
+    });
+  }
 
   async function flush() {
     const current = viewRef.current;
     if (!current || pending.current.size === 0) return;
     const id = ++saveSeq.current;
-    const sheets = [...pending.current.entries()].map(([name, cells]) => ({ name, cells }));
-    pending.current = new Map();
-    setSaving(true);
-    setSaved(false);
+    const sheets = takePending();
+    inflightBody.current = sheets;
+    if (mounted.current) {
+      setSaving(true);
+      setSaved(false);
+    }
     try {
       const next = (await apiClient.put<ControlledListView>(`/controlled-lists/${listKey}`, { sheets })).data;
-      if (id !== saveSeq.current) return;
+      if (inflightBody.current === sheets) inflightBody.current = null;
+      if (!mounted.current || id !== saveSeq.current) return;
       setView((local) => {
         if (!local || pending.current.size > 0) return local;
         return next;
@@ -452,11 +449,33 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
       setSaved(true);
       void queryClient.setQueryData(["controlled-list", listKey], next);
     } catch (err) {
-      toast.error(errorMessage(err));
+      if (inflightBody.current === sheets) inflightBody.current = null;
+      if (mounted.current) toast.error(errorMessage(err));
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   }
+
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  useEffect(() => {
+    mounted.current = true;
+    function onHide() {
+      const queued = [...pending.current.entries()].map(([name, cells]) => ({ name, cells: { ...cells } }));
+      const sheets = queued.length > 0 ? queued : (inflightBody.current ?? []);
+      if (queued.length > 0) pending.current = new Map();
+      if (timer.current != null) window.clearTimeout(timer.current);
+      sendKeepalive(sheets);
+    }
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener("pagehide", onHide);
+      if (timer.current != null) window.clearTimeout(timer.current);
+      void flushRef.current();
+    };
+  }, [listKey]);
 
   function queue(name: string, addr: string, value: string | number | null) {
     const sheet = pending.current.get(name) ?? {};
@@ -491,6 +510,51 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
       };
     });
     queue(name, addr, value);
+  }
+
+  function flushNow() {
+    if (timer.current != null) window.clearTimeout(timer.current);
+    timer.current = null;
+    void flush();
+  }
+
+  function sameCellValue(prev: string | number | null | undefined, value: string | number | null): boolean {
+    const left = prev == null || prev === "" ? null : prev;
+    const right = value == null || value === "" ? null : value;
+    return left === right;
+  }
+
+  function persistField(target: EventTarget | null, gesture: EditGesture) {
+    if (!gestureSavesEdit(gesture)) return;
+    const field = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement ? target : null;
+    if (field && field.getAttribute("data-column-title") !== "true" && !field.closest(".controlled-list-inactive")) {
+      const addr = field.closest("[data-addr]")?.getAttribute("data-addr");
+      const name = field.closest("[data-sheet]")?.getAttribute("data-sheet");
+      const storedSheet = viewRef.current?.sheets.find((item) => item.name === name);
+      if (addr && storedSheet) {
+        const cell = storedSheet.cells[addr];
+        if (!(cell?.f || cell?.kind === "formula")) {
+          const prev = cell?.v ?? null;
+          const parsed = parseEdited(field.value, cell?.nf);
+          const committed = commitAndReload(
+            { saved: { cells: { [addr]: prev == null || prev === "" ? null : prev } }, pending: {}, draft: { addr, value: parsed } },
+            gesture,
+          );
+          const next = committed.cells[addr] ?? null;
+          const signature = `${storedSheet.name}:${addr}:${String(next)}`;
+          if (lastCommit.current !== signature) {
+            lastCommit.current = signature;
+            // Keydown and the blur it causes both read the field. Drop the
+            // guard after this turn so a later Tab of the same value still saves.
+            queueMicrotask(() => {
+              if (lastCommit.current === signature) lastCommit.current = null;
+            });
+            if (!sameCellValue(prev, next)) edit(storedSheet.name, addr, next);
+          }
+        }
+      }
+    }
+    flushNow();
   }
 
   function undo() {
@@ -618,16 +682,19 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
       return;
     }
     if (!sheet) return;
-    const key = event.key;
-    if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Enter") return;
-    if (!leaveField(event.target, key)) return;
+    const gesture = gestureFromKey(event.key, event.shiftKey);
+    if (!gesture) return;
+    const tab = gesture === "Tab" || gesture === "ShiftTab";
+    if (!tab && !leaveField(event.target, event.key)) return;
     const host = event.target instanceof Element ? event.target.closest("[data-addr]") : null;
     const addr = host?.getAttribute("data-addr");
     if (!addr) return;
-    const move: GridMove = key === "Enter" ? (event.shiftKey ? "ArrowUp" : "ArrowDown") : key;
+    persistField(event.target, gesture);
+    const bounds = { minRow: 1, maxRow: sheet.maxRow, maxCol: sheet.maxCol };
+    const move: GridMove = gesture === "Enter" ? (event.shiftKey ? "ArrowUp" : "ArrowDown") : gesture === "Tab" || gesture === "ShiftTab" ? "ArrowRight" : gesture;
     let next = addr;
     for (let step = 0; step < sheet.maxRow + sheet.maxCol; step += 1) {
-      const moved = moveAddr(next, move, { minRow: 1, maxRow: sheet.maxRow, maxCol: sheet.maxCol });
+      const moved = tab ? moveTab(next, gesture === "ShiftTab", bounds) : moveAddr(next, move, bounds);
       if (!moved) return;
       next = moved;
       const field = visibleField(event.currentTarget, next);
@@ -719,6 +786,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               onPick: (row: number, addr: string, extend: boolean) => pick(item.name, row, addr, extend),
               onChange: (addr: string, value: string | number | null) => edit(item.name, addr, value),
               onRename: (col: string, name: string) => void changeColumn({ op: "rename", col, name }),
+              onLeave: (target: EventTarget | null, gesture: EditGesture = "blur") => persistField(target, gesture),
             };
             return (
               <div key={item.name} className={shown ? "mb-2" : "controlled-list-inactive"}>

@@ -217,10 +217,16 @@ export function lockRevision(key: ListKey, sheets: StoredSheet[]): StoredSheet[]
 /** Rows 1–3 are the workbook title block (title, Doc ID / Approved By / Date, status line). */
 const HEADER_DEPTH = 3;
 
-function mergeHitsHeader(merge: string): boolean {
+/** Title rows, plus the blank spacer above the column titles. The column-title row itself is not included. */
+function headerMergeLimit(dataStart: number | undefined): number {
+  if (dataStart == null) return HEADER_DEPTH;
+  return Math.max(HEADER_DEPTH, columnHeaderRow(dataStart) - 1);
+}
+
+function mergeHitsHeader(merge: string, limit: number): boolean {
   const [start, end] = merge.split(":");
   if (!start || !end) return false;
-  return parseAddr(start).row <= HEADER_DEPTH || parseAddr(end).row <= HEADER_DEPTH;
+  return parseAddr(start).row <= limit || parseAddr(end).row <= limit;
 }
 
 /** The row of column titles. Editing it is a structure change, not a cell edit. */
@@ -264,7 +270,7 @@ function headerNeedsSeed(cell: StoredCell | undefined): boolean {
  * A value someone already typed stays, even when it differs from the workbook.
  * Column widths and an added column's wider title merge stay as saved.
  */
-function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): StoredSheet {
+function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined, mergeLimit: number): StoredSheet {
   if (!seed) return sheet;
   let changed = false;
   const cells = { ...sheet.cells };
@@ -276,7 +282,7 @@ function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): 
     changed = true;
   }
   const origins = new Set(sheet.merges.map((merge) => merge.split(":")[0]).filter((addr): addr is string => Boolean(addr)));
-  const missingMerges = seed.merges.filter((merge) => mergeHitsHeader(merge) && !sheet.merges.includes(merge) && !origins.has(merge.split(":")[0] ?? ""));
+  const missingMerges = seed.merges.filter((merge) => mergeHitsHeader(merge, mergeLimit) && !sheet.merges.includes(merge) && !origins.has(merge.split(":")[0] ?? ""));
   const merges = missingMerges.length > 0 ? [...sheet.merges, ...missingMerges] : sheet.merges;
   if (missingMerges.length > 0) changed = true;
   const rowHeights = { ...sheet.rowHeights };
@@ -309,7 +315,7 @@ export function restoreHeaderBlock(key: ListKey, sheets: StoredSheet[]): { sheet
   const seeds = seedBook()[key].sheets;
   let changed = false;
   const next = sheets.map((sheet) => {
-    const restored = restoreSheetHeader(sheet, seeds.find((item) => item.name === sheet.name));
+    const restored = restoreSheetHeader(sheet, seeds.find((item) => item.name === sheet.name), headerMergeLimit(LISTS[key].dataStart[sheet.name]));
     if (restored !== sheet) changed = true;
     return restored;
   });

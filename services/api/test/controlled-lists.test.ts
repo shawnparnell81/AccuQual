@@ -21,6 +21,7 @@ import {
   restoreHeaderBlock,
   revisionLetter,
   rowsDeletedSummary,
+  type ListKey,
 } from "../src/modules/controlled-lists/logic.js";
 import { workbookFileName } from "../src/modules/controlled-lists/workbook.js";
 import parity from "../src/modules/controlled-lists/seeds/formula-parity.json" with { type: "json" };
@@ -288,8 +289,9 @@ describe("living controlled lists", () => {
     expect(ws?.getCell("B5").numFmt).toBe("mm-dd-yy");
     expect(ws?.getColumn(1).width).toBeCloseTo(41.85, 1);
     expect(ws?.pageSetup.orientation).toBe("landscape");
-    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1"]));
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1", "C2:D2", "F2:G2", "A3:H3"]));
     const validationSheet = book.getWorksheet("Validation Report");
+    expect(validationSheet?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:I1", "C2:D2", "F2:G2", "H2:I2", "A3:I3"]));
     expect(validationSheet?.getCell("A1989").value).toBe("VAL-2026-2000");
     expect(validationSheet?.getCell("A1").border?.top?.style).toBe("medium");
     const dropdown = ws?.dataValidations.model["F5:F284"] ?? ws?.dataValidations.model.F5;
@@ -679,7 +681,7 @@ describe("living controlled lists", () => {
     expect(ws?.getColumn(1).width).toBeCloseTo(16.57, 1);
     expect(ws?.getColumn(6).width).toBeCloseTo(40.29, 1);
     expect(ws?.pageSetup.orientation).toBe("landscape");
-    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:K1", "A3:D3", "E3:K3", "A4:K4"]));
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:K1", "E2:F2", "H2:I2", "A3:D3", "E3:K3", "A4:K4"]));
     expect(ws?.getCell("A1").border?.left?.style).toBe("thin");
     expect(ws?.getCell("A1").border?.right?.style).toBeUndefined();
     const rules = JSON.stringify(ws?.conditionalFormattings ?? []);
@@ -831,5 +833,52 @@ describe("living controlled lists", () => {
     expect(ncrFixed.sheets.find((sheet) => sheet.name.endsWith("CAR"))?.cells.B2?.v).toBe("Rev: E");
     expect(LISTS["lst-ncr-001"].revision).toBe("G");
     expect(coalesceRevision("G", "E")).toBe("G");
+  });
+
+  it("restores dropped header merges without changing Rev or an edited name", () => {
+    const keys = Object.keys(LISTS) as ListKey[];
+    for (const key of keys) {
+      const fresh = freshSheets(key);
+      const stripped = fresh.map((sheet) => {
+        const start = LISTS[key].dataStart[sheet.name];
+        const limit = start == null ? 3 : Math.max(3, start - 2);
+        return {
+          ...sheet,
+          merges: sheet.merges.filter((merge) => {
+            const row = Number((merge.split(":")[0] ?? "").replace(/^[A-Z]+/i, ""));
+            return row > limit;
+          }),
+        };
+      });
+      const restored = restoreHeaderBlock(key, stripped);
+      for (const sheet of fresh) {
+        const start = LISTS[key].dataStart[sheet.name];
+        const limit = start == null ? 3 : Math.max(3, start - 2);
+        const wanted = sheet.merges.filter((merge) => {
+          const ends = merge.split(":");
+          const rows = ends.map((addr) => Number((addr ?? "").replace(/^[A-Z]+/i, "")));
+          return rows.some((row) => row <= limit);
+        });
+        const got = restored.sheets.find((item) => item.name === sheet.name);
+        for (const merge of wanted) expect(got?.merges, `${key} ${sheet.name} ${merge}`).toContain(merge);
+      }
+      expect(restoreHeaderBlock(key, restored.sheets).changed, key).toBe(false);
+    }
+
+    const eng = freshSheets("lst-eng-001").map((sheet) => ({
+      ...sheet,
+      merges: [],
+      cells: { ...sheet.cells, H2: { ...sheet.cells.H2!, v: "Shawn Parnell" } },
+    }));
+    const fixed = restoreHeaderBlock("lst-eng-001", eng);
+    expect(fixed.changed).toBe(true);
+    expect(fixed.sheets[0]?.merges).toEqual(expect.arrayContaining(["A1:K1", "E2:F2", "H2:I2", "A3:D3", "E3:K3", "A4:K4"]));
+    expect(fixed.sheets[0]?.cells.H2?.v).toBe("Shawn Parnell");
+    expect(fixed.sheets[0]?.cells.D2?.v).toBe("A");
+    expect(fixed.sheets[0]?.cells.E2?.v).toBe("Location: X:\\ISO Compliance Documents\\12_Engineering_Logs");
+    expect(fixed.sheets[0]?.cells.K2?.v).toBe("2026-07-02");
+    expect(fixed.sheets[0]?.cells.A1).toMatchObject({ v: "ENGINEERING REQUEST CHANGE LOG", bold: true, size: 26, align: "center" });
+    expect(LISTS["lst-eng-001"].revision).toBe("A");
+    expect(restoreHeaderBlock("lst-eng-001", fixed.sheets).changed).toBe(false);
   });
 });

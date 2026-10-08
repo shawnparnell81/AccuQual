@@ -148,7 +148,7 @@ async function repairStoredHeader(db: Db, key: ListKey, row: { id: number; revis
     action: "update",
     performedBy: userId,
     changes: {
-      summary: `${who} filled blank header cells on ${spec.docId} from the controlled workbook. Edited header values were left as saved. ${revisionNote}.`,
+      summary: `${who} restored the header block on ${spec.docId} from the controlled workbook. Blank header cells and missing header merges were filled back in. Edited header values were left as saved. ${revisionNote}.`,
     },
   });
   return { ...row, sheets: restored.sheets, revision };
