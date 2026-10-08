@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 import { rejectAiStubText, AI_STUB_REJECT_MESSAGE } from "../ai/ai.guardrails.js";
 
 /**
@@ -25,6 +26,7 @@ export const createCapaSchema = z.object({
   preventiveAction: freeTextField(),
   ownerId: z.number().int().optional(),
   dueDate: z.coerce.date().nullable().optional(),
+  recordNumber: recordNumberSchema,
 });
 
 // Status changes only through /start, /verify, and /close.

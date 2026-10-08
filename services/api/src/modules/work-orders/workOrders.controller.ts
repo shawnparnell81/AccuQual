@@ -4,6 +4,8 @@ import { workOrders, workOrderOperations } from "../../drizzle/schema/workOrders
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { WORK_ORDER_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
@@ -110,9 +112,11 @@ export const createWorkOrderHandler = asyncHandler(async (req: Request, res: Res
     if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
   }
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, WORK_ORDER_NUMBER);
   const [created] = await req
     .db!.insert(workOrders)
-    .values({ itemId, quantityPlanned: String(quantityPlanned), linkedNcrId, dueDate, notes, createdBy: req.user?.id })
+    .values({ itemId, quantityPlanned: String(quantityPlanned), linkedNcrId, dueDate, notes, recordNumber: (body.recordNumber as string | null) ?? null, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
@@ -137,12 +141,14 @@ export const updateWorkOrderHandler = asyncHandler(async (req: Request, res: Res
   if (record.status !== "planned") {
     throw AppError.badRequest(`Cannot edit a work order that is "${record.status}", not "planned"`);
   }
+  const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, WORK_ORDER_NUMBER, { id: record.id, current: record.recordNumber, row: record });
   const [updated] = await req
     .db!.update(workOrders)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(eq(workOrders.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

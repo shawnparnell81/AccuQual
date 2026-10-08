@@ -39,6 +39,10 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { users } from "../../drizzle/schema/users.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
+import { capa } from "../../drizzle/schema/capa.js";
+import { NCR_NUMBER, CAPA_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit, showRecordNumber } from "../records/userRecordNumber.js";
 import { auditReason, emptyFrame, exportTrace, type AttachmentLine, type AuditLine, type ControlledPdfFrame } from "./controlledPdf.js";
 import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
 
@@ -118,6 +122,7 @@ export async function saveData(db: Db, input: SaveInput) {
       .set({ data, updatedAt: new Date() })
       .where(and(eq(formData.id, existing.id)))
       .returning();
+    await mirrorTypedNumber(db, input.formType, input.entityId, data, input.userId);
     return updated;
   }
 
@@ -134,7 +139,28 @@ export async function saveData(db: Db, input: SaveInput) {
     })
     .returning();
   if (created && input.entityId != null) await snapshotFormDataNumber(db, input.formType, input.entityId);
+  await mirrorTypedNumber(db, input.formType, input.entityId, data, input.userId);
   return created;
+}
+
+async function mirrorTypedNumber(db: Db, formType: string, entityId: number | undefined, data: Record<string, unknown>, userId: number | undefined) {
+  if (entityId == null) return;
+  if (formType === "ncr" && Object.prototype.hasOwnProperty.call(data, "ncrNumber")) {
+    const [row] = await db.select({ id: ncr.id, recordNumber: ncr.recordNumber }).from(ncr).where(eq(ncr.id, entityId));
+    if (!row || showRecordNumber(row.recordNumber) === showRecordNumber(data.ncrNumber)) return;
+    const body: Record<string, unknown> = { recordNumber: data.ncrNumber };
+    const change = await applyRecordNumber(db, body, NCR_NUMBER, { id: row.id, current: row.recordNumber, row });
+    await db.update(ncr).set({ recordNumber: (body.recordNumber as string | null) ?? null, updatedAt: new Date() }).where(eq(ncr.id, row.id));
+    if (change) await recordAuditTrail(db, { entityType: "NCR", entityId: row.id, action: "update", changes: changesWithNumberEdit({}, change), performedBy: userId });
+  }
+  if (formType === "capa" && Object.prototype.hasOwnProperty.call(data, "capaNumber")) {
+    const [row] = await db.select({ id: capa.id, recordNumber: capa.recordNumber }).from(capa).where(eq(capa.id, entityId));
+    if (!row || showRecordNumber(row.recordNumber) === showRecordNumber(data.capaNumber)) return;
+    const body: Record<string, unknown> = { recordNumber: data.capaNumber };
+    const change = await applyRecordNumber(db, body, CAPA_NUMBER, { id: row.id, current: row.recordNumber, row });
+    await db.update(capa).set({ recordNumber: (body.recordNumber as string | null) ?? null, updatedAt: new Date() }).where(eq(capa.id, row.id));
+    if (change) await recordAuditTrail(db, { entityType: "CAPA", entityId: row.id, action: "update", changes: changesWithNumberEdit({}, change), performedBy: userId });
+  }
 }
 
 /**
@@ -188,13 +214,11 @@ function textOf(value: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
-function recordNumberFrom(formType: string, data: Record<string, unknown>, entityId?: number): string {
+function recordNumberFrom(_formType: string, data: Record<string, unknown>, _entityId?: number): string {
   for (const key of ["ncrNumber", "capaNumber", "number", "documentNumber", "faiNumber", "recordNumber"]) {
     const value = textOf(data[key]);
     if (value) return value;
   }
-  if (formType === "ncr" && entityId) return `NCR-${entityId}`;
-  if (formType === "capa" && entityId) return `CAPA-${entityId}`;
   return "";
 }
 

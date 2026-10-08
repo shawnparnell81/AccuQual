@@ -23,6 +23,8 @@ import { SegmentedTabs } from "../../components/dashboard/kit";
 import { uploadPendingAttachments } from "../../lib/attachments";
 import { NcrBoard } from "./NcrBoard";
 import { QuarantineDraftFields, saveDraftQuarantineItems } from "./NcrQuarantineSection";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 
 const NCR_STATUSES = ["ncr_created", "contain", "disposition", "fix", "verify", "closed"] as const;
 
@@ -53,13 +55,15 @@ export function NcrListPage() {
     setParams(next, { replace: true });
   }, [accessPending, canEdit, params, setParams]);
   const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
-  const [form, setForm] = useState<{ title: string; description: string; severity: Ncr["severity"]; dueDate: string; assignedTo: string }>({
+  const [form, setForm] = useState<{ title: string; description: string; severity: Ncr["severity"]; dueDate: string; assignedTo: string; recordNumber: string }>({
     title: "",
     description: "",
     severity: "medium",
     dueDate: "",
     assignedTo: "",
+    recordNumber: "",
   });
+  const [numberError, setNumberError] = useState<string | null>(null);
   const [quarantineRows, setQuarantineRows] = useState([{ partNumber: "", quantity: "", serialNumber: "" }]);
 
   const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
@@ -90,7 +94,7 @@ export function NcrListPage() {
   );
 
   const columns: Column<Ncr>[] = [
-    { header: "ID", accessor: (n) => `#${n.id}` },
+    { header: "NCR No.", accessor: (n) => showRecordNumber(n.recordNumber) || "" },
     { header: "What happened", accessor: (n) => n.title },
     { header: "State", accessor: (n) => <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} /> },
     { header: "Owner", accessor: (n) => label(n.assignedTo) },
@@ -213,6 +217,7 @@ export function NcrListPage() {
             e.preventDefault();
             createNcr.mutate(
               {
+                recordNumber: form.recordNumber.trim() || null,
                 title: form.title,
                 description: form.description || undefined,
                 severity: form.severity,
@@ -237,11 +242,16 @@ export function NcrListPage() {
                 }
                 navigate(`/ncr/${created.id}`);
               },
-              onError: (err) => toast.error(extractErrorMessage(err, "Couldn't log this issue. Check the title and try again.")),
+              onError: (err) => {
+                const message = extractErrorMessage(err, "Couldn't log this issue. Check the title and try again.");
+                setNumberError(duplicateNumberError(message));
+                toast.error(message);
+              },
               },
             );
           }}
         >
+          <RecordNumberField label="NCR No." value={form.recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, recordNumber: value }); }} />
           <TextField label="What happened" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Short description of the problem" />
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">

@@ -8,6 +8,7 @@ import { StepMoveModal, type StepRequest } from "../../components/board/StepMove
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { duePhrase, formatPerson, isPastDue, ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
 
@@ -49,7 +50,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
   }
 
   function requestMove(ncr: Ncr, to: string) {
-    const name = `NCR #${ncr.id}`;
+    const name = recordHeading("NCR", ncr.recordNumber);
     if (to === "contain")
       setStep({ title: `Contain ${name}`, description: "Describe what you did to stop the problem from spreading. This moves it to Contain.", fieldLabel: "Containment", submitLabel: "Mark contained", run: (t) => post(ncr, "containment", { containment: t }, `${name} is at Contain.`) });
     else if (to === "disposition")
@@ -75,8 +76,8 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
         rejectMessage={(n, to) => {
           const next = NEXT[ncrStepKey(n.status) as NcrStep];
           return next
-            ? `NCRs move one step at a time. #${n.id} goes from ${ncrStepLabel(n.status)} to ${ncrStepLabel(next)} first — drop it there.`
-            : `#${n.id} is closed and can't move (${ncrStepLabel(to)}).`;
+            ? `NCRs move one step at a time. ${recordHeading("NCR", n.recordNumber)} goes from ${ncrStepLabel(n.status)} to ${ncrStepLabel(next)} first — drop it there.`
+            : `${recordHeading("NCR", n.recordNumber)} is closed and can't move (${ncrStepLabel(to)}).`;
         }}
         people={people.map((person) => ({ id: person.id, name: formatPerson(person) }))}
         assignedTo={(n) => n.assignedTo}
@@ -84,13 +85,13 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
           apiClient
             .post(`/ncr/${n.id}/assign`, { assignedTo: personId })
             .then(() => qc.invalidateQueries({ queryKey: ["ncr"] }))
-            .then(() => toast.success(`NCR #${n.id} assigned to ${personName}.`))
+            .then(() => toast.success(`${recordHeading("NCR", n.recordNumber)} assigned to ${personName}.`))
             .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this NCR.")));
         }}
         renderCard={(n) => (
           <div onClick={() => navigate(`/ncr/${n.id}`)} className="cursor-pointer">
             <div className="flex items-start justify-between gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">#{n.id}</span>
+              <span className="text-xs font-semibold text-muted-foreground">{recordHeading("NCR", n.recordNumber)}</span>
               <StatusBadge value={n.severity} />
             </div>
             <p className="mt-1 text-sm font-medium leading-snug">{n.title}</p>

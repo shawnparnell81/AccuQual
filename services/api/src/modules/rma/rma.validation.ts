@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 const REASON_CODES = ["defective", "wrong_item", "over_shipment", "under_shipment", "quality_issue", "other"] as const;
 export const RMA_STATUSES = ["draft", "submitted_to_supplier", "approved_by_supplier", "in_transit", "received_by_supplier", "closed", "cancelled"] as const;
 
 export const createRmaSchema = z.object({
+  rmaNumber: recordNumberSchema,
   supplierId: z.coerce.number().int(),
   reasonCode: z.enum(REASON_CODES).optional(),
   linkedNcrId: z.coerce.number().int().optional(),
@@ -19,6 +21,7 @@ export const createRmaSchema = z.object({
  * every other module in this app uses.
  */
 export const updateRmaSchema = z.object({
+  rmaNumber: recordNumberSchema,
   supplierId: z.coerce.number().int().optional(),
   reasonCode: z.enum(REASON_CODES).optional(),
   linkedNcrId: z.coerce.number().int().nullable().optional(),

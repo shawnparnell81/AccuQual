@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { RiskAssessment } from "../../api/types";
 import { Modal } from "../modals/Modal";
+import { RecordNumberField, duplicateNumberError } from "../forms/RecordNumberField";
 import { TextField, TextAreaField, SelectField } from "../forms/Field";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useToast } from "./ToastProvider";
 import { RISK_CATEGORIES } from "./riskConstants";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
@@ -35,6 +38,9 @@ export function CreateRiskButton({ sourceType, sourceId, defaultTitle, defaultDe
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>(defaultCategory ?? "process");
   const [department, setDepartment] = useState(defaultDepartment ?? "");
+  const [recordNumber, setRecordNumber] = useState("");
+  const [numberError, setNumberError] = useState<string | null>(null);
+  const toast = useToast();
 
   return (
     <>
@@ -47,11 +53,20 @@ export function CreateRiskButton({ sourceType, sourceId, defaultTitle, defaultDe
           onSubmit={(e) => {
             e.preventDefault();
             createRisk.mutate(
-              { title, description: description || undefined, category: category as never, department: department || undefined, sourceType, sourceId } as never,
-              { onSuccess: (created) => navigate(`/risk/${created.id}`) }
+              { title, recordNumber: recordNumber.trim() || null, description: description || undefined, category: category as never, department: department || undefined, sourceType, sourceId } as never,
+              {
+                onSuccess: (created) => navigate(`/risk/${created.id}`),
+                onError: (err) => {
+                  const message = extractErrorMessage(err, "Couldn't create this risk.");
+                  const duplicate = duplicateNumberError(message);
+                  if (duplicate) setNumberError(duplicate);
+                  else toast.error(message);
+                },
+              }
             );
           }}
         >
+          <RecordNumberField label="Risk No." value={recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setRecordNumber(value); }} />
           <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <TextAreaField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
           <SelectField label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -62,7 +77,7 @@ export function CreateRiskButton({ sourceType, sourceId, defaultTitle, defaultDe
             ))}
           </SelectField>
           <TextField label="Owning department (optional)" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="quality, engineering, production…" />
-          <p className="text-xs text-muted-foreground">Linked to this {sourceType} (#{sourceId}) automatically. Severity, probability, and a mitigation plan can be added — or AI-suggested — from the new risk's own page.</p>
+          <p className="text-xs text-muted-foreground">Linked to this {sourceType} automatically. Severity, probability, and a mitigation plan can be added — or AI-suggested — from the new risk's own page.</p>
           <button type="submit" disabled={createRisk.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             {createRisk.isPending ? "Creating…" : "Create Risk"}
           </button>

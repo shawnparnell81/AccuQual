@@ -23,7 +23,7 @@ export function SupplierInspectionList({ supplierId }: { supplierId?: number }) 
       <h3 className="mb-3 text-sm font-medium">Inspections</h3>
       <ul className="flex flex-col gap-2">
         {rows.map((r) => {
-          const label = `${r.partMaterialNo ?? `Inspection #${r.id}`} — ${new Date(r.inspectionDate ?? r.createdAt ?? Date.now()).toLocaleDateString()}`;
+          const label = `${r.recordNumber?.trim() || r.partMaterialNo || "Inspection"} — ${new Date(r.inspectionDate ?? r.createdAt ?? Date.now()).toLocaleDateString()}`;
           const status = r.finalStatus ?? "pending";
           return canOpen ? (
             <li key={r.id}>

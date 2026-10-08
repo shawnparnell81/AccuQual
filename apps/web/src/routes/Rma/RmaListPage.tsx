@@ -6,7 +6,9 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import type { Rma, RmaStatus, RmaReasonCode, Supplier, Ncr, Capa } from "../../api/types";
 import { formatDate } from "../../lib/dates";
 
@@ -38,6 +40,8 @@ function NewRmaModal({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose:
   const [linkedNcrId, setLinkedNcrId] = useState("");
   const [linkedCapaId, setLinkedCapaId] = useState("");
   const [notes, setNotes] = useState("");
+  const [rmaNumber, setRmaNumber] = useState("");
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   const reset = () => {
     setSupplierId("");
@@ -60,19 +64,28 @@ function NewRmaModal({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose:
               linkedNcrId: linkedNcrId ? Number(linkedNcrId) : undefined,
               linkedCapaId: linkedCapaId ? Number(linkedCapaId) : undefined,
               notes: notes || undefined,
+              rmaNumber: rmaNumber.trim() || null,
             } as never,
             {
               onSuccess: (created) => {
-                toast.success(`${created.rmaNumber} created.`);
+                toast.success(`${recordHeading("RMA", created.rmaNumber)} created.`);
                 reset();
+                setRmaNumber("");
+                setNumberError(null);
                 onClose();
                 onCreated(created);
               },
-              onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create RMA.")),
+              onError: (err) => {
+                const message = extractErrorMessage(err, "Couldn't create RMA.");
+                const duplicate = duplicateNumberError(message);
+                if (duplicate) setNumberError(duplicate);
+                else toast.error(message);
+              },
             }
           );
         }}
       >
+        <RecordNumberField label="RMA No." value={rmaNumber} error={numberError} onChange={(value) => { setNumberError(null); setRmaNumber(value); }} />
         <SelectField label="Supplier" required value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
           <option value="">Select a supplier…</option>
           {suppliers.map((s) => (
@@ -93,7 +106,7 @@ function NewRmaModal({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose:
           <option value="">None</option>
           {ncrs.map((n) => (
             <option key={n.id} value={n.id}>
-              NCR #{n.id} — {n.title}
+              {recordHeading("NCR", n.recordNumber)}{n.title ? ` — ${n.title}` : ""}
             </option>
           ))}
         </SelectField>
@@ -101,7 +114,7 @@ function NewRmaModal({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose:
           <option value="">None</option>
           {capas.map((c) => (
             <option key={c.id} value={c.id}>
-              CAPA #{c.id}
+              {recordHeading("CAPA", c.recordNumber)}
             </option>
           ))}
         </SelectField>
@@ -152,7 +165,7 @@ export function RmaListPage() {
       </div>
 
       <div className="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-3 lg:grid-cols-6">
-        <TextField label="Search RMA #" placeholder="RMA-000123" value={q} onChange={(e) => setQ(e.target.value)} />
+        <TextField label="Search RMA #" value={q} onChange={(e) => setQ(e.target.value)} />
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All</option>
           {STATUSES.map((s) => (
@@ -183,7 +196,7 @@ export function RmaListPage() {
 
       <DataTable<Rma>
         columns={[
-          { header: "RMA #", accessor: (r) => r.rmaNumber },
+          { header: "RMA #", accessor: (r) => showRecordNumber(r.rmaNumber) },
           { header: "Supplier", accessor: (r) => r.supplierName ?? "—" },
           { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
           { header: "Reason", accessor: (r) => (r.reasonCode ? r.reasonCode.replace(/_/g, " ") : "—") },

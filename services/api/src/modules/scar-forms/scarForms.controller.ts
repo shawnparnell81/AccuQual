@@ -8,6 +8,8 @@ import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
+import { SCAR_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 async function loadScar(req: Request, id: number) {
   const [row] = await req.db!.select().from(scarForms).where(and(eq(scarForms.id, id)));
@@ -25,7 +27,9 @@ export const listScarFormsHandler = asyncHandler(async (req: Request, res: Respo
 });
 
 export const createScarFormHandler = asyncHandler(async (req: Request, res: Response) => {
-  const [created] = await req.db!.insert(scarForms).values({ ...req.body, createdBy: req.user?.id }).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, SCAR_NUMBER);
+  const [created] = await req.db!.insert(scarForms).values({ ...body, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "ScarForm", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   // Full-System Audit finding M1 — same publishEvent(WORKFLOW_STREAM, ...)
   // shape CAPA/CRAR/RMA already emit on their own create/status changes;
@@ -42,6 +46,7 @@ export const getScarFormHandler = asyncHandler(async (req: Request, res: Respons
 export const updateScarFormHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadScar(req, Number(req.params.id));
   const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, SCAR_NUMBER, { id: record.id, current: record.scarNumber, row: record });
   await assignSignatureRequired(req.db!, {
     entityType: "ScarForm",
     entityId: record.id,
@@ -51,7 +56,7 @@ export const updateScarFormHandler = asyncHandler(async (req: Request, res: Resp
     blocks: signatureBlocksFor("scar"),
   });
   const [updated] = await req.db!.update(scarForms).set({ ...body, updatedAt: new Date() }).where(eq(scarForms.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "ScarForm", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ScarForm", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   // SCAR has no dedicated /close endpoint (unlike CAPA/CRAR/RMA) — closing
   // one is just a PATCH that sets status:"closed" among its other fields.
   // Same event-naming convention CRAR/RMA already use for their own status

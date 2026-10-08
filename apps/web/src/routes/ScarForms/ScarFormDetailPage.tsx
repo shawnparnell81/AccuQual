@@ -60,7 +60,7 @@ export function ScarFormDetailPage() {
             <input type="checkbox" checked={scar.status === "closed"} onChange={(e) => patch.mutate({ status: e.target.checked ? "closed" : "open" })} />
             Closed
           </label>
-          <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.scarNumber || scar.partNumberDescription} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" />
+          <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.partNumberDescription} number={scar.scarNumber} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" />
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export function ScarFormDetailPage() {
           </div>
           <div className="text-right text-xs text-muted-foreground print:text-black">
             <div>SCAR NO.</div>
-            <div className="text-lg font-semibold text-foreground print:text-black">#{scar.id}</div>
+            <div className="text-lg font-semibold text-foreground print:text-black">{scar.scarNumber?.trim() || ""}</div>
           </div>
         </div>
 

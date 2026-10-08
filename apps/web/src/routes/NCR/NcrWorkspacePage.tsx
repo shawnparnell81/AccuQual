@@ -21,6 +21,9 @@ import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { RecordFrame } from "../../components/records/RecordFrame";
 import { NcrStepDocuments } from "../../components/records/NcrStepDocuments";
 import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, statusPhrase } from "../../lib/opsLanguage";
@@ -42,6 +45,7 @@ const workOrderHooks = createResourceHooks<WorkOrder>("work-orders");
 interface EightDReport {
   id: number;
   ncrId: number | null;
+  recordNumber?: string | null;
   currentStep: number;
 }
 const eightDHooks = createResourceHooks<EightDReport>("8d");
@@ -69,10 +73,10 @@ export function NcrWorkspacePage() {
   const user = useCurrentUser();
   useEffect(() => {
     if (!ncr) return;
-    rememberRecord({ path: `/ncr/${ncr.id}`, title: ncr.title || `NCR #${ncr.id}`, type: "NCR" }, user?.id);
+    rememberRecord({ path: `/ncr/${ncr.id}`, title: ncr.title || recordHeading("NCR", ncr.recordNumber), type: "NCR" }, user?.id);
   }, [ncr, user?.id]);
   const updateNcr = ncrHooks.useUpdate();
-  useSetAssistantContext("ncr", ncrId, ncr ? `NCR #${ncr.id}` : `NCR #${ncrId}`);
+  useSetAssistantContext("ncr", ncrId, ncr ? recordHeading("NCR", ncr.recordNumber) : "NCR");
 
   const historyKey: unknown[][] = [["workflow-history", "ncr", ncrId]];
   // Each workflow action also syncs a field onto the official document
@@ -125,10 +129,18 @@ export function NcrWorkspacePage() {
       header={<RecordGlance
         crumbs={[
           { label: "NCR", to: "/ncr" },
-          { label: `NCR #${ncr.id}` },
+          { label: recordHeading("NCR", ncr.recordNumber) },
         ]}
         title={ncr.title}
-        standard={`NCR #${ncr.id}`}
+        standard={recordHeading("NCR", ncr.recordNumber)}
+        numberControl={
+          <RecordNumberEditor
+            label="NCR No."
+            value={ncr.recordNumber}
+            canEdit={canEdit}
+            onSave={(next) => updateNcr.mutateAsync({ id: ncrId, recordNumber: next.trim() || null })}
+          />
+        }
         stateValue={step}
         stateLabel={stepLabel}
         owner={owner}
@@ -170,7 +182,7 @@ export function NcrWorkspacePage() {
         accessNote={canEdit ? null : READ_ONLY_REASON}
         actions={
           <>
-            <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} ownerIds={[ncr.createdBy]} navigateTo="/ncr" />
+            <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
             {canEdit && (
               <button
@@ -244,7 +256,7 @@ export function NcrWorkspacePage() {
                 module: "ncr",
                 recordId: ncrId,
                 buildPrompt: () =>
-                  `Recommend a containment action for NCR #${ncr.id} ("${ncr.title}"). Problem: ${ncr.description || "not described"}.` +
+                  `Recommend a containment action for ${recordHeading("NCR", ncr.recordNumber)} ("${ncr.title}"). Problem: ${ncr.description || "not described"}.` +
                   " Keep it specific and actionable — this is a draft for a quality engineer to review and edit, not a final record.",
               }}
             />
@@ -438,20 +450,30 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
         <h3 className="text-sm font-medium">Related records</h3>
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
-          <button
-            onClick={() => createCapa.mutate({ ncrId }, { onSuccess: (created) => navigate(`/capa/${created.id}`) })}
-            className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground"
-          >
-            Open a CAPA
-          </button>
+          <NumberedCreateButton
+            label="Open a CAPA"
+            numberLabel="CAPA No."
+            dialogTitle="Open a CAPA"
+            pending={createCapa.isPending}
+            className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-60"
+            onCreate={async (recordNumber) => {
+              const created = await createCapa.mutateAsync({ ncrId, recordNumber: recordNumber.trim() || null });
+              navigate(`/capa/${created.id}`);
+            }}
+          />
           )}
           {canEdit && (
-          <button
-            onClick={() => createEightD.mutate({ ncrId }, { onSuccess: (created) => navigate(`/8d/${created.id}`) })}
-            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-          >
-            Start 8D
-          </button>
+          <NumberedCreateButton
+            label="Start 8D"
+            numberLabel="8D No."
+            dialogTitle="Start an 8D"
+            pending={createEightD.isPending}
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-60"
+            onCreate={async (recordNumber) => {
+              const created = await createEightD.mutateAsync({ ncrId, recordNumber: recordNumber.trim() || null });
+              navigate(`/8d/${created.id}`);
+            }}
+          />
           )}
           {canEdit && (
           <div className="relative">
@@ -484,7 +506,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
                         attachCapa.mutate({ id: c.id, ncrId }, { onSuccess: () => { setAttachQuery(""); setAttachOpen(false); } });
                       }}
                     >
-                      CAPA #{c.id}
+                      {recordHeading("CAPA", c.recordNumber)}
                       {c.rootCause ? ` — ${c.rootCause}` : ""}
                     </button>
                   </li>
@@ -508,7 +530,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
         {linkedCapas.map((c) => (
           <li key={`capa-${c.id}`} className="border-b border-border pb-1">
             <button onClick={() => navigate(`/capa/${c.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>CAPA #{c.id}</span>
+              <span>{recordHeading("CAPA", c.recordNumber)}</span>
               <StatusBadge value={c.status} label={statusPhrase(c.status)} />
             </button>
           </li>
@@ -516,7 +538,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
         {linkedEightDs.map((r) => (
           <li key={`8d-${r.id}`} className="border-b border-border pb-1">
             <button onClick={() => navigate(`/8d/${r.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>8D #{r.id}</span>
+              <span>{recordHeading("8D", r.recordNumber)}</span>
               <span className="text-xs text-muted-foreground">D{r.currentStep}</span>
             </button>
           </li>

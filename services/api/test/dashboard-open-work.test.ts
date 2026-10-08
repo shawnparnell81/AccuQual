@@ -55,7 +55,7 @@ describe("open quality work", () => {
       input({
         ncrs: [
           { id: 1, siteId: 1, title: "Burr", status: "open", severity: "high", assignedTo: 7, isDeleted: false, createdAt: daysAgo(3), updatedAt: daysAgo(1) },
-          { id: 2, siteId: 1, title: "Scratch", status: "investigating", severity: "low", assignedTo: null, isDeleted: false, createdAt: daysAgo(10), updatedAt: null },
+          { id: 2, siteId: 1, recordNumber: "NCR 2", title: "Scratch", status: "investigating", severity: "low", assignedTo: null, isDeleted: false, createdAt: daysAgo(10), updatedAt: null },
           { id: 3, siteId: 1, title: "Done", status: "closed", severity: "critical", assignedTo: 7, isDeleted: false, createdAt: daysAgo(4), updatedAt: null },
           { id: 4, siteId: 1, title: "Gone", status: "open", severity: "critical", assignedTo: null, isDeleted: true, createdAt: daysAgo(1), updatedAt: null },
           { id: 5, siteId: 9, title: "Elsewhere", status: "open", severity: "high", assignedTo: null, isDeleted: false, createdAt: daysAgo(2), updatedAt: null },
@@ -64,7 +64,10 @@ describe("open quality work", () => {
     );
     expect(work.cards.find((card) => card.key === "ncr")).toMatchObject({ value: 2, foot: "1 high / critical", href: "/iso-forms/frm-ncr-001", module: "NCR" });
     const rows = work.records.filter((row) => row.module === "NCR");
-    expect(rows.map((row) => row.number)).toEqual(["NCR-2", "NCR-1"]);
+    expect(rows.map((row) => row.number)).toEqual(["NCR 2", ""]);
+    expect(rows.map((row) => row.href)).toEqual(["/ncr/2", "/ncr/1"]);
+    expect(rows[1]?.number).not.toBe("1");
+    expect(rows[1]?.number).not.toBe("NCR-1");
     expect(rows[0]).toMatchObject({ title: "Scratch", status: "disposition", plant: "Dayton Machining", owner: "Unassigned", ageDays: 10 });
     expect(rows[1]).toMatchObject({ owner: "Dana Wells", ageDays: 3, href: "/ncr/1" });
   });
@@ -73,7 +76,7 @@ describe("open quality work", () => {
     const work = buildOpenWork(
       input({
         capas: [
-          { id: 4, siteId: 1, ncrId: 1, status: "in_progress", ownerId: 7, actionPlan: "Rework the fixture", rootCause: null, createdAt: daysAgo(2), updatedAt: null },
+          { id: 4, siteId: 1, recordNumber: null, ncrId: 1, status: "in_progress", ownerId: 7, actionPlan: "Rework the fixture", rootCause: null, createdAt: daysAgo(2), updatedAt: null },
           { id: 5, siteId: 1, ncrId: null, status: "closed", ownerId: null, actionPlan: null, rootCause: null, createdAt: daysAgo(8), updatedAt: null },
         ],
         scars: [
@@ -111,7 +114,7 @@ describe("open quality work", () => {
       module: null,
       modules: ["CAPA", "CAR"],
     });
-    expect(work.records.find((row) => row.module === "CAPA")).toMatchObject({ number: "CAPA-4", status: "in_progress", href: "/capa/4", owner: "Dana Wells" });
+    expect(work.records.find((row) => row.module === "CAPA")).toMatchObject({ number: "", status: "in_progress", href: "/capa/4", owner: "Dana Wells" });
     expect(work.records.find((row) => row.module === "CAR")).toMatchObject({ number: "CAR-18", title: "Valve body", owner: "Glen", href: "/scar-forms/8", plant: null });
   });
 
@@ -153,13 +156,14 @@ describe("open quality work", () => {
       module: null,
       modules: ["ECR", "Change"],
     });
-    expect(work.records.filter((row) => row.module === "VAL").map((row) => row.number)).toEqual(["VAL-3", "VAL-1"]);
-    expect(work.records.find((row) => row.number === "VAL-3")).toMatchObject({ title: "Air strut validation", owner: null, status: "in_progress" });
-    expect(work.records.find((row) => row.number === "FAI-10")).toMatchObject({ title: "PN-10", href: "/iso-forms/record/10" });
-    expect(work.records.find((row) => row.number === "TRP-11")).toMatchObject({ status: "tested", title: "Lot 4" });
-    expect(work.records.find((row) => row.number === "TRP-14")).toMatchObject({ title: "Strut B", status: "in_progress" });
-    expect(work.records.find((row) => row.number === "ECR-16")).toMatchObject({ title: "Housing · Job 2", status: "request", href: "/iso-forms/record/16" });
-    expect(work.records.find((row) => row.module === "Change")).toMatchObject({ number: "CHG-3", status: "under_review", owner: "Dana Wells", href: "/change/3" });
+    expect(work.records.filter((row) => row.module === "VAL").map((row) => row.href)).toEqual(["/validation-reports/3", "/validation-reports/1"]);
+    expect(work.records.filter((row) => row.module === "VAL").every((row) => row.number === "")).toBe(true);
+    expect(work.records.find((row) => row.href === "/validation-reports/3")).toMatchObject({ title: "Air strut validation", owner: null, status: "in_progress" });
+    expect(work.records.find((row) => row.href === "/iso-forms/record/10")).toMatchObject({ title: "PN-10", number: "" });
+    expect(work.records.find((row) => row.href === "/iso-forms/record/11")).toMatchObject({ status: "tested", title: "Lot 4", number: "" });
+    expect(work.records.find((row) => row.href === "/iso-forms/record/14")).toMatchObject({ title: "Strut B", status: "in_progress", number: "" });
+    expect(work.records.find((row) => row.href === "/iso-forms/record/16")).toMatchObject({ title: "Housing · Job 2", status: "request", number: "" });
+    expect(work.records.find((row) => row.module === "Change")).toMatchObject({ number: "", status: "under_review", owner: "Dana Wells", href: "/change/3" });
   });
 
   it("keeps a one-list ECR or change card on that single module", () => {
@@ -222,10 +226,10 @@ describe("open quality work", () => {
         ],
       }),
     );
-    expect(work.records.find((row) => row.module === "PPAP")).toMatchObject({ number: "PPAP-1", title: "P-1 — Bracket", status: "submitted", href: "/ppap/1" });
-    expect(work.records.find((row) => row.module === "Risk")).toMatchObject({ number: "RISK-3", status: "mitigation", owner: "Unassigned", href: "/risk/3" });
-    expect(work.records.find((row) => row.module === "Work order")).toMatchObject({ number: "WO-6", title: "SKU-6 — Housing", status: "in_progress", href: "/work-orders/6" });
-    expect(work.records.some((row) => row.number === "PPAP-2" || row.number === "RISK-4" || row.number === "WO-7" || row.number === "WO-8")).toBe(false);
+    expect(work.records.find((row) => row.module === "PPAP")).toMatchObject({ number: "", title: "P-1 — Bracket", status: "submitted", href: "/ppap/1" });
+    expect(work.records.find((row) => row.module === "Risk")).toMatchObject({ number: "", status: "mitigation", owner: "Unassigned", href: "/risk/3" });
+    expect(work.records.find((row) => row.module === "Work order")).toMatchObject({ number: "", title: "SKU-6 — Housing", status: "in_progress", href: "/work-orders/6" });
+    expect(work.records.some((row) => row.href === "/ppap/2" || row.href === "/risk/4" || row.href === "/work-orders/7" || row.href === "/work-orders/8")).toBe(false);
   });
 
   it("omits modules this person cannot read, including a zero card for an empty table they can read", () => {
@@ -271,7 +275,10 @@ describe("open quality work", () => {
     expect(work.truncated).toBe(true);
     expect(work.records).toHaveLength(300);
     expect(work.cards.find((card) => card.key === "ncr")?.value).toBe(301);
-    expect(work.records[0]?.number).toBe("NCR-301");
+    expect(work.records[0]?.href).toBe("/ncr/301");
+    expect(work.records[0]?.title).toBe("Issue 301");
+    expect(work.records[0]?.number).toBe("");
+    expect(work.records.every((row) => row.number !== String(row.href.split("/").pop()))).toBe(true);
   });
 
   it("keeps a deleted plant's name on the record and leaves it out of the filter", () => {
@@ -291,6 +298,6 @@ describe("open quality work", () => {
       }),
     );
     expect(work.plants.map((plant) => plant.name)).toEqual(["Dayton Machining", "Greenville Stamping"]);
-    expect(work.records.find((row) => row.number === "NCR-8")).toMatchObject({ plant: "Harbor", title: "Issue at harbor" });
+    expect(work.records.find((row) => row.href === "/ncr/8")).toMatchObject({ plant: "Harbor", title: "Issue at harbor", number: "" });
   });
 });

@@ -70,6 +70,7 @@ export interface NcrWorkflow {
 
 export interface Ncr {
   id: number;
+  recordNumber?: string | null;
   title: string;
   description: string | null;
   /** Canonical step key. Older responses may still say open, contained, investigating, or corrective_action until they are read through the API. */
@@ -99,6 +100,7 @@ export interface Ncr {
 
 export interface Capa {
   id: number;
+  recordNumber?: string | null;
   ncrId: number | null;
   rootCause: string | null;
   actionPlan: string | null;
@@ -131,6 +133,7 @@ export interface AuditItem {
 
 export interface Audit {
   id: number;
+  recordNumber?: string | null;
   name: string;
   type: string | null;
   status: "scheduled" | "in_progress" | "completed";
@@ -484,7 +487,7 @@ export interface RmaItem {
 
 export interface Rma {
   id: number;
-  rmaNumber: string;
+  rmaNumber: string | null;
   status: RmaStatus;
   supplierId: number;
   supplierName?: string; // list endpoint only
@@ -841,6 +844,7 @@ export interface WorkOrderOperation {
 
 export interface WorkOrder {
   id: number;
+  recordNumber?: string | null;
   itemId: number;
   sku?: string; // list endpoint only
   description?: string | null; // list endpoint only
@@ -1039,6 +1043,7 @@ export interface QualityInspectionItem {
 
 export interface QualityInspectionReport {
   id: number;
+  recordNumber?: string | null;
   inspectionDate: string | null;
   inspectorName: string | null;
   inspectionType: InspectionType | null;
@@ -1122,6 +1127,7 @@ export interface FmeaItem {
 /** The Risk Register — see risk.ts's own schema comment for how this differs from /ai/risk-score (supplier scoring) and the Digital Twin's simulation heatmap. */
 export interface RiskAssessment {
   id: number;
+  recordNumber?: string | null;
   title: string;
   description: string | null;
   category: string | null;
@@ -1507,7 +1513,7 @@ export type WarrantyCostType = "parts" | "labor" | "shipping" | "replacement_uni
 
 export interface WarrantyClaim {
   id: number;
-  claimNumber: string;
+  claimNumber: string | null;
   status: WarrantyStatus;
   customerId: number | null;
   customerName?: string; // list endpoint only
@@ -1948,7 +1954,7 @@ export type RmaLogDispositionAction = "warranty" | "scrap" | "repair" | "replace
 export interface RmaLogRecord {
   id: number;
   status: RmaLogStatus;
-  rmaNumber: string;
+  rmaNumber: string | null;
   dateIssued: string;
   trackingNumber: string | null;
   customerName: string | null;

@@ -13,6 +13,7 @@ import { audits, auditItems } from "./audits.js";
  */
 export const discrepancyInvestigations = pgTable("discrepancy_investigations", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   title: text("title").notNull(),
   description: text("description"),
   severity: text("severity"), // minor, major, critical

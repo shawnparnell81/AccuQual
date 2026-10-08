@@ -5,12 +5,13 @@ import { discrepancyInvestigations } from "../../drizzle/schema/quality.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { AUDIT_NUMBER } from "../records/recordNumberSpecs.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { syncDiRecordToForm } from "../quality/quality.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 
-export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true });
+export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true, recordNumber: AUDIT_NUMBER });
 
 /** A logged finding is a real nonconformance once it's rated past a mere observation. */
 const NONCONFORMANCE_SEVERITIES = ["minor", "major", "critical"];

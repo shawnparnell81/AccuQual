@@ -11,6 +11,8 @@ import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
+import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 async function loadForm(req: Request, id: number) {
   const [row] = await req.db!.select().from(qmsForms).where(and(eq(qmsForms.id, id)));
@@ -37,7 +39,9 @@ export const createQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   const definition = getQmsFormDefinition(formType);
   if (!definition) throw AppError.badRequest(`Unknown form type "${formType}"`);
   const revision = templateRevisionFor(`qms:${formType}`).revision;
-  const [created] = await req.db!.insert(qmsForms).values({ ...req.body, revision, createdBy: req.user?.id }).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, QMS_NUMBER);
+  const [created] = await req.db!.insert(qmsForms).values({ ...body, revision, createdBy: req.user?.id } as typeof qmsForms.$inferInsert).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -57,9 +61,10 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   }
   const body = { ...(req.body as Record<string, unknown>) };
   delete body.revision;
+  const numberChange = await applyRecordNumber(req.db!, body, QMS_NUMBER, { id: record.id, current: record.formNo, row: record });
   const revision = keptRevision(record.revision, templateRevisionFor(`qms:${record.formType}`).revision);
   const [updated] = await req.db!.update(qmsForms).set({ ...body, revision, updatedAt: new Date() }).where(eq(qmsForms.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

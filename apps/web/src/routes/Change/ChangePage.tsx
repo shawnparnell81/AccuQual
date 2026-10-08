@@ -2,9 +2,11 @@ import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 
 interface ChangeRequest {
   id: number;
+  recordNumber?: string | null;
   title: string;
   status: string;
 }
@@ -22,7 +24,7 @@ export function ChangePage() {
       onRowClick={(c) => navigate(`/change/${c.id}`)}
       onCreated={(c) => navigate(`/change/${c.id}`)}
       columns={[
-        { header: "ID", accessor: (c) => `#${c.id}` },
+        { header: "Change No.", accessor: (c) => showRecordNumber(c.recordNumber) },
         { header: "Title", accessor: (c) => c.title },
         { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
         {
@@ -44,6 +46,7 @@ export function ChangePage() {
         },
       ]}
       createFields={[
+        { name: "recordNumber", label: "Change No." },
         { name: "title", label: "Title" },
         { name: "description", label: "Description" },
         { name: "impactAssessment", label: "Impact assessment" },

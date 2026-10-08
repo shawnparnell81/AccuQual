@@ -17,6 +17,9 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -47,7 +50,9 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const auditId = entityId ?? Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
-  useSetAssistantContext("audit", auditId, audit ? audit.name : `Audit #${auditId}`);
+  const updateAudit = auditHooks.useUpdate();
+  const canEdit = useCanEditWorkflow("audit");
+  useSetAssistantContext("audit", auditId, audit ? recordHeading("Audit", audit.recordNumber) : "Audit");
   const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started.", invalidateKeys: historyKey });
   const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed.", invalidateKeys: historyKey });
   const queryClient = useQueryClient();
@@ -94,13 +99,14 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{audit.name}</h1>
+          <RecordNumberEditor label="Audit No." value={audit.recordNumber} canEdit={canEdit} onSave={(next) => updateAudit.mutateAsync({ id: audit.id, recordNumber: next.trim() || null })} />
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} ownerIds={[audit.auditorId]} navigateTo="/audits" />
-          <OpenFormButton formType="audit_plan" entityId={audit.id} title={`Audit #${audit.id} — Audit Plan`} label="Audit Plan" />
-          <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`Audit #${audit.id} — Audit Checklist`} label="Audit Checklist" />
-          <OpenFormButton formType="lpa" entityId={audit.id} title={`Audit #${audit.id} — Layered Process Audit`} label="Layered Process Audit" />
+          <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} number={audit.recordNumber} ownerIds={[audit.auditorId]} navigateTo="/audits" />
+          <OpenFormButton formType="audit_plan" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Plan`} label="Audit Plan" />
+          <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Checklist`} label="Audit Checklist" />
+          <OpenFormButton formType="lpa" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Layered Process Audit`} label="Layered Process Audit" />
           <AiFieldAssistant
             module="audit"
             recordId={auditId}

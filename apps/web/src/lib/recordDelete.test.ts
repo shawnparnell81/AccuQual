@@ -20,7 +20,10 @@ test("any signed-in role can open the company audit log", () => {
   assert.equal(canViewAuditLog(undefined), false);
 });
 
-test("the confirmation names the record", () => {
-  assert.equal(recordDeleteLabel("NCR", 3, "Bent flange"), 'NCR #3 "Bent flange"');
-  assert.equal(recordDeleteLabel("Validation Report", 3, "  "), "Validation Report #3");
+test("the confirmation names the record and leaves a blank number blank", () => {
+  assert.equal(recordDeleteLabel("NCR", "Bent flange", "QA-14"), 'NCR QA-14 "Bent flange"');
+  assert.equal(recordDeleteLabel("NCR", "Bent flange", "  "), 'NCR "Bent flange"');
+  assert.equal(recordDeleteLabel("NCR", "Bent flange"), 'NCR "Bent flange"');
+  assert.equal(recordDeleteLabel("Validation Report", "  ", null), "Validation Report");
+  assert.equal(recordDeleteLabel("NCR", "Bent flange", "3").includes("#"), false);
 });

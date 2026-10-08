@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { company } from "../../drizzle/schema/company.js";
@@ -10,7 +10,6 @@ import { notificationLog } from "../../drizzle/schema/notifications.js";
 import {
   faiAnnualPulls,
   faiInspectionPlans,
-  faiNumberCounters,
   faiPlanCharacteristics,
   faiPlanRevisions,
   faiRecords,
@@ -22,6 +21,8 @@ import {
   type FaiResultLine,
 } from "../../drizzle/schema/faiSourceControl.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { FAI_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, claimRecordNumber, showRecordNumber } from "../records/userRecordNumber.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { notifyRecipients } from "../notifications/notification.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
@@ -45,7 +46,6 @@ import {
   DEFAULT_CADENCE_MONTHS,
   freezeCharacteristic,
   formalDate,
-  formatFaiNumber,
   isCharacteristicMode,
   judgeFrozen,
   limitsLabel,
@@ -409,16 +409,6 @@ export async function retirePlan(db: Db, userId: number, planId: number) {
   return presentPlan(db, updated!);
 }
 
-async function allocateNumber(db: Db, today: string): Promise<string> {
-  const year = Number(today.slice(0, 4));
-  const [row] = await db
-    .insert(faiNumberCounters)
-    .values({ year, lastValue: 1 })
-    .onConflictDoUpdate({ target: faiNumberCounters.year, set: { lastValue: sql`${faiNumberCounters.lastValue} + 1` } })
-    .returning({ lastValue: faiNumberCounters.lastValue });
-  return formatFaiNumber(year, row!.lastValue);
-}
-
 async function ensureSource(db: Db, partNumber: string, supplierId: number, name: string, cadenceMonths: number, userId: number) {
   const [existing] = await db.select().from(faiSourceApprovals).where(and(eq(faiSourceApprovals.partNumber, partNumber), eq(faiSourceApprovals.supplierId, supplierId)));
   if (existing) return existing;
@@ -461,7 +451,12 @@ async function recordLines(db: Db, faiId: number) {
 async function presentRecord(db: Db, record: FaiRecord) {
   const lines = await recordLines(db, record.id);
   const [plan] = await db.select({ name: faiInspectionPlans.name }).from(faiInspectionPlans).where(eq(faiInspectionPlans.id, record.planId));
-  return { ...record, planName: plan?.name ?? "", lines: lines.map(presentLine), ncrNumber: record.ncrId ? `NCR-${record.ncrId}` : null };
+  let ncrNumber: string | null = null;
+  if (record.ncrId) {
+    const [linked] = await db.select({ recordNumber: ncr.recordNumber }).from(ncr).where(eq(ncr.id, record.ncrId));
+    ncrNumber = showRecordNumber(linked?.recordNumber) || null;
+  }
+  return { ...record, planName: plan?.name ?? "", lines: lines.map(presentLine), ncrNumber };
 }
 
 export async function listRecords(db: Db) {
@@ -502,8 +497,7 @@ export async function copyRecord(db: Db, userId: number, sourceId: number) {
   const lines = await recordLines(db, sourceId);
   if (lines.length === 0) throw AppError.badRequest("That record has no characteristics to copy.");
   const [revision] = await db.select({ cadenceMonths: faiPlanRevisions.cadenceMonths }).from(faiPlanRevisions).where(eq(faiPlanRevisions.id, source.revisionId));
-  const today = await companyToday(db);
-  const number = await allocateNumber(db, today);
+  const number = null;
   const [created] = await db
     .insert(faiRecords)
     .values({
@@ -524,7 +518,8 @@ export async function copyRecord(db: Db, userId: number, sourceId: number) {
   await db.insert(faiResultLines).values(copied.map((line) => ({ faiId: created!.id, ...line })));
   await ensureSource(db, source.partNumber, source.supplierId, source.supplierName, revision?.cadenceMonths ?? DEFAULT_CADENCE_MONTHS, userId);
   const who = await actorLabel(db, userId);
-  await writeAudit(db, "FaiRecord", created!.id, "create", who, "Copied first article setup", `Opened ${number} from ${source.number}. Results, signatures, and history were not copied.`, userId);
+  const sourceNumber = showRecordNumber(source.number);
+  await writeAudit(db, "FaiRecord", created!.id, "create", who, "Copied first article setup", `Opened a copy${sourceNumber ? ` of ${sourceNumber}` : ""}. Results, signatures, and history were not copied.`, userId);
   return presentRecord(db, created!);
 }
 
@@ -553,8 +548,7 @@ export async function openRecord(db: Db, userId: number, body: OpenBody) {
   if (structure.supplierId && structure.supplierId !== body.supplierId) throw AppError.badRequest("This plan is limited to one supplier.");
   const name = await supplierName(db, body.supplierId);
   if (body.assignedTo) await loadPerson(db, body.assignedTo);
-  const today = await companyToday(db);
-  const number = await allocateNumber(db, today);
+  const number = await claimRecordNumber(db, FAI_NUMBER, body.number);
   const frozen = characteristics.map((row) => {
     try {
       return freezeCharacteristic(toCharacteristic(row));
@@ -606,7 +600,7 @@ export async function openRecord(db: Db, userId: number, body: OpenBody) {
     "create",
     who,
     "Opened first article",
-    `Opened ${number} for ${partNumber} from ${name}. Characteristic limits were copied from plan revision ${revision.revision} and will not change if the plan is revised.`,
+    `Opened ${showRecordNumber(number) || "a first article"} for ${partNumber} from ${name}. Characteristic limits were copied from plan revision ${revision.revision} and will not change if the plan is revised.`,
     userId,
   );
   if (body.assignedTo) {
@@ -614,6 +608,17 @@ export async function openRecord(db: Db, userId: number, body: OpenBody) {
     await sendNotice(db, [assignee.email], noticeAssigned(number, formatUserLabel(assignee, assignee.id)), "FaiRecord", created!.id);
   }
   return presentRecord(db, created!);
+}
+
+export async function updateRecordNumber(db: Db, userId: number, id: number, value: unknown) {
+  const record = await loadRecord(db, id);
+  const body: Record<string, unknown> = { number: value };
+  const change = await applyRecordNumber(db, body, FAI_NUMBER, { id, current: record.number, row: record });
+  const [updated] = await db.update(faiRecords).set({ number: (body.number as string | null) ?? null, updatedAt: new Date() }).where(eq(faiRecords.id, id)).returning();
+  if (change) {
+    await recordAuditTrail(db, { entityType: "FaiRecord", entityId: id, action: "update", changes: change, performedBy: userId });
+  }
+  return presentRecord(db, updated!);
 }
 
 export async function saveResults(db: Db, userId: number, id: number, body: ResultsBody) {
@@ -761,7 +766,7 @@ export async function rejectRecord(req: Request, id: number) {
   const [createdNcr] = await db
     .insert(ncr)
     .values({
-      title: `${record.number} was not approved — ${record.partNumber}`.slice(0, 200),
+      title: `${showRecordNumber(record.number) || "First article"} was not approved — ${record.partNumber}`.slice(0, 200),
       description,
       severity: "medium",
       status: "ncr_created",
@@ -775,7 +780,6 @@ export async function rejectRecord(req: Request, id: number) {
     db,
     createdNcr!.id,
     {
-      ncrNumber: `NCR-${createdNcr!.id}`,
       dateIssued: ncrIsoDate(createdNcr!.createdAt ?? new Date()),
       documentStatus: "Active",
       nonconformanceDescription: description,
@@ -800,7 +804,7 @@ export async function rejectRecord(req: Request, id: number) {
     .set({ status: "rejected", outcome: "rejected", ncrId: createdNcr!.id, decidedBy: actor.id, decidedAt: stamp.signedAt, qualitySignature: stamp.stamp, updatedAt: new Date() })
     .where(eq(faiRecords.id, id))
     .returning();
-  await writeAudit(db, "FaiRecord", id, "status_change", stamp.displayName, "Rejected", `${text} NCR-${createdNcr!.id} was opened.`, actor.id);
+  await writeAudit(db, "FaiRecord", id, "status_change", stamp.displayName, "Rejected", `${text} An NCR was opened.`, actor.id);
   await writeAudit(db, "FaiSourceApproval", source.id, "status_change", stamp.displayName, "Source not approved", text, actor.id);
   const recipients = [...(await qualityEmails(db)), ...(await activeEmails(db, [record.openedBy, record.assignedTo].filter((value): value is number => value != null)))];
   await sendNotice(db, recipients, text, "FaiRecord", id);
@@ -814,7 +818,7 @@ export async function recordPdf(db: Db, id: number, actorId?: number) {
   const outcome = record.status === "approved" ? "Approved" : "Not approved";
   const chrome = await loadPdfChrome(db, "fai", id, {});
   const bytes = await renderFaiPdf({
-    number: record.number,
+    number: showRecordNumber(record.number),
     partNumber: record.partNumber,
     partName: record.partName,
     supplierName: record.supplierName,
@@ -842,13 +846,13 @@ export async function recordPdf(db: Db, id: number, actorId?: number) {
   }, chrome);
   const frame = applyChrome(emptyFrame({
     sourceModule: "FAI",
-    recordNumber: record.number,
+    recordNumber: showRecordNumber(record.number),
     revision: String(record.planRevision),
     generatedBy: "AccuQual",
     status: outcome,
   }), chrome);
   await persistPdfExport(db, bytes, frame, { entityType: "fai", entityId: id, actorId });
-  return { filename: `${record.number}.pdf`, bytes, exportId: chrome.exportId };
+  return { filename: `${showRecordNumber(record.number) || "first-article"}.pdf`, bytes, exportId: chrome.exportId };
 }
 
 export async function listSources(db: Db) {

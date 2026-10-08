@@ -9,6 +9,7 @@ import { erpReceivingLineItems } from "./erp.js";
  */
 export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   inspectionDate: timestamp("inspection_date"),
   inspectorName: text("inspector_name"),
   inspectionType: text("inspection_type"), // incoming | in_process | final

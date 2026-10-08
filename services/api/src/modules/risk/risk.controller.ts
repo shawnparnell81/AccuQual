@@ -5,6 +5,8 @@ import { pfmeaActionPriority } from "../forms/fmeaPriority.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
+import { RISK_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
@@ -108,10 +110,12 @@ async function transition(req: Request, id: number, newStatus: string) {
 export const createRiskHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
   const { riskScore, riskLevel } = computeScoring(req.body.severity, req.body.probability);
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, RISK_NUMBER);
 
   const [created] = await req
     .db!.insert(riskAssessments)
-    .values({ ...req.body, riskScore, riskLevel, createdBy: req.user?.id })
+    .values({ ...body, riskScore, riskLevel, createdBy: req.user?.id } as typeof riskAssessments.$inferInsert)
     .returning();
   await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
@@ -141,6 +145,7 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
   // Stripped before the DB write either way.
   const { aiSuggestionId, ...rest } = req.body as { aiSuggestionId?: number } & Record<string, unknown>;
   const body = stripClientOwnedFields(rest) as { severity?: number; probability?: number } & Record<string, unknown>;
+  const numberChange = await applyRecordNumber(req.db!, body, RISK_NUMBER, { id: record.id, current: record.recordNumber, row: record });
   const scoringChanged = body.severity !== undefined || body.probability !== undefined;
   const { riskScore, riskLevel } = computeScoring(body.severity ?? record.severity, body.probability ?? record.probability);
 
@@ -150,15 +155,16 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
     .where(eq(riskAssessments.id, record.id))
     .returning();
 
+  const baseChanges = aiSuggestionId
+    ? { subAction: "ai_suggestion_accepted", suggestionId: aiSuggestionId, fieldsChanged: Object.keys(body), ...body }
+    : scoringChanged
+      ? { subAction: "severity_probability_change", fieldsChanged: Object.keys(body), oldSeverity: record.severity, oldProbability: record.probability, newSeverity: updated!.severity, newProbability: updated!.probability, newRiskScore: riskScore, newRiskLevel: riskLevel }
+      : { fieldsChanged: Object.keys(body), ...body };
   await recordAuditTrail(req.db!, {
     entityType: "RiskAssessment",
     entityId: record.id,
     action: "update",
-    changes: aiSuggestionId
-      ? { subAction: "ai_suggestion_accepted", suggestionId: aiSuggestionId, fieldsChanged: Object.keys(body), ...body }
-      : scoringChanged
-        ? { subAction: "severity_probability_change", fieldsChanged: Object.keys(body), oldSeverity: record.severity, oldProbability: record.probability, newSeverity: updated!.severity, newProbability: updated!.probability, newRiskScore: riskScore, newRiskLevel: riskLevel }
-        : { fieldsChanged: Object.keys(body), ...body },
+    changes: changesWithNumberEdit(baseChanges, numberChange),
     performedBy: req.user?.id,
   });
   res.json(updated);

@@ -18,12 +18,15 @@ import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { filledCopyFolderSentence, revisionLabel } from "../../lib/formDocument";
 
 interface IsoQualityForm {
   id: number;
   formType: IsoFormType;
+  recordNumber?: string | null;
   data: { cells?: Record<string, CellValue>; customers?: ScorecardRow[]; problems?: FailureRow[] };
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -31,9 +34,9 @@ interface IsoQualityForm {
 
 const hooks = createResourceHooks<IsoQualityForm>("iso-quality-forms");
 
-function filedName(pattern: string, formId: string, recordNumber: number, createdAt?: string | null) {
+function filedName(pattern: string, formId: string, recordNumber: string, createdAt?: string | null) {
   const date = (createdAt ?? "").slice(0, 10);
-  return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
+  return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", recordNumber).replaceAll("{date}", date);
 }
 
 function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
@@ -86,13 +89,15 @@ export function IsoFormListPage() {
 
   const mine = rows.filter((row) => row.formType === form.formType);
 
-  function start() {
+  async function start(recordNumber: string) {
     setPending(true);
     const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : form.formType === "audit_summary" ? auditSummaryStarter() : form.formType === "visitor_log" ? visitorStarter() : form.formType === "monthly_engineering" ? monthlyStarter() : isBatch4(form.formType) ? blankBatch4(form.formType) : isBatch5(form.formType) ? blankBatch5(form.formType) : isBatch6(form.formType) ? blankBatch6(form.formType) : {};
-    createForm.mutate({ formType: form.formType, data: { cells } } as never, {
-      onSuccess: (created) => navigate(`/iso-forms/record/${created.id}`),
-      onSettled: () => setPending(false),
-    });
+    try {
+      const created = await createForm.mutateAsync({ formType: form.formType, recordNumber: recordNumber.trim() || null, data: { cells } } as never);
+      navigate(`/iso-forms/record/${created.id}`);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -111,9 +116,13 @@ export function IsoFormListPage() {
           {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}
         </div>
         {canEdit && !form.retired && (
-          <button type="button" onClick={start} disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
-            {pending ? "Creating…" : liveFormId ? `New ${liveFormId}` : `New ${meta.title}`}
-          </button>
+          <NumberedCreateButton
+            label={liveFormId ? `New ${liveFormId}` : `New ${meta.title}`}
+            numberLabel="Record No."
+            dialogTitle={`New ${meta.title}`}
+            pending={pending}
+            onCreate={start}
+          />
         )}
       </div>
       {isLoading && <p className="text-sm text-muted-foreground">Loading records…</p>}
@@ -136,7 +145,7 @@ export function IsoFormListPage() {
                 <tr key={row.id} className="border-t border-border">
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => navigate(`/iso-forms/record/${row.id}`)} className="text-left text-primary hover:underline">
-                      {filedName(pattern, filingId, row.id, row.createdAt)}
+                      {filedName(pattern, filingId, showRecordNumber(row.recordNumber), row.createdAt) || meta.title}
                     </button>
                   </td>
                   <td className="px-3 py-2">{summary(meta.formType, row.data ?? {}) || "—"}</td>

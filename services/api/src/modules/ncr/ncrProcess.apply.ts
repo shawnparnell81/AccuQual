@@ -138,14 +138,14 @@ async function applyStep(node: WorkflowNode, context: Record<string, unknown>, d
     data.supplierCorrectiveActions = Array.isArray(data.supplierCorrectiveActions) ? data.supplierCorrectiveActions : [];
   } else if (node.id === "a_od") {
     if (data.priority === "Normal") data.priority = "High";
-    data.dashboardAlert = `Corrective action for NCR ${text(data.ncr_number) ?? ncrId} is overdue.`;
+    data.dashboardAlert = `Corrective action for NCR ${text(data.ncr_number) || "this record"} is overdue.`;
   }
 
   const openedAt = text(data.date_opened) ? new Date(String(data.date_opened)) : row.createdAt ? new Date(row.createdAt) : null;
   const noticesSent = Array.isArray(data.noticesSent) ? (data.noticesSent as string[]) : [];
   const evaluation = evaluateSla({
     now,
-    ncrNumber: text(data.ncr_number) ?? String(ncrId),
+    ncrNumber: text(data.ncr_number) ?? "",
     severity: data.severity ?? row.severity,
     workflowStage: typeof data.workflow_stage === "string" ? data.workflow_stage : stage,
     openedAt,
@@ -166,7 +166,7 @@ async function applyStep(node: WorkflowNode, context: Record<string, unknown>, d
   const stepTargets = Array.isArray(node.config.notify) ? (node.config.notify.filter((item) => typeof item === "string") as string[]) : [];
   const stepKey = `step:${node.id}`;
   const stepNotices: SlaNotice[] = !noticesSent.includes(stepKey) && stepTargets.length > 0
-    ? [{ key: stepKey, targets: stepTargets, subject: `${node.label ?? "NCR step"} — NCR ${text(data.ncr_number) ?? ncrId}`, body: `${node.label ?? "This step"} is now active for NCR ${text(data.ncr_number) ?? ncrId}. This is an in-app notice.` }]
+        ? [{ key: stepKey, targets: stepTargets, subject: `${node.label ?? "NCR step"} — NCR ${text(data.ncr_number) || "record"}`, body: `${node.label ?? "This step"} is now active for NCR ${text(data.ncr_number) || "this record"}. This is an in-app notice.` }]
     : [];
   const approverTitles = await managementTitles(db);
   const delivered = await deliverInAppNotices(db, [...stepNotices, ...evaluation.notices], data, approverTitles, row.assignedTo, ncrId);

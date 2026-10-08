@@ -10,9 +10,12 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { RecordFrame } from "../../components/records/RecordFrame";
 import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 
 interface ChangeRequest {
   id: number;
+  recordNumber?: string | null;
   title: string;
   description: string | null;
   impactAssessment: string | null;
@@ -28,6 +31,7 @@ export function ChangeDetailPage() {
   const { id } = useParams();
   const changeId = Number(id);
   const { data: change, isLoading, isError } = changeHooks.useOne(changeId);
+  const updateChange = changeHooks.useUpdate();
   const approveAction = changeHooks.useAction("approve");
   const canEdit = useCanEditWorkflow("change");
   const user = useCurrentUser();
@@ -44,12 +48,13 @@ export function ChangeDetailPage() {
       header={
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Change #{change.id} — {change.title}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("Change", change.recordNumber)} — {change.title}</h1>
+          <RecordNumberEditor label="Change No." value={change.recordNumber} canEdit={canEdit} onSave={(next) => updateChange.mutateAsync({ id: change.id, recordNumber: next.trim() || null })} />
           <StatusBadge value={change.status} />
         </div>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} ownerIds={[change.requestedBy]} navigateTo="/change" />
-          <OpenFormButton formType="pcn" entityId={change.id} title={`PCN #${change.id} Form`} label="PCN Document" />
+          <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} number={change.recordNumber} ownerIds={[change.requestedBy]} navigateTo="/change" />
+          <OpenFormButton formType="pcn" entityId={change.id} title={`${recordHeading("Change", change.recordNumber)} Form`} label="PCN Document" />
           {canEdit && change.status !== "approved" && (
             <button onClick={() => approveAction.mutate({ id: changeId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Approve

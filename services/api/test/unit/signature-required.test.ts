@@ -181,13 +181,14 @@ describe("signature required choice", () => {
       ],
     };
     const work = buildOpenWork(input);
-    const numbers = work.records.map((row) => row.number);
-    expect(numbers).not.toContain("VAL-1");
-    expect(numbers).toContain("VAL-2");
-    expect(numbers).toContain("VAL-3");
-    expect(numbers).not.toContain("TRP-11");
-    expect(numbers).toContain("TRP-12");
-    expect(numbers).toContain("TRP-13");
+    const hrefs = work.records.map((row) => row.href);
+    expect(hrefs).not.toContain("/validation-reports/1");
+    expect(hrefs).toContain("/validation-reports/2");
+    expect(hrefs).toContain("/validation-reports/3");
+    expect(hrefs).not.toContain("/iso-forms/record/11");
+    expect(hrefs).toContain("/iso-forms/record/12");
+    expect(hrefs).toContain("/iso-forms/record/13");
+    expect(work.records.every((row) => row.number === "")).toBe(true);
   });
 
   it("does not change the stored form revision when the choice is added", () => {

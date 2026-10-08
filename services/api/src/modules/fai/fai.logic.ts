@@ -372,20 +372,25 @@ export function canRecordAnnualPull(actor: FaiActor, assignedTo: number | null):
   return actor.id != null && actor.id === assignedTo;
 }
 
-export function noticeAssigned(number: string, name: string): string {
-  return `${number} is ready for result entry. It is assigned to ${name}.`;
+function faiLabel(number: string | null | undefined): string {
+  const shown = number?.trim() ?? "";
+  return shown || "This first article";
 }
 
-export function noticeSubmitted(number: string): string {
-  return `${number} has been submitted for Quality review.`;
+export function noticeAssigned(number: string | null, name: string): string {
+  return `${faiLabel(number)} is ready for result entry. It is assigned to ${name}.`;
 }
 
-export function noticeApproved(number: string, part: string, supplier: string, due: string): string {
-  return `${number} was approved. ${part} from ${supplier} is approved. The next inspection is due ${due}.`;
+export function noticeSubmitted(number: string | null): string {
+  return `${faiLabel(number)} has been submitted for Quality review.`;
 }
 
-export function noticeRejected(number: string, part: string, supplier: string): string {
-  return `${number} was not approved. A nonconformance was opened. ${part} from ${supplier} is not approved.`;
+export function noticeApproved(number: string | null, part: string, supplier: string, due: string): string {
+  return `${faiLabel(number)} was approved. ${part} from ${supplier} is approved. The next inspection is due ${due}.`;
+}
+
+export function noticeRejected(number: string | null, part: string, supplier: string): string {
+  return `${faiLabel(number)} was not approved. A nonconformance was opened. ${part} from ${supplier} is not approved.`;
 }
 
 export function noticeDueSoon(part: string, supplier: string, due: string): string {

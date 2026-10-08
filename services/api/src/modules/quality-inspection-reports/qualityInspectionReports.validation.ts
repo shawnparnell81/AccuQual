@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
 import { signatureRequiredField } from "../signatures/signatureRequired.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const INSPECTION_TYPES = ["incoming", "in_process", "final"] as const;
 export const INSPECTION_FINAL_STATUSES = ["accepted", "rejected", "rework_required", "accepted_via_deviation"] as const;
@@ -9,12 +10,14 @@ export const DEFECT_CATEGORIES = ["dimensional", "cosmetic", "functional", "mate
 export const INSPECTION_METHODS = ["visual", "dimensional", "functional", "documentation", "other"] as const;
 
 export const createQualityInspectionReportSchema = z.object({
+  recordNumber: recordNumberSchema,
   inspectionType: z.enum(INSPECTION_TYPES).optional(),
   supplierId: z.coerce.number().int().optional(),
   receivingLineItemId: z.coerce.number().int().optional(),
 });
 
 export const updateQualityInspectionReportSchema = z.object({
+  recordNumber: recordNumberSchema,
   inspectionDate: reasonableDate.nullable().optional(),
   inspectorName: z.string().nullable().optional(),
   inspectionType: z.enum(INSPECTION_TYPES).nullable().optional(),

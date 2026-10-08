@@ -41,7 +41,7 @@ export async function runNcrSlaSweep(db: Db = ownerDb as unknown as Db, now = ne
     const noticesSent = Array.isArray(data.noticesSent) ? [...(data.noticesSent as string[])] : [];
     const evaluation = evaluateSla({
       now,
-      ncrNumber: text(data.ncr_number) ?? String(row.id),
+      ncrNumber: text(data.ncr_number) ?? "",
       severity: data.severity ?? row.severity,
       workflowStage: stage,
       openedAt,

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { RecordNumberEditor, RecordNumberField } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { SaveAsFolderDialog } from "../../components/forms/SaveAsFolderDialog";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -16,6 +18,7 @@ import { GridFormEditor } from "./GridFormEditor";
 interface FillRecord {
   id: number;
   formId: number;
+  recordNumber?: string | null;
   templateRevision: string;
   templateFormNumber: string | null;
   title: string;
@@ -80,8 +83,19 @@ export function FormFillPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="no-print flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">This is a new copy of revision {fill.data.templateRevision}. The blank template is not changed.</p>
+      <div className="no-print flex flex-wrap items-end justify-between gap-2">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">This is a new copy of revision {fill.data.templateRevision}. The blank template is not changed.</p>
+          <RecordNumberEditor
+            label="Record No."
+            value={fill.data.recordNumber}
+            canEdit
+            onSave={async (next) => {
+              await apiClient.patch(`/form-builder/fills/${id}`, { recordNumber: next.trim() || null });
+              await queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
+            }}
+          />
+        </div>
         <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
       </div>
       <Paper
@@ -141,28 +155,36 @@ export function FormTemplateOpenPage() {
   const { id } = useParams();
   const formId = Number(id);
   const navigate = useNavigate();
-  const toast = useToast();
-  const [message, setMessage] = useState("Opening a fresh copy…");
+  const [recordNumber, setRecordNumber] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    let cancel = false;
-    async function open() {
-      try {
-        const res = await apiClient.post<{ id: number }>(`/form-builder/${formId}/fills`);
-        if (!cancel) navigate(`/form-builder/fills/${res.data.id}`, { replace: true });
-      } catch (err) {
-        if (!cancel) {
-          const text = extractErrorMessage(err, "Couldn't open a copy of that form.");
-          setMessage(text);
-          toast.error(text);
-        }
-      }
+  async function openCopy() {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await apiClient.post<{ id: number }>(`/form-builder/${formId}/fills`, { recordNumber: recordNumber.trim() || null });
+      navigate(`/form-builder/fills/${res.data.id}`, { replace: true });
+    } catch (err) {
+      setError(extractErrorMessage(err, "Couldn't open a copy of that form."));
+      setPending(false);
     }
-    if (Number.isInteger(formId)) void open();
-    return () => {
-      cancel = true;
-    };
-  }, [formId, navigate, toast]);
+  }
 
-  return <p className="text-sm text-muted-foreground">{message}</p>;
+  return (
+    <form
+      className="flex max-w-md flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void openCopy();
+      }}
+    >
+      <h1 className="text-2xl font-semibold">{recordHeading("Filled form", recordNumber)}</h1>
+      <p className="text-sm text-muted-foreground">Type the record number for this copy, or leave it blank. The blank template is not changed.</p>
+      <RecordNumberField label="Record No." value={recordNumber} error={error} onChange={(value) => { setError(null); setRecordNumber(value); }} />
+      <button type="submit" disabled={pending || !Number.isInteger(formId)} className="w-fit rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+        {pending ? "Opening…" : "Open a copy"}
+      </button>
+    </form>
+  );
 }

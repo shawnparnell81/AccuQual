@@ -33,6 +33,7 @@ import { ncr } from "./ncr.js";
  */
 export const workOrders = pgTable("work_orders", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   quantityPlanned: numeric("quantity_planned").notNull(),
   quantityCompleted: numeric("quantity_completed").notNull().default("0"),

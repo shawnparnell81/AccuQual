@@ -11,10 +11,13 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "../ncr/ncr.formSync.js";
 import { syncComplaintRecordToForm } from "./complaints.formSync.js";
+import { COMPLAINT_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 export const baseHandlers = crudFactory(complaints, {
   entityName: "Complaint",
   idColumn: "id",
+  recordNumber: COMPLAINT_NUMBER,
   afterCreate: async (created, req) => {
     await syncComplaintRecordToForm(req.db!, created as unknown as Complaint, req.user?.id);
   },
@@ -43,12 +46,14 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
   const current = await loadOwned(req);
   if (current.status === "closed") throw AppError.badRequest("A closed complaint cannot be edited.");
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, COMPLAINT_NUMBER, { id: current.id, current: current.recordNumber, row: current });
   const [updated] = await req
     .db!.update(complaints)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(and(eq(complaints.id, current.id)))
     .returning();
-  await recordAuditTrail(req.db!, { entityType: "Complaint", entityId: current.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Complaint", entityId: current.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   await syncComplaintRecordToForm(req.db!, updated!, req.user?.id);
   res.json(updated);
 });
@@ -122,7 +127,6 @@ export const escalateToNcrHandler = asyncHandler(async (req: Request, res: Respo
     req.db!,
     createdNcr!.id,
     {
-      ncrNumber: `NCR-${createdNcr!.id}`,
       dateIssued: ncrIsoDate(createdNcr!.createdAt ?? new Date()),
       documentStatus: "Active",
       nonconformanceDescription: createdNcr!.description ?? undefined,

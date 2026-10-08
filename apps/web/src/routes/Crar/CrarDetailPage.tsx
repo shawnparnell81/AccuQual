@@ -85,7 +85,7 @@ export function CrarDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
-          <h1 className="text-2xl font-semibold">Customer Return Analysis Report {record.customerClaim ? `— ${record.customerClaim}` : `#${record.id}`}</h1>
+          <h1 className="text-2xl font-semibold">Customer Return Analysis Report{record.customerClaim?.trim() ? ` — ${record.customerClaim.trim()}` : ""}</h1>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={record.status} />
             <span className="text-sm text-muted-foreground">{record.customerName ?? "No customer on file"}</span>
@@ -107,12 +107,12 @@ export function CrarDetailPage() {
               variant="primary"
             />
           )}
-          <DeleteRecordButton resource="crar" id={record.id} kind="CRAR" title={record.customerClaim || record.partNumber} ownerIds={[record.createdByUserId]} navigateTo="/crar" />
+          <DeleteRecordButton resource="crar" id={record.id} kind="CRAR" title={record.partNumber} number={record.customerClaim} ownerIds={[record.createdByUserId]} navigateTo="/crar" />
         </div>
       </div>
 
       <div className="hidden print:block">
-        <h1 className="text-2xl font-semibold">Customer Return Analysis Report — {record.customerClaim ?? `#${record.id}`}</h1>
+        <h1 className="text-2xl font-semibold">Customer Return Analysis Report{record.customerClaim?.trim() ? ` — ${record.customerClaim.trim()}` : ""}</h1>
         <p className="text-sm text-muted-foreground">
           Status: {record.status.replace(/_/g, " ")} — RMA {record.rmaNumber ?? "n/a"} — Part {record.partNumber ?? "n/a"} — Initiated {record.reportDate ? new Date(record.reportDate).toLocaleDateString() : "n/a"}
         </p>

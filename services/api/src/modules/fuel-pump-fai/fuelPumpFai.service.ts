@@ -29,7 +29,9 @@ import {
   type FpmCriterionResult,
   type FpmState,
 } from "./fuelPumpFai.logic.js";
-import { nextFuelPumpNumber, persistFpm } from "./fuelPumpFai.persist.js";
+import { persistFpm } from "./fuelPumpFai.persist.js";
+import { FUEL_PUMP_FAI_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, showRecordNumber } from "../records/userRecordNumber.js";
 import { requirePlantId } from "../sites/siteAccess.js";
 import { loadNcrStatus, notifySla } from "./fuelPumpFai.actions.js";
 
@@ -208,7 +210,10 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
   if (errors.length > 0) throw AppError.badRequest(errors.join(" "));
   const workflow = await ensureFuelPumpDraft(db, actor);
   const now = new Date();
-  const number = await nextFuelPumpNumber(db, now.getUTCFullYear());
+  const numberBody: Record<string, unknown> = { faiNumber: input.number };
+  await applyRecordNumber(db, numberBody, FUEL_PUMP_FAI_NUMBER);
+  const stored = typeof numberBody.faiNumber === "string" ? numberBody.faiNumber : null;
+  const number = showRecordNumber(stored);
   const state = emptyState(typeof input.dateOpened === "string" && input.dateOpened ? new Date(input.dateOpened).toISOString() : now.toISOString());
   state.number = number;
   state.partNumber = text(input.partNumber);
@@ -238,7 +243,7 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
   const [row] = await db
     .insert(fuelPumpFaiRecords)
     .values({
-      faiNumber: number,
+      faiNumber: stored,
       partNumber: state.partNumber,
       partDescription: state.partDescription,
       supplier: state.supplier,
@@ -300,6 +305,17 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
   });
   const fresh = await loadRow(db, row.id);
   return { ...present(fresh, readFpm((fresh.packet ?? {}) as Record<string, unknown>)), pendingApproval: (run?.context as { pendingApproval?: unknown } | null)?.pendingApproval ?? null };
+}
+
+export async function updateFuelPumpNumber(db: Db, id: number, value: unknown, userId: number) {
+  const row = await loadRow(db, id);
+  const body: Record<string, unknown> = { faiNumber: value };
+  const change = await applyRecordNumber(db, body, FUEL_PUMP_FAI_NUMBER, { id, current: row.faiNumber, row });
+  const stored = typeof body.faiNumber === "string" ? body.faiNumber : null;
+  const packet = { ...((row.packet ?? {}) as Record<string, unknown>), number: stored ?? "" };
+  await db.update(fuelPumpFaiRecords).set({ faiNumber: stored, packet, updatedAt: new Date() }).where(eq(fuelPumpFaiRecords.id, id));
+  if (change) await recordAuditTrail(db, { entityType: "FuelPumpFai", entityId: id, action: "update", changes: change, performedBy: userId });
+  return getFuelPump(db, id);
 }
 
 export async function getFuelPump(db: Db, id: number) {

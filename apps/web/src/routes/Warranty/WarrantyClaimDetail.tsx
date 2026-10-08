@@ -14,6 +14,8 @@ import { WarrantyDocumentsPanel } from "./WarrantyDocumentsPanel";
 import { WarrantyCrarPanel } from "./WarrantyCrarPanel";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -57,6 +59,7 @@ export function WarrantyClaimDetail() {
   const { id } = useParams();
   const claimId = Number(id);
   const { data: claim, isLoading, isError } = claimHooks.useOne(claimId);
+  const updateClaim = claimHooks.useUpdate();
   const currentUser = useCurrentUser();
   const warrantyAccessLevel = useWorkflowAccessLevel("warranty");
 
@@ -85,18 +88,19 @@ export function WarrantyClaimDetail() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <h1 className="text-2xl font-semibold">{claim.claimNumber}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("Warranty claim", claim.claimNumber)}</h1>
+          <RecordNumberEditor label="Claim No." value={claim.claimNumber} canEdit={canEditFields} onSave={(next) => updateClaim.mutateAsync({ id: claim.id, claimNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={claim.status} />
           </div>
         </div>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="warranty/claims" id={claim.id} kind="Warranty claim" title={claim.failureDescription} ownerIds={[claim.createdByUserId]} navigateTo="/warranty" />
+          <DeleteRecordButton resource="warranty/claims" id={claim.id} kind="Warranty claim" title={claim.failureDescription} number={claim.claimNumber} ownerIds={[claim.createdByUserId]} navigateTo="/warranty" />
         </div>
       </div>
 
       <div className="hidden print:block">
-        <h1 className="text-2xl font-semibold">{claim.claimNumber}</h1>
+        <h1 className="text-2xl font-semibold">{recordHeading("Warranty claim", claim.claimNumber)}</h1>
         <p className="text-sm text-muted-foreground">
           Status: {claim.status.replace(/_/g, " ")}
         </p>
@@ -182,14 +186,14 @@ export function WarrantyClaimDetail() {
           <h3 className="mb-2 text-sm font-medium">Linked Records</h3>
           {claim.linkedNcr ? (
             <Link to={`/ncr/${claim.linkedNcr.id}`} className="block text-sm text-primary hover:underline">
-              NCR #{claim.linkedNcr.id} — {claim.linkedNcr.title}
+              {claim.linkedNcr.title || "NCR"}
             </Link>
           ) : (
             <p className="text-sm text-muted-foreground">No linked NCR.</p>
           )}
           {claim.linkedWorkOrder ? (
             <Link to={`/work-orders/${claim.linkedWorkOrder.id}`} className="mt-1 block text-sm text-primary hover:underline">
-              Work Order #{claim.linkedWorkOrder.id}
+              Work order
             </Link>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">No linked Work Order.</p>

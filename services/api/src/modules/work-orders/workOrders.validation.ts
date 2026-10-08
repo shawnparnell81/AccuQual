@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
 import { signatureRequiredField } from "../signatures/signatureRequired.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const WORK_ORDER_STATUSES = ["planned", "in_progress", "completed", "cancelled"] as const;
 
 export const createWorkOrderSchema = z.object({
+  recordNumber: recordNumberSchema,
   itemId: z.coerce.number().int(),
   quantityPlanned: z.coerce.number().positive(),
   linkedNcrId: z.coerce.number().int().optional(),
@@ -14,6 +16,7 @@ export const createWorkOrderSchema = z.object({
 });
 
 export const updateWorkOrderSchema = z.object({
+  recordNumber: recordNumberSchema,
   quantityPlanned: z.coerce.number().positive().optional(),
   linkedNcrId: z.coerce.number().int().nullable().optional(),
   dueDate: reasonableDate.nullable().optional(),

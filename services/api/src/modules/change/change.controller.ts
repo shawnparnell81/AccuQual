@@ -4,10 +4,11 @@ import { changeRequests } from "../../drizzle/schema/change.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { CHANGE_NUMBER } from "../records/recordNumberSpecs.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
-export const baseHandlers = crudFactory(changeRequests, { entityName: "Change request", idColumn: "id" });
+export const baseHandlers = crudFactory(changeRequests, { entityName: "Change request", idColumn: "id", recordNumber: CHANGE_NUMBER });
 
 // Previously had no audit trail entry and published no event — the one
 // hand-rolled action on this module, unlike create/update above (which get

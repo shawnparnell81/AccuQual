@@ -6,9 +6,9 @@ import { ensureTestCompany } from "../helpers/company.js";
 // cross-module aggregation endpoint most likely to regress into a
 // leak during a refactor.
 //
-// Record numbers still match a numeric id prefix. Documents also match title
-// and revision, and equipment matches name and serial. The response is
-// `{ results: [...] }`, not a bare array.
+// Search matches the number the user typed, plus title, part number, document
+// title, revision, and equipment name or serial. A blank number is not the
+// database id. The response is `{ results: [...] }`, not a bare array.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import request from "supertest";
@@ -35,6 +35,7 @@ const suffix = Date.now();
 let companyId: number;
 
 let ncrId: number;
+let blankNcrId: number;
 let rmaId: number;
 let eightDId: number;
 let complaintId: number;
@@ -72,21 +73,23 @@ describe("Search (real DB + real HTTP path)", () => {
     
     
 
-    const [created] = await db.insert(ncr).values({ title: `Search test NCR ${suffix}` }).returning();
+    const [created] = await db.insert(ncr).values({ title: "Search test NCR", recordNumber: `QNCR-${suffix}` }).returning();
     ncrId = created!.id;
+    const [blankNcr] = await db.insert(ncr).values({ title: "Bent flange only" }).returning();
+    blankNcrId = blankNcr!.id;
 
     const [supplier] = await db.insert(suppliers).values({ name: `Search Test Supplier ${suffix}` }).returning();
     const [rmaRow] = await db.insert(rma).values({ rmaNumber: `RMA-${suffix}`, supplierId: supplier!.id }).returning();
     rmaId = rmaRow!.id;
-    const [eightDRow] = await db.insert(eightD).values({ }).returning();
+    const [eightDRow] = await db.insert(eightD).values({ recordNumber: `EIGHT-${suffix}` }).returning();
     eightDId = eightDRow!.id;
     const [complaintRow] = await db.insert(complaints).values({ description: `Search test complaint ${suffix}` }).returning();
     complaintId = complaintRow!.id;
-    const [changeRow] = await db.insert(changeRequests).values({ title: `Search test change ${suffix}` }).returning();
+    const [changeRow] = await db.insert(changeRequests).values({ title: `Search test change ${suffix}`, recordNumber: `CHG-${suffix}` }).returning();
     changeId = changeRow!.id;
-    const [riskRow] = await db.insert(riskAssessments).values({ title: `Search test risk ${suffix}` }).returning();
+    const [riskRow] = await db.insert(riskAssessments).values({ title: `Search test risk ${suffix}`, recordNumber: `RISK-${suffix}` }).returning();
     riskId = riskRow!.id;
-    const [ppapRow] = await db.insert(ppapPackages).values({ partNumber: `PN-SEARCH-${suffix}` }).returning();
+    const [ppapRow] = await db.insert(ppapPackages).values({ partNumber: `PN-SEARCH-${suffix}`, recordNumber: `PPAP-${suffix}` }).returning();
     ppapId = ppapRow!.id;
     const [documentRow] = await db.insert(documents).values({ title: documentTitle, revisionCode: `REV-${suffix}` }).returning();
     documentId = documentRow!.id;
@@ -99,14 +102,18 @@ describe("Search (real DB + real HTTP path)", () => {
     await pool.end();
   });
 
-  it("quality (real ncr access) finds the NCR by its numeric id prefix", async () => {
-    const res = await request(app).get(`/search?q=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`);
+  it("quality (real ncr access) finds the NCR by the number the user typed", async () => {
+    const res = await request(app).get(`/search`).query({ q: `QNCR-${suffix}` }).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(200);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "NCR" && r.id === ncrId)).toBe(true);
+    const byId = await request(app).get(`/search`).query({ q: String(blankNcrId) }).set("Authorization", `Bearer ${qualityToken}`);
+    expect(byId.body.results.some((r: { type: string; id: number }) => r.type === "NCR" && r.id === blankNcrId)).toBe(false);
+    const blank = byId.body.results.find((r: { type: string; id: number }) => r.id === blankNcrId);
+    expect(blank).toBeUndefined();
   });
 
   it("engineering (zero access to ncr) never sees the NCR in results — the category is skipped, not filtered after the fact", async () => {
-    const res = await request(app).get(`/search?q=${ncrId}`).set("Authorization", `Bearer ${engineeringToken}`);
+    const res = await request(app).get(`/search`).query({ q: `QNCR-${suffix}` }).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.status).toBe(200);
     expect(res.body.results.some((r: { type: string }) => r.type === "NCR")).toBe(false);
   });
@@ -119,16 +126,14 @@ describe("Search (real DB + real HTTP path)", () => {
     expect(res.body.results).toEqual([]);
   });
 
-  // RMA/8D/Complaint/Change/Risk/PPAP — closing the pre-existing search gap. Each follows the exact same
-  // numeric-id-prefix + canRead() pattern already proven above for NCR; one "found" case per type is enough
-  // to prove the wiring, since the WHERE-clause shape is identical to what's already covered.
-  it("finds an RMA (quality has edit access) by its numeric id prefix", async () => {
-    const res = await request(app).get(`/search?q=${rmaId}`).set("Authorization", `Bearer ${qualityToken}`);
+  // RMA/8D/Complaint/Change/Risk/PPAP — one found case per type, by the user-entered number.
+  it("finds an RMA (quality has edit access) by the number the user typed", async () => {
+    const res = await request(app).get(`/search`).query({ q: `RMA-${suffix}` }).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "RMA" && r.id === rmaId)).toBe(true);
   });
 
   it("finds an 8D (quality has edit access)", async () => {
-    const res = await request(app).get(`/search?q=${eightDId}`).set("Authorization", `Bearer ${qualityToken}`);
+    const res = await request(app).get(`/search`).query({ q: `EIGHT-${suffix}` }).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "8D" && r.id === eightDId)).toBe(true);
   });
 
@@ -138,17 +143,17 @@ describe("Search (real DB + real HTTP path)", () => {
   });
 
   it("finds a Change request (engineering has edit access)", async () => {
-    const res = await request(app).get(`/search?q=${changeId}`).set("Authorization", `Bearer ${engineeringToken}`);
+    const res = await request(app).get(`/search`).query({ q: `CHG-${suffix}` }).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "Change" && r.id === changeId)).toBe(true);
   });
 
   it("finds a Risk assessment (engineering has edit access)", async () => {
-    const res = await request(app).get(`/search?q=${riskId}`).set("Authorization", `Bearer ${engineeringToken}`);
+    const res = await request(app).get(`/search`).query({ q: `RISK-${suffix}` }).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "Risk" && r.id === riskId)).toBe(true);
   });
 
   it("finds a PPAP package (engineering has edit access)", async () => {
-    const res = await request(app).get(`/search?q=${ppapId}`).set("Authorization", `Bearer ${engineeringToken}`);
+    const res = await request(app).get(`/search`).query({ q: `PPAP-${suffix}` }).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "PPAP" && r.id === ppapId)).toBe(true);
   });
 

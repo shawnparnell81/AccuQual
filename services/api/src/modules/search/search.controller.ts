@@ -21,6 +21,7 @@ import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmen
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { Db } from "../../lib/requestDb.js";
 import { wantsRecordType, type SearchTypeName } from "./searchFilters.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 
 const RESULTS_PER_TYPE = 5;
 
@@ -81,9 +82,9 @@ function contains(value: string) {
 
 /**
  * GET /search?q=... — read-only across every module's own real table, no
- * new table of its own. Numeric ids for records, plus document title /
- * revision and equipment name / serial. Complaint, inventory, and purchase
- * orders are not returned.
+ * new table of its own. Matches the number the user typed, plus document
+ * title / revision and equipment name / serial. A blank number is not the
+ * database id. Complaint, inventory, and purchase orders are not returned.
  *
  * Optional palette facets (`type`, `status`, `plant`, `assigned`) narrow
  * that same search. `assigned=me` is the signed-in user. A plant facet
@@ -136,7 +137,8 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     if (statusFilter && !hasStatus) return false;
     if (plantFilter && (kind === "company" || plantMiss)) return false;
     if (assignedFilter && (!assigned || assignMiss)) return false;
-    if (textWithoutFacet) return Boolean(digits) || hasFacet;
+    // Record numbers are text the user typed, so a word search has to reach these modules too.
+    if (textWithoutFacet) return Boolean(q) || hasFacet;
     return Boolean(q) || hasFacet;
   }
 
@@ -164,16 +166,15 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .where(
           and(
             eq(ncr.siteId, siteId),
-            digits ? idPrefix(ncr.id, digits) : undefined,
-            !digits && q ? ilike(ncr.title, contains(q)) : undefined,
+            q ? or(ilike(ncr.title, contains(q)), ilike(ncr.recordNumber, contains(q))) : undefined,
             statusLike ? ilike(ncr.status, statusLike) : undefined,
             plantIds ? inArray(ncr.siteId, plantIds) : undefined,
             assigneeIds ? inArray(ncr.assignedTo, assigneeIds) : undefined,
           ),
         )
-        .orderBy(desc(ncr.id))
+        .orderBy(desc(ncr.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "NCR" as const, id: r.id, label: `NCR #${r.id} — ${r.title}`, path: `/ncr/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "NCR" as const, id: r.id, label: `${showRecordNumber(r.recordNumber) ? `NCR ${showRecordNumber(r.recordNumber)} — ` : "NCR — "}${r.title}`, path: `/ncr/${r.id}`, status: r.status }))),
     );
   }
 
@@ -185,15 +186,15 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .where(
           and(
             eq(capa.siteId, siteId),
-            digits ? idPrefix(capa.id, digits) : undefined,
+            q ? or(ilike(capa.rootCause, contains(q)), ilike(capa.recordNumber, contains(q))) : undefined,
             statusLike ? ilike(capa.status, statusLike) : undefined,
             plantIds ? inArray(capa.siteId, plantIds) : undefined,
             assigneeIds ? inArray(capa.ownerId, assigneeIds) : undefined,
           ),
         )
-        .orderBy(desc(capa.id))
+        .orderBy(desc(capa.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "CAPA" as const, id: r.id, label: `CAPA #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/capa/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "CAPA" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `CAPA ${showRecordNumber(r.recordNumber)}` : "CAPA", path: `/capa/${r.id}`, status: r.status }))),
     );
   }
 
@@ -202,10 +203,10 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(workOrders)
-        .where(and(digits ? idPrefix(workOrders.id, digits) : undefined, statusLike ? ilike(workOrders.status, statusLike) : undefined))
-        .orderBy(desc(workOrders.id))
+        .where(and(q ? ilike(workOrders.recordNumber, contains(q)) : undefined, statusLike ? ilike(workOrders.status, statusLike) : undefined))
+        .orderBy(desc(workOrders.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "WO" as const, id: r.id, label: `WO #${r.id} (${r.status})`, path: `/work-orders/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "WO" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `WO ${showRecordNumber(r.recordNumber)} (${r.status})` : `Work order (${r.status})`, path: `/work-orders/${r.id}`, status: r.status }))),
     );
   }
 
@@ -217,16 +218,15 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .where(
           and(
             eq(audits.siteId, siteId),
-            digits ? idPrefix(audits.id, digits) : undefined,
-            !digits && q ? ilike(audits.name, contains(q)) : undefined,
+            q ? or(ilike(audits.name, contains(q)), ilike(audits.recordNumber, contains(q))) : undefined,
             statusLike ? ilike(audits.status, statusLike) : undefined,
             plantIds ? inArray(audits.siteId, plantIds) : undefined,
             assigneeIds ? inArray(audits.auditorId, assigneeIds) : undefined,
           ),
         )
-        .orderBy(desc(audits.id))
+        .orderBy(desc(audits.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "Audit" as const, id: r.id, label: `Audit #${r.id} — ${r.name}`, path: `/audits/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "Audit" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `Audit ${showRecordNumber(r.recordNumber)} — ${r.name}` : `Audit — ${r.name}`, path: `/audits/${r.id}`, status: r.status }))),
     );
   }
 
@@ -235,10 +235,10 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(rma)
-        .where(and(digits ? idPrefix(rma.id, digits) : undefined, statusLike ? ilike(rma.status, statusLike) : undefined))
-        .orderBy(desc(rma.id))
+        .where(and(q ? ilike(rma.rmaNumber, contains(q)) : undefined, statusLike ? ilike(rma.status, statusLike) : undefined))
+        .orderBy(desc(rma.rmaNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "RMA" as const, id: r.id, label: `RMA ${r.rmaNumber} (${r.status})`, path: `/rma/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "RMA" as const, id: r.id, label: showRecordNumber(r.rmaNumber) ? `RMA ${showRecordNumber(r.rmaNumber)} (${r.status})` : `RMA (${r.status})`, path: `/rma/${r.id}`, status: r.status }))),
     );
   }
 
@@ -247,10 +247,10 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(eightD)
-        .where(digits ? idPrefix(eightD.id, digits) : undefined)
-        .orderBy(desc(eightD.id))
+        .where(q ? ilike(eightD.recordNumber, contains(q)) : undefined)
+        .orderBy(desc(eightD.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "8D" as const, id: r.id, label: `8D #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/8d/${r.id}` }))),
+        .then((rows) => rows.map((r) => ({ type: "8D" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `8D ${showRecordNumber(r.recordNumber)}` : "8D", path: `/8d/${r.id}` }))),
     );
   }
 
@@ -261,15 +261,14 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .from(changeRequests)
         .where(
           and(
-            digits ? idPrefix(changeRequests.id, digits) : undefined,
-            !digits && q ? ilike(changeRequests.title, contains(q)) : undefined,
+            q ? or(ilike(changeRequests.title, contains(q)), ilike(changeRequests.recordNumber, contains(q))) : undefined,
             statusLike ? ilike(changeRequests.status, statusLike) : undefined,
             assigneeIds ? inArray(changeRequests.requestedBy, assigneeIds) : undefined,
           ),
         )
-        .orderBy(desc(changeRequests.id))
+        .orderBy(desc(changeRequests.recordNumber))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "Change" as const, id: r.id, label: `Change #${r.id} — ${r.title}`, path: `/change/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "Change" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `Change ${showRecordNumber(r.recordNumber)} — ${r.title}` : `Change — ${r.title}`, path: `/change/${r.id}`, status: r.status }))),
     );
   }
 
@@ -278,10 +277,10 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(riskAssessments)
-        .where(and(digits ? idPrefix(riskAssessments.id, digits) : undefined, !digits && q ? ilike(riskAssessments.title, contains(q)) : undefined, statusLike ? ilike(riskAssessments.status, statusLike) : undefined, assigneeIds ? inArray(riskAssessments.ownerId, assigneeIds) : undefined))
+        .where(and(q ? or(ilike(riskAssessments.title, contains(q)), ilike(riskAssessments.recordNumber, contains(q))) : undefined, statusLike ? ilike(riskAssessments.status, statusLike) : undefined, assigneeIds ? inArray(riskAssessments.ownerId, assigneeIds) : undefined))
         .orderBy(desc(riskAssessments.id))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "Risk" as const, id: r.id, label: `Risk #${r.id} — ${r.title}`, path: `/risk/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "Risk" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `Risk ${showRecordNumber(r.recordNumber)} — ${r.title}` : `Risk — ${r.title}`, path: `/risk/${r.id}`, status: r.status }))),
     );
   }
 
@@ -290,10 +289,10 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(ppapPackages)
-        .where(and(digits ? idPrefix(ppapPackages.id, digits) : undefined, statusLike ? ilike(ppapPackages.status, statusLike) : undefined))
+        .where(and(q ? or(ilike(ppapPackages.partNumber, contains(q)), ilike(ppapPackages.recordNumber, contains(q))) : undefined, statusLike ? ilike(ppapPackages.status, statusLike) : undefined))
         .orderBy(desc(ppapPackages.id))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "PPAP" as const, id: r.id, label: `PPAP #${r.id} — ${r.partNumber}`, path: `/ppap/${r.id}`, status: r.status }))),
+        .then((rows) => rows.map((r) => ({ type: "PPAP" as const, id: r.id, label: showRecordNumber(r.recordNumber) ? `PPAP ${showRecordNumber(r.recordNumber)} — ${r.partNumber}` : `PPAP — ${r.partNumber}`, path: `/ppap/${r.id}`, status: r.status }))),
     );
   }
 

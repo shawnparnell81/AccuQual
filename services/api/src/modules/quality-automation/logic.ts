@@ -156,6 +156,7 @@ export interface RepeatSignals {
   defectCode: string | null;
   description: string;
   title: string;
+  recordNumber?: string | null;
 }
 
 /**
@@ -208,6 +209,7 @@ export function signalsFromNcr(input: {
   supplierId: number | null;
   title: string | null;
   description: string | null;
+  recordNumber?: string | null;
   form: Record<string, unknown> | null;
   partNumbers: string[];
 }): RepeatSignals {
@@ -224,7 +226,8 @@ export function signalsFromNcr(input: {
     supplierId: input.supplierId,
     defectCode: categories.length > 0 ? categories.join(", ") : null,
     description,
-    title: input.title?.trim() || `NCR #${input.id}`,
+    title: input.title?.trim() || "NCR",
+    recordNumber: input.recordNumber ?? null,
   };
 }
 

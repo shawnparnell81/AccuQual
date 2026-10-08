@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const createEightDSchema = z.object({
+  recordNumber: recordNumberSchema,
   // .coerce — the quick-create modal (GenericCreateForm) submits every
   // field, matches inventory.validation.ts's own established convention
   // for every optional numeric field. Plain z.number() used to reject a
@@ -11,6 +13,7 @@ export const createEightDSchema = z.object({
 const sheetCells = z.record(z.string(), z.string());
 
 export const updateEightDSchema = z.object({
+  recordNumber: recordNumberSchema,
   currentStep: z.coerce.number().int().min(1).max(8).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
   problemDescriptionD2: sheetCells.optional(),

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../../middleware/validate.js";
-import { copyFuelPumpHandler, fuelPumpPdfHandler, getFuelPumpHandler, listFuelPumpHandler, listPreviousFuelPumpHandler, saveFuelPumpResultsHandler, submitFuelPumpHandler } from "./fuelPumpFai.controller.js";
+import { copyFuelPumpHandler, fuelPumpPdfHandler, getFuelPumpHandler, listFuelPumpHandler, listPreviousFuelPumpHandler, saveFuelPumpResultsHandler, submitFuelPumpHandler, updateFuelPumpNumberHandler } from "./fuelPumpFai.controller.js";
 
 const submitSchema = z.object({
   partNumber: z.string().min(1),
@@ -23,6 +23,7 @@ const submitSchema = z.object({
   validationOwner: z.string().optional().default(""),
   qualityManager: z.string().optional().default(""),
   dateOpened: z.string().optional(),
+  number: z.string().trim().max(120).optional(),
 }).strict().refine((value) => Boolean(value.supplier || value.supplierName), { message: "Supplier is required.", path: ["supplier"] })
   .refine((value) => Boolean(value.application || value.vehicleApplication), { message: "Vehicle Application is required.", path: ["application"] })
   .refine((value) => Boolean(value.inspector || value.inspectorName), { message: "Inspector is required.", path: ["inspector"] });
@@ -48,4 +49,5 @@ fuelPumpFaiRouter.post("/copy", copyFuelPumpHandler);
 fuelPumpFaiRouter.post("/", validate(submitSchema), submitFuelPumpHandler);
 fuelPumpFaiRouter.get("/:id/pdf", fuelPumpPdfHandler);
 fuelPumpFaiRouter.get("/:id", getFuelPumpHandler);
+fuelPumpFaiRouter.patch("/:id", validate(z.object({ number: z.string().trim().max(120).nullable().optional() })), updateFuelPumpNumberHandler);
 fuelPumpFaiRouter.put("/:id/results", validate(resultsSchema), saveFuelPumpResultsHandler);

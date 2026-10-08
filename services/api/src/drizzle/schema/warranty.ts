@@ -32,7 +32,7 @@ import { workOrders } from "./workOrders.js";
  */
 export const warrantyClaims = pgTable("warranty_claims", {
   id: serial("id").primaryKey(),
-  claimNumber: text("claim_number").notNull().unique(),
+  claimNumber: text("claim_number"),
   status: text("status").notNull().default("new"),
   customerId: integer("customer_id").references(() => customers.id),
   productId: integer("product_id").references(() => inventoryItems.id),

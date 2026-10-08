@@ -7,7 +7,9 @@ import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowA
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { RecordNumberEditor, RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -40,6 +42,7 @@ export function RiskDetailPage() {
   const riskId = Number(id);
   const canEdit = useCanEditWorkflow("risk");
 
+  const queryClient = useQueryClient();
   const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
   const historyKey: unknown[][] = [["workflow-history", "risk", riskId]];
 
@@ -60,7 +63,8 @@ export function RiskDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">{risk.title}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("Risk", risk.recordNumber) === "Risk" ? risk.title : `${recordHeading("Risk", risk.recordNumber)} — ${risk.title}`}</h1>
+          <RecordNumberEditor label="Risk No." value={risk.recordNumber} canEdit={canEdit} onSave={async (next) => { await apiClient.put(`/risk/${risk.id}`, { recordNumber: next.trim() || null }); await queryClient.invalidateQueries({ queryKey: ["risk", risk.id] }); }} />
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {risk.riskLevel && <StatusBadge value={risk.riskLevel} />}
             <StatusBadge value={risk.status} />
@@ -68,13 +72,13 @@ export function RiskDetailPage() {
             {risk.department && <span className="text-sm text-muted-foreground">· {risk.department}</span>}
             {sourceLink && (
               <a href={sourceLink} className="text-sm text-primary hover:underline">
-                Linked {risk.sourceType} #{risk.sourceId}
+                Linked {risk.sourceType}
               </a>
             )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <OpenFormButton formType="fmea" entityId={risk.id} title={`FMEA #${risk.id} Document`} label="FMEA Document" />
+          <OpenFormButton formType="fmea" entityId={risk.id} title={`${recordHeading("FMEA", risk.recordNumber)} Document`} label="FMEA Document" />
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Risk Analysis
           </button>
@@ -86,7 +90,7 @@ export function RiskDetailPage() {
           <WorkflowActionButton label="Start Mitigation" navKey="risk" action={startMitigation} onClick={() => startMitigation.mutate({ id: riskId })} visible={risk.status === "open"} />
           <WorkflowActionButton label="Start Monitoring" navKey="risk" action={startMonitoring} onClick={() => startMonitoring.mutate({ id: riskId })} visible={risk.status === "mitigation"} />
           <WorkflowActionButton label="Close" navKey="risk" action={closeRisk} onClick={() => closeRisk.mutate({ id: riskId })} visible={risk.status === "monitoring"} variant="primary" />
-          <DeleteRecordButton resource="risk" id={riskId} kind="Risk" title={risk.title} ownerIds={[risk.createdBy, risk.ownerId]} navigateTo="/risk" />
+          <DeleteRecordButton resource="risk" id={riskId} kind="Risk" title={risk.title} number={risk.recordNumber} ownerIds={[risk.createdBy, risk.ownerId]} navigateTo="/risk" />
         </div>
       </div>
 
@@ -127,7 +131,9 @@ function EditRiskModal({ risk, isOpen, onClose }: { risk: RiskAssessment; isOpen
     probability: risk.probability ? String(risk.probability) : "",
     processArea: risk.processArea ?? "",
     department: risk.department ?? "",
+    recordNumber: showRecordNumber(risk.recordNumber),
   });
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   const update = useMutation({
     mutationFn: async () =>
@@ -140,6 +146,7 @@ function EditRiskModal({ risk, isOpen, onClose }: { risk: RiskAssessment; isOpen
           probability: form.probability ? Number(form.probability) : undefined,
           processArea: form.processArea || undefined,
           department: form.department || undefined,
+          recordNumber: form.recordNumber.trim() || null,
         })
       ).data,
     onSuccess: () => {
@@ -147,11 +154,16 @@ function EditRiskModal({ risk, isOpen, onClose }: { risk: RiskAssessment; isOpen
       toast.success("Risk updated.");
       onClose();
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update this risk — Quality/Engineering only.")),
+    onError: (err) => {
+      const message = extractErrorMessage(err, "Couldn't update this risk — Quality/Engineering only.");
+      const duplicate = duplicateNumberError(message);
+      if (duplicate) setNumberError(duplicate);
+      else toast.error(message);
+    },
   });
 
   return (
-    <Modal title={`Edit Risk #${risk.id}`} isOpen={isOpen} onClose={onClose}>
+    <Modal title="Edit Risk" isOpen={isOpen} onClose={onClose}>
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
@@ -159,6 +171,7 @@ function EditRiskModal({ risk, isOpen, onClose }: { risk: RiskAssessment; isOpen
           update.mutate();
         }}
       >
+        <RecordNumberField label="Risk No." value={form.recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, recordNumber: value }); }} />
         <TextField label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
         <TextAreaField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         <SelectField label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>

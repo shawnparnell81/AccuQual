@@ -17,6 +17,8 @@ import { PendingFilesField } from "../../components/shared/PendingFilesField";
 import { SegmentedTabs } from "../../components/dashboard/kit";
 import { uploadPendingAttachments } from "../../lib/attachments";
 import { CapaBoard } from "./CapaBoard";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -38,11 +40,12 @@ export function CapaListPage() {
     setParams(next, { replace: true });
   }, [canEdit, params, setParams]);
   const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
-  const [form, setForm] = useState<{ ncrId: string; rootCause: string }>({ ncrId: "", rootCause: "" });
+  const [form, setForm] = useState<{ ncrId: string; rootCause: string; recordNumber: string }>({ ncrId: "", rootCause: "", recordNumber: "" });
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   const columns: Column<Capa>[] = [
-    { header: "ID", accessor: (c) => `#${c.id}` },
-    { header: "NCR", accessor: (c) => (c.ncrId ? `#${c.ncrId}` : "Not linked") },
+    { header: "CAPA No.", accessor: (c) => showRecordNumber(c.recordNumber) },
+    { header: "NCR", accessor: (c) => (c.ncrId ? "Linked" : "Not linked") },
     { header: "State", accessor: (c) => <StatusBadge value={c.status} label={statusPhrase(c.status)} /> },
     { header: "Owner", accessor: (c) => label(c.ownerId) },
     { header: "Due", accessor: (c) => duePhrase(c.dueDate, c.status === "closed") },
@@ -100,7 +103,7 @@ export function CapaListPage() {
           onSubmit={(e) => {
             e.preventDefault();
             createCapa.mutate(
-              { ncrId: form.ncrId ? Number(form.ncrId) : undefined, rootCause: form.rootCause || undefined },
+              { recordNumber: form.recordNumber.trim() || null, ncrId: form.ncrId ? Number(form.ncrId) : undefined, rootCause: form.rootCause || undefined },
               {
                 onSuccess: async (created) => {
                   const files = pendingFiles;
@@ -112,11 +115,16 @@ export function CapaListPage() {
                   }
                   navigate(`/capa/${created.id}`);
                 },
-                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't open this fix. Check the issue number and try again.")),
+                onError: (err) => {
+                  const message = extractErrorMessage(err, "Couldn't open this fix. Check the issue number and try again.");
+                  setNumberError(duplicateNumberError(message));
+                  toast.error(message);
+                },
               }
             );
           }}
         >
+          <RecordNumberField label="CAPA No." value={form.recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, recordNumber: value }); }} />
           <TextField
             label="Issue number"
             type="number"

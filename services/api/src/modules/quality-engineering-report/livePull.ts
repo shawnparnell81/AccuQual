@@ -95,7 +95,7 @@ export async function pullLive(db: Db, input: {
       const closed = row.status === "closed";
       return {
         id: row.id,
-        number: textOf(data, ["ncr_number", "ncrNumber"]) || `NCR-${row.id}`,
+        number: textOf(data, ["ncr_number", "ncrNumber"]) || "",
         partNumber: textOf(data, ["part_number", "partNumber"]) || row.title,
         description: row.description?.trim() || textOf(data, ["description", "nonconformanceDescription"]) || row.title,
         disposition: titleCase(textOf(data, ["disposition", "item_disposition", "final_disposition"])),

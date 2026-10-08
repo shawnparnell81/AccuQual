@@ -9,12 +9,14 @@ import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/Signatur
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { faiFill } from "../../lib/qualitySheetLogic";
+import { RecordNumberEditor, RecordNumberField } from "../../components/forms/RecordNumberField";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import "../IsoForms/isoForm.css";
 
 interface FuelPumpListRow {
   id: number;
-  number: string;
+  number: string | null;
   partNumber: string;
   supplier: string;
   status: string;
@@ -46,7 +48,7 @@ interface FuelPumpResultRow {
 
 interface FuelPumpRecord {
   id: number;
-  number: string;
+  number: string | null;
   partNumber: string;
   partDescription: string;
   supplier: string;
@@ -116,7 +118,7 @@ async function downloadFuelPumpPdf(id: number, number: string) {
   const url = URL.createObjectURL(response.data);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${number}.pdf`;
+  link.download = `${number.trim() || "fuel-pump-fai"}.pdf`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -126,9 +128,10 @@ export function FuelPumpFaiListPage() {
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["fuel-pump-fai"], queryFn: async () => (await apiClient.get<FuelPumpListRow[]>("/fai/fuel-pump")).data });
   const [form, setForm] = useState(BLANK);
+  const [number, setNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const submit = useMutation({
-    mutationFn: async () => (await apiClient.post<FuelPumpRecord>("/fai/fuel-pump", form)).data,
+    mutationFn: async () => (await apiClient.post<FuelPumpRecord>("/fai/fuel-pump", { ...form, number: number.trim() || null })).data,
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["fuel-pump-fai"] });
       navigate(`/fai/fuel-pump/${created.id}`);
@@ -170,6 +173,7 @@ export function FuelPumpFaiListPage() {
         }}
       >
         <h2 className="sm:col-span-2 text-sm font-medium">Submit a fuel pump FAI</h2>
+        <RecordNumberField label="FAI No." value={number} error={error} onChange={(value) => { setError(null); setNumber(value); }} />
         <CopyFromPrevious
           partNumber={form.partNumber}
           previousPath="/fai/fuel-pump/previous"
@@ -207,7 +211,7 @@ export function FuelPumpFaiListPage() {
         <tbody>
           {(list.data ?? []).map((row) => (
             <tr key={row.id} className="border-b border-border">
-              <td className="py-2"><Link to={`/fai/fuel-pump/${row.id}`} className="text-primary hover:underline">{row.number}</Link></td>
+              <td className="py-2"><Link to={`/fai/fuel-pump/${row.id}`} className="text-primary hover:underline">{showRecordNumber(row.number)}</Link></td>
               <td>{row.partNumber}</td>
               <td>{row.supplier}</td>
               <td><StatusBadge value={row.status} /></td>
@@ -326,7 +330,8 @@ export function FuelPumpFaiRecordPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground"><Link to="/fai/fuel-pump" className="text-primary hover:underline">Fuel pump first articles</Link></p>
-          <h1 className="text-2xl font-semibold">{data.number}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("Fuel pump FAI", data.number)}</h1>
+          <RecordNumberEditor label="FAI No." value={data.number} canEdit onSave={async (next) => { await apiClient.patch(`/fai/fuel-pump/${data.id}`, { number: next.trim() || null }); await refresh(); }} />
           <p className="text-sm">{data.partNumber}{data.partDescription ? ` — ${data.partDescription}` : ""}</p>
           <p className="text-sm text-muted-foreground">{data.supplier} · {data.application} · {data.productFamily}</p>
         </div>
@@ -336,7 +341,7 @@ export function FuelPumpFaiRecordPage() {
           <span>Production release: {data.productionRelease}</span>
           {data.slaStatus && <span>SLA: {data.slaStatus}</span>}
           {(data.status === "Approved" || data.status === "Closed") && (
-            <button type="button" className="rounded-md border border-border px-3 py-1.5" onClick={() => void downloadFuelPumpPdf(data.id, data.number)}>Download report</button>
+            <button type="button" className="rounded-md border border-border px-3 py-1.5" onClick={() => void downloadFuelPumpPdf(data.id, showRecordNumber(data.number))}>Download report</button>
           )}
         </div>
       </div>

@@ -151,9 +151,10 @@ describe("record delete", () => {
     expect(entry!.performedBy).toBe(qualityManager.id);
     expect(entry!.createdAt).toBeTruthy();
     const changes = entry!.changes as { summary: string; title: string; recordNumber: string; snapshot: { title: string }; attachmentFileNames: string[] };
-    expect(changes.summary).toBe(`Deleted NCR #${ncrId} "${title}"`);
+    expect(changes.summary).toBe(`Deleted NCR "${title}"`);
     expect(changes.title).toBe(title);
-    expect(changes.recordNumber).toBe(String(ncrId));
+    expect(changes.recordNumber).toBe("");
+    expect(changes.recordNumber).not.toBe(String(ncrId));
     expect(changes.snapshot.title).toBe(title);
     expect(changes.attachmentFileNames).toEqual(["bent-flange.png"]);
 
@@ -208,7 +209,8 @@ describe("record delete", () => {
       .from(auditTrail)
       .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
     expect(entry!.performedBy).toBe(qualityManager.id);
-    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted CSA VALIDATION REPORT #${id} "CSA-VAL-9"`);
+    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted CSA VALIDATION REPORT "CSA-VAL-9"`);
+    expect((entry!.changes as { recordNumber: string }).recordNumber).not.toBe(String(id));
     expect((entry!.changes as { attachmentFileNames: string[] }).attachmentFileNames).toEqual([]);
   });
 
@@ -227,7 +229,8 @@ describe("record delete", () => {
       .select()
       .from(auditTrail)
       .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
-    expect((entry!.changes as { summary: string }).summary).toBe(`Deleted FUEL PUMP VALIDATION DOCUMENT #${id} "FP-200"`);
+    expect((entry!.changes as { summary: string }).summary).toBe(`Deleted FUEL PUMP VALIDATION DOCUMENT "FP-200"`);
+    expect((entry!.changes as { recordNumber: string }).recordNumber).not.toBe(String(id));
 
     const csa = await request(app).post("/validation-reports").set("Authorization", `Bearer ${creator.token}`).send({ data: { formType: "csa", cells: { B6: "CSA-KEEP" } } });
     expect(csa.status).toBe(201);

@@ -112,7 +112,7 @@ async function ensureNcr(node: WorkflowNode, context: Record<string, unknown>, s
       changes: { message: "NCR opened from fuel pump first article inspection.", workflowNode: node.id, faiNumber: state.number },
       performedBy: actorId(context),
     });
-    await syncNcrFormData(db, created!.id, { ncrNumber: `NCR-${created!.id}`, dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
+    await syncNcrFormData(db, created!.id, { dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
     await noteRepeatNcr(db, created!.id);
     await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: created!.id });
   }

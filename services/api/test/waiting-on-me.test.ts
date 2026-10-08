@@ -34,7 +34,9 @@ describe("waiting on me", () => {
         { id: 8, title: "Closed", status: "closed", assignedTo: 7, dueDate: null, siteId: 1, isDeleted: false },
       ],
     }));
-    expect(items.map((row) => row.number)).toEqual(["NCR-4"]);
+    expect(items.map((row) => row.number)).toEqual([""]);
+    expect(items[0]?.number).not.toBe("NCR-4");
+    expect(items[0]?.number).not.toBe("4");
     expect(items[0]?.timing).toBe("3 days late");
     expect(items[0]?.href).toBe("/ncr/4");
     expect(items[0]?.assignedTo).toBe("Shawn");

@@ -78,6 +78,13 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
           </tr>
 
           <tr>
+            <th scope="row" className={labelCell}>DCR No.</th>
+            <td className={cell} colSpan={5}>
+              <TextCell ariaLabel="DCR No." value={dcr.formNo} onSave={(value) => save({ formNo: value || null })} />
+            </td>
+          </tr>
+
+          <tr>
             <th scope="row" className={labelCell}>Requester Name</th>
             <td className={cell} colSpan={2}>
               <TextCell ariaLabel="Requester Name" value={dcr.requesterName} onSave={(value) => save({ requesterName: value || null })} />

@@ -17,6 +17,7 @@ interface GenericCreateFormProps {
   // needing its own bespoke edit form; every existing create-only caller
   // omits this and is unaffected.
   initialValues?: Record<string, unknown>;
+  error?: string | null;
 }
 
 function toFieldStrings(fields: FieldSpec[], initialValues?: Record<string, unknown>): Record<string, string> {
@@ -49,7 +50,7 @@ function toSubmitValues(fields: FieldSpec[], values: Record<string, string>): Re
 }
 
 /** Renders a small create form from a field spec — used by every simple master-data module page. */
-export function GenericCreateForm({ fields, onSubmit, submitLabel = "Create", initialValues }: GenericCreateFormProps) {
+export function GenericCreateForm({ fields, onSubmit, submitLabel = "Create", initialValues, error }: GenericCreateFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => toFieldStrings(fields, initialValues));
 
   return (
@@ -69,6 +70,7 @@ export function GenericCreateForm({ fields, onSubmit, submitLabel = "Create", in
         // the QA sweep review.
       }}
     >
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {fields.map((field) =>
         field.type === "select" ? (
           <SelectField

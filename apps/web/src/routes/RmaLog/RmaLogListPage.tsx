@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
-import { useToast } from "../../components/shared/ToastProvider";
-import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { SelectField, TextField } from "../../components/forms/Field";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 import type { RmaLogRecord, RmaLogStatus } from "../../api/types";
 
 const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
@@ -17,14 +17,10 @@ const STATUSES: RmaLogStatus[] = ["open", "received", "under_review", "dispositi
  * (not the automated Supplier RMA Request event trail at
  * /rma-activity-log). "Add New" is RBAC-controlled: only visible with
  * rma_log.write (live, DB-driven — see useWorkflowAccessLevel), matching
- *  explicit button-behavior spec. Clicking it POSTs an
- * empty body — the backend auto-generates rmaNumber and defaults
- * dateIssued to today, then the user lands straight on the detail page to
- * fill in everything else.
+ *  explicit button-behavior spec. The number is optional and typed by the user.
  */
 export function RmaLogListPage() {
   const navigate = useNavigate();
-  const toast = useToast();
   const canWrite = useWorkflowAccessLevel("rma_log") === "edit";
   const [status, setStatus] = useState("");
   const [partNumber, setPartNumber] = useState("");
@@ -48,21 +44,16 @@ export function RmaLogListPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">RMA Log</h1>
         {canWrite && (
-          <button
-            onClick={() =>
-              createRecord.mutate(
-                {} as never,
-                {
-                  onSuccess: (created) => navigate(`/rma-log/${created.id}`),
-                  onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create a new RMA Log entry.")),
-                }
-              )
-            }
-            disabled={createRecord.isPending}
-            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {createRecord.isPending ? "Creating…" : "+ Add New"}
-          </button>
+          <NumberedCreateButton
+            label="+ Add New"
+            numberLabel="RMA No."
+            dialogTitle="New RMA log entry"
+            pending={createRecord.isPending}
+            onCreate={async (recordNumber) => {
+              const created = await createRecord.mutateAsync({ rmaNumber: recordNumber.trim() || null } as never);
+              navigate(`/rma-log/${created.id}`);
+            }}
+          />
         )}
       </div>
 
@@ -82,7 +73,7 @@ export function RmaLogListPage() {
 
       <DataTable<RmaLogRecord>
         columns={[
-          { header: "RMA #", accessor: (r) => r.rmaNumber },
+          { header: "RMA #", accessor: (r) => showRecordNumber(r.rmaNumber) },
           { header: "Date Issued", accessor: (r) => new Date(r.dateIssued).toLocaleDateString() },
           { header: "Customer", accessor: (r) => r.customerName ?? "—" },
           { header: "Part #", accessor: (r) => r.partNumber ?? "—" },

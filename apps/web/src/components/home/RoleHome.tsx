@@ -24,6 +24,7 @@ import { WaitingOnMe } from "./WaitingOnMe";
 import { readRecentRecords, type RecentRecord } from "../../lib/recentRecords";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
+import { recordHeading } from "../../lib/userRecordNumber";
 
 function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared", params?: Record<string, string>) {
   return useQuery({
@@ -70,14 +71,14 @@ export function RoleHome() {
   const late = lateItems([
     ...openIssues.map((ncr) => ({
       who: label(ncr.assignedTo),
-      label: `NCR #${ncr.id}`,
+      label: recordHeading("NCR", ncr.recordNumber),
       link: `/ncr/${ncr.id}`,
       due: ncr.dueDate,
       terminal: false,
     })),
     ...openFixes.map((capa) => ({
       who: label(capa.ownerId),
-      label: `CAPA #${capa.id}`,
+      label: recordHeading("CAPA", capa.recordNumber),
       link: `/capa/${capa.id}`,
       due: capa.dueDate,
       terminal: false,
@@ -87,15 +88,15 @@ export function RoleHome() {
   const waiting = [
     ...openIssues
       .filter((ncr) => (ncr.status === "ncr_created" || ncr.status === "open") && !ncr.containment)
-      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "Still on NCR Created", link: `/ncr/${ncr.id}` })),
+      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `${recordHeading("NCR", ncr.recordNumber)} — ${ncr.title}`, detail: "Still on NCR Created", link: `/ncr/${ncr.id}` })),
     ...openIssues
       .filter((ncr) => (ncr.status === "disposition" || ncr.status === "fix" || ncr.status === "verify" || ncr.status === "investigating" || ncr.status === "corrective_action") && !fixIds.has(ncr.id))
-      .map((ncr) => ({ key: `link-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "No CAPA linked yet", link: `/ncr/${ncr.id}` })),
+      .map((ncr) => ({ key: `link-${ncr.id}`, label: `${recordHeading("NCR", ncr.recordNumber)} — ${ncr.title}`, detail: "No CAPA linked yet", link: `/ncr/${ncr.id}` })),
     ...openFixes
       .filter((capa) => capa.status === "verifying" || capa.status === "open")
       .map((capa) => ({
         key: `capa-${capa.id}`,
-        label: `CAPA #${capa.id}`,
+        label: recordHeading("CAPA", capa.recordNumber),
         detail: capa.status === "open" ? "Not started" : "Waiting on the check",
         link: `/capa/${capa.id}`,
       })),
@@ -336,7 +337,7 @@ function NextCallout({
     return (
       <Callout
         kicker="Next"
-        title={`NCR #${issue.id} — ${issue.title}`}
+        title={`${recordHeading("NCR", issue.recordNumber)} — ${issue.title}`}
         detail={`${ncrNextAction(issue.status, hasFix)} ${who === "Unassigned" ? "Nobody owns it yet." : `${who} owns it.`}`}
         href={`/ncr/${issue.id}`}
       />

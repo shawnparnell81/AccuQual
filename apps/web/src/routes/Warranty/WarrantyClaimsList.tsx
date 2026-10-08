@@ -60,7 +60,7 @@ export function WarrantyClaimsList() {
 
       <DataTable<WarrantyClaim>
         columns={[
-          { header: "Claim #", accessor: (c) => c.claimNumber },
+          { header: "Claim #", accessor: (c) => c.claimNumber?.trim() || "" },
           { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
           { header: "Serial #", accessor: (c) => c.serialNumber ?? "—" },
           { header: "Failure Date", accessor: (c) => (c.failureDate ? new Date(c.failureDate).toLocaleDateString() : "—") },

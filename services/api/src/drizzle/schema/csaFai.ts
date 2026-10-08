@@ -16,7 +16,7 @@ export const csaFaiCounters = pgTable("csa_fai_counters", {
 
 export const csaFaiRecords = pgTable("csa_fai_records", {
   id: serial("id").primaryKey(),
-  number: text("number").notNull().unique(),
+  number: text("number"),
   partNumber: text("part_number").notNull(),
   partDescription: text("part_description").notNull(),
   supplierName: text("supplier_name").notNull(),

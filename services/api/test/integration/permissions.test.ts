@@ -110,7 +110,7 @@ describe("department permissions (real DB + real HTTP path, via RMA)", () => {
   it("purchasing can create an RMA — full RMA access includes create", async () => {
     const res = await request(app).post("/rma").set("Authorization", `Bearer ${purchasingToken}`).send({ supplierId, reasonCode: "defective" });
     expect(res.status).toBe(201);
-    expect(res.body.rmaNumber).toMatch(/^RMA-/);
+    expect(res.body.rmaNumber).toBeNull();
     expect(res.body.createdByUserId).toBe(purchasingUserId);
     rmaId = res.body.id;
   });

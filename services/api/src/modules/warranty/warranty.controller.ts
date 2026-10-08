@@ -16,6 +16,8 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { WARRANTY_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
@@ -77,10 +79,6 @@ const STATUS_TRANSITION_DEPARTMENTS: Record<string, string[]> = {
   repaired: ["quality", "customer_service"],
   closed: ["quality", "customer_service"],
 };
-
-function generateClaimNumber(id: number): string {
-  return `WC-${String(id).padStart(6, "0")}`;
-}
 
 async function loadClaim(req: Request, id: number) {
   const [row] = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.id, id)));
@@ -159,24 +157,21 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
     if (!row) throw AppError.badRequest(`Work Order #${body.linkedWorkOrderId} not found`);
   }
 
+  const values = { ...(body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, values, WARRANTY_NUMBER);
   const [created] = await req
     .db!.insert(warrantyClaims)
     .values({
-      // Placeholder — real value written right after, same reasoning as
-      // rma.ts's generateRmaNumber (derived from the row's own post-insert
-      // id, nothing to race between two concurrent creates).
-      claimNumber: `WC-PENDING-${Date.now()}`,
-      ...body,
+      ...values,
+      claimNumber: (values.claimNumber as string | null) ?? null,
       warrantyCostEstimate: body.warrantyCostEstimate !== undefined ? String(body.warrantyCostEstimate) : undefined,
       createdByUserId: req.user?.id,
     })
     .returning();
 
-  const [withNumber] = await req.db!.update(warrantyClaims).set({ claimNumber: generateClaimNumber(created!.id) }).where(eq(warrantyClaims.id, created!.id)).returning();
-
-  await req.db!.insert(warrantyClaimWorkflow).values({ claimId: withNumber!.id, fromStatus: null, toStatus: "new", performedByUserId: req.user?.id });
-  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
-  res.status(201).json(withNumber);
+  await req.db!.insert(warrantyClaimWorkflow).values({ claimId: created!.id, fromStatus: null, toStatus: "new", performedByUserId: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(created);
 });
 
 export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -211,12 +206,14 @@ export const updateWarrantyClaimHandler = asyncHandler(async (req: Request, res:
   if (record.status === "closed") throw AppError.badRequest("This claim is closed and can no longer be edited");
   await assertWarrantyContentWrite(req);
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, WARRANTY_NUMBER, { id: record.id, current: record.claimNumber, row: record });
   const [updated] = await req
     .db!.update(warrantyClaims)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(eq(warrantyClaims.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

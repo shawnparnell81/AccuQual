@@ -10,6 +10,8 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { canApproveFai, judgeFrozen, type PassFailWord } from "../../lib/faiLogic";
 import { faiFill } from "../../lib/qualitySheetLogic";
 import { personLabel } from "../../lib/opsLanguage";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { RecordFrame } from "../../components/records/RecordFrame";
 import { rememberRecord } from "../../lib/recentRecords";
 import { RecordReferences } from "../../components/records/WorkflowStepLinks";
@@ -48,7 +50,7 @@ export function FaiRecordPage() {
   const data = record.data;
   useEffect(() => {
     if (!data) return;
-    rememberRecord({ path: `/fai/records/${data.id}`, title: data.number, type: "FAI" }, user?.id);
+    rememberRecord({ path: `/fai/records/${data.id}`, title: recordHeading("FAI", data.number), type: "FAI" }, user?.id);
   }, [data, user?.id]);
   const editable = data?.status === "open";
   const mayDecide = canApproveFai({ roleName: user?.roleName, department: user?.department }) && data?.status === "submitted";
@@ -86,7 +88,7 @@ export function FaiRecordPage() {
     const url = URL.createObjectURL(response.data);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${data?.number ?? "first-article"}.pdf`;
+    link.download = `${showRecordNumber(data?.number) || "first-article"}.pdf`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -100,7 +102,16 @@ export function FaiRecordPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link to="/fai" className="text-xs text-primary hover:underline">First Article</Link>
-          <h1 className="text-2xl font-semibold">{data.number}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("First article", data.number)}</h1>
+          <RecordNumberEditor
+            label="FAI No."
+            value={data.number}
+            canEdit
+            onSave={async (next) => {
+              await apiClient.patch(`/fai/records/${id}`, { number: next.trim() || null });
+              await invalidate();
+            }}
+          />
         </div>
         {(data.status === "approved" || data.status === "rejected") && (
           <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void downloadPdf()}>
@@ -118,7 +129,7 @@ export function FaiRecordPage() {
               <td className="title" colSpan={6}>PRODUCTION PART APPROVAL — DIMENSIONAL TEST RESULTS</td>
             </tr>
             <tr>
-              <td>{data.number}</td>
+              <td>{showRecordNumber(data.number)}</td>
               <td colSpan={3}>First Article · {data.planName} · revision {data.planRevision}</td>
               <td>Status</td>
               <td>{data.status === "rejected" ? "Not approved" : data.status === "submitted" ? "Submitted for Quality review" : data.status === "approved" ? "Approved" : "Open"}</td>

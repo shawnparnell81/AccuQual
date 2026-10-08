@@ -133,7 +133,7 @@ registerActionHandler("csa_create_ncr", async (node, context, dryRun) => {
       changes: { message: "NCR opened from CSA first article inspection.", workflowNode: node.id, faiNumber: state.number },
       performedBy: actorId(context),
     });
-    await syncNcrFormData(db, ncrId, { ncrNumber: `NCR-${ncrId}`, dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
+    await syncNcrFormData(db, ncrId, { dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
     await noteRepeatNcr(db, ncrId);
     await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: ncrId });
   }

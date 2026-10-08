@@ -111,13 +111,16 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
   });
 
   describe("Finding 11 — global search knows Work Orders exist", () => {
-    it("a real work order is findable by its id", async () => {
+    it("a real work order is findable by the number the user typed", async () => {
       const [item] = await db.insert(inventoryItems).values({ sku: `QA-FIX-SEARCH-${suffix}`, minLevel: "0" }).returning();
-      const [wo] = await db.insert(workOrders).values({ itemId: item!.id, quantityPlanned: "5" }).returning();
+      const number = `WO-ALPHA-${suffix}`;
+      const [wo] = await db.insert(workOrders).values({ itemId: item!.id, quantityPlanned: "5", recordNumber: number }).returning();
 
-      const res = await request(app).get(`/search?q=${wo!.id}`).set("Authorization", `Bearer ${adminToken}`);
+      const res = await request(app).get("/search").query({ q: number }).set("Authorization", `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.results.some((r: { type: string; id: number }) => r.type === "WO" && r.id === wo!.id)).toBe(true);
+      const byId = await request(app).get("/search").query({ q: String(wo!.id) }).set("Authorization", `Bearer ${adminToken}`);
+      expect(byId.body.results.some((r: { type: string; id: number; label: string }) => r.type === "WO" && r.id === wo!.id && r.label.includes(`#${wo!.id}`))).toBe(false);
     });
   });
 

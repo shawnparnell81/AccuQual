@@ -28,11 +28,16 @@ export const savePlanSchema = z.object({
 });
 
 export const openFaiSchema = z.object({
+  number: optionalText(120),
   planId: z.number().int().positive(),
   partNumber: optionalText(80),
   partName: optionalText(160),
   supplierId: z.number().int().positive(),
   assignedTo: z.number().int().positive().nullish(),
+});
+
+export const updateFaiNumberSchema = z.object({
+  number: optionalText(120),
 });
 
 export const saveResultsSchema = z.object({

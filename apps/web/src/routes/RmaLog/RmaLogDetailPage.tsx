@@ -77,7 +77,7 @@ export function RmaLogDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
-          <h1 className="text-2xl font-semibold">RMA Log — {record.rmaNumber}</h1>
+          <h1 className="text-2xl font-semibold">{record.rmaNumber?.trim() ? `RMA Log — ${record.rmaNumber.trim()}` : "RMA Log"}</h1>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={record.status} />
             <span className="text-sm text-muted-foreground">{record.customerName ?? "No customer on file"}</span>
@@ -106,7 +106,7 @@ export function RmaLogDetailPage() {
       </div>
 
       <div className="hidden print:block">
-        <h1 className="text-2xl font-semibold">RMA Log — {record.rmaNumber}</h1>
+        <h1 className="text-2xl font-semibold">{record.rmaNumber?.trim() ? `RMA Log — ${record.rmaNumber.trim()}` : "RMA Log"}</h1>
         <p className="text-sm text-muted-foreground">
           Status: {record.status.replace(/_/g, " ")} — {record.customerName ?? "No customer on file"} — Issued {new Date(record.dateIssued).toLocaleDateString()}
         </p>
@@ -152,7 +152,7 @@ export function RmaLogDetailPage() {
             <p className="mb-1 text-xs text-muted-foreground">Quality (NCR)</p>
             {record.linkedNcr ? (
               <Link to={`/ncr/${record.linkedNcr.id}`} className="text-sm text-primary hover:underline">
-                NCR #{record.linkedNcr.id} — {record.linkedNcr.title}
+                {record.linkedNcr.title || "NCR"}
               </Link>
             ) : (
               <p className="text-sm text-muted-foreground">Not linked.</p>

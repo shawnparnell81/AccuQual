@@ -15,6 +15,8 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
@@ -37,7 +39,7 @@ export function CapaDetailPage() {
   const canEdit = useCanEditWorkflow("capa");
   const { label, people } = usePersonDirectory();
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
-  useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
+  useSetAssistantContext("capa", capaId, capa ? recordHeading("CAPA", capa.recordNumber) : "CAPA");
   const updateCapa = capaHooks.useUpdate();
   const startAction = useWorkflowAction("capa", "start", { successMessage: "CAPA started.", invalidateKeys: historyKey });
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
@@ -62,10 +64,18 @@ export function CapaDetailPage() {
       <RecordGlance
         crumbs={[
           { label: "CAPA", to: "/capa" },
-          ...(capa.ncrId ? [{ label: `NCR #${capa.ncrId}`, to: `/ncr/${capa.ncrId}` }] : []),
-          { label: `CAPA #${capa.id}` },
+          ...(capa.ncrId ? [{ label: "Linked NCR", to: `/ncr/${capa.ncrId}` }] : []),
+          { label: recordHeading("CAPA", capa.recordNumber) },
         ]}
-        title={`CAPA #${capa.id}`}
+        title={recordHeading("CAPA", capa.recordNumber)}
+        numberControl={
+          <RecordNumberEditor
+            label="CAPA No."
+            value={capa.recordNumber}
+            canEdit={canEdit}
+            onSave={(next) => updateCapa.mutateAsync({ id: capaId, recordNumber: next.trim() || null })}
+          />
+        }
         standard="CAPA"
         stateValue={capa.status}
         stateLabel={statusPhrase(capa.status)}
@@ -108,8 +118,8 @@ export function CapaDetailPage() {
         accessNote={canEdit ? null : READ_ONLY_REASON}
         actions={
           <>
-            <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} ownerIds={[capa.ownerId]} navigateTo="/capa" />
-            <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
+            <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" />
+            <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
               label="Start the work"
               navKey="capa"

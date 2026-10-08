@@ -28,10 +28,13 @@ import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
 
 interface ValidationReport {
   id: number;
+  recordNumber?: string | null;
   data: { formType?: ValidationFormType; cells?: Record<string, CellValue>; _signatureRequired?: Record<string, SignatureChoice> };
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -83,7 +86,7 @@ export function ValidationReportDetailPage() {
   useEffect(() => {
     if (!report) return;
     const formTitle = VALIDATION_FORMS[formTypeOf(report.data)].title;
-    rememberRecord({ path: `/validation-reports/${report.id}`, title: `${formTitle} #${report.id}`, type: "Validation" }, user?.id);
+    rememberRecord({ path: `/validation-reports/${report.id}`, title: recordHeading(formTitle, report.recordNumber), type: "Validation" }, user?.id);
   }, [report, user?.id]);
 
   useEffect(() => {
@@ -105,7 +108,7 @@ export function ValidationReportDetailPage() {
   const badge = passed ? meta.pass : failed ? "#FF0000" : "transparent";
   const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
-  const title = `${meta.title} #${report.id}`;
+  const title = recordHeading(meta.title, report.recordNumber);
 
   const multiSignature = formType === "fuel_injector" || formType === "brake_wear" || formType === "gas_lift";
   const savedReport = report;
@@ -148,6 +151,7 @@ export function ValidationReportDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
+            <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={canEdit} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
             <FormNumberEditor formKey={formKey} compact />
             <p className="text-sm text-muted-foreground">
               {doc}
@@ -165,6 +169,7 @@ export function ValidationReportDetailPage() {
               id={reportId}
               kind={meta.title}
               title={cells.B6 == null ? null : String(cells.B6)}
+              number={report.recordNumber}
               navigateTo={validationReportsCrumb().to}
             />
             <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: passed || failed ? "#111" : undefined }} data-testid="validation-overall">

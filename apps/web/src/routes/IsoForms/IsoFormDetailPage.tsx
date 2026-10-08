@@ -5,6 +5,8 @@ import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -57,6 +59,7 @@ interface IsoFormData {
 interface IsoQualityForm {
   id: number;
   formType: IsoFormType;
+  recordNumber?: string | null;
   data: IsoFormData;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -207,6 +210,7 @@ export function IsoFormDetailPage() {
       dirty={dirty}
       saving={updateRecord.isPending}
       onSave={saveRecord}
+      onSaveNumber={(next) => updateRecord.mutateAsync({ id: recordId, recordNumber: next.trim() || null })}
       sheet={sheet}
       setSheet={setSheet}
       cells={cells}
@@ -253,6 +257,7 @@ function IsoFormDetailBody({
   dirty,
   saving,
   onSave,
+  onSaveNumber,
   sheet,
   setSheet,
   cells,
@@ -286,6 +291,7 @@ function IsoFormDetailBody({
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
+  onSaveNumber: (next: string) => Promise<unknown>;
   sheet: "form" | "photos";
   setSheet: (sheet: "form" | "photos") => void;
   cells: Record<string, CellValue>;
@@ -353,10 +359,11 @@ function IsoFormDetailBody({
   return (
     <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`}>
       <div className="no-print flex flex-col gap-4">
-        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: documentNumber ? `${documentNumber} #${record.id}` : `Record ${record.id}` }]} />
+        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: recordHeading(documentNumber || meta.title, record.recordNumber) }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold">{meta.title}</h1>
+            <h1 className="text-2xl font-semibold">{recordHeading(meta.title, record.recordNumber)}</h1>
+            <RecordNumberEditor label="Record No." value={record.recordNumber} canEdit={canEdit} onSave={onSaveNumber} />
             <p className="text-sm text-muted-foreground">
               {revisionLabel(documentNumber, revision)}
               {" · "}
@@ -367,7 +374,7 @@ function IsoFormDetailBody({
             {formKey && <RecordFolderField formKey={formKey} recordId={recordId} prepare={onSave} />}
           </div>
           <div className="flex items-center gap-2">
-            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} navigateTo={`/iso-forms/${meta.formKey}`} />
+            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} />
             <SaveStatus saving={saving} unsaved={dirty && !saving} />
             {canEdit && (
               <button type="button" onClick={() => void save()} disabled={saving || pending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">

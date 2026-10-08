@@ -41,6 +41,7 @@ export const builtFormFills = pgTable("built_form_fills", {
     .notNull(),
   templateRevision: text("template_revision").notNull(),
   templateFormNumber: text("template_form_number"),
+  recordNumber: text("record_number"),
   structure: jsonb("structure").notNull(),
   title: text("title").notNull(),
   answers: jsonb("answers").notNull(),

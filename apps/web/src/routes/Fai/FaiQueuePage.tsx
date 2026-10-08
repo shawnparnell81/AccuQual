@@ -7,6 +7,8 @@ import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { personLabel } from "../../lib/opsLanguage";
+import { RecordNumberField } from "../../components/forms/RecordNumberField";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 
 export function FaiQueuePage() {
@@ -21,6 +23,7 @@ export function FaiQueuePage() {
   const [partName, setPartName] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
+  const [number, setNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const plan = lookups.data?.plans.find((row) => String(row.id) === planId);
@@ -33,6 +36,7 @@ export function FaiQueuePage() {
           partName: partName || plan?.partName || null,
           supplierId: Number(plan?.supplierId ?? supplierId),
           assignedTo: assignedTo ? Number(assignedTo) : null,
+          number: number.trim() || null,
         })
       ).data,
     onSuccess: async (created) => {
@@ -43,7 +47,7 @@ export function FaiQueuePage() {
   });
 
   const openColumns: Column<NonNullable<typeof queue.data>["open"][number]>[] = [
-    { header: "Number", accessor: (row) => row.number },
+    { header: "FAI No.", accessor: (row) => showRecordNumber(row.number) },
     { header: "Part", accessor: (row) => row.partNumber },
     { header: "Supplier", accessor: (row) => row.supplierName },
     { header: "Status", accessor: (row) => <StatusBadge value={row.status} /> },
@@ -97,6 +101,7 @@ export function FaiQueuePage() {
             openFai.mutate();
           }}
         >
+          <RecordNumberField label="FAI No." value={number} error={error} onChange={(value) => { setError(null); setNumber(value); }} />
           <label className="flex flex-col gap-1 text-xs">
             Inspection plan
             <select className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={planId} onChange={(event) => setPlanId(event.target.value)} required>
@@ -169,7 +174,7 @@ export function FaiQueuePage() {
         <h2 className="text-sm font-semibold">Recent first articles</h2>
         <DataTable
           columns={[
-            { header: "Number", accessor: (row: FaiRecordSummary) => row.number },
+            { header: "FAI No.", accessor: (row: FaiRecordSummary) => showRecordNumber(row.number) },
             { header: "Part", accessor: (row: FaiRecordSummary) => row.partNumber },
             { header: "Supplier", accessor: (row: FaiRecordSummary) => row.supplierName },
             { header: "Status", accessor: (row: FaiRecordSummary) => <StatusBadge value={row.status} /> },

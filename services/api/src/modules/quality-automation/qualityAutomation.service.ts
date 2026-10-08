@@ -18,6 +18,7 @@ import { notifyRecipients, normalizeNotificationPreferences } from "../notificat
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { OPEN_NCR_STATUSES, canonicalNcrStep, ncrStepLabel } from "../ncr/ncr.workflow.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 import { AppError } from "../../utils/appError.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import {
@@ -379,6 +380,7 @@ async function loadRepeatCluster(db: Db, ncrId: number, now = new Date()): Promi
       createdAt: row.createdAt ?? now,
       supplierId: row.supplierId,
       title: row.title,
+      recordNumber: row.recordNumber,
       description: row.description,
       form: formById.get(row.id) ?? null,
       partNumbers: partsById.get(row.id) ?? [],
@@ -419,6 +421,13 @@ export async function repeatReport(db: Db, ncrId: number, allowedSiteIds?: numbe
   };
 }
 
+function ncrNoticeLabel(row: { recordNumber?: string | null; title?: string | null } | undefined): string {
+  const number = showRecordNumber(row?.recordNumber);
+  if (number) return `NCR ${number}`;
+  const title = row?.title?.trim();
+  return title && title !== "NCR" ? title : "NCR";
+}
+
 /** Called after an NCR or its form is saved. Never throws — a reminder must not fail the save. */
 export async function noteRepeatNcr(db: Db, ncrId: number): Promise<void> {
   try {
@@ -438,8 +447,8 @@ export async function noteRepeatNcr(db: Db, ncrId: number): Promise<void> {
       recipient,
       bucket,
       item: {
-        label: `NCR #${ncrId}`,
-        detail: `${loaded.cluster.length} NCRs in ${loaded.settings.repeatNcrWindowDays} days: ${loaded.cluster.map((row) => `#${row.id}`).join(", ")}`,
+        label: ncrNoticeLabel(loaded.cluster.find((row) => row.id === ncrId)),
+        detail: `${loaded.cluster.length} NCRs in ${loaded.settings.repeatNcrWindowDays} days: ${loaded.cluster.map((row) => ncrNoticeLabel(row)).join(", ")}`,
         href: href(`/ncr/${ncrId}`),
       },
     }));
@@ -452,7 +461,7 @@ export async function noteRepeatNcr(db: Db, ncrId: number): Promise<void> {
           entityId: match.id,
           recipient,
           bucket,
-          item: { label: `NCR #${match.id}`, detail: match.title, href: href(`/ncr/${match.id}`) },
+          item: { label: ncrNoticeLabel(match), detail: match.title, href: href(`/ncr/${match.id}`) },
         });
       }
     }
@@ -478,7 +487,7 @@ export async function openRepeatCapa(db: Db, ncrId: number, actorId: number | un
     return { capa: existing, created: false };
   }
   const [subject] = await db.select().from(ncr).where(eq(ncr.id, ncrId));
-  const summary = `Repeat nonconformance — ${ids.length} NCRs in ${loaded.settings.repeatNcrWindowDays} days (${ids.map((id) => `#${id}`).join(", ")}).`;
+  const summary = `Repeat nonconformance — ${ids.length} NCRs in ${loaded.settings.repeatNcrWindowDays} days (${loaded.cluster.map((row) => ncrNoticeLabel(row)).join(", ")}).`;
   const [created] = await db
     .insert(capa)
     .values({

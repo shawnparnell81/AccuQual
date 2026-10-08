@@ -13,7 +13,6 @@ import { folderMoveAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import {
   canEditFormNumber,
-  EDITABLE_FORM_NUMBER_KEYS,
   FILEABLE_FORM_KEYS,
   FORM_DATA_TYPE_TO_FORM_KEY,
   ISO_TYPE_TO_FORM_KEY,
@@ -22,16 +21,28 @@ import {
   folderPathNames,
   recordLinkedPath,
   resolveFolderPath,
+  VALIDATION_RECORD_KEYS,
   validationKind,
   validationKindForKey,
   type FolderNode,
 } from "./editableForms.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 
 const FOLDER_AUDIT = "DocumentFolder";
 const TEMPLATE_AUDIT = "ControlledFormTemplate";
 
 function seedFor(formKey: string) {
   return FORM_TEMPLATES.find((seed) => seed.formKey === formKey);
+}
+
+/** The number typed on the record. Blank stays blank. The database id is not a number. */
+async function userFilingNumber(db: Db, formKey: string, recordId: number): Promise<string> {
+  if (VALIDATION_RECORD_KEYS.has(formKey)) {
+    const [row] = await db.select({ recordNumber: validationReports.recordNumber }).from(validationReports).where(eq(validationReports.id, recordId));
+    return showRecordNumber(row?.recordNumber);
+  }
+  const [row] = await db.select({ recordNumber: isoQualityForms.recordNumber }).from(isoQualityForms).where(eq(isoQualityForms.id, recordId));
+  return showRecordNumber(row?.recordNumber);
 }
 
 async function loadFolders(db: Db): Promise<FolderNode[]> {
@@ -243,7 +254,7 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
 
   const seed = seedFor(formKey);
   const date = createdOn || new Date().toISOString().slice(0, 10);
-  const name = filedRecordName(filing.formNumber, recordId, date, fileNamePatternFor(seed ?? {}));
+  const name = filedRecordName(filing.formNumber, await userFilingNumber(db, formKey, recordId), date, fileNamePatternFor(seed ?? {}));
   const siblings = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, folderId));
   const [created] = await db
     .insert(documentFolders)

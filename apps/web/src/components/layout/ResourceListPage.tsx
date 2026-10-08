@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { duplicateNumberError } from "../forms/RecordNumberField";
 import { useToast } from "../shared/ToastProvider";
 import { useSavedViews } from "../../hooks/useSavedViews";
 import { DataTable, type Column } from "../tables/DataTable";
@@ -64,6 +65,7 @@ export function ResourceListPage<T extends { id: number }>({
   rowPredicate,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   useEffect(() => {
     if (createOnMount) setCreateOpen(true);
   }, [createOnMount]);
@@ -88,7 +90,7 @@ export function ResourceListPage<T extends { id: number }>({
         <div className="flex flex-wrap items-center gap-2">
           {headerActions}
           {createFields && canCreate !== false && (
-            <button onClick={() => setCreateOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+            <button onClick={() => { setCreateError(null); setCreateOpen(true); }} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
               + New
             </button>
           )}
@@ -136,19 +138,22 @@ export function ResourceListPage<T extends { id: number }>({
       <DataTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} emptyMessage={searchable && search.trim() ? "No records match this search." : undefined} />
 
       {createFields && (
-        <Modal title={createTitle ?? `Create ${title}`} isOpen={createOpen} onClose={() => setCreateOpen(false)}>
+        <Modal title={createTitle ?? `Create ${title}`} isOpen={createOpen} onClose={() => { setCreateError(null); setCreateOpen(false); }}>
           <GenericCreateForm
             fields={createFields}
+            error={createError}
             onSubmit={(values) =>
               createMutation.mutate(values as never, {
                 onSuccess: (created) => {
+                  setCreateError(null);
                   setCreateOpen(false);
                   onCreated?.(created);
                 },
-                // Previously missing entirely — every module sharing this
-                // component failed dead silent on any validation, permission,
-                // or network error.
-                onError: (err) => toast.error(extractErrorMessage(err, `Couldn't create ${title.toLowerCase()}.`)),
+                onError: (err) => {
+                  const message = extractErrorMessage(err, `Couldn't create ${title.toLowerCase()}.`);
+                  setCreateError(duplicateNumberError(message));
+                  toast.error(message);
+                },
               })
             }
           />

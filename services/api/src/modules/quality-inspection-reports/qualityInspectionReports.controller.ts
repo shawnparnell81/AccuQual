@@ -8,6 +8,8 @@ import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { applyMeasuredResult } from "../../utils/passFail.js";
+import { INSPECTION_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 async function loadReport(req: Request, id: number) {
   const [row] = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.id, id)));
@@ -25,7 +27,9 @@ export const listReportsHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 export const createReportHandler = asyncHandler(async (req: Request, res: Response) => {
-  const [created] = await req.db!.insert(qualityInspectionReports).values({ ...req.body, createdBy: req.user?.id }).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, INSPECTION_NUMBER);
+  const [created] = await req.db!.insert(qualityInspectionReports).values({ ...body, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -45,6 +49,7 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
   }
 
   const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, INSPECTION_NUMBER, { id: record.id, current: record.recordNumber, row: record });
   await assignSignatureRequired(req.db!, {
     entityType: "QualityInspectionReport",
     entityId: record.id,
@@ -54,7 +59,7 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
     blocks: signatureBlocksFor("quality_inspection"),
   });
   const [updated] = await req.db!.update(qualityInspectionReports).set({ ...body, updatedAt: new Date() }).where(eq(qualityInspectionReports.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

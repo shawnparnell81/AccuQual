@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 import { rejectAiStubText, AI_STUB_REJECT_MESSAGE } from "../ai/ai.guardrails.js";
 import { NCR_ITEM_DISPOSITIONS } from "../quarantine/quarantine.service.js";
 import { NCR_STATUS_INPUTS, canonicalNcrStep } from "./ncr.workflow.js";
@@ -9,6 +10,7 @@ export const createNcrSchema = z.object({
   severity: z.enum(["low", "medium", "high", "critical"]).optional(),
   assignedTo: z.number().int().optional(),
   dueDate: z.coerce.date().nullable().optional(),
+  recordNumber: recordNumberSchema,
 });
 
 export const updateNcrSchema = createNcrSchema.partial().extend({

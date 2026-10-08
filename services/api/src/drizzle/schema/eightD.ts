@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { ncr } from "./ncr.js";
 
 /**
@@ -9,6 +9,7 @@ import { ncr } from "./ncr.js";
  */
 export const eightD = pgTable("eight_d", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   ncrId: integer("ncr_id").references(() => ncr.id),
   currentStep: integer("current_step").notNull().default(1),
   data: jsonb("data").$type<Record<string, unknown>>().default({}),
