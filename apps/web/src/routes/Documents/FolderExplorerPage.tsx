@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { folderContents, savedItemRemoval, type FolderDetailItem, type FolderDetailNode } from "../../lib/folderDetails";
 import { folderNodePath, joinFolderPath } from "../../lib/folderPath";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
-import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
+import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -18,7 +19,9 @@ import { paneScrollDelta } from "../../lib/dragAutoScroll";
 import { applyFolderPlacements, folderMoveIsBlocked, libraryPoolDeleteConfirm, planNest, planSiblingGap, planSiblingReorder, unlistFromLibraryPool, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
-import { CopyPathButton, FolderPathBar } from "../../components/documents/FolderPathBar";
+import { FolderPathBar, copyFolderPath } from "../../components/documents/FolderPathBar";
+import { FolderContentsList, type FolderRowAction } from "../../components/documents/FolderContentsList";
+import { RemoveSavedFileDialog } from "../../components/documents/RemoveSavedFileDialog";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
 import { DeleteFolderDialog, FolderActionButtons, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
 import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
@@ -69,11 +72,7 @@ function SiblingGap({
   );
 }
 
-interface DocumentFolder {
-  id: number;
-  name: string;
-  parentId: number | null;
-  sortOrder: number;
+interface DocumentFolder extends FolderDetailNode {
   pdfPath: string | null;
   pdfMimeType?: string | null;
   linkedPath: string | null;
@@ -85,6 +84,83 @@ interface DocumentFolder {
 }
 
 const LIBRARY_POOL_NAME = "Library Pool";
+
+function attachedFileName(doc: DocumentFolder) {
+  const ext = doc.pdfPath?.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+  if (!ext || doc.name.toLowerCase().endsWith(ext.toLowerCase())) return doc.name;
+  return `${doc.name}${ext}`;
+}
+
+async function downloadFolderFile(doc: DocumentFolder) {
+  const res = await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "blob" });
+  saveBytes(res.data as Blob, attachedFileName(doc), doc.pdfMimeType ?? undefined);
+}
+
+function folderFilePreview(doc: DocumentFolder): PreviewRequest {
+  const fileName = attachedFileName(doc);
+  return {
+    fileName,
+    mimeType: doc.pdfMimeType,
+    loadBytes: async () => (await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "arraybuffer" })).data as ArrayBuffer,
+    officeSource: onlyOfficeFile(fileName, doc.pdfMimeType) ? { kind: "folder", folderId: doc.id } : undefined,
+    download: () => downloadFolderFile(doc),
+  };
+}
+
+function buildDetailActions(
+  item: FolderDetailItem<DocumentFolder>,
+  options: {
+    path: string;
+    canManage: boolean;
+    canRename: boolean;
+    canDelete: boolean;
+    onMove?: () => void;
+    onEdit?: () => void;
+    onDeleteFolder?: () => void;
+    onDeleteTemplate?: () => void;
+    onSendToLibrary?: () => void;
+    onAttach?: () => void;
+    onRemove?: () => void;
+    onView?: () => void;
+    onDownload?: () => void;
+    onComments?: () => void;
+    onUploadInto?: () => void;
+    onPoolDelete?: () => void;
+    poolDeletePending?: boolean;
+    onCopy: (path: string) => void;
+  },
+): FolderRowAction[] {
+  const doc = item.node;
+  const locked = doc.name === "ISO Compliance Documents" || doc.name === LIBRARY_POOL_NAME;
+  const actions: FolderRowAction[] = [];
+  if (options.path) actions.push({ id: "copy", label: "Copy path", onClick: () => options.onCopy(options.path) });
+  if (item.type === "folder" && options.onUploadInto) actions.push({ id: "upload", label: "Upload document", onClick: options.onUploadInto });
+  if (options.canManage && options.onMove) actions.push({ id: "move", label: "Move to…", testId: "move-to", onClick: options.onMove });
+  if (item.type === "folder" && !locked && options.canRename && options.onEdit) actions.push({ id: "edit", label: "Edit folder", testId: "edit-folder", onClick: options.onEdit });
+  if (item.type === "folder" && !locked && options.canDelete && options.onDeleteFolder) {
+    actions.push({ id: "delete-folder", label: "Delete folder", testId: "delete-folder", destructive: true, onClick: options.onDeleteFolder });
+  }
+  if (item.type !== "folder" && doc.pdfPath && options.onView) actions.push({ id: "view", label: "View file", onClick: options.onView });
+  if (item.type !== "folder" && doc.pdfPath && options.onDownload) actions.push({ id: "download", label: "Download", onClick: options.onDownload });
+  if (item.type !== "folder" && doc.pdfPath && options.onRemove) actions.push({ id: "remove", label: "Remove uploaded file", destructive: true, onClick: options.onRemove });
+  if (item.type !== "folder" && !doc.pdfPath && options.onAttach) actions.push({ id: "attach", label: "Attach a file", onClick: options.onAttach });
+  if (item.type !== "folder" && options.onComments) actions.push({ id: "comments", label: "Comments", onClick: options.onComments });
+  if (options.canManage && options.onSendToLibrary) actions.push({ id: "library", label: "Send to Library Pool", onClick: options.onSendToLibrary });
+  if (options.canManage && options.onDeleteTemplate && isBlankTemplateLink(doc.linkedPath)) {
+    actions.push({ id: "delete-template", label: "Delete", destructive: true, onClick: options.onDeleteTemplate });
+  }
+  if (options.onPoolDelete) {
+    actions.push({
+      id: "pool-delete",
+      label: "Remove from Library Pool",
+      testId: "pool-delete",
+      destructive: true,
+      disabled: options.poolDeletePending,
+      onClick: options.onPoolDelete,
+    });
+  }
+  return actions;
+}
 
 function FolderTreeBranch({
   folder,
@@ -535,7 +611,9 @@ export function FolderExplorerPage() {
   }
 
   const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
-  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+  const [pendingRemoval, setPendingRemoval] = useState<DocumentFolder | null>(null);
+  const [filePreview, setFilePreview] = useState<PreviewRequest | null>(null);
+  const [commentDoc, setCommentDoc] = useState<DocumentFolder | null>(null);
   const [treeOpen, setTreeOpen] = useState<Record<number, boolean>>({});
   const [dropHint, setDropHint] = useState<{ id: number; position: DropPosition } | null>(null);
   const [gapHint, setGapHint] = useState<string | null>(null);
@@ -968,6 +1046,56 @@ export function FolderExplorerPage() {
     showFolder(folder.id);
   }
 
+  function copyItemPath(path: string) {
+    void copyFolderPath(path).then((ok) => {
+      if (ok) toast.success("Path copied");
+      else toast.error("Couldn't copy the path.");
+    });
+  }
+
+  const query = search.trim().toLowerCase();
+
+  function detailItems(parentId: number) {
+    return folderContents(visibleFolders, parentId).filter((item) => !query || `${item.label} ${item.node.name}`.toLowerCase().includes(query));
+  }
+
+  function actionsFor(item: FolderDetailItem<DocumentFolder>, parentNames: string[], extras?: { pool?: boolean }) {
+    const doc = item.node;
+    const path = joinFolderPath([...parentNames, doc.name]);
+    return buildDetailActions(item, {
+      path,
+      canManage: canManageFolders,
+      canRename: canRenameFolders,
+      canDelete: canDeleteFolders,
+      onMove: canManageFolders ? () => openMove(doc.id) : undefined,
+      onEdit: canRenameFolders ? () => setNameEdit(doc) : undefined,
+      onDeleteFolder: canDeleteFolders ? () => setRetireTarget(doc) : undefined,
+      onDeleteTemplate: canManageFolders
+        ? () => {
+            if (confirm(`Remove "${doc.name}" from this folder? It will not be put back.`)) deleteFolder.mutate(doc.id);
+          }
+        : undefined,
+      onSendToLibrary: canManageFolders && !extras?.pool && poolFolder ? () => sendToLibrary(doc.id) : undefined,
+      onAttach: () => requestUpload(doc.id),
+      onRemove: doc.pdfPath ? () => setPendingRemoval(doc) : undefined,
+      onView: doc.pdfPath
+        ? () => {
+            const kind = previewKind(attachedFileName(doc), doc.pdfMimeType);
+            if (kind === "download") void downloadFolderFile(doc);
+            else setFilePreview(folderFilePreview(doc));
+          }
+        : undefined,
+      onDownload: doc.pdfPath ? () => void downloadFolderFile(doc) : undefined,
+      onComments: () => setCommentDoc(doc),
+      onUploadInto: item.type === "folder" ? () => requestDocumentUpload(doc.id) : undefined,
+      onPoolDelete: extras?.pool && canManageFolders ? () => void removePoolItems([doc.id]) : undefined,
+      poolDeletePending,
+      onCopy: copyItemPath,
+    });
+  }
+
+  const removal = pendingRemoval ? savedItemRemoval(pendingRemoval, visibleFolders.some((folder) => folder.parentId === pendingRemoval.id)) : null;
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading folders">
@@ -985,11 +1113,9 @@ export function FolderExplorerPage() {
   const deptParent = deptChain.length > 1 ? deptChain[deptChain.length - 2] : undefined;
   const movingFolder = movingId == null ? undefined : folders.find((folder) => folder.id === movingId);
 
-  const query = search.trim().toLowerCase();
   const treeRoots = (isoRoot ? [isoRoot, ...departments.filter((dept) => dept.parentId !== isoRoot.id)] : departments)
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
-  const activeListing = listFolder(visibleFolders, activeDept.id);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -1118,7 +1244,7 @@ export function FolderExplorerPage() {
               onMove={canManageFolders ? () => openMove(openFolder.id) : undefined}
               moveDisabled={movePending}
               onAttach={() => requestUpload(openFolder.id)}
-              onRemoveAttachment={() => removeTemplate.mutate(openFolder.id)}
+              onRemoveAttachment={() => setPendingRemoval(openFolder)}
             />
           ) : openFolder ? (
             <FolderBrowser
@@ -1151,14 +1277,11 @@ export function FolderExplorerPage() {
                 )
               }
               onMove={(id) => openMove(id)}
-              onDelete={canManageFolders ? (id) => deleteFolder.mutate(id) : undefined}
               onEditFolder={canRenameFolders ? (row) => setNameEdit(row) : undefined}
               onDeleteFolder={canDeleteFolders ? (row) => setRetireTarget(row) : undefined}
               folderActionPending={updateFolder.isPending || retireFolder.isPending}
               canManage={canManageFolders}
-              onSendToLibrary={sendToLibrary}
-              onAttach={requestUpload}
-              onRemoveAttachment={(id) => removeTemplate.mutate(id)}
+              detailActions={actionsFor}
               dragKind={dragKind}
               gapHint={gapHint}
               onGapOver={hoverGap}
@@ -1224,341 +1347,70 @@ export function FolderExplorerPage() {
             </span>
           </FileDropZone>
 
-          {activeListing.folders.map((sub, index) => {
-            const listing = listFolder(visibleFolders, sub.id);
-            const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
-            const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
-            const isCollapsed = query.length > 0 ? false : collapsed[sub.id] !== false;
-            const isDropTarget = dropHoverId === sub.id;
-            const beforeCard = gapKey(activeDept.id, sub.id, "folder");
-            const afterCards = gapKey(activeDept.id, null, "folder");
-            return (
-              <div key={sub.id} className="contents">
-              {dragKind === "folder" && (
-                <SiblingGap
-                  active={gapHint === beforeCard}
-                  className="h-4 shrink-0"
-                  onDragOver={(event) => hoverGap(event, activeDept.id, sub.id, "folder")}
-                  onDragLeave={() => leaveGap(beforeCard)}
-                  onDrop={(event) => dropGap(event, activeDept.id, sub.id, "folder")}
-                />
-              )}
-              <FileDropZone
-                onFiles={(dropped) => void uploadFiles(sub.id, dropped)}
-                overlay={false}
-                className={`shrink-0 overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
-              >
-                <div
-                  className={`flex cursor-grab items-center gap-2 border-b border-border bg-muted/40 px-2 py-1.5 active:cursor-grabbing ${hintClass(sub.id)}`}
-                  draggable={canManageFolders}
-                  data-folder-id={sub.id}
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    beginDrag(e, sub.id, "folder");
-                  }}
-                  onDragEnd={endDrag}
-                  onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: c[sub.id] === false }))}
-                  onDragOver={(e) => hoverRow(e, sub)}
-                  onDragLeave={() => leaveRow(sub.id)}
-                  onDrop={(e) => dropRow(e, sub)}
-                >
-                  <GripVertical size={14} className="text-muted-foreground" />
-                  <span className="text-muted-foreground">{isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
-                  {isCollapsed ? <Folder size={15} className="shrink-0 text-primary" /> : <FolderOpen size={15} className="shrink-0 text-primary" />}
-                  <span className="flex-1 text-sm font-semibold" data-testid="folder-title">
-                    {sub.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      showFolder(sub.id);
-                    }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Open
-                  </button>
-                  {canManageFolders && (
-                    <button
-                      type="button"
-                      data-testid="move-to"
-                      className="text-xs text-primary hover:underline"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openMove(sub.id);
-                      }}
-                    >
-                      Move to…
-                    </button>
-                  )}
-                  <span className="font-mono text-[10px] text-muted-foreground">{subfolders.length + docs.length}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      requestDocumentUpload(sub.id);
-                    }}
-                    className="text-muted-foreground hover:text-primary"
-                    aria-label={`Upload a document into ${sub.name}`}
-                    title={`Upload a document into ${sub.name}`}
-                  >
-                    <UploadCloud size={14} />
-                  </button>
-                  {sub.name !== LIBRARY_POOL_NAME && sub.name !== "ISO Compliance Documents" && (
-                    <span onClick={(event) => event.stopPropagation()}>
-                      <FolderActionButtons
-                        canRename={canRenameFolders}
-                        canDelete={canDeleteFolders}
-                        pending={updateFolder.isPending || retireFolder.isPending}
-                        onEdit={() => setNameEdit(sub)}
-                        onDelete={() => setRetireTarget(sub)}
-                      />
-                    </span>
-                  )}
-                </div>
-                {!isCollapsed && (
-                  <div
-                    className="flex flex-col gap-3 p-3"
-                    onDragOver={(e) => {
-                      if (allowDrop(e, sub.id)) setDropHoverId(sub.id);
-                    }}
-                    onDrop={(e) => {
-                      if (isFileDrag(e)) return;
-                      dropOnParent(e, sub.id);
-                    }}
-                  >
-                    {subfolders.length === 0 && docs.length === 0 && <EmptyFolder filtered={query.length > 0} />}
-                    {subfolders.map((row, rowIndex) => {
-                      const beforeRow = gapKey(sub.id, row.id, "folder");
-                      const afterRows = gapKey(sub.id, null, "folder");
-                      return (
-                      <div key={row.id} className="relative">
-                      {dragKind === "folder" && (
-                        <SiblingGap
-                          active={gapHint === beforeRow}
-                          className="absolute inset-x-0 -top-4 h-4"
-                          onDragOver={(event) => hoverGap(event, sub.id, row.id, "folder")}
-                          onDragLeave={() => leaveGap(beforeRow)}
-                          onDrop={(event) => dropGap(event, sub.id, row.id, "folder")}
-                        />
-                      )}
-                      <div
-                        data-testid="folder-row"
-                        data-folder-id={row.id}
-                        draggable={canManageFolders}
-                        onDragStart={(event) => {
-                          event.stopPropagation();
-                          beginDrag(event, row.id, "folder");
-                        }}
-                        onDragEnd={endDrag}
-                        onDragOver={(event) => hoverRow(event, row)}
-                        onDragLeave={() => leaveRow(row.id)}
-                        onDrop={(event) => dropRow(event, row)}
-                        className={`flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted ${hintClass(row.id)}`}
-                      >
-                        <GripVertical size={14} className="text-muted-foreground" />
-                        <Folder size={15} className="shrink-0 text-primary" />
-                        <button type="button" onClick={() => showFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
-                          {row.name}
-                        </button>
-                        <ChevronRight size={14} className="text-muted-foreground" />
-                      </div>
-                      {dragKind === "folder" && rowIndex === subfolders.length - 1 && (
-                        <SiblingGap
-                          active={gapHint === afterRows}
-                          className="mt-1 h-4"
-                          onDragOver={(event) => hoverGap(event, sub.id, null, "folder")}
-                          onDragLeave={() => leaveGap(afterRows)}
-                          onDrop={(event) => dropGap(event, sub.id, null, "folder")}
-                        />
-                      )}
-                      </div>
-                      );
-                    })}
-                    <div className="flex flex-wrap gap-2">
-                    {docs.map((doc, docIndex) => {
-                      const target = openTarget(doc);
-                      const beforeDoc = gapKey(sub.id, doc.id, "doc");
-                      const afterDocs = gapKey(sub.id, null, "doc");
-                      return (
-                        <div key={doc.id} className="contents">
-                        {dragKind === "doc" && (
-                          <SiblingGap
-                            orientation="pill"
-                            active={gapHint === beforeDoc}
-                            className="h-6 w-3 shrink-0"
-                            onDragOver={(event) => hoverGap(event, sub.id, doc.id, "doc")}
-                            onDragLeave={() => leaveGap(beforeDoc)}
-                            onDrop={(event) => dropGap(event, sub.id, doc.id, "doc")}
-                          />
-                        )}
-                        <div
-                          className={`inline-flex rounded-full ${hintClass(doc.id)}`}
-                          onDragOver={(event) => hoverRow(event, doc)}
-                          onDragLeave={() => leaveRow(doc.id)}
-                          onDrop={(event) => dropRow(event, doc)}
-                        >
-                          {target ? (
-                            <Link
-                              to={target}
-                              data-testid="saved-file"
-                              draggable={canManageFolders}
-                              onDragStart={(event) => {
-                                event.stopPropagation();
-                                beginDrag(event, doc.id, "doc");
-                              }}
-                              onDragEnd={endDrag}
-                              className="inline-flex cursor-grab items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:underline active:cursor-grabbing"
-                            >
-                              <FileText size={12} />
-                              {doc.name}
-                            </Link>
-                          ) : (
-                            <DocPill
-                              doc={doc}
-                              onDragStart={(e) => beginDrag(e, doc.id, "doc")}
-                              onDragEnd={endDrag}
-                              onSendToLibrary={() => sendToLibrary(doc.id)}
-                              onAttach={() => requestUpload(doc.id)}
-                              onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                              onMove={canManageFolders ? () => openMove(doc.id) : undefined}
-                            />
-                          )}
-                          {canManageFolders && target && (
-                            <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => openMove(doc.id)}>
-                              Move to…
-                            </button>
-                          )}
-                          {canManageFolders && isBlankTemplateLink(doc.linkedPath) && (
-                            <button
-                              type="button"
-                              className="px-1 text-[11px] text-muted-foreground hover:text-destructive"
-                              aria-label={`Delete ${doc.name}`}
-                              onClick={() => {
-                                if (confirm(`Remove "${doc.name}" from this folder? It will not be put back.`)) deleteFolder.mutate(doc.id);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                        {dragKind === "doc" && docIndex === docs.length - 1 && (
-                          <SiblingGap
-                            orientation="pill"
-                            active={gapHint === afterDocs}
-                            className="h-6 w-3 shrink-0"
-                            onDragOver={(event) => hoverGap(event, sub.id, null, "doc")}
-                            onDragLeave={() => leaveGap(afterDocs)}
-                            onDrop={(event) => dropGap(event, sub.id, null, "doc")}
-                          />
-                        )}
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </div>
-                )}
-              </FileDropZone>
-              {dragKind === "folder" && index === activeListing.folders.length - 1 && (
-                <SiblingGap
-                  active={gapHint === afterCards}
-                  className="h-4 shrink-0"
-                  onDragOver={(event) => hoverGap(event, activeDept.id, null, "folder")}
-                  onDragLeave={() => leaveGap(afterCards)}
-                  onDrop={(event) => dropGap(event, activeDept.id, null, "folder")}
-                />
-              )}
-              </div>
-            );
-          })}
-
-          {activeListing.files.some((file) => !query || file.name.toLowerCase().includes(query)) && (
-            <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
-              <p className="text-xs font-medium text-muted-foreground">Saved in {activeDept.name}</p>
-              <div className="flex flex-wrap gap-2">
-                {activeListing.files
-                  .filter((file) => !query || file.name.toLowerCase().includes(query))
-                  .map((doc, index, list) => {
-                    const target = openTarget(doc);
-                    const beforeDoc = gapKey(activeDept.id, doc.id, "doc");
-                    const afterDocs = gapKey(activeDept.id, null, "doc");
-                    return (
-                      <div key={doc.id} className="contents">
-                      {dragKind === "doc" && (
-                        <SiblingGap
-                          orientation="pill"
-                          active={gapHint === beforeDoc}
-                          className="h-6 w-3 shrink-0"
-                          onDragOver={(event) => hoverGap(event, activeDept.id, doc.id, "doc")}
-                          onDragLeave={() => leaveGap(beforeDoc)}
-                          onDrop={(event) => dropGap(event, activeDept.id, doc.id, "doc")}
-                        />
-                      )}
-                      <div
-                        className={`inline-flex rounded-full ${hintClass(doc.id)}`}
-                        onDragOver={(event) => hoverRow(event, doc)}
-                        onDragLeave={() => leaveRow(doc.id)}
-                        onDrop={(event) => dropRow(event, doc)}
-                      >
-                        {target ? (
-                          <Link
-                            to={target}
-                            data-testid="saved-file"
-                            draggable={canManageFolders}
-                            onDragStart={(event) => {
-                              event.stopPropagation();
-                              beginDrag(event, doc.id, "doc");
-                            }}
-                            onDragEnd={endDrag}
-                            className="inline-flex cursor-grab items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:underline active:cursor-grabbing"
-                          >
-                            <FileText size={12} />
-                            {doc.name}
-                          </Link>
-                        ) : (
-                          <DocPill
-                            doc={doc}
-                            onDragStart={(event) => beginDrag(event, doc.id, "doc")}
-                            onDragEnd={endDrag}
-                            onSendToLibrary={() => sendToLibrary(doc.id)}
-                            onAttach={() => requestUpload(doc.id)}
-                            onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                            onMove={canManageFolders ? () => openMove(doc.id) : undefined}
-                          />
-                        )}
-                        {canManageFolders && target && (
-                          <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => openMove(doc.id)}>
-                            Move to…
-                          </button>
-                        )}
-                        {canManageFolders && isBlankTemplateLink(doc.linkedPath) && (
-                          <button
-                            type="button"
-                            className="px-1 text-[11px] text-muted-foreground hover:text-destructive"
-                            aria-label={`Delete ${doc.name}`}
-                            onClick={() => {
-                              if (confirm(`Remove "${doc.name}" from this folder? It will not be put back.`)) deleteFolder.mutate(doc.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                      {dragKind === "doc" && index === list.length - 1 && (
-                        <SiblingGap
-                          orientation="pill"
-                          active={gapHint === afterDocs}
-                          className="h-6 w-3 shrink-0"
-                          onDragOver={(event) => hoverGap(event, activeDept.id, null, "doc")}
-                          onDragLeave={() => leaveGap(afterDocs)}
-                          onDrop={(event) => dropGap(event, activeDept.id, null, "doc")}
-                        />
-                      )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
+          <div
+            onDragOver={(event) => {
+              if (isFileDrag(event)) return;
+              allowDrop(event, activeDept.id);
+            }}
+            onDrop={(event) => {
+              if (isFileDrag(event)) return;
+              dropOnParent(event, activeDept.id);
+            }}
+          >
+            <FolderContentsList
+              items={detailItems(activeDept.id)}
+              testId="folder-details"
+              empty={<EmptyFolder filtered={query.length > 0} />}
+              onOpen={(item) => {
+                if (item.type === "folder") showFolder(item.node.id);
+              }}
+              actions={(item) => actionsFor(item, deptChain.map((crumb) => crumb.name))}
+              rowProps={(item) => ({
+                draggable: canManageFolders,
+                onDragStart: (event) => {
+                  event.stopPropagation();
+                  beginDrag(event, item.node.id, item.type === "folder" ? "folder" : "doc");
+                },
+                onDragEnd: endDrag,
+                onDragOver: (event) => hoverRow(event, item.node),
+                onDragLeave: () => leaveRow(item.node.id),
+                onDrop: (event) => dropRow(event, item.node),
+                className: hintClass(item.node.id),
+              })}
+              renderBefore={(item) => {
+                const kind = item.type === "folder" ? "folder" : "doc";
+                if (dragKind !== kind) return null;
+                const before = gapKey(activeDept.id, item.node.id, kind);
+                return (
+                  <SiblingGap
+                    active={gapHint === before}
+                    className="h-3"
+                    onDragOver={(event) => hoverGap(event, activeDept.id, item.node.id, kind)}
+                    onDragLeave={() => leaveGap(before)}
+                    onDrop={(event) => dropGap(event, activeDept.id, item.node.id, kind)}
+                  />
+                );
+              }}
+            />
+            {dragKind === "folder" && (
+              <SiblingGap
+                active={gapHint === gapKey(activeDept.id, null, "folder")}
+                className="h-3"
+                onDragOver={(event) => hoverGap(event, activeDept.id, null, "folder")}
+                onDragLeave={() => leaveGap(gapKey(activeDept.id, null, "folder"))}
+                onDrop={(event) => dropGap(event, activeDept.id, null, "folder")}
+              />
+            )}
+            {dragKind === "doc" && (
+              <SiblingGap
+                active={gapHint === gapKey(activeDept.id, null, "doc")}
+                className="h-3"
+                onDragOver={(event) => hoverGap(event, activeDept.id, null, "doc")}
+                onDragLeave={() => leaveGap(gapKey(activeDept.id, null, "doc"))}
+                onDrop={(event) => dropGap(event, activeDept.id, null, "doc")}
+              />
+            )}
+          </div>
 
           {canManageFolders && (
           <form
@@ -1630,53 +1482,41 @@ export function FolderExplorerPage() {
                 </div>
               )}
             </div>
-            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-              {poolItems.length === 0 && <span className="text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
-              {poolItems.map((doc) => (
-                <div
-                  key={doc.id}
-                  className={`flex items-center gap-2 ${hintClass(doc.id)}`}
-                  onDragOver={(event) => hoverRow(event, doc)}
-                  onDragLeave={() => leaveRow(doc.id)}
-                  onDrop={(event) => dropRow(event, doc)}
-                >
-                  {canManageFolders && (
-                    <input
-                      type="checkbox"
-                      data-testid="pool-select"
-                      aria-label={`Select ${doc.name}`}
-                      disabled={poolDeletePending}
-                      checked={poolSelection.includes(doc.id)}
-                      onChange={(event) =>
-                        setPoolSelection((current) => (event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id)))
-                      }
-                    />
-                  )}
-                  <DocPill
-                    doc={doc}
-                    fill
-                    moveDisabled={movePending}
-                    onDragStart={(e) => beginDrag(e, doc.id, "doc")}
-                    onDragEnd={endDrag}
-                    onAttach={() => requestUpload(doc.id)}
-                    onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                    onMove={canManageFolders ? () => openMove(doc.id) : undefined}
-                  />
-                  {canManageFolders && (
-                    <button
-                      type="button"
-                      data-testid="pool-delete"
-                      disabled={poolDeletePending}
-                      onClick={() => void removePoolItems([doc.id])}
-                      className="shrink-0 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/15 disabled:opacity-40"
-                      aria-label={`Delete ${doc.name} from the Library Pool`}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <FolderContentsList
+              items={detailItems(poolFolder.id)}
+              testId="library-pool-details"
+              empty={<span className="block px-2 py-3 text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
+              leading={
+                canManageFolders
+                  ? (item) => (
+                      <input
+                        type="checkbox"
+                        data-testid="pool-select"
+                        aria-label={`Select ${item.node.name}`}
+                        disabled={poolDeletePending}
+                        checked={poolSelection.includes(item.node.id)}
+                        onChange={(event) =>
+                          setPoolSelection((current) => (event.target.checked ? [...current, item.node.id] : current.filter((id) => id !== item.node.id)))
+                        }
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    )
+                  : undefined
+              }
+              actions={(item) => actionsFor(item, [poolFolder.name], { pool: true })}
+              rowProps={(item) => ({
+                draggable: canManageFolders,
+                onDragStart: (event) => {
+                  event.stopPropagation();
+                  beginDrag(event, item.node.id, "doc");
+                },
+                onDragEnd: endDrag,
+                onDragOver: (event) => hoverRow(event, item.node),
+                onDragLeave: () => leaveRow(item.node.id),
+                onDrop: (event) => dropRow(event, item.node),
+                className: hintClass(item.node.id),
+              })}
+            />
           </div>
         </div>
       )}
@@ -1728,6 +1568,22 @@ export function FolderExplorerPage() {
           );
         }}
       />
+      <RemoveSavedFileDialog
+        open={pendingRemoval != null}
+        removal={removal}
+        pending={removeTemplate.isPending}
+        onClose={() => {
+          if (!removeTemplate.isPending) setPendingRemoval(null);
+        }}
+        onConfirm={() => {
+          if (!pendingRemoval) return;
+          removeTemplate.mutate(pendingRemoval.id, { onSuccess: () => setPendingRemoval(null) });
+        }}
+      />
+      <InAppFilePreview request={filePreview} onClose={() => setFilePreview(null)} />
+      <Modal title={commentDoc ? `Comments · ${commentDoc.name}` : "Comments"} isOpen={commentDoc != null} onClose={() => setCommentDoc(null)} wide>
+        {commentDoc && (commentDoc.documentId ? <DocumentCommentThread documentId={commentDoc.documentId} canComment /> : <DocumentCommentThread folderId={commentDoc.id} canComment />)}
+      </Modal>
     </div>
   );
 }
@@ -1971,34 +1827,6 @@ function ExplorerPathBar({
   );
 }
 
-function WindowedRows<T>({ items, forceAll, render }: { items: T[]; forceAll?: boolean; render: (item: T, index: number) => ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewport, setViewport] = useState(320);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      setScrollTop(el.scrollTop);
-      setViewport(el.clientHeight || 320);
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    return () => el.removeEventListener("scroll", update);
-  }, [items.length]);
-  if (forceAll || items.length <= 40) return <>{items.map((item, index) => render(item, index))}</>;
-  const range = virtualRange(items.length, scrollTop, viewport, 44);
-  return (
-    <div ref={ref} className="max-h-80 overflow-y-auto" data-testid="windowed-rows">
-      <div style={{ height: range.height, position: "relative" }}>
-        <div style={{ position: "absolute", top: range.offset, left: 0, right: 0 }}>
-          {items.slice(range.start, range.end).map((item, index) => render(item, range.start + index))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FolderBrowser({
   folder,
   folders,
@@ -2022,14 +1850,11 @@ function FolderBrowser({
   onCreateFolder,
   onRename,
   onMove,
-  onDelete,
   onEditFolder,
   onDeleteFolder,
   folderActionPending,
   canManage,
-  onSendToLibrary,
-  onAttach,
-  onRemoveAttachment,
+  detailActions,
   dragKind,
   gapHint,
   onGapOver,
@@ -2058,14 +1883,11 @@ function FolderBrowser({
   onCreateFolder: (name: string, parentId: number) => void;
   onRename: (id: number, name: string) => void;
   onMove: (id: number) => void;
-  onDelete?: (id: number) => void;
   onEditFolder?: (folder: DocumentFolder) => void;
   onDeleteFolder?: (folder: DocumentFolder) => void;
   folderActionPending?: boolean;
   canManage: boolean;
-  onSendToLibrary: (id: number) => void;
-  onAttach: (id: number) => void;
-  onRemoveAttachment: (id: number) => void;
+  detailActions: (item: FolderDetailItem<DocumentFolder>, parentNames: string[]) => FolderRowAction[];
   dragKind: DragKind | null;
   gapHint: string | null;
   onGapOver: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
@@ -2081,11 +1903,8 @@ function FolderBrowser({
   }, [folder.id, folder.name]);
   const chain = folderChain(folders, folder.id);
   const selectedPath = joinFolderPath(chain.map((crumb) => crumb.name));
-  const listing = listFolder(folders, folder.id);
   const parent = chain.length > 1 ? chain[chain.length - 2] : undefined;
-  const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
-  const files = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
-  const empty = subfolders.length === 0 && files.length === 0;
+  const items = folderContents(folders, folder.id).filter((item) => !query || `${item.label} ${item.node.name}`.toLowerCase().includes(query));
   const canRename = canManage && folder.name !== LIBRARY_POOL_NAME;
 
   return (
@@ -2193,7 +2012,6 @@ function FolderBrowser({
       </FileDropZone>
 
       <div
-        className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2"
         data-testid="folder-contents"
         onDragOver={(event) => {
           if (isFileDrag(event)) return;
@@ -2204,158 +2022,59 @@ function FolderBrowser({
           onNest(event, folder.id);
         }}
       >
-        {empty && <EmptyFolder filtered={query.length > 0} />}
-        {subfolders.map((row, index) => {
-          const beforeRow = gapKey(folder.id, row.id, "folder");
-          const afterRows = gapKey(folder.id, null, "folder");
-          return (
-          <div key={row.id}>
-          {dragKind === "folder" && (
-            <SiblingGap
-              active={gapHint === beforeRow}
-              className="h-3"
-              onDragOver={(event) => onGapOver(event, folder.id, row.id, "folder")}
-              onDragLeave={() => onGapLeave(beforeRow)}
-              onDrop={(event) => onGapDrop(event, folder.id, row.id, "folder")}
-            />
-          )}
-          <div
-            data-testid="folder-row"
-            data-folder-id={row.id}
-            draggable={canManage}
-            onDragStart={(event) => {
+        <FolderContentsList
+          items={items}
+          testId="folder-details"
+          empty={<EmptyFolder filtered={query.length > 0} />}
+          onOpen={(item) => {
+            if (item.type === "folder") onOpenFolder(item.node.id);
+          }}
+          actions={(item) => detailActions(item, chain.map((crumb) => crumb.name))}
+          rowProps={(item) => ({
+            draggable: canManage,
+            onDragStart: (event) => {
               event.stopPropagation();
-              onBeginDrag(event, row.id, "folder");
-            }}
-            onDragEnd={onEndDrag}
-            onDragOver={(event) => onHoverRow(event, row)}
-            onDragLeave={() => onLeaveRow(row.id)}
-            onDrop={(event) => onDropRow(event, row)}
-            className={`flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted ${hintClass(row.id)}`}
-          >
-            <GripVertical size={14} className="text-muted-foreground" />
-            <Folder size={15} className="shrink-0 text-primary" />
-            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title" title={joinFolderPath([...chain.map((crumb) => crumb.name), row.name])}>
-              {row.name}
-            </button>
-            <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), row.name])} compact />
-            {canManage && (
-              <button
-                type="button"
-                data-testid="move-to"
-                className="text-xs text-primary hover:underline"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onMove(row.id);
-                }}
-              >
-                Move to…
-              </button>
-            )}
-            <ChevronRight size={14} className="text-muted-foreground" />
-          </div>
-          {dragKind === "folder" && index === subfolders.length - 1 && (
-            <SiblingGap
-              active={gapHint === afterRows}
-              className="h-3"
-              onDragOver={(event) => onGapOver(event, folder.id, null, "folder")}
-              onDragLeave={() => onGapLeave(afterRows)}
-              onDrop={(event) => onGapDrop(event, folder.id, null, "folder")}
-            />
-          )}
-          </div>
-          );
-        })}
-        <WindowedRows
-          items={files}
-          forceAll={dragKind != null}
-          render={(file, index) => {
-          const target = openTarget(file);
-          const beforeFile = gapKey(folder.id, file.id, "doc");
-          const afterFiles = gapKey(folder.id, null, "doc");
-          return (
-            <div key={file.id}>
-            {dragKind === "doc" && (
+              onBeginDrag(event, item.node.id, item.type === "folder" ? "folder" : "doc");
+            },
+            onDragEnd: onEndDrag,
+            onDragOver: (event) => onHoverRow(event, item.node),
+            onDragLeave: () => onLeaveRow(item.node.id),
+            onDrop: (event) => onDropRow(event, item.node),
+            className: hintClass(item.node.id),
+          })}
+          renderBefore={(item) => {
+            const kind = item.type === "folder" ? "folder" : "doc";
+            if (dragKind !== kind) return null;
+            const before = gapKey(folder.id, item.node.id, kind);
+            return (
               <SiblingGap
-                active={gapHint === beforeFile}
+                active={gapHint === before}
                 className="h-3"
-                onDragOver={(event) => onGapOver(event, folder.id, file.id, "doc")}
-                onDragLeave={() => onGapLeave(beforeFile)}
-                onDrop={(event) => onGapDrop(event, folder.id, file.id, "doc")}
+                onDragOver={(event) => onGapOver(event, folder.id, item.node.id, kind)}
+                onDragLeave={() => onGapLeave(before)}
+                onDrop={(event) => onGapDrop(event, folder.id, item.node.id, kind)}
               />
-            )}
-            <div
-              className={hintClass(file.id)}
-              onDragOver={(event) => onHoverRow(event, file)}
-              onDragLeave={() => onLeaveRow(file.id)}
-              onDrop={(event) => onDropRow(event, file)}
-            >
-              {target ? (
-                <div className="flex items-center gap-2">
-                <Link
-                  to={target}
-                  data-testid={`open-file-${file.id}`}
-                  draggable={canManage}
-                  onDragStart={(event) => {
-                    event.stopPropagation();
-                    onBeginDrag(event, file.id, "doc");
-                  }}
-                  onDragEnd={onEndDrag}
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-                >
-                  <FileText size={14} className="text-primary" />
-                  <span className="flex-1 text-primary" title={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])}>{file.name}</span>
-                  <span className="text-xs text-muted-foreground">Open</span>
-                </Link>
-                <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])} compact />
-                {canManage && (
-                  <button type="button" data-testid="move-to" className="shrink-0 px-2 text-xs text-primary hover:underline" aria-label={`Move ${file.name} to another folder`} onClick={() => onMove(file.id)}>
-                    Move to…
-                  </button>
-                )}
-                {canManage && onDelete && isBlankTemplateLink(file.linkedPath) && (
-                  <button
-                    type="button"
-                    className="shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${file.name}`}
-                    onClick={() => {
-                      if (confirm(`Remove "${file.name}" from this folder? It will not be put back.`)) onDelete(file.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-                </div>
-              ) : (
-                <div data-testid="file-row" className="flex items-center gap-2 px-2 py-1" title={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])}>
-                  <div className="min-w-0 flex-1">
-                    <DocPill
-                      doc={file}
-                      onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
-                      onDragEnd={onEndDrag}
-                      onSendToLibrary={() => onSendToLibrary(file.id)}
-                      onAttach={() => onAttach(file.id)}
-                      onRemoveAttachment={() => onRemoveAttachment(file.id)}
-                      onMove={canManage ? () => onMove(file.id) : undefined}
-                    />
-                  </div>
-                  <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])} compact />
-                </div>
-              )}
-            </div>
-            {dragKind === "doc" && index === files.length - 1 && (
-              <SiblingGap
-                active={gapHint === afterFiles}
-                className="h-3"
-                onDragOver={(event) => onGapOver(event, folder.id, null, "doc")}
-                onDragLeave={() => onGapLeave(afterFiles)}
-                onDrop={(event) => onGapDrop(event, folder.id, null, "doc")}
-              />
-            )}
-            </div>
-          );
-        }}
+            );
+          }}
         />
+        {dragKind === "folder" && (
+          <SiblingGap
+            active={gapHint === gapKey(folder.id, null, "folder")}
+            className="h-3"
+            onDragOver={(event) => onGapOver(event, folder.id, null, "folder")}
+            onDragLeave={() => onGapLeave(gapKey(folder.id, null, "folder"))}
+            onDrop={(event) => onGapDrop(event, folder.id, null, "folder")}
+          />
+        )}
+        {dragKind === "doc" && (
+          <SiblingGap
+            active={gapHint === gapKey(folder.id, null, "doc")}
+            className="h-3"
+            onDragOver={(event) => onGapOver(event, folder.id, null, "doc")}
+            onDragLeave={() => onGapLeave(gapKey(folder.id, null, "doc"))}
+            onDrop={(event) => onGapDrop(event, folder.id, null, "doc")}
+          />
+        )}
       </div>
 
       {canManage && (

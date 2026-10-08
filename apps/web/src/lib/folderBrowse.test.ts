@@ -298,9 +298,10 @@ describe("folder browse", () => {
     const page = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../routes/Documents/FolderExplorerPage.tsx"), "utf8");
     assert.match(page, /folderTreeOpen\(treeOpen\[folder\.id\], depth\)/);
     assert.match(page, /treeOpenForTarget/);
-    assert.match(page, /collapsed\[sub\.id\] !== false/);
+    assert.match(page, /FolderContentsList/);
     assert.match(page, /folderNodePath\(visibleFolders, activeDept\.id\)/);
     assert.match(page, /<FolderPathBar path=\{deptPath\} \/>/);
     assert.doesNotMatch(page, /treeOpen\[folder\.id\] \?\? isoRoot/);
+    assert.doesNotMatch(page, /collapsed\[sub\.id\] !== false/);
   });
 });

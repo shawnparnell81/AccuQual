@@ -7,6 +7,8 @@ import { company } from "../../drizzle/schema/company.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { controlledLists } from "../../drizzle/schema/controlledLists.js";
 import { documents } from "../../drizzle/schema/documents.js";
+import { users } from "../../drizzle/schema/users.js";
+import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
@@ -35,6 +37,7 @@ import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./
 import { getFormFolder, listFormFolders, renameFormFolder, retireFormFolder } from "./formFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
+import { retireQualityManualCopies } from "./retiredListCopies.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -218,18 +221,75 @@ async function linkKnownForms(db: Db, all: (typeof documentFolders.$inferSelect)
  * Folder Explorer can show "Draft" / "Expiring Soon" / "Expired" without a
  * per-leaf round trip. Leaves without a linked document are untouched.
  */
+const LIVING_LIST_ROUTES: Record<string, string> = {
+  "lst-eqp-001": "/calibration/master-list",
+  "lst-gen-001": "/documents/master-list",
+  "lst-gen-002": "/documents/internal-audit-schedule",
+  "lst-gen-003": "/documents/laboratory-scope",
+  "lst-dev-001": "/documents/development-log",
+  "lst-ncr-001": "/documents/nonconformance-log",
+  "lst-eng-001": "/documents/engineering-request-log",
+};
+
 async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$inferSelect)[]) {
   const documentIds = [...new Set(all.map((f) => f.documentId).filter((id): id is number => id !== null))];
   if (documentIds.length === 0) return all;
 
   const linked = await db.select().from(documents).where(and(inArray(documents.id, documentIds)));
   const byId = new Map(linked.map((d) => [d.id, d]));
+  const versionIds = [...new Set(linked.map((doc) => doc.currentVersionId).filter((id): id is number => id != null))];
+  const versions = versionIds.length
+    ? await db
+        .select({ id: controlledVersions.id, updatedBy: controlledVersions.updatedBy, createdBy: controlledVersions.createdBy })
+        .from(controlledVersions)
+        .where(inArray(controlledVersions.id, versionIds))
+    : [];
+  const versionById = new Map(versions.map((version) => [version.id, version]));
+  const userIds = [
+    ...new Set(
+      [
+        ...linked.map((doc) => doc.ownerId),
+        ...versions.flatMap((version) => [version.updatedBy, version.createdBy]),
+      ].filter((id): id is number => id != null),
+    ),
+  ];
+  const people = userIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds)) : [];
+  const nameById = new Map(people.map((person) => [person.id, person.name]));
 
   return all.map((f) => {
     if (f.documentId === null) return f;
     const doc = byId.get(f.documentId);
     if (!doc) return f;
-    return { ...f, documentStatus: doc.status, documentExpirationStatus: expirationStatus(doc) };
+    const version = doc.currentVersionId == null ? undefined : versionById.get(doc.currentVersionId);
+    const actorId = version?.updatedBy ?? version?.createdBy ?? doc.ownerId;
+    return {
+      ...f,
+      documentStatus: doc.status,
+      documentExpirationStatus: expirationStatus(doc),
+      documentTitle: doc.title,
+      documentRevisionCode: doc.revisionCode,
+      documentUpdatedAt: doc.updatedAt,
+      modifiedByName: actorId == null ? null : (nameById.get(actorId) ?? null),
+    };
+  });
+}
+
+/** Revision and last save on each in-app controlled list, so the folder row can show the list's own record. */
+async function withLivingListInfo<T extends { linkedPath: string | null }>(db: Db, folders: T[]): Promise<T[]> {
+  const rows = await db
+    .select({ listKey: controlledLists.listKey, revision: controlledLists.revision, updatedAt: controlledLists.updatedAt })
+    .from(controlledLists);
+  if (rows.length === 0) return folders;
+  const byRoute = new Map<string, { revision: string; updatedAt: Date | null }>();
+  for (const row of rows) {
+    const route = LIVING_LIST_ROUTES[row.listKey];
+    if (route) byRoute.set(route, { revision: row.revision, updatedAt: row.updatedAt });
+  }
+  return folders.map((folder) => {
+    const path = folder.linkedPath?.split("?")[0] ?? "";
+    const list = byRoute.get(path);
+    if (!list) return folder;
+    return { ...folder, listRevision: list.revision, listUpdatedAt: list.updatedAt };
   });
 }
 
@@ -388,10 +448,11 @@ function markRemovedFromLibraryPool<T extends { id: number }>(folders: T[], remo
   return folders.map((folder) => (removed.has(folder.id) ? { ...folder, removedFromLibraryPool: true } : folder));
 }
 
-async function folderListResponse(db: Db, folders: (typeof documentFolders.$inferSelect)[]) {
-  const collapsed = await collapseDuplicateLivingListNodes(db, folders);
-  const removed = await detachRemovedFromPool(db, collapsed);
-  const presented = await withLinkedDocumentInfo(db, presentDocumentFolders(collapsed));
+async function folderListResponse(db: Db, folders: (typeof documentFolders.$inferSelect)[], performedBy?: number) {
+  const collapsed = await collapseDuplicateLivingListNodes(db, folders, performedBy);
+  const retired = await retireQualityManualCopies(db, collapsed, performedBy);
+  const removed = await detachRemovedFromPool(db, retired);
+  const presented = await withLivingListInfo(db, await withLinkedDocumentInfo(db, presentDocumentFolders(retired)));
   return markRemovedFromLibraryPool(presented, removed);
 }
 
@@ -411,7 +472,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await ensureLivingControlledLists(req);
     const fresh = await db.select().from(documentFolders);
     const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-    return res.json(await folderListResponse(db, merged));
+    return res.json(await folderListResponse(db, merged, req.user?.id));
   }
 
   // Move to… used to wait on this refetch. The filing work below is a hundred
@@ -425,7 +486,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await linkKnownForms(db, withPool);
     const filed = await rehomeStrayBlankShortcuts(db, withPool, settled.blankFormsTemplatesFolderId, req.user?.id);
     const merged = await mergeLooseFolderDuplicates(db, filed, req.user?.id);
-    return res.json(await folderListResponse(db, merged));
+    return res.json(await folderListResponse(db, merged, req.user?.id));
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -438,7 +499,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   await ensureLivingControlledLists(req);
   const fresh = await db.select().from(documentFolders);
   const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-  res.json(await folderListResponse(db, merged));
+  res.json(await folderListResponse(db, merged, req.user?.id));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -854,9 +915,10 @@ export const downloadTemplate = asyncHandler(async (req: Request, res: Response)
 });
 
 /**
- * Detaches the PDF from a folder node — the node itself (and its place in the
- * tree) is untouched; only the attached file goes away. To send the whole
- * node back to the library pool instead, use PATCH .../:id { parentId }.
+ * Takes an uploaded file off a saved item. The bytes stay on disk (archived).
+ * A row that existed only to hold that file is removed, so it cannot come back
+ * as an empty folder. A list, form, or folder that also has other meaning keeps
+ * its place and only loses the file.
  */
 export const removeTemplate = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -864,14 +926,35 @@ export const removeTemplate = asyncHandler(async (req: Request, res: Response) =
 
   const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!folder) throw AppError.notFound("Document folder");
+  if (!folder.pdfPath) throw AppError.badRequest("No uploaded file is attached to this item");
 
-  if (folder.pdfPath && existsSync(folder.pdfPath)) {
-    await unlink(folder.pdfPath).catch((err) => logger.warn(`Could not remove template file ${folder.pdfPath}`, err));
+  const children = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, id));
+  const removeNode = children.length === 0 && !folder.linkedPath && folder.documentId == null;
+  const archivedPath = folder.pdfPath;
+
+  if (removeNode) {
+    await db.delete(documentFolders).where(eq(documentFolders.id, id));
+    await rememberDeletedDocumentFolder(db, await parentNameOf(db, folder.parentId), folder.name);
+    await recordAuditTrail(db, {
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: id,
+      action: "delete",
+      performedBy: req.user?.id,
+      changes: {
+        action: "remove_saved_upload",
+        summary: `Removed "${folder.name}" from the folder. The uploaded file was archived and kept. No empty folder was left behind.`,
+        archivedPath,
+        name: folder.name,
+        parentId: folder.parentId,
+      },
+    });
+    res.status(204).send();
+    return;
   }
 
   const [updated] = await db
     .update(documentFolders)
-    .set({ pdfPath: null, updatedAt: new Date() })
+    .set({ pdfPath: null, pdfMimeType: null, updatedAt: new Date() })
     .where(and(eq(documentFolders.id, id)))
     .returning();
 
@@ -879,8 +962,13 @@ export const removeTemplate = asyncHandler(async (req: Request, res: Response) =
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "update",
-    changes: { action: "remove_template" },
     performedBy: req.user?.id,
+    changes: {
+      action: "unlink_uploaded_file",
+      summary: `Unlinked the uploaded file from "${folder.name}". The item stays in the folder. The file was archived and kept.`,
+      archivedPath,
+      name: folder.name,
+    },
   });
 
   res.json(updated);
