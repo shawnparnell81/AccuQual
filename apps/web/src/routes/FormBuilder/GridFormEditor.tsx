@@ -132,18 +132,18 @@ export function GridFormEditor({
           <button type="button" className="rounded border border-border px-2 py-1 underline" onClick={() => updateSelected({ style: { underline: true } })}>Underline</button>
           <label className="flex items-center gap-1">
             Fill
-            <input type="color" aria-label="Fill color" onChange={(event) => updateSelected({ style: { background: event.target.value } })} />
+            <input type="color" className="fb-color" aria-label="Fill color" defaultValue="#0A3C7B" onChange={(event) => updateSelected({ style: { background: event.target.value } })} />
           </label>
           <label className="flex items-center gap-1">
             Font
-            <input type="color" aria-label="Font color" onChange={(event) => updateSelected({ style: { color: event.target.value } })} />
+            <input type="color" className="fb-color" aria-label="Font color" defaultValue="#111111" onChange={(event) => updateSelected({ style: { color: event.target.value } })} />
           </label>
-          <select aria-label="Alignment" className="rounded border border-border bg-background px-1 py-1" onChange={(event) => updateSelected({ style: { align: event.target.value as "left" | "center" | "right" } })}>
+          <select aria-label="Alignment" className="fb-control rounded px-1 py-1" onChange={(event) => updateSelected({ style: { align: event.target.value as "left" | "center" | "right" } })}>
             <option value="left">Left</option>
             <option value="center">Center</option>
             <option value="right">Right</option>
           </select>
-          <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ style: { borderTop: "1px solid #1a1a1a", borderRight: "1px solid #1a1a1a", borderBottom: "1px solid #1a1a1a", borderLeft: "1px solid #1a1a1a" } })}>Borders</button>
+          <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ style: { borderTop: "1px solid currentColor", borderRight: "1px solid currentColor", borderBottom: "1px solid currentColor", borderLeft: "1px solid currentColor" } })}>Borders</button>
           <button type="button" className="rounded border border-border px-2 py-1" onClick={merge}>Merge</button>
           <button type="button" className="rounded border border-border px-2 py-1" onClick={unmerge}>Unmerge</button>
           <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ locked: true })}>Lock label</button>
@@ -154,7 +154,7 @@ export function GridFormEditor({
             <input
               aria-label="Column width"
               type="number"
-              className="w-16 rounded border border-border bg-background px-1 py-1"
+              className="fb-control w-16 rounded px-1 py-1"
               value={sheet.colWidths[box.c1] ?? 110}
               onChange={(event) => {
                 const next = cloneSheets(structure.sheets);
@@ -170,7 +170,7 @@ export function GridFormEditor({
             <input
               aria-label="Row height"
               type="number"
-              className="w-16 rounded border border-border bg-background px-1 py-1"
+              className="fb-control w-16 rounded px-1 py-1"
               value={sheet.rowHeights[box.r1] ?? 24}
               onChange={(event) => {
                 const next = cloneSheets(structure.sheets);
@@ -188,7 +188,7 @@ export function GridFormEditor({
           <span className="text-muted-foreground">{addressOf(selection.c1 + 1, selection.r1 + 1)}</span>
           <input
             aria-label="Formula bar"
-            className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1"
+            className="fb-formula min-w-0 flex-1 rounded px-2 py-1"
             value={bar}
             onChange={(event) => setBar(event.target.value)}
             onBlur={applyBar}
@@ -271,7 +271,7 @@ export function GridFormEditor({
             {mode === "design" ? (
               <input
                 aria-label={`Sheet ${index + 1} name`}
-                className="w-24 bg-transparent"
+                className="fb-plain w-24 bg-transparent"
                 value={item.name}
                 onChange={(event) => {
                   const next = cloneSheets(structure.sheets);
