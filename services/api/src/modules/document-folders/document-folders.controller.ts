@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { documentFolders, LIBRARY_POOL_NAME } from "../../drizzle/schema/documentFolders.js";
+import { company } from "../../drizzle/schema/company.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
+import { controlledLists } from "../../drizzle/schema/controlledLists.js";
 import { documents } from "../../drizzle/schema/documents.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -19,9 +21,10 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
-import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce } from "./companyDocumentFolders.js";
+import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce, rehomeStrayBlankShortcuts } from "./companyDocumentFolders.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
-import { MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, retargetRetiredRegisterLink } from "./formFiling.js";
+import { FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
+import { LIST_KEYS } from "../controlled-lists/logic.js";
 import { ensureLivingControlledLists } from "../controlled-lists/service.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
@@ -261,6 +264,44 @@ export const formFolderDetail = asyncHandler(async (req: Request, res: Response)
   res.json(await getFormFolder(req.db!, String(req.params.formKey ?? "")));
 });
 
+type FolderNode = { id: number; name: string; parentId: number | null };
+
+/** True when this parent choice would put the folder inside its own subtree. One pass over rows already loaded. */
+function folderParentCycles(nodes: FolderNode[], folderId: number, candidateParentId: number): boolean {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  let cursor: number | null = candidateParentId;
+  const seen = new Set<number>();
+  while (cursor !== null) {
+    if (cursor === folderId) return true;
+    if (seen.has(cursor)) return false;
+    seen.add(cursor);
+    cursor = byId.get(cursor)?.parentId ?? null;
+  }
+  return false;
+}
+
+async function loadFolderNodes(db: Db): Promise<FolderNode[]> {
+  return db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+}
+
+/**
+ * The one-time filing flags are set, every current blank is accounted for,
+ * and every living list already has a row. Opening Documents again is a read.
+ * A new form or list still takes the full filing path once.
+ */
+async function settledFolderProfile(db: Db) {
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const profile = row?.profile;
+  if (!profile?.isoMainFoldersReady || !profile.blankFormsTemplatesReady || !profile.folderNamesUnified) return null;
+  const placed = new Set(profile.blankFormKeysPlaced ?? []);
+  const fillable = FORM_TEMPLATES.filter((seed) => !keptOutOfBlankFormsTemplates(seed));
+  if (fillable.some((seed) => !placed.has(seed.formKey))) return null;
+  const lists = await db.select({ listKey: controlledLists.listKey }).from(controlledLists);
+  const have = new Set(lists.map((list) => list.listKey));
+  if (LIST_KEYS.some((key) => !have.has(key))) return null;
+  return profile;
+}
+
 /** Full flat folder list for the company, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -278,6 +319,19 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const fresh = await db.select().from(documentFolders);
     const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
     return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(merged)));
+  }
+
+  // Move to… used to wait on this refetch. The filing work below is a hundred
+  // round trips (template sync, living lists, and the whole master document
+  // list) and it also put numbered placeholders back just to delete them.
+  // A tree that is already filed does not need that on every open.
+  const settled = await settledFolderProfile(db);
+  if (settled) {
+    const pool = await ensureLibraryPool(db, existing);
+    const withPool = existing.some((folder) => folder.id === pool.id) ? existing : [...existing, pool];
+    await linkKnownForms(db, withPool);
+    const filed = await rehomeStrayBlankShortcuts(db, withPool, settled.blankFormsTemplatesFolderId, req.user?.id);
+    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(filed)));
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -336,20 +390,6 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(created);
 });
 
-/** Would setting `candidateParentId` as this folder's parent make it its own ancestor? */
-async function wouldCreateCycle(db: Db, folderId: number, candidateParentId: number): Promise<boolean> {
-  let cursor: number | null = candidateParentId;
-  const seen = new Set<number>();
-  while (cursor !== null) {
-    if (cursor === folderId) return true;
-    if (seen.has(cursor)) return false; // defensive: shouldn't happen in a well-formed tree
-    seen.add(cursor);
-    const [row] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, cursor)));
-    cursor = row?.parentId ?? null;
-  }
-  return false;
-}
-
 export const update = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const id = Number(req.params.id);
@@ -363,11 +403,13 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   const [current] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!current) throw AppError.notFound("Document folder");
 
-  if (parentId !== undefined && parentId !== null) {
+  const parentChanging = parentId !== undefined && parentId !== current.parentId;
+  let nodes: FolderNode[] | null = null;
+  if (parentId != null && parentId !== current.parentId) {
     if (parentId === id) throw AppError.badRequest("A folder cannot be its own parent");
-    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId)));
-    if (!parent) throw AppError.notFound("Parent folder");
-    if (await wouldCreateCycle(db, id, parentId)) {
+    nodes = await loadFolderNodes(db);
+    if (!nodes.some((node) => node.id === parentId)) throw AppError.notFound("Parent folder");
+    if (folderParentCycles(nodes, id, parentId)) {
       throw AppError.badRequest("That move would nest a folder inside itself");
     }
   }
@@ -385,18 +427,17 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
 
-  const parentChanged = parentId !== undefined && parentId !== current.parentId;
   const nameChanged = name !== undefined && name !== current.name;
   let changes: Record<string, unknown>;
-  if (parentChanged) {
-    const all = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+  if (parentChanging) {
+    nodes = nodes ?? (await loadFolderNodes(db));
     changes = folderMoveAudit({
       name: current.name,
-      kind: documentNodeKind(current, all),
+      kind: documentNodeKind(current, nodes),
       fromParentId: current.parentId,
       toParentId: parentId ?? null,
-      fromLabel: folderLocationLabel(all, current.parentId),
-      toLabel: folderLocationLabel(all, parentId ?? null),
+      fromLabel: folderLocationLabel(nodes, current.parentId),
+      toLabel: folderLocationLabel(nodes, parentId ?? null),
       renamedTo: nameChanged ? name : undefined,
     });
   } else if (nameChanged && name) {
@@ -430,7 +471,7 @@ export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Resp
   const [parent] = current.parentId == null ? [] : await db.select().from(documentFolders).where(eq(documentFolders.id, current.parentId));
   if (!parent || parent.name !== LIBRARY_POOL_NAME) throw AppError.badRequest("That item is not in the Library Pool.");
   const children = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, id));
-  if (children.length > 0) throw AppError.badRequest("Move or delete this folder's contents before removing it from the Library Pool.");
+  if (children.length > 0) throw AppError.badRequest("Move or delete this folder's contents before deleting it from the Library Pool.");
 
   const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
   const livesElsewhere = current.documentId != null || (current.linkedPath != null && current.linkedPath !== "") || filing != null;
@@ -441,10 +482,10 @@ export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Resp
   if (!deleted) throw AppError.notFound("Document folder");
 
   const summary = livesElsewhere
-    ? `Removed "${deleted.name}" from the Library Pool. The record was left in place.`
+    ? `Deleted "${deleted.name}" from the Library Pool. The record was left in place.`
     : deleted.pdfPath
-      ? `Removed the uploaded file "${deleted.name}" from the Library Pool.`
-      : `Removed "${deleted.name}" from the Library Pool.`;
+      ? `Deleted the uploaded file "${deleted.name}" from the Library Pool.`
+      : `Deleted "${deleted.name}" from the Library Pool.`;
   await recordAuditTrail(db, {
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,

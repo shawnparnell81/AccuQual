@@ -14,7 +14,7 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { paneScrollDelta } from "../../lib/dragAutoScroll";
-import { folderMoveIsBlocked, planNest, planSiblingGap, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
+import { applyFolderPlacements, folderMoveIsBlocked, omitFolders, planNest, planSiblingGap, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
@@ -428,7 +428,11 @@ export function FolderExplorerPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [newDepartmentName, setNewDepartmentName] = useState("");
   const [movingId, setMovingId] = useState<number | null>(null);
+  const [movePending, setMovePending] = useState(false);
+  const moveLock = useRef(false);
   const [poolSelection, setPoolSelection] = useState<number[]>([]);
+  const [poolDeletePending, setPoolDeletePending] = useState(false);
+  const poolDeleteLock = useRef(false);
   const [history, setHistory] = useState<ExplorerHistory>(initialExplorerHistory);
   const [expandingId, setExpandingId] = useState<number | null>(null);
   const applyingHistory = useRef(false);
@@ -572,13 +576,20 @@ export function FolderExplorerPage() {
     setDropHint((current) => (current?.id === id ? null : current));
     setDropHoverId((current) => (current === id ? null : current));
   }
-  async function commitPlacements(placements: NodePlacement[] | null): Promise<boolean> {
+  async function commitPlacements(placements: NodePlacement[] | null, lockHeld = false): Promise<boolean> {
     if (!canManageFolders || !placements || placements.length === 0) return false;
+    if (!lockHeld && moveLock.current) return false;
     const changed = placements.filter((placement) => {
       const current = folders.find((folder) => folder.id === placement.id);
       return !current || current.parentId !== placement.parentId || current.sortOrder !== placement.sortOrder;
     });
     if (changed.length === 0) return false;
+    if (!lockHeld) {
+      moveLock.current = true;
+      setMovePending(true);
+    }
+    const snapshot = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
+    if (snapshot) qc.setQueryData<DocumentFolder[]>(["document-folders"], applyFolderPlacements(snapshot, changed));
     try {
       await Promise.all(
         changed.map((placement) => {
@@ -590,28 +601,44 @@ export function FolderExplorerPage() {
       );
       return true;
     } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't rearrange that"));
+      if (snapshot) qc.setQueryData(["document-folders"], snapshot);
+      const detail = await extractErrorMessageAsync(err, "Couldn't move that");
+      toast.error(`${detail} It's back where it was.`);
       return false;
     } finally {
-      await qc.invalidateQueries({ queryKey: ["document-folders"] });
+      if (!lockHeld) {
+        moveLock.current = false;
+        setMovePending(false);
+      }
+      void qc.invalidateQueries({ queryKey: ["document-folders"] });
     }
   }
   async function moveInto(parentId: number) {
-    if (!canManageFolders || movingId == null) return;
-    const placements = planNest(folders, movingId, parentId);
-    if (placements === null) {
-      toast.error("A folder cannot be moved into itself.");
-      return;
+    if (!canManageFolders || movingId == null || moveLock.current) return;
+    moveLock.current = true;
+    setMovePending(true);
+    try {
+      const placements = planNest(folders, movingId, parentId);
+      if (placements === null) {
+        toast.error("A folder cannot be moved into itself.");
+        return;
+      }
+      if (placements.length === 0) {
+        toast.error("That item is already in this folder.");
+        return;
+      }
+      const destination = folders.find((folder) => folder.id === parentId);
+      setMovingId(null);
+      const saved = await commitPlacements(placements, true);
+      if (saved && destination) toast.success(`Moved to ${destination.name}.`);
+    } finally {
+      moveLock.current = false;
+      setMovePending(false);
     }
-    if (placements.length === 0) {
-      toast.error("That item is already in this folder.");
-      return;
-    }
-    const moved = folders.find((folder) => folder.id === movingId);
-    const saved = await commitPlacements(placements);
-    if (!saved) return;
-    setMovingId(null);
-    if (moved) toast.success(`Moved ${moved.name}.`);
+  }
+  function openMove(id: number) {
+    if (movePending || moveLock.current) return;
+    setMovingId(id);
   }
   function applyDrop(target: DocumentFolder, position: DropPosition) {
     const drag = dragRef.current;
@@ -722,24 +749,32 @@ export function FolderExplorerPage() {
   }
   async function removePoolItems(ids: number[]) {
     const rows = poolItems.filter((item) => ids.includes(item.id));
-    if (!canManageFolders || rows.length === 0) return;
+    if (!canManageFolders || rows.length === 0 || poolDeleteLock.current) return;
     const message =
       rows.length === 1
         ? poolItemLivesElsewhere(rows[0]!)
-          ? `Remove "${rows[0]!.name}" from the Library Pool? The record stays in AccuQual.`
+          ? `Delete "${rows[0]!.name}" from the Library Pool? The record stays in AccuQual.`
           : rows[0]!.pdfPath
             ? `Delete "${rows[0]!.name}"? This file is only in the Library Pool and will be removed.`
-            : `Remove "${rows[0]!.name}" from the Library Pool?`
-        : `Remove ${rows.length} items from the Library Pool? A record that also lives in AccuQual stays. An uploaded file that exists only here is deleted.`;
+            : `Delete "${rows[0]!.name}" from the Library Pool?`
+        : `Delete ${rows.length} items from the Library Pool? A record that also lives in AccuQual stays. An uploaded file that exists only here is deleted.`;
     if (!confirm(message)) return;
+    poolDeleteLock.current = true;
+    setPoolDeletePending(true);
+    const snapshot = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
+    const removing = rows.map((row) => row.id);
+    if (snapshot) qc.setQueryData<DocumentFolder[]>(["document-folders"], omitFolders(snapshot, removing));
+    setPoolSelection((current) => current.filter((id) => !removing.includes(id)));
     try {
-      for (const id of rows.map((row) => row.id)) await apiClient.delete(`/document-folders/${id}/pool`);
-      toast.success(rows.length === 1 ? "Removed from the Library Pool." : `Removed ${rows.length} items from the Library Pool.`);
-      setPoolSelection((current) => current.filter((id) => !rows.some((row) => row.id === id)));
+      await Promise.all(removing.map((id) => apiClient.delete(`/document-folders/${id}/pool`)));
+      toast.success(removing.length === 1 ? "Deleted from the Library Pool." : `Deleted ${removing.length} items from the Library Pool.`);
     } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't remove that from the Library Pool"));
+      if (snapshot) qc.setQueryData(["document-folders"], snapshot);
+      toast.error(`${await extractErrorMessageAsync(err, "Couldn't delete that from the Library Pool")} It's back in the Library Pool.`);
     } finally {
-      await qc.invalidateQueries({ queryKey: ["document-folders"] });
+      poolDeleteLock.current = false;
+      setPoolDeletePending(false);
+      void qc.invalidateQueries({ queryKey: ["document-folders"] });
     }
   }
   function requestUpload(docId: number) {
@@ -913,7 +948,7 @@ export function FolderExplorerPage() {
                 onGapOver={hoverGap}
                 onGapLeave={leaveGap}
                 onGapDrop={dropGap}
-                onMove={canManageFolders ? (row) => setMovingId(row.id) : undefined}
+                onMove={canManageFolders ? (row) => openMove(row.id) : undefined}
               />
             ))}
           </ul>
@@ -986,7 +1021,7 @@ export function FolderExplorerPage() {
               onUploadClick={requestDocumentUpload}
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
               onRename={(id, name) => updateFolder.mutate({ id, name })}
-              onMove={(id) => setMovingId(id)}
+              onMove={(id) => openMove(id)}
               onDelete={canManageFolders ? (id) => deleteFolder.mutate(id) : undefined}
               canManage={canManageFolders}
               onSendToLibrary={sendToLibrary}
@@ -1017,7 +1052,7 @@ export function FolderExplorerPage() {
               Open
             </button>
             {canManageFolders && activeDept.name !== LIBRARY_POOL_NAME && (
-              <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => setMovingId(activeDept.id)}>
+              <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => openMove(activeDept.id)}>
                 Move to…
               </button>
             )}
@@ -1111,7 +1146,7 @@ export function FolderExplorerPage() {
                       className="text-xs text-primary hover:underline"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setMovingId(sub.id);
+                        openMove(sub.id);
                       }}
                     >
                       Move to…
@@ -1245,11 +1280,11 @@ export function FolderExplorerPage() {
                               onSendToLibrary={() => sendToLibrary(doc.id)}
                               onAttach={() => requestUpload(doc.id)}
                               onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                              onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
+                              onMove={canManageFolders ? () => openMove(doc.id) : undefined}
                             />
                           )}
                           {canManageFolders && target && (
-                            <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => setMovingId(doc.id)}>
+                            <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => openMove(doc.id)}>
                               Move to…
                             </button>
                           )}
@@ -1347,11 +1382,11 @@ export function FolderExplorerPage() {
                             onSendToLibrary={() => sendToLibrary(doc.id)}
                             onAttach={() => requestUpload(doc.id)}
                             onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                            onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
+                            onMove={canManageFolders ? () => openMove(doc.id) : undefined}
                           />
                         )}
                         {canManageFolders && target && (
-                          <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => setMovingId(doc.id)}>
+                          <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => openMove(doc.id)}>
                             Move to…
                           </button>
                         )}
@@ -1426,38 +1461,41 @@ export function FolderExplorerPage() {
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
           }`}
         >
-          <div className="flex items-start gap-3 px-4 py-3">
-            <Inbox size={16} className="mt-0.5 flex-none text-muted-foreground" />
-            <span className="mt-0.5 flex-none text-sm font-medium">Library Pool</span>
-            <span className="mt-0.5 flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{poolItems.length}</span>
-            {canManageFolders && poolItems.length > 0 && (
-              <div className="mt-0.5 flex flex-none items-center gap-2">
-                <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    data-testid="pool-select-all"
-                    checked={poolItems.every((item) => poolSelection.includes(item.id))}
-                    onChange={(event) => setPoolSelection(event.target.checked ? poolItems.map((item) => item.id) : [])}
-                  />
-                  All
-                </label>
-                <button
-                  type="button"
-                  data-testid="pool-remove-selected"
-                  disabled={poolSelection.length === 0}
-                  onClick={() => void removePoolItems(poolSelection)}
-                  className="rounded-md border border-border px-2 py-0.5 text-xs text-foreground hover:bg-muted disabled:opacity-40"
-                >
-                  Remove selected
-                </button>
-              </div>
-            )}
-            <div className="flex max-h-28 min-w-0 flex-1 flex-wrap gap-2 overflow-y-auto">
+          <div className="flex flex-col gap-2 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Inbox size={16} className="flex-none text-muted-foreground" />
+              <span className="flex-none text-sm font-medium">Library Pool</span>
+              <span className="flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{poolItems.length}</span>
+              {canManageFolders && poolItems.length > 0 && (
+                <div className="flex flex-none items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      data-testid="pool-select-all"
+                      disabled={poolDeletePending}
+                      checked={poolItems.every((item) => poolSelection.includes(item.id))}
+                      onChange={(event) => setPoolSelection(event.target.checked ? poolItems.map((item) => item.id) : [])}
+                    />
+                    All
+                  </label>
+                  <button
+                    type="button"
+                    data-testid="pool-delete-selected"
+                    disabled={poolSelection.length === 0 || poolDeletePending}
+                    onClick={() => void removePoolItems(poolSelection)}
+                    className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/15 disabled:opacity-40"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
               {poolItems.length === 0 && <span className="text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
               {poolItems.map((doc) => (
                 <div
                   key={doc.id}
-                  className={`inline-flex items-center gap-1 rounded-full ${hintClass(doc.id)}`}
+                  className={`flex items-center gap-2 ${hintClass(doc.id)}`}
                   onDragOver={(event) => hoverRow(event, doc)}
                   onDragLeave={() => leaveRow(doc.id)}
                   onDrop={(event) => dropRow(event, doc)}
@@ -1465,9 +1503,9 @@ export function FolderExplorerPage() {
                   {canManageFolders && (
                     <input
                       type="checkbox"
-                      className="ml-1"
                       data-testid="pool-select"
                       aria-label={`Select ${doc.name}`}
+                      disabled={poolDeletePending}
                       checked={poolSelection.includes(doc.id)}
                       onChange={(event) =>
                         setPoolSelection((current) => (event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id)))
@@ -1476,13 +1514,26 @@ export function FolderExplorerPage() {
                   )}
                   <DocPill
                     doc={doc}
+                    fill
+                    moveDisabled={movePending}
                     onDragStart={(e) => beginDrag(e, doc.id, "doc")}
                     onDragEnd={endDrag}
                     onAttach={() => requestUpload(doc.id)}
                     onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                    onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
-                    onRemoveFromPool={canManageFolders ? () => void removePoolItems([doc.id]) : undefined}
+                    onMove={canManageFolders ? () => openMove(doc.id) : undefined}
                   />
+                  {canManageFolders && (
+                    <button
+                      type="button"
+                      data-testid="pool-delete"
+                      disabled={poolDeletePending}
+                      onClick={() => void removePoolItems([doc.id])}
+                      className="shrink-0 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/15 disabled:opacity-40"
+                      aria-label={`Delete ${doc.name} from the Library Pool`}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1490,7 +1541,7 @@ export function FolderExplorerPage() {
         </div>
       )}
       {movingFolder && (
-        <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={updateFolder.isPending} onClose={() => setMovingId(null)} onMove={(parentId) => void moveInto(parentId)} />
+        <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={movePending} onClose={() => { if (!movePending) setMovingId(null); }} onMove={(parentId) => void moveInto(parentId)} />
       )}
     </div>
   );
@@ -1498,22 +1549,24 @@ export function FolderExplorerPage() {
 
 function DocPill({
   doc,
+  fill,
+  moveDisabled,
   onDragStart,
   onDragEnd,
   onSendToLibrary,
   onAttach,
   onRemoveAttachment,
   onMove,
-  onRemoveFromPool,
 }: {
   doc: DocumentFolder;
+  fill?: boolean;
+  moveDisabled?: boolean;
   onDragStart: (event: DragEvent) => void;
   onDragEnd: () => void;
   onSendToLibrary?: () => void;
   onAttach: () => void;
   onRemoveAttachment: () => void;
   onMove?: () => void;
-  onRemoveFromPool?: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -1553,17 +1606,17 @@ function DocPill({
         onDragStart(event);
       }}
       onDragEnd={onDragEnd}
-      className={`inline-flex cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
+      className={`${fill ? "flex min-w-0 flex-1" : "inline-flex"} cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
         doc.linkedPath ? "border-primary/40 bg-primary/10" : "border-border bg-muted"
       }`}
       title={doc.pdfPath ? "Has an attached file — click the file icon to view/download it" : "No file attached yet"}
     >
       {doc.linkedPath ? (
-        <Link to={doc.linkedPath} draggable={false} className="text-primary hover:underline" title="Open">
+        <Link to={doc.linkedPath} draggable={false} className={`text-primary hover:underline ${fill ? "min-w-0 flex-1 truncate" : ""}`} title="Open">
           {doc.name}
         </Link>
       ) : (
-        doc.name
+        <span className={fill ? "min-w-0 flex-1 truncate" : undefined}>{doc.name}</span>
       )}
       {doc.documentId && (
         <Link to={`/documents/${doc.documentId}`} draggable={false} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
@@ -1599,13 +1652,8 @@ function DocPill({
         )}
       </Modal>
       {onMove && (
-        <button type="button" data-testid="move-to" onClick={onMove} className="text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`}>
+        <button type="button" data-testid="move-to" disabled={moveDisabled} onClick={onMove} className="text-primary hover:underline disabled:opacity-40" aria-label={`Move ${doc.name} to another folder`}>
           Move to…
-        </button>
-      )}
-      {onRemoveFromPool && (
-        <button type="button" data-testid="pool-remove" onClick={onRemoveFromPool} className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${doc.name} from the Library Pool`}>
-          Remove
         </button>
       )}
       {onSendToLibrary && (

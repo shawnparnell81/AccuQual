@@ -107,3 +107,22 @@ export function planSiblingReorder(group: OrderedNode[], movingId: number, targe
   });
   return placements;
 }
+
+/** Applies a saved move onto the folder list the screen already has. */
+export function applyFolderPlacements<T extends { id: number; parentId: number | null; sortOrder: number }>(
+  folders: T[],
+  placements: NodePlacement[],
+): T[] {
+  const byId = new Map(placements.map((placement) => [placement.id, placement]));
+  return folders.map((folder) => {
+    const next = byId.get(folder.id);
+    if (!next || (folder.parentId === next.parentId && folder.sortOrder === next.sortOrder)) return folder;
+    return { ...folder, parentId: next.parentId, sortOrder: next.sortOrder };
+  });
+}
+
+/** Drops Library Pool rows the moment Delete is confirmed. */
+export function omitFolders<T extends { id: number }>(folders: T[], ids: number[]): T[] {
+  const drop = new Set(ids);
+  return folders.filter((folder) => !drop.has(folder.id));
+}

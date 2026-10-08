@@ -189,11 +189,14 @@ describe("one folder in one place, and library pool moves", () => {
     expect(after.some((folder) => folder.id === linked!.id || folder.id === orphan!.id)).toBe(false);
 
     const linkedHistory = await request(app).get(`/audit-trail/DocumentFolder/${linked!.id}`).set("Authorization", `Bearer ${qualityToken}`);
-    const linkedLine = (linkedHistory.body as { changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === true);
+    const linkedLine = (linkedHistory.body as { performedByName?: string; changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === true);
+    expect(linkedLine?.performedByName).toContain("Shawn Parnell");
+    expect(linkedLine?.changes?.summary).toMatch(/^Deleted "Linked report" from the Library Pool\./);
     expect(linkedLine?.changes?.summary).toMatch(/left in place/);
     const orphanHistory = await request(app).get(`/audit-trail/DocumentFolder/${orphan!.id}`).set("Authorization", `Bearer ${qualityToken}`);
-    const orphanLine = (orphanHistory.body as { changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === false);
-    expect(orphanLine?.changes?.summary).toMatch(/uploaded file/);
+    const orphanLine = (orphanHistory.body as { performedByName?: string; changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === false);
+    expect(orphanLine?.performedByName).toContain("Shawn Parnell");
+    expect(orphanLine?.changes?.summary).toMatch(/^Deleted the uploaded file "Orphan upload" from the Library Pool\./);
   });
 
   it("does not recreate a deleted main folder, and folds a second nested copy into the one that is left", async () => {
