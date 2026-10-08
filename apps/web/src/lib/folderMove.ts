@@ -16,12 +16,17 @@ export interface NodePlacement {
   sortOrder: number;
 }
 
-/** True when `targetParentId` is the folder itself or one of its descendants. Null is the top level. */
+/**
+ * True when `targetParentId` is the folder itself or one of its descendants.
+ * Null is the top level. A saved file is not a folder, so it can move into
+ * any real folder. Missing it from this list must not block every destination.
+ */
 export function folderMoveIsBlocked(folders: FolderNode[], folderId: number, targetParentId: number | null): boolean {
   if (targetParentId === null) return false;
   if (targetParentId === folderId) return true;
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  if (!byId.has(targetParentId) || !byId.has(folderId)) return true;
+  if (!byId.has(folderId)) return false;
+  if (!byId.has(targetParentId)) return true;
   let cursor: number | null = targetParentId;
   const seen = new Set<number>();
   while (cursor !== null) {

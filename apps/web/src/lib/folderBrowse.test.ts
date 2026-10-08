@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { blankFormsFolderHref, departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, isBlankTemplateLink, isLivingListPath, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
+import { fileURLToPath } from "node:url";
+import { blankFormsFolderHref, departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isLivingListPath, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, treeOpenForTarget, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -268,5 +271,31 @@ describe("folder browse", () => {
     assert.deepEqual(listing.folders.map((folder) => folder.name), ["2026 Hold"]);
     assert.deepEqual(listing.files.map((file) => file.name), ["LST-NCR-001"]);
     assert.equal(openTarget(rows[1]!), "/documents/nonconformance-log");
+  });
+
+  it("opens only the top level of the tree, and a deep link opens ancestors", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Quality", parentId: 1, sortOrder: 0 },
+      { id: 3, name: "Blank Forms Templates", parentId: 2, sortOrder: 0 },
+      { id: 4, name: "NCR", parentId: 3, sortOrder: 0 },
+    ];
+    assert.equal(folderDepth(rows, 1), 0);
+    assert.equal(folderDepth(rows, 2), 1);
+    assert.equal(folderDepth(rows, 4), 3);
+    assert.equal(folderTreeOpen(undefined, 0), true);
+    assert.equal(folderTreeOpen(undefined, 1), false);
+    assert.equal(folderTreeOpen(undefined, 3), false);
+    assert.equal(folderTreeOpen(false, 0), false);
+    assert.equal(folderTreeOpen(true, 2), true);
+    assert.deepEqual(treeOpenForTarget(rows, null), {});
+    assert.deepEqual(treeOpenForTarget(rows, 3), { 1: true, 2: true });
+    assert.equal(treeOpenForTarget(rows, 3)[3], undefined);
+    assert.equal(treeOpenForTarget(rows, 3)[4], undefined);
+    const page = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../routes/Documents/FolderExplorerPage.tsx"), "utf8");
+    assert.match(page, /folderTreeOpen\(treeOpen\[folder\.id\], depth\)/);
+    assert.match(page, /treeOpenForTarget/);
+    assert.match(page, /collapsed\[sub\.id\] !== false/);
+    assert.doesNotMatch(page, /treeOpen\[folder\.id\] \?\? isoRoot/);
   });
 });

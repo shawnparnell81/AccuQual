@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -133,7 +133,7 @@ function FolderTreeBranch({
   onMove?: (folder: DocumentFolder) => void;
 }) {
   const children = listFolder(folders, folder.id).folders;
-  const open = treeOpen[folder.id] ?? isoRoot;
+  const open = folderTreeOpen(treeOpen[folder.id], depth);
   const selected = selectedId === folder.id;
   const Icon = open && children.length > 0 ? FolderOpen : Folder;
   const showGaps = dragKind === "folder";
@@ -379,7 +379,14 @@ export function FolderExplorerPage() {
   const { data: folders = [], isLoading, isFetching } = useDocumentFolders();
   const { effective, isLoading: permissionsLoading } = useEffectivePermissions();
   const canManageFolders = !permissionsLoading && effective?.documents === "edit";
-  const visibleFolders = useMemo(() => visibleExplorerFolders(folders), [folders]);
+  const visibleFolders = useMemo(() => {
+    const seen = new Set<number>();
+    return visibleExplorerFolders(folders).filter((folder) => {
+      if (seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    });
+  }, [folders]);
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
@@ -421,6 +428,7 @@ export function FolderExplorerPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [newDepartmentName, setNewDepartmentName] = useState("");
   const [movingId, setMovingId] = useState<number | null>(null);
+  const [poolSelection, setPoolSelection] = useState<number[]>([]);
   const [history, setHistory] = useState<ExplorerHistory>(initialExplorerHistory);
   const [expandingId, setExpandingId] = useState<number | null>(null);
   const applyingHistory = useRef(false);
@@ -477,22 +485,19 @@ export function FolderExplorerPage() {
   const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : namedFolderId;
   const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
   const selectedTreeId = openFolder?.id ?? activeDept?.id ?? null;
+  const deptParam = searchParams.get("dept");
+  const linkedDeptId = deptParam != null && /^\d+$/.test(deptParam) ? Number(deptParam) : null;
+  const expandTargetId = requestedFolderId ?? linkedDeptId;
+  const appliedExpand = useRef<number | null>(null);
 
   useEffect(() => {
-    if (selectedTreeId == null) return;
-    const chain = folderChain(visibleFolders, selectedTreeId);
-    setTreeOpen((current) => {
-      let changed = false;
-      const next = { ...current };
-      for (const crumb of chain.slice(0, -1)) {
-        if (next[crumb.id] !== true) {
-          next[crumb.id] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [selectedTreeId, visibleFolders]);
+    if (expandTargetId == null) return;
+    if (appliedExpand.current === expandTargetId) return;
+    if (!visibleFolders.some((folder) => folder.id === expandTargetId)) return;
+    appliedExpand.current = expandTargetId;
+    const required = treeOpenForTarget(visibleFolders, expandTargetId);
+    setTreeOpen((current) => ({ ...current, ...required }));
+  }, [expandTargetId, visibleFolders]);
 
   useEffect(() => {
     if (!isFetching) setExpandingId(null);
@@ -709,6 +714,31 @@ export function FolderExplorerPage() {
   function sendToLibrary(docId: number) {
     if (poolFolder) void commitPlacements(planNest(folders, docId, poolFolder.id));
   }
+  function poolItemLivesElsewhere(doc: DocumentFolder): boolean {
+    return doc.documentId != null || (doc.linkedPath != null && doc.linkedPath !== "");
+  }
+  async function removePoolItems(ids: number[]) {
+    const rows = poolItems.filter((item) => ids.includes(item.id));
+    if (!canManageFolders || rows.length === 0) return;
+    const message =
+      rows.length === 1
+        ? poolItemLivesElsewhere(rows[0]!)
+          ? `Remove "${rows[0]!.name}" from the Library Pool? The record stays in AccuQual.`
+          : rows[0]!.pdfPath
+            ? `Delete "${rows[0]!.name}"? This file is only in the Library Pool and will be removed.`
+            : `Remove "${rows[0]!.name}" from the Library Pool?`
+        : `Remove ${rows.length} items from the Library Pool? A record that also lives in AccuQual stays. An uploaded file that exists only here is deleted.`;
+    if (!confirm(message)) return;
+    try {
+      for (const id of rows.map((row) => row.id)) await apiClient.delete(`/document-folders/${id}/pool`);
+      toast.success(rows.length === 1 ? "Removed from the Library Pool." : `Removed ${rows.length} items from the Library Pool.`);
+      setPoolSelection((current) => current.filter((id) => !rows.some((row) => row.id === id)));
+    } catch (err) {
+      toast.error(await extractErrorMessageAsync(err, "Couldn't remove that from the Library Pool"));
+    } finally {
+      await qc.invalidateQueries({ queryKey: ["document-folders"] });
+    }
+  }
   function requestUpload(docId: number) {
     pendingUploadTarget.current = docId;
     fileInputRef.current?.click();
@@ -769,7 +799,7 @@ export function FolderExplorerPage() {
   function toggleTree(id: number) {
     setExpandingId(id);
     setTreeOpen((current) => {
-      const wasOpen = current[id] ?? id === isoRoot?.id;
+      const wasOpen = folderTreeOpen(current[id], folderDepth(visibleFolders, id));
       return { ...current, [id]: !wasOpen };
     });
   }
@@ -1021,7 +1051,7 @@ export function FolderExplorerPage() {
             const listing = listFolder(visibleFolders, sub.id);
             const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
             const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
-            const isCollapsed = collapsed[sub.id];
+            const isCollapsed = query.length > 0 ? false : collapsed[sub.id] !== false;
             const isDropTarget = dropHoverId === sub.id;
             const beforeCard = gapKey(activeDept.id, sub.id, "folder");
             const afterCards = gapKey(activeDept.id, null, "folder");
@@ -1050,7 +1080,7 @@ export function FolderExplorerPage() {
                     beginDrag(e, sub.id, "folder");
                   }}
                   onDragEnd={endDrag}
-                  onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: !c[sub.id] }))}
+                  onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: c[sub.id] === false }))}
                   onDragOver={(e) => hoverRow(e, sub)}
                   onDragLeave={() => leaveRow(sub.id)}
                   onDrop={(e) => dropRow(e, sub)}
@@ -1397,16 +1427,50 @@ export function FolderExplorerPage() {
             <Inbox size={16} className="mt-0.5 flex-none text-muted-foreground" />
             <span className="mt-0.5 flex-none text-sm font-medium">Library Pool</span>
             <span className="mt-0.5 flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{poolItems.length}</span>
+            {canManageFolders && poolItems.length > 0 && (
+              <div className="mt-0.5 flex flex-none items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    data-testid="pool-select-all"
+                    checked={poolItems.every((item) => poolSelection.includes(item.id))}
+                    onChange={(event) => setPoolSelection(event.target.checked ? poolItems.map((item) => item.id) : [])}
+                  />
+                  All
+                </label>
+                <button
+                  type="button"
+                  data-testid="pool-remove-selected"
+                  disabled={poolSelection.length === 0}
+                  onClick={() => void removePoolItems(poolSelection)}
+                  className="rounded-md border border-border px-2 py-0.5 text-xs text-foreground hover:bg-muted disabled:opacity-40"
+                >
+                  Remove selected
+                </button>
+              </div>
+            )}
             <div className="flex max-h-28 min-w-0 flex-1 flex-wrap gap-2 overflow-y-auto">
               {poolItems.length === 0 && <span className="text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
               {poolItems.map((doc) => (
                 <div
                   key={doc.id}
-                  className={`inline-flex rounded-full ${hintClass(doc.id)}`}
+                  className={`inline-flex items-center gap-1 rounded-full ${hintClass(doc.id)}`}
                   onDragOver={(event) => hoverRow(event, doc)}
                   onDragLeave={() => leaveRow(doc.id)}
                   onDrop={(event) => dropRow(event, doc)}
                 >
+                  {canManageFolders && (
+                    <input
+                      type="checkbox"
+                      className="ml-1"
+                      data-testid="pool-select"
+                      aria-label={`Select ${doc.name}`}
+                      checked={poolSelection.includes(doc.id)}
+                      onChange={(event) =>
+                        setPoolSelection((current) => (event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id)))
+                      }
+                    />
+                  )}
                   <DocPill
                     doc={doc}
                     onDragStart={(e) => beginDrag(e, doc.id, "doc")}
@@ -1414,6 +1478,7 @@ export function FolderExplorerPage() {
                     onAttach={() => requestUpload(doc.id)}
                     onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
                     onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
+                    onRemoveFromPool={canManageFolders ? () => void removePoolItems([doc.id]) : undefined}
                   />
                 </div>
               ))}
@@ -1436,6 +1501,7 @@ function DocPill({
   onAttach,
   onRemoveAttachment,
   onMove,
+  onRemoveFromPool,
 }: {
   doc: DocumentFolder;
   onDragStart: (event: DragEvent) => void;
@@ -1444,6 +1510,7 @@ function DocPill({
   onAttach: () => void;
   onRemoveAttachment: () => void;
   onMove?: () => void;
+  onRemoveFromPool?: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -1531,6 +1598,11 @@ function DocPill({
       {onMove && (
         <button type="button" data-testid="move-to" onClick={onMove} className="text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`}>
           Move to…
+        </button>
+      )}
+      {onRemoveFromPool && (
+        <button type="button" data-testid="pool-remove" onClick={onRemoveFromPool} className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${doc.name} from the Library Pool`}>
+          Remove
         </button>
       )}
       {onSendToLibrary && (

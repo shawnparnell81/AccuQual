@@ -89,7 +89,8 @@ describe("ISO Compliance Documents form templates", () => {
     expect(ncrForm?.subjectRoute).toBe("/iso-forms/frm-ncr-001");
     expect(ncr?.subjectRoute).toBe("/ncr");
     expect(ncr?.isoPath).toEqual(["Blank Forms Templates", "Nonconformance"]);
-    expect(training?.isoPath).toEqual(["Blank Forms Templates", "Training"]);
+    expect(training?.isoPath).toEqual(["Blank Forms Templates", "Training Forms"]);
+    expect(templates.find((form) => form.formKey === "rpt-eng-001")?.isoPath).toEqual(["Blank Forms Templates", "Engineering Forms"]);
     expect(audit?.isoPath).toEqual(["Blank Forms Templates", "Audit"]);
     expect(templates.filter((form) => form.formKey === "frm-val-001")).toHaveLength(1);
 
