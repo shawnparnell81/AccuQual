@@ -9,6 +9,7 @@ describe("record surfaces", () => {
     assert.deepEqual(recordSurface("/documents/internal-audit-schedule"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/documents/development-log"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/documents/nonconformance-log"), { kind: "list", access: "documents" });
+    assert.deepEqual(recordSurface("/documents/engineering-request-log"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/calibration/master-list"), { kind: "list", access: "calibration" });
   });
 

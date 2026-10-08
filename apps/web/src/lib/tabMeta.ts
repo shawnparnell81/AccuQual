@@ -82,6 +82,7 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/rma\/?$/, icon: "rma", title: () => "RMAs" },
   { test: /^\/digital-twin/, icon: "digitaltwin", title: () => "Digital Twin" },
   { test: /^\/documents\/internal-audit-schedule\/?$/, icon: "documents", title: () => "LST-GEN-002" },
+  { test: /^\/documents\/engineering-request-log\/?$/, icon: "documents", title: () => "LST-ENG-001" },
   { test: /^\/documents/, icon: "documents", title: () => "Documents" },
   { test: /^\/quality/, icon: "quality", title: () => "Quality" },
   { test: /^\/complaints/, icon: "capa", title: () => "Complaints" },

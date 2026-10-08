@@ -34,6 +34,7 @@ import {
   rowSummary,
   titleMatchesAuditSchedule,
   titleMatchesDevLog,
+  titleMatchesEngLog,
   titleMatchesList,
   type CellPatch,
   type ListKey,
@@ -312,7 +313,7 @@ export async function retireSupersededLists(req: Request): Promise<void> {
 
   for (const id of plan.documentIds) {
     const [doc] = await db.select({ id: documents.id, title: documents.title }).from(documents).where(eq(documents.id, id));
-    if (!doc || !(titleMatchesList(doc.title) || titleMatchesDevLog(doc.title) || titleMatchesAuditSchedule(doc.title))) continue;
+    if (!doc || !(titleMatchesList(doc.title) || titleMatchesDevLog(doc.title) || titleMatchesAuditSchedule(doc.title) || titleMatchesEngLog(doc.title))) continue;
     try {
       await purgeExistingRecord(req, "document", id);
     } catch (err) {

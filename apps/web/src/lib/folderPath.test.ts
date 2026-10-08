@@ -15,6 +15,8 @@ const tree = [
   folder(5, "LST-DEV-001", 4, { linkedPath: "/documents/development-log" }),
   folder(9, "Management System", 1),
   folder(10, "LST-GEN-002", 9, { linkedPath: "/documents/internal-audit-schedule" }),
+  folder(11, "Engineering Logs", 1),
+  folder(12, "LST-ENG-001", 11, { linkedPath: "/documents/engineering-request-log" }),
   folder(6, "Torque procedure", 2, { documentId: 14 }),
   folder(7, "Incoming check", 2, { linkedPath: "/form-builder/template/8" }),
   folder(8, "Incoming check copy", 4, { linkedPath: "/form-builder/fills/3" }),
@@ -25,6 +27,7 @@ test("folder paths use backslashes and the real folder names", () => {
   assert.equal(folderNodePath(tree, 3), "ISO Compliance Documents\\Quality Logs\\LST-NCR-001");
   assert.equal(folderNodePath(tree, 5), "ISO Compliance Documents\\Test Data Projects\\LST-DEV-001");
   assert.equal(folderNodePath(tree, 10), "ISO Compliance Documents\\Management System\\LST-GEN-002");
+  assert.equal(folderNodePath(tree, 12), "ISO Compliance Documents\\Engineering Logs\\LST-ENG-001");
   assert.equal(folderNodePath(tree, 6), "ISO Compliance Documents\\Quality Logs\\Torque procedure");
 });
 
@@ -45,6 +48,8 @@ test("document pages resolve the folder the person can already open", () => {
   assert.equal(folderPathLookupEnabled("/documents/nonconformance-log"), true);
   assert.equal(folderPathLookupEnabled("/documents/internal-audit-schedule"), true);
   assert.equal(folderNodeForRoute(tree, "/documents/internal-audit-schedule")?.id, 10);
+  assert.equal(folderPathLookupEnabled("/documents/engineering-request-log"), true);
+  assert.equal(folderNodeForRoute(tree, "/documents/engineering-request-log")?.id, 12);
   assert.equal(folderPathLookupEnabled("/form-builder/8"), true);
   assert.equal(folderPathLookupEnabled("/blank-forms/start/frm-ncr-001"), true);
   assert.equal(folderNodeForRoute(tree, "/documents/folders"), null);

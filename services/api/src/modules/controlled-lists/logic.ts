@@ -1,6 +1,7 @@
 import rawLists from "./seeds/lists.json" with { type: "json" };
 import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
 import auditSchedule from "./seeds/lst-gen-002.json" with { type: "json" };
+import engLog from "./seeds/lst-eng-001.json" with { type: "json" };
 import ncrLog from "./seeds/lst-ncr-001.json" with { type: "json" };
 import {
   appendSheetRow,
@@ -16,7 +17,7 @@ import {
 
 export type { StoredCell, StoredSheet } from "./math.js";
 
-export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003", "lst-dev-001", "lst-ncr-001"] as const;
+export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003", "lst-dev-001", "lst-ncr-001", "lst-eng-001"] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
 
 export const OMITTED_DOCUMENT_IDS = new Set(["FRM-TST-001", "FRM-TST-002"]);
@@ -28,6 +29,7 @@ export const LIVING_LIST_PATHS = [
   "/documents/internal-audit-schedule",
   "/documents/development-log",
   "/documents/nonconformance-log",
+  "/documents/engineering-request-log",
 ] as const;
 
 export interface ListCatalog {
@@ -156,6 +158,21 @@ export const LISTS: Record<ListKey, ListCatalog> = {
     },
     idColumn: "A",
   },
+  "lst-eng-001": {
+    key: "lst-eng-001",
+    title: "LST-ENG-001",
+    docId: "LST-ENG-001",
+    revision: "A",
+    route: "/documents/engineering-request-log",
+    resource: "documents",
+    landscape: true,
+    rev: { sheet: "LST-ENG-001 - ECR Tracker - Rev", addr: "D2" },
+    folder: "Engineering Logs",
+    nodeName: "LST-ENG-001",
+    fileName: "LST-ENG-001.xlsx",
+    centered: true,
+    dataStart: { "LST-ENG-001 - ECR Tracker - Rev": 6 },
+  },
 };
 
 export function isListKey(value: string): value is ListKey {
@@ -173,6 +190,7 @@ function seedBook(): Record<ListKey, { sheets: StoredSheet[] }> {
   book["lst-dev-001"] = structuredClone(devLog) as unknown as { sheets: StoredSheet[] };
   book["lst-gen-002"] = structuredClone(auditSchedule) as unknown as { sheets: StoredSheet[] };
   book["lst-ncr-001"] = structuredClone(ncrLog) as unknown as { sheets: StoredSheet[] };
+  book["lst-eng-001"] = structuredClone(engLog) as unknown as { sheets: StoredSheet[] };
   return book;
 }
 
@@ -574,6 +592,13 @@ const DEV_LOG_NUMBERS = new Set(["LST-DEV-001"]);
 const AUDIT_SCHEDULE_TITLES = new Set(["lst-gen-002", "internal audit schedule"]);
 const AUDIT_SCHEDULE_NUMBERS = new Set(["LST-GEN-002"]);
 const AUDIT_SCHEDULE_KEYS = new Set(["lst-gen-002"]);
+const ENG_LOG_TITLES = new Set([
+  "lst-eng-001",
+  "engineering request change log",
+  "ecr tracker",
+  "lst-eng-001 - ecr tracker - rev",
+]);
+const ENG_LOG_NUMBERS = new Set(["LST-ENG-001"]);
 
 export function normalizeListTitle(name: string): string {
   return name.replace(/\.(xlsx|xls|xlsm|pdf|docx)$/i, "").trim().toLowerCase();
@@ -589,6 +614,11 @@ export function titleMatchesDevLog(name: string): boolean {
 
 export function titleMatchesAuditSchedule(name: string): boolean {
   return AUDIT_SCHEDULE_TITLES.has(normalizeListTitle(name));
+}
+
+export function titleMatchesEngLog(name: string): boolean {
+  return ENG_LOG_TITLES.has(normalizeListTitle(name));
+}
 }
 
 export interface CleanupFolder {
@@ -655,8 +685,10 @@ function filedRecord(linkedPath: string | null | undefined): boolean {
 
 /**
  * Old Quality Manual uploads of the three lists, Development Log copies under Test Data Projects,
- * Internal Audit Schedule uploads, and blank templates with those titles.
+ * Internal Audit Schedule uploads, Engineering Request Change Log copies under Engineering Logs,
+ * and blank templates with those titles.
  * A Non-Conformance Log blank is not one of these and stays in Blank Forms Templates.
+ * The Engineering Change Request workflow blank is a different document and stays.
  * Living list links and filled records stay. The Audits drawer named Internal Audit Schedule
  * stays too, unless that row itself is an uploaded file.
  */
@@ -670,13 +702,16 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
     const number = template.formId.trim().toUpperCase();
     if (
       RETIRED_LIST_KEYS.has(template.formKey) ||
+      template.formKey === "lst-eng-001" ||
       titleMatchesList(template.title) ||
       RETIRED_LIST_NUMBERS.has(number) ||
       titleMatchesDevLog(template.title) ||
       DEV_LOG_NUMBERS.has(number) ||
       AUDIT_SCHEDULE_KEYS.has(template.formKey) ||
       titleMatchesAuditSchedule(template.title) ||
-      AUDIT_SCHEDULE_NUMBERS.has(number)
+      AUDIT_SCHEDULE_NUMBERS.has(number) ||
+      titleMatchesEngLog(template.title) ||
+      ENG_LOG_NUMBERS.has(number)
     ) {
       templateIds.add(template.id);
     }
@@ -690,12 +725,14 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
     const nameHit = titleMatchesList(folder.name) || (linked ? titleMatchesList(linked.title) : false);
     const devHit = titleMatchesDevLog(folder.name) || (linked ? titleMatchesDevLog(linked.title) : false);
     const auditHit = titleMatchesAuditSchedule(folder.name) || (linked ? titleMatchesAuditSchedule(linked.title) : false);
-    if (!nameHit && !devHit && !auditHit) continue;
+    const engHit = titleMatchesEngLog(folder.name) || (linked ? titleMatchesEngLog(linked.title) : false);
+    if (!nameHit && !devHit && !auditHit && !engHit) continue;
     const filedHere = Boolean(folder.pdfPath || folder.documentId != null);
     const inManual = nameHit && underQualityManual(names) && filedHere;
     const inProjects = devHit && underIsoChild(names, "Test Data Projects") && filedHere;
     const auditUpload = auditHit && filedHere && names.includes("ISO Compliance Documents");
-    if (inManual || inProjects || auditUpload) {
+    const inEngineering = engHit && underIsoChild(names, "Engineering Logs") && filedHere;
+    if (inManual || inProjects || auditUpload || inEngineering) {
       if (folder.documentId != null && docs.has(folder.documentId)) documentIds.add(folder.documentId);
       folderNodeIds.add(folder.id);
       continue;
