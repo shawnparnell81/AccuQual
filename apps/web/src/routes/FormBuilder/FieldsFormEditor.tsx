@@ -85,7 +85,7 @@ export function FieldsFormEditor({
       {structure.sections.map((section) => (
         <section key={section.id} className="flex flex-col gap-2">
           {mode === "design" ? (
-            <input className="bg-transparent text-base font-semibold" aria-label="Section title" value={section.title} onChange={(event) => onChange?.({ ...structure, sections: structure.sections.map((item) => (item.id === section.id ? { ...item, title: event.target.value } : item)) })} />
+            <input className="fb-plain bg-transparent text-base font-semibold" aria-label="Section title" value={section.title} onChange={(event) => onChange?.({ ...structure, sections: structure.sections.map((item) => (item.id === section.id ? { ...item, title: event.target.value } : item)) })} />
           ) : (
             <h2 className="text-base font-semibold">{section.title}</h2>
           )}
@@ -105,7 +105,7 @@ export function FieldsFormEditor({
               >
                 {mode === "design" ? (
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-                    <input aria-label="Field label" className="min-w-0 flex-1 border-b border-black/20 bg-transparent font-medium" value={field.label} onChange={(event) => patch(field.id, { label: event.target.value })} />
+                    <input aria-label="Field label" className="fb-plain min-w-0 flex-1 border-b border-border bg-transparent font-medium" value={field.label} onChange={(event) => patch(field.id, { label: event.target.value })} />
                     <label className="flex items-center gap-1">
                       <input type="checkbox" checked={field.required} onChange={(event) => patch(field.id, { required: event.target.checked })} />
                       Required
@@ -179,7 +179,7 @@ function FieldControl({
           <thead>
             <tr>
               {(field.columns ?? []).map((column) => (
-                <th key={column.id} className="border border-black/20 px-1 text-left">{column.label}</th>
+                <th key={column.id} className="border border-border px-1 text-left">{column.label}</th>
               ))}
             </tr>
           </thead>
@@ -187,7 +187,7 @@ function FieldControl({
             {rows.map((row, index) => (
               <tr key={index}>
                 {(field.columns ?? []).map((column) => (
-                  <td key={column.id} className="border border-black/20">
+                  <td key={column.id} className="border border-border">
                     <input disabled={mode === "design"} value={row[column.id] ?? ""} onChange={(event) => {
                       const next = rows.map((item, rowIndex) => (rowIndex === index ? { ...item, [column.id]: event.target.value } : item));
                       onChange(next);
@@ -199,7 +199,7 @@ function FieldControl({
           </tbody>
         </table>
         {mode === "fill" && (
-          <button type="button" className="mt-1 text-sm text-[#0A3C7B]" onClick={() => onChange([...rows, {}])}>Add row</button>
+          <button type="button" className="mt-1 text-sm text-primary" onClick={() => onChange([...rows, {}])}>Add row</button>
         )}
       </div>
     );

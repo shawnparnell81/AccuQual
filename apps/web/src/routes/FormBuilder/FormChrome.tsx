@@ -4,9 +4,9 @@ import { useAuthStore } from "../../store/authStore";
 export function FormMasthead({ formNumber, revision, title }: { formNumber: string | null | undefined; revision: string; title?: string }) {
   const logoUrl = useAuthStore((state) => state.company?.branding.logoUrl);
   return (
-    <header className="aq-doc-head mb-3 flex items-start justify-between gap-3 border-b border-black/15 pb-2">
+    <header className="aq-doc-head mb-3 flex items-start justify-between gap-3 border-b border-border pb-2">
       <div className="flex items-center gap-3">
-        {logoUrl ? <img src={logoUrl} alt="" className="h-10 w-auto object-contain" /> : <span className="text-sm font-semibold text-[#0A3C7B]">AccuQual</span>}
+        {logoUrl ? <img src={logoUrl} alt="" className="h-10 w-auto object-contain" /> : <span className="text-sm font-semibold text-primary">AccuQual</span>}
         {title ? <h1 className="text-lg font-semibold">{title}</h1> : null}
       </div>
       <div className="text-right text-xs">
@@ -20,7 +20,7 @@ export function FormMasthead({ formNumber, revision, title }: { formNumber: stri
 export function Paper({ wide, children, docId, rev }: { wide?: boolean; children: ReactNode; docId?: string | null; rev?: string | null }) {
   return (
     <div
-      className={`aq-paper aq-print-sheet mx-auto max-w-full overflow-auto p-4 shadow-sm ${wide ? "aq-print-wide" : ""}`}
+      className={`fb-sheet aq-print-sheet mx-auto max-w-full overflow-auto p-4 shadow-sm ${wide ? "aq-print-wide" : ""}`}
       data-doc-id={docId?.trim() || undefined}
       data-doc-rev={rev?.trim() || undefined}
     >
