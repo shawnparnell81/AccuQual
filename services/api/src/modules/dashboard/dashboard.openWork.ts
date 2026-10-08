@@ -172,7 +172,10 @@ export interface OpenWorkInput {
   now: Date;
   allPlants: boolean;
   siteIds: number[];
+  /** Living plants. These are the filter choices. */
   sites: { id: number; name: string }[];
+  /** Names for records, including plants that are no longer listed. Defaults to `sites`. */
+  plantNames?: { id: number; name: string }[];
   access: OpenWorkAccess;
   names: Record<number, string | null>;
   userSites: { userId: number; siteId: number }[];
@@ -315,7 +318,7 @@ function buildRecords(input: OpenWorkInput): Built {
   const { access, now, names } = input;
   const records: OpenWorkRecord[] = [];
   const modules: OpenWorkModule[] = [];
-  const plantName = new Map(input.sites.map((site) => [site.id, site.name]));
+  const plantName = new Map((input.plantNames ?? input.sites).map((site) => [site.id, site.name]));
 
   if (access.ncr) {
     modules.push({ key: "NCR", label: "NCR" });

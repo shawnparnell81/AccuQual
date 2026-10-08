@@ -268,11 +268,14 @@ export function resolvePlant(input: {
   let chosen: number | "all";
   if (input.plantId === "all") chosen = "all";
   else if (typeof input.plantId === "number") chosen = input.plantId;
-  else if (input.currentSiteId != null && allowed.includes(input.currentSiteId)) chosen = input.currentSiteId;
+  else if (input.currentSiteId != null && names.has(input.currentSiteId)) chosen = input.currentSiteId;
   else chosen = "all";
 
   if (typeof chosen === "number" && !allowed.includes(chosen)) {
     throw AppError.forbidden("You aren't assigned to that plant.");
+  }
+  if (typeof chosen === "number" && !names.has(chosen)) {
+    throw AppError.badRequest("That plant was deleted.");
   }
 
   if (chosen === "all") {

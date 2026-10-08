@@ -10,7 +10,6 @@ export const createSiteSchema = z.object({
 export const updateSiteSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   code: codeSchema.optional(),
-  status: z.enum(["active", "inactive"]).optional(),
 });
 
 export const switchSiteSchema = z.object({

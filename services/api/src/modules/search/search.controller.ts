@@ -111,7 +111,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     const rows = await db
       .select({ id: sites.id })
       .from(sites)
-      .where(or(ilike(sites.name, contains(plantFilter)), ilike(sites.code, contains(plantFilter))))
+      .where(or(ilike(sites.name, contains(plantFilter)), ilike(sites.code, contains(plantFilter)), ilike(sites.nameSnapshot, contains(plantFilter))))
       .limit(50);
     plantIds = rows.map((row) => row.id);
   }

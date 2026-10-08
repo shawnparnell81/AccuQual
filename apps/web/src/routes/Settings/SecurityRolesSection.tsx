@@ -524,7 +524,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false });
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false });
   const [replacing, setReplacing] = useState<AppRole | null>(null);
   const [replacementId, setReplacementId] = useState("");
 
@@ -589,6 +589,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                       canBuildForms: (r.permissions ?? []).includes("form_builder"),
                       canRenameFolders: (r.permissions ?? []).includes("folders.rename"),
                       canDeleteFolders: (r.permissions ?? []).includes("folders.delete"),
+                      canDeletePlants: (r.permissions ?? []).includes("plants.delete"),
                     });
                   }}
                   className="text-primary hover:underline"
@@ -658,6 +659,8 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             else permissions.delete("folders.rename");
             if (editForm.canDeleteFolders) permissions.add("folders.delete");
             else permissions.delete("folders.delete");
+            if (editForm.canDeletePlants) permissions.add("plants.delete");
+            else permissions.delete("plants.delete");
             updateRole.mutate(
               {
                 id: editing.id,
@@ -700,6 +703,11 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             Can delete folders
           </label>
           <p className="text-xs text-muted-foreground">An administrator assigns these on the role. They are not tied to a job title. A folder with saved forms asks where to move them before it is deleted.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canDeletePlants} onChange={(e) => setEditForm({ ...editForm, canDeletePlants: e.target.checked })} />
+            Can delete plants
+          </label>
+          <p className="text-xs text-muted-foreground">Removes a plant from every list. Records keep the plant name. This follows the permission on the role, not the role's name.</p>
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
           </button>

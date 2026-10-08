@@ -1,9 +1,11 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
+import { roles } from "../../drizzle/schema/roles.js";
 import { AppError } from "../../utils/appError.js";
-import { isSiteAdmin, slugifyPlantCode } from "./siteAccess.js";
+import { roleHasPlantDeletePermission } from "../roles/roleAccess.js";
+import { isRetiredPlant, isSiteAdmin, plantDeleteDescription, plantDisplayName, slugifyPlantCode } from "./siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
 export interface SiteView {
@@ -17,13 +19,28 @@ export interface SiteView {
 export interface SiteContextView {
   currentSiteId: number | null;
   canManage: boolean;
+  canDelete: boolean;
   sites: SiteView[];
+}
+
+/** Plants that still appear in lists. Deleted and deactivated rows stay in the table. */
+function livingPlants() {
+  return and(isNull(sites.deletedAt), eq(sites.status, "active"));
 }
 
 async function loadSites(db: Db): Promise<SiteView[]> {
   return db
     .select({ id: sites.id, name: sites.name, code: sites.code, status: sites.status, isDefault: sites.isDefault })
-    .from(sites);
+    .from(sites)
+    .where(livingPlants())
+    .orderBy(asc(sites.id));
+}
+
+/** Permission is read from the role row. A role name by itself does not grant this. */
+export async function callerCanDeletePlants(db: Db, roleName: string | null): Promise<boolean> {
+  if (!roleName) return false;
+  const [role] = await db.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, roleName));
+  return roleHasPlantDeletePermission(role?.permissions);
 }
 
 async function membershipIds(db: Db, userId: number): Promise<number[]> {
@@ -40,74 +57,148 @@ export async function getSiteContext(db: Db, userId: number, roleName: string | 
     db.select({ currentSiteId: users.currentSiteId }).from(users).where(and(eq(users.id, userId))),
   ]);
   const canManage = isSiteAdmin(roleName);
+  const canDelete = await callerCanDeletePlants(db, roleName);
   const allowed = new Set(canManage ? all.map((site) => site.id) : await membershipIds(db, userId));
   const visible = all.filter((site) => allowed.has(site.id));
   const saved = user?.currentSiteId ?? null;
   const currentSiteId = saved != null && allowed.has(saved) ? saved : (visible.find((site) => site.isDefault && site.status === "active") ?? visible.find((site) => site.status === "active"))?.id ?? null;
-  return { currentSiteId, canManage, sites: visible };
+  return { currentSiteId, canManage, canDelete, sites: visible };
 }
 
 async function uniqueCode(db: Db, base: string): Promise<string> {
   let code = base.slice(0, 40);
   for (let n = 2; n < 50; n++) {
-    const [hit] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.code, code)));
+    const [hit] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.code, code), livingPlants()));
     if (!hit) return code;
     code = `${base}-${n}`.slice(0, 40);
   }
   throw AppError.badRequest("Couldn't make a short code for that plant name.");
 }
 
+async function assertLivingName(db: Db, name: string, exceptId?: number) {
+  const [hit] = await db
+    .select({ id: sites.id })
+    .from(sites)
+    .where(and(sql`lower(${sites.name}) = ${name.toLowerCase()}`, livingPlants(), exceptId != null ? ne(sites.id, exceptId) : undefined));
+  if (hit) throw AppError.badRequest("Another plant already uses that name.");
+}
+
 export async function createSite(db: Db, actorId: number, input: { name: string; code?: string }) {
-  const code = await uniqueCode(db, input.code ? slugifyPlantCode(input.code) : slugifyPlantCode(input.name));
+  const name = input.name.trim();
+  await assertLivingName(db, name);
+  const code = await uniqueCode(db, input.code ? slugifyPlantCode(input.code) : slugifyPlantCode(name));
   const [created] = await db
     .insert(sites)
-    .values({ name: input.name.trim(), code, status: "active", isDefault: false })
+    .values({ name, code, status: "active", isDefault: false })
     .returning();
   if (!created) throw new AppError("Failed to create plant", 500);
   await recordAuditTrail(db, { entityType: "Site", entityId: created.id, action: "create", changes: { name: created.name, code: created.code }, performedBy: actorId });
   return created;
 }
 
-export async function updateSite(db: Db, actorId: number, siteId: number, patch: { name?: string; code?: string; status?: "active" | "inactive" }) {
+export async function updateSite(db: Db, actorId: number, siteId: number, patch: { name?: string; code?: string }) {
   const [current] = await db.select().from(sites).where(and(eq(sites.id, siteId)));
-  if (!current) throw AppError.notFound("Plant");
-  if (patch.status === "inactive" && current.isDefault) {
-    throw AppError.badRequest("The main plant stays active so existing records keep a home.");
+  if (!current || isRetiredPlant(current)) throw AppError.notFound("Plant");
+  const next: { name?: string; code?: string; updatedAt: Date } = { updatedAt: new Date() };
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    await assertLivingName(db, name, siteId);
+    next.name = name;
   }
-  const next: { name?: string; code?: string; status?: string; updatedAt: Date } = { updatedAt: new Date() };
-  if (patch.name !== undefined) next.name = patch.name.trim();
   if (patch.code !== undefined) {
     const code = slugifyPlantCode(patch.code);
-    const [hit] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.code, code), ne(sites.id, siteId)));
+    const [hit] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.code, code), ne(sites.id, siteId), livingPlants()));
     if (hit) throw AppError.badRequest("Another plant already uses that code.");
     next.code = code;
   }
-  if (patch.status !== undefined) next.status = patch.status;
   const [updated] = await db.update(sites).set(next).where(and(eq(sites.id, siteId))).returning();
   if (!updated) throw AppError.notFound("Plant");
   await recordAuditTrail(db, { entityType: "Site", entityId: siteId, action: "update", changes: patch, performedBy: actorId });
   return updated;
 }
 
+/**
+ * Hide the plant. The row stays so issues, fixes, audits, and other records
+ * keep their foreign key and can still show the plant name. Nothing is cascaded.
+ */
+export async function deleteSite(db: Db, actorId: number, siteId: number) {
+  const [current] = await db.select().from(sites).where(eq(sites.id, siteId));
+  if (!current || isRetiredPlant(current)) throw AppError.notFound("Plant");
+
+  const now = new Date();
+  if (current.isDefault) {
+    await db.update(sites).set({ isDefault: false, updatedAt: now }).where(eq(sites.id, siteId));
+    const [nextDefault] = await db
+      .select({ id: sites.id })
+      .from(sites)
+      .where(and(ne(sites.id, siteId), livingPlants()))
+      .orderBy(asc(sites.id))
+      .limit(1);
+    if (nextDefault) await db.update(sites).set({ isDefault: true, updatedAt: now }).where(eq(sites.id, nextDefault.id));
+  }
+
+  const [updated] = await db
+    .update(sites)
+    .set({
+      deletedAt: now,
+      nameSnapshot: plantDisplayName(current),
+      status: "inactive",
+      isDefault: false,
+      updatedAt: now,
+    })
+    .where(eq(sites.id, siteId))
+    .returning();
+  if (!updated) throw AppError.notFound("Plant");
+
+  // Point people who were working in this plant at another living plant they
+  // belong to, or at none. Membership rows stay so the assignment history remains.
+  await db.execute(sql`
+    UPDATE users AS u
+    SET current_site_id = (
+      SELECT us.site_id
+      FROM user_sites AS us
+      INNER JOIN sites AS s ON s.id = us.site_id
+      WHERE us.user_id = u.id
+        AND s.id <> ${siteId}
+        AND s.deleted_at IS NULL
+        AND s.status = 'active'
+      ORDER BY s.is_default DESC, s.id
+      LIMIT 1
+    ),
+    updated_at = ${now}
+    WHERE u.current_site_id = ${siteId}
+  `);
+
+  const description = plantDeleteDescription(current.name, current.code);
+  await recordAuditTrail(db, {
+    entityType: "Site",
+    entityId: siteId,
+    action: "delete",
+    changes: { name: current.name, code: current.code, summary: description },
+    performedBy: actorId,
+  });
+  return { id: updated.id, name: current.name, code: current.code };
+}
+
 export async function switchSite(db: Db, userId: number, roleName: string | null, siteId: number) {
+  const [target] = await db.select().from(sites).where(eq(sites.id, siteId));
+  if (target && isRetiredPlant(target)) throw AppError.badRequest("That plant was deleted.");
   const context = await getSiteContext(db, userId, roleName);
   if (!context.sites.some((site) => site.id === siteId)) throw AppError.forbidden("You aren't assigned to that plant.");
-  const target = context.sites.find((site) => site.id === siteId);
-  if (target && target.status !== "active" && !context.canManage) throw AppError.badRequest("That plant isn't active.");
   await db.update(users).set({ currentSiteId: siteId, updatedAt: new Date() }).where(and(eq(users.id, userId)));
   return { ...context, currentSiteId: siteId };
 }
 
 export async function listMemberIds(db: Db, siteId: number): Promise<number[]> {
-  const [site] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.id, siteId)));
-  if (!site) throw AppError.notFound("Plant");
+  const [site] = await db.select().from(sites).where(and(eq(sites.id, siteId)));
+  if (!site || isRetiredPlant(site)) throw AppError.notFound("Plant");
   const rows = await db.select({ userId: userSites.userId }).from(userSites).where(and(eq(userSites.siteId, siteId)));
   return rows.map((row) => row.userId);
 }
 
 export async function replaceMembers(db: Db, actorId: number, siteId: number, userIds: number[]) {
   const [site] = await db.select().from(sites).where(and(eq(sites.id, siteId)));
-  if (!site) throw AppError.notFound("Plant");
+  if (!site || isRetiredPlant(site)) throw AppError.notFound("Plant");
 
   const uniqueIds = [...new Set(userIds)];
   if (uniqueIds.length > 0) {
@@ -125,7 +216,8 @@ export async function replaceMembers(db: Db, actorId: number, siteId: number, us
     const others = await db
       .select({ siteId: userSites.siteId })
       .from(userSites)
-      .where(and(eq(userSites.userId, userId), ne(userSites.siteId, siteId)));
+      .innerJoin(sites, eq(sites.id, userSites.siteId))
+      .where(and(eq(userSites.userId, userId), ne(userSites.siteId, siteId), livingPlants()));
     if (others.length === 0) {
       const [person] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, userId));
       const label = person?.name || person?.email || `User #${userId}`;

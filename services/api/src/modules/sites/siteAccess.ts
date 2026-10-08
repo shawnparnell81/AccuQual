@@ -4,6 +4,23 @@ export interface SiteChoice {
   id: number;
   isDefault: boolean;
   status: string;
+  deletedAt?: Date | string | null;
+}
+
+/** A plant that must stay out of lists. Inactive is the old Deactivate status. */
+export function isRetiredPlant(site: { deletedAt?: Date | string | null; status?: string | null }): boolean {
+  return site.deletedAt != null || site.status === "inactive";
+}
+
+/** Name historical records show. The snapshot is frozen at deletion. */
+export function plantDisplayName(site: { name: string; nameSnapshot?: string | null }): string {
+  const snapshot = site.nameSnapshot?.trim();
+  return snapshot || site.name;
+}
+
+/** Plain audit sentence: who and when come from the audit row itself. */
+export function plantDeleteDescription(name: string, code: string): string {
+  return `Deleted plant "${name}" (${code}). Records that already used this plant keep the name. It no longer appears in plant lists.`;
 }
 
 /** Company admins manage every plant. Everyone else is limited to membership. */
@@ -39,9 +56,10 @@ export function pickCurrentSiteId(input: {
   sites: SiteChoice[];
 }): number | null {
   const allowed = new Set(input.allowedIds);
-  if (input.headerSiteId != null && allowed.has(input.headerSiteId)) return input.headerSiteId;
-  if (input.savedSiteId != null && allowed.has(input.savedSiteId)) return input.savedSiteId;
-  const active = input.sites.filter((site) => allowed.has(site.id) && site.status === "active");
+  const retired = new Set(input.sites.filter((site) => site.status !== "active" || site.deletedAt != null).map((site) => site.id));
+  if (input.headerSiteId != null && allowed.has(input.headerSiteId) && !retired.has(input.headerSiteId)) return input.headerSiteId;
+  if (input.savedSiteId != null && allowed.has(input.savedSiteId) && !retired.has(input.savedSiteId)) return input.savedSiteId;
+  const active = input.sites.filter((site) => allowed.has(site.id) && site.status === "active" && site.deletedAt == null);
   return (active.find((site) => site.isDefault) ?? active[0])?.id ?? null;
 }
 

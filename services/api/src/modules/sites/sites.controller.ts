@@ -22,6 +22,11 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
   res.json(updated);
 });
 
+export const deleteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const deleted = await sitesService.deleteSite(req.db!, req.user!.id, Number(req.params.id));
+  res.json(deleted);
+});
+
 export const listMembersHandler = asyncHandler(async (req: Request, res: Response) => {
   const userIds = await sitesService.listMemberIds(req.db!, Number(req.params.id));
   res.json({ userIds });

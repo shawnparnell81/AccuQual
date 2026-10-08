@@ -15,6 +15,8 @@ export interface PlantSummary {
 export interface PlantContext {
   currentSiteId: number | null;
   canManage: boolean;
+  /** True when this person's role has plants.delete. Not implied by a role name. */
+  canDelete?: boolean;
   sites: PlantSummary[];
 }
 

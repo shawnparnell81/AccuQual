@@ -8,8 +8,9 @@ import { TextField } from "../../components/forms/Field";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { useSites, type PlantSummary } from "../../hooks/useSites";
+import { useSites, type PlantContext, type PlantSummary } from "../../hooks/useSites";
 import { formatPerson } from "../../lib/opsLanguage";
+import { useDialogBehavior } from "../../components/shared/useDialogBehavior";
 
 const userHooks = createResourceHooks<AppUser>("users");
 
@@ -50,20 +51,38 @@ function PlantsEditor() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't add that plant.")),
   });
 
-  const updatePlant = useMutation({
-    mutationFn: async (patch: { id: number; name?: string; status?: "active" | "inactive" }) => {
-      const { id, ...body } = patch;
-      return (await apiClient.patch(`/sites/${id}`, body)).data;
+  const [confirmPlant, setConfirmPlant] = useState<PlantSummary | null>(null);
+
+  const deletePlant = useMutation({
+    mutationFn: async (id: number) => (await apiClient.delete(`/sites/${id}`)).data,
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["sites"] });
+      const previous = queryClient.getQueryData<PlantContext>(["sites"]);
+      queryClient.setQueryData<PlantContext>(["sites"], (current) => {
+        if (!current) return current;
+        const sites = current.sites.filter((site) => site.id !== id);
+        const currentSiteId = current.currentSiteId === id ? (sites.find((site) => site.isDefault)?.id ?? sites[0]?.id ?? null) : current.currentSiteId;
+        return { ...current, sites, currentSiteId };
+      });
+      setSelectedId((current) => (current === id ? null : current));
+      return { previous };
     },
-    onSuccess: () => {
-      toast.success("Plant updated.");
+    onSuccess: (result: { name?: string }) => {
+      toast.success(`${result.name ?? "Plant"} deleted.`);
+      setConfirmPlant(null);
+    },
+    onError: (err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(["sites"], context.previous);
+      toast.error(extractErrorMessage(err, "Couldn't delete that plant."));
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["sites"] });
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update that plant.")),
   });
 
   const plants = data?.sites ?? [];
   const selected = plants.find((plant) => plant.id === selectedId) ?? plants[0] ?? null;
+  const canDelete = Boolean(data?.canDelete);
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,7 +103,6 @@ function PlantsEditor() {
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="pb-2">Name</th>
                 <th className="pb-2">Code</th>
-                <th className="pb-2">Status</th>
                 <th className="pb-2" />
               </tr>
             </thead>
@@ -96,23 +114,18 @@ function PlantsEditor() {
                     {plant.isDefault ? <span className="ml-2 text-xs text-muted-foreground">Main</span> : null}
                   </td>
                   <td className="py-1.5 text-muted-foreground">{plant.code}</td>
-                  <td className="py-1.5 capitalize">{plant.status}</td>
                   <td className="space-x-3 py-1.5 text-right">
                     <button type="button" onClick={() => setSelectedId(plant.id)} className="text-xs text-primary hover:underline">
                       People
                     </button>
-                    {!plant.isDefault && plant.status === "active" && (
+                    {canDelete && (
                       <button
                         type="button"
-                        onClick={() => updatePlant.mutate({ id: plant.id, status: "inactive" })}
-                        className="text-xs text-muted-foreground hover:text-destructive"
+                        disabled={deletePlant.isPending}
+                        onClick={() => setConfirmPlant(plant)}
+                        className="text-xs text-destructive hover:underline disabled:opacity-60"
                       >
-                        Deactivate
-                      </button>
-                    )}
-                    {plant.status === "inactive" && (
-                      <button type="button" onClick={() => updatePlant.mutate({ id: plant.id, status: "active" })} className="text-xs text-primary hover:underline">
-                        Activate
+                        Delete
                       </button>
                     )}
                   </td>
@@ -135,11 +148,54 @@ function PlantsEditor() {
             {createPlant.isPending ? "Adding…" : "Add plant"}
           </button>
         </form>
-        <p className="mt-2 text-xs text-muted-foreground">The main plant stays active. Deactivating another plant hides it from the switcher.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Deleting a plant removes it from every list. Records that already use it keep the plant name.</p>
       </div>
 
       {selected && <MembersEditor plant={selected} users={users} />}
+      {confirmPlant && (
+        <DeletePlantDialog
+          plant={confirmPlant}
+          pending={deletePlant.isPending}
+          onCancel={() => {
+            if (!deletePlant.isPending) setConfirmPlant(null);
+          }}
+          onConfirm={() => deletePlant.mutate(confirmPlant.id)}
+        />
+      )}
     </div>
+  );
+}
+
+function DeletePlantDialog({ plant, pending, onCancel, onConfirm }: { plant: PlantSummary; pending: boolean; onCancel: () => void; onConfirm: () => void }) {
+  const ref = useDialogBehavior(true, onCancel);
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40" onClick={onCancel} />
+      <div
+        ref={ref}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-plant-title"
+        aria-describedby="delete-plant-message"
+        tabIndex={-1}
+        className="modal-in fixed left-1/2 top-24 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-xl outline-none"
+      >
+        <h2 id="delete-plant-title" className="text-sm font-medium">
+          Delete {plant.name}?
+        </h2>
+        <p id="delete-plant-message" className="mt-2 text-sm text-muted-foreground">
+          {plant.name} will disappear from plant lists, pickers, and the switcher. Issues, fixes, equipment, people, and audit history that already use {plant.name} keep that name.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} disabled={pending} className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-60">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm} disabled={pending} className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground disabled:opacity-60">
+            {pending ? "Deleting…" : "Delete"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
