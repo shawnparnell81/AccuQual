@@ -1304,6 +1304,13 @@ body.aq-side-resizing * {
   color: hsl(var(--foreground));
   border-color: hsl(var(--primary));
 }
+.aq-side-locked {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+.aq-side-locked-mark {
+  color: hsl(var(--muted-foreground));
+}
 .aq-nav-organize {
   position: relative;
   display: inline-flex;

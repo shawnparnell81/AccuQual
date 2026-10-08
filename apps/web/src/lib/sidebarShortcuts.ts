@@ -8,7 +8,7 @@ import {
   ShieldAlert,
   Workflow,
 } from "lucide-react";
-import { flattenSidebarLinks, isFolder, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
+import { flattenSidebarLinks, isFolder, isLockedSidebarKey, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
 import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 import type { SidebarPlacement } from "./sidebarLayout";
 
@@ -73,10 +73,11 @@ export function shortcutIcon(key: string): SidebarLink["icon"] {
 function filterHidden(nodes: SidebarNode[], hidden: Set<string>): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
-    if (hidden.has(node.key)) continue;
+    const locked = isLockedSidebarKey(node.key);
+    if (!locked && hidden.has(node.key)) continue;
     if (isFolder(node)) {
       const children = filterHidden(node.children, hidden);
-      if (children.length === 0 && !node.path) continue;
+      if (!locked && children.length === 0 && !node.path) continue;
       out.push({ ...node, children });
     } else {
       out.push(node);
@@ -109,7 +110,10 @@ export function applyUserShortcuts(nodes: SidebarNode[], prefs: SidebarShortcutP
     pins.push(toLink({ ...pin, path }));
   }
   if (pins.length === 0) return filtered;
-  return [{ key: SHORTCUTS_FOLDER_KEY, label: "Shortcuts", icon: Pin, children: pins }, ...filtered];
+  const folder: SidebarNode = { key: SHORTCUTS_FOLDER_KEY, label: "Shortcuts", icon: Pin, children: pins };
+  let index = 0;
+  while (index < filtered.length && isLockedSidebarKey(filtered[index]!.key)) index += 1;
+  return [...filtered.slice(0, index), folder, ...filtered.slice(index)];
 }
 
 export function sidebarToggleRows(nodes: SidebarNode[], depth = 0): { key: string; label: string; depth: number }[] {

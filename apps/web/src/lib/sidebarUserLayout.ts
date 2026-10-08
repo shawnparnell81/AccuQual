@@ -1,5 +1,5 @@
 import { Folder, Pin } from "lucide-react";
-import { isFolder, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
+import { isFolder, isLockedSidebarKey, LOCKED_SIDEBAR_KEYS, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
 import { blankFormsFolderHref } from "./folderBrowse";
 import { acceptSidebarPath, filterSidebarByAccess, type SidebarAccess } from "./sidebarAccess";
 import { defaultPlacements, findPlacement, moveSidebarItem, nudgeSidebarItem, placementParent, type SidebarPlacement } from "./sidebarLayout";
@@ -39,6 +39,8 @@ export interface LayoutRow {
   depth: number;
   kind: "item" | "section" | "pin";
   hidden: boolean;
+  /** Home stays at the top. The editor shows it pinned and does not move or hide it. */
+  locked: boolean;
 }
 
 function collectKeys(nodes: SidebarPlacement[], into = new Set<string>()): Set<string> {
@@ -163,16 +165,89 @@ function nodeFor(key: string, children: SidebarNode[], ctx: { catalog: Map<strin
 function dropHidden(nodes: SidebarNode[], hidden: Set<string>): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
-    if (hidden.has(node.key)) continue;
+    const locked = isLockedSidebarKey(node.key);
+    if (!locked && hidden.has(node.key)) continue;
     if (isFolder(node)) {
       const children = dropHidden(node.children, hidden);
-      if (children.length === 0 && !node.path) continue;
+      if (!locked && children.length === 0 && !node.path) continue;
       out.push({ ...node, children });
     } else {
       out.push(node);
     }
   }
   return out;
+}
+
+function withoutLockedHidden(hidden: string[]): string[] {
+  return hidden.filter((key) => !isLockedSidebarKey(key));
+}
+
+/** Pulls locked rows out of whatever section they were saved in and puts them first. A missing Home is inserted. */
+export function hoistLockedPlacements(layout: SidebarPlacement[]): SidebarPlacement[] {
+  const found = new Map<string, SidebarPlacement>();
+  function pull(nodes: SidebarPlacement[]): SidebarPlacement[] {
+    const out: SidebarPlacement[] = [];
+    for (const node of nodes) {
+      if (!node?.key) continue;
+      const children = node.children ? pull(node.children) : undefined;
+      if (isLockedSidebarKey(node.key)) {
+        if (!found.has(node.key)) found.set(node.key, children && children.length > 0 ? { key: node.key, children } : { key: node.key });
+        continue;
+      }
+      out.push(children && children.length > 0 ? { key: node.key, children } : { key: node.key });
+    }
+    return out;
+  }
+  const rest = pull(layout);
+  const locked = LOCKED_SIDEBAR_KEYS.map((key) => found.get(key) ?? { key });
+  return [...locked, ...rest];
+}
+
+/** Moves locked catalog rows to the front of a rendered menu. Does not invent a row the catalog never had. */
+function hoistLockedNodes(nodes: SidebarNode[]): SidebarNode[] {
+  const found = new Map<string, SidebarNode>();
+  function pull(items: SidebarNode[]): SidebarNode[] {
+    const out: SidebarNode[] = [];
+    for (const node of items) {
+      if (isFolder(node)) {
+        const children = pull(node.children);
+        if (isLockedSidebarKey(node.key)) {
+          if (!found.has(node.key)) found.set(node.key, { ...node, children });
+          continue;
+        }
+        out.push({ ...node, children });
+      } else if (isLockedSidebarKey(node.key)) {
+        if (!found.has(node.key)) found.set(node.key, node);
+      } else {
+        out.push(node);
+      }
+    }
+    return out;
+  }
+  const rest = pull(nodes);
+  const locked: SidebarNode[] = [];
+  for (const key of LOCKED_SIDEBAR_KEYS) {
+    const node = found.get(key);
+    if (node) locked.push(node);
+  }
+  return [...locked, ...rest];
+}
+
+/**
+ * Read-time fix for a saved menu. Home is never hidden and, when this person
+ * has their own arrangement, it is the first row. A null layout stays null:
+ * that means the built-in menu, which already starts with Home.
+ */
+export function normalizeSidebarPrefs(prefs: SidebarShortcutPrefs | null | undefined): SidebarShortcutPrefs {
+  const hidden = withoutLockedHidden(prefs?.hidden ?? []);
+  const pinned = prefs?.pinned ?? [];
+  const groups = prefs?.groups ?? [];
+  const layout = prefs?.layout ? hoistLockedPlacements(prefs.layout) : (prefs?.layout ?? null);
+  return { hidden, pinned, layout, groups };
+}
+
+function settle(draft: SidebarDraft): SidebarDraft {
+  return { ...draft, hidden: withoutLockedHidden(draft.hidden), layout: hoistLockedPlacements(draft.layout) };
 }
 
 function cleanPins(pins: PinnedShortcut[] | undefined): PinnedShortcut[] {
@@ -195,17 +270,20 @@ function withBlankPin(layout: SidebarPlacement[], pinned: PinnedShortcut[]): Pin
 }
 
 /** The menu this person actually sees. No saved layout means the built-in order. */
-export function resolveUserSidebar(catalog: SidebarNode[], prefs: SidebarShortcutPrefs | null | undefined, access: SidebarAccess): SidebarNode[] {
-  const hidden = prefs?.hidden ?? [];
-  const pinned = cleanPins(prefs?.pinned);
-  const groups = prefs?.groups ?? [];
+export function resolveUserSidebar(catalog: SidebarNode[], rawPrefs: SidebarShortcutPrefs | null | undefined, access: SidebarAccess): SidebarNode[] {
+  const prefs = normalizeSidebarPrefs(rawPrefs);
+  const hidden = prefs.hidden;
+  const pinned = cleanPins(prefs.pinned);
+  const groups = prefs.groups ?? [];
   let nodes: SidebarNode[];
-  if (!prefs?.layout) {
+  if (!prefs.layout) {
     nodes = applyUserShortcuts(catalog, { hidden, pinned });
   } else {
-    const layout = ensureGroupsPlaced(
-      ensurePinsPlaced(ensureCatalogPlaced(rewriteBlankPlacements(prefs.layout), catalog, new Set(hidden)), pinned),
-      groups,
+    const layout = hoistLockedPlacements(
+      ensureGroupsPlaced(
+        ensurePinsPlaced(ensureCatalogPlaced(rewriteBlankPlacements(prefs.layout), catalog, new Set(hidden)), pinned),
+        groups,
+      ),
     );
     const placedPins = withBlankPin(layout, pinned);
     nodes = materialize(layout, {
@@ -216,7 +294,7 @@ export function resolveUserSidebar(catalog: SidebarNode[], prefs: SidebarShortcu
     });
     nodes = dropHidden(nodes, new Set(hidden));
   }
-  return filterSidebarByAccess(nodes, access);
+  return filterSidebarByAccess(hoistLockedNodes(nodes), access);
 }
 
 /** The arrangement being edited, including rows that are currently hidden. */
@@ -229,40 +307,46 @@ export function editorNodes(draft: SidebarDraft, catalog: SidebarNode[]): Sideba
   });
 }
 
-export function draftFromPrefs(catalog: SidebarNode[], prefs: SidebarShortcutPrefs | null | undefined): SidebarDraft {
-  const hidden = [...(prefs?.hidden ?? [])];
-  const pinned = cleanPins(prefs?.pinned);
-  const groups = [...(prefs?.groups ?? [])];
-  const base = prefs?.layout ? rewriteBlankPlacements(prefs.layout) : defaultPlacements(catalog);
-  const withPins = prefs?.layout ? base : ensurePinsPlaced(base, pinned);
-  const layout = ensureGroupsPlaced(ensurePinsPlaced(ensureCatalogPlaced(withPins, catalog, new Set()), pinned), groups);
+export function draftFromPrefs(catalog: SidebarNode[], rawPrefs: SidebarShortcutPrefs | null | undefined): SidebarDraft {
+  const prefs = normalizeSidebarPrefs(rawPrefs);
+  const hidden = [...prefs.hidden];
+  const pinned = cleanPins(prefs.pinned);
+  const groups = [...(prefs.groups ?? [])];
+  const base = prefs.layout ? rewriteBlankPlacements(prefs.layout) : defaultPlacements(catalog);
+  const withPins = prefs.layout ? base : ensurePinsPlaced(base, pinned);
+  const layout = hoistLockedPlacements(ensureGroupsPlaced(ensurePinsPlaced(ensureCatalogPlaced(withPins, catalog, new Set()), pinned), groups));
   return { layout, hidden, pinned: withBlankPin(layout, pinned), groups };
 }
 
 export function draftToPrefs(draft: SidebarDraft): SidebarShortcutPrefs {
-  return {
+  return normalizeSidebarPrefs({
     hidden: [...draft.hidden],
     pinned: cleanPins(draft.pinned),
     layout: draft.layout,
     groups: [...draft.groups],
-  };
+  });
 }
 
 export function toggleHidden(draft: SidebarDraft, key: string): SidebarDraft {
+  if (isLockedSidebarKey(key)) return draft;
   const hidden = draft.hidden.includes(key) ? draft.hidden.filter((item) => item !== key) : [...draft.hidden, key];
-  return { ...draft, hidden };
+  return settle({ ...draft, hidden });
 }
 
 export function nudgeDraft(draft: SidebarDraft, key: string, direction: -1 | 1): SidebarDraft {
+  if (isLockedSidebarKey(key)) return draft;
+  const place = placementParent(draft.layout, key);
+  if (place && direction < 0 && isLockedSidebarKey(place.siblings[place.index - 1]?.key ?? "")) return draft;
   const layout = nudgeSidebarItem(draft.layout, key, direction);
   if (!layout) return draft;
-  return { ...draft, layout };
+  return settle({ ...draft, layout });
 }
 
 export function moveDraftItem(draft: SidebarDraft, key: string, parentKey: string | null, index: number): SidebarDraft {
+  if (isLockedSidebarKey(key)) return draft;
   const layout = moveSidebarItem(draft.layout, key, parentKey, index);
   if (!layout) return draft;
-  return { ...draft, layout };
+  return settle({ ...draft, layout });
 }
 
 export function moveDraftInto(draft: SidebarDraft, key: string, parentKey: string | null): SidebarDraft {
@@ -276,7 +360,7 @@ export function addPin(draft: SidebarDraft, pin: PinnedShortcut): SidebarDraft {
   if (!next) return draft;
   if (draft.pinned.some((item) => item.key === next.key || item.path === next.path)) return draft;
   const layout = findPlacement(draft.layout, next.key) ? draft.layout : [{ key: next.key }, ...draft.layout];
-  return { ...draft, pinned: [...draft.pinned, next], layout, hidden: draft.hidden.filter((key) => key !== next.key) };
+  return settle({ ...draft, pinned: [...draft.pinned, next], layout, hidden: draft.hidden.filter((key) => key !== next.key) });
 }
 
 function removeKey(nodes: SidebarPlacement[], key: string): SidebarPlacement[] {
@@ -289,7 +373,8 @@ function removeKey(nodes: SidebarPlacement[], key: string): SidebarPlacement[] {
 }
 
 export function removePin(draft: SidebarDraft, key: string): SidebarDraft {
-  return { ...draft, pinned: draft.pinned.filter((pin) => pin.key !== key), layout: removeKey(draft.layout, key) };
+  if (isLockedSidebarKey(key)) return draft;
+  return settle({ ...draft, pinned: draft.pinned.filter((pin) => pin.key !== key), layout: removeKey(draft.layout, key) });
 }
 
 function groupKey(label: string, explicit?: string): string {
@@ -303,18 +388,18 @@ export function addGroup(draft: SidebarDraft, label: string, key?: string): Side
   if (!name) return draft;
   const id = groupKey(name, key);
   if (draft.groups.some((group) => group.key === id) || findPlacement(draft.layout, id)) return draft;
-  return { ...draft, groups: [...draft.groups, { key: id, label: name }], layout: [...draft.layout, { key: id, children: [] }] };
+  return settle({ ...draft, groups: [...draft.groups, { key: id, label: name }], layout: [...draft.layout, { key: id, children: [] }] });
 }
 
 export function removeGroup(draft: SidebarDraft, key: string): SidebarDraft {
   const place = placementParent(draft.layout, key);
   const groups = draft.groups.filter((group) => group.key !== key);
-  if (!place) return { ...draft, groups };
+  if (!place) return settle({ ...draft, groups });
   const children = place.siblings[place.index]?.children ?? [];
   const layout = removeKey(structuredClone(draft.layout), key);
   const parentList = place.parentKey === null ? layout : findPlacement(layout, place.parentKey)?.children;
   parentList?.splice(Math.min(place.index, parentList.length), 0, ...children);
-  return { ...draft, layout, groups };
+  return settle({ ...draft, layout, groups });
 }
 
 export function layoutRows(draft: SidebarDraft, catalog: SidebarNode[]): LayoutRow[] {
@@ -325,7 +410,14 @@ export function layoutRows(draft: SidebarDraft, catalog: SidebarNode[]): LayoutR
     for (const node of nodes) {
       const described = describe(node.key, draft, byKey);
       if (!described) continue;
-      out.push({ key: node.key, label: described.label, depth, kind: described.kind, hidden: hidden.has(node.key) });
+      out.push({
+        key: node.key,
+        label: described.label,
+        depth,
+        kind: described.kind,
+        hidden: !isLockedSidebarKey(node.key) && hidden.has(node.key),
+        locked: isLockedSidebarKey(node.key),
+      });
       if (node.children) walk(node.children, depth + 1);
     }
   }

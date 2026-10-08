@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   PieChart,
   ScrollText,
+  Settings,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -71,6 +72,25 @@ export type SidebarNode = SidebarLink | SidebarFolder;
 export function isFolder(node: SidebarNode): node is SidebarFolder {
   return "children" in node;
 }
+
+/**
+ * Rows that stay on the menu for every person.
+ * Home is always the first item and always opens /home.
+ */
+export const LOCKED_SIDEBAR_KEYS = ["home"] as const;
+
+export function isLockedSidebarKey(key: string): boolean {
+  return (LOCKED_SIDEBAR_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * Footer links. They are not part of the customizable menu, so a saved
+ * layout cannot hide, reorder, or replace them. Settings is the account
+ * and company door and stays at the bottom in every layout.
+ */
+export const PERMANENT_SIDEBAR_LINKS: SidebarLink[] = [
+  { key: "settings", label: "Settings", path: "/settings", icon: Settings },
+];
 
 /** Category stored on documents that live in Quality → Obsolete / Archive. */
 export const OBSOLETE_ARCHIVE_CATEGORY = "obsolete-archive" as const;

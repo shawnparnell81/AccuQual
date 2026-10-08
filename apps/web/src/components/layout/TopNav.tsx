@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
-import { ChevronDown, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, X } from "lucide-react";
+import { ChevronDown, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useCurrentCompany, useCurrentUser } from "../../hooks/useAuth";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 import { NotificationDropdown } from "./NotificationDropdown";
@@ -15,6 +15,7 @@ import {
   flattenSidebarLinks,
   isFolder,
   pathMatches,
+  PERMANENT_SIDEBAR_LINKS,
   sidebarLinkOpensNewTab,
   sidebarNodeContainsPath,
   type SidebarFolder,
@@ -332,10 +333,15 @@ function SidebarNav({
         )}
       </div>
       <div className="aq-side-foot">
-        <NavLink to="/settings" title="Settings" onClick={closeSide} onMouseEnter={() => prefetchRoute("/settings")} onFocus={() => prefetchRoute("/settings")} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
-          <Settings size={18} />
-          <span className="aq-nav-label">Settings</span>
-        </NavLink>
+        {PERMANENT_SIDEBAR_LINKS.map((link) => {
+          const Icon = link.icon;
+          return (
+            <NavLink key={link.key} to={link.path} title={link.label} onClick={closeSide} onMouseEnter={() => prefetchRoute(link.path)} onFocus={() => prefetchRoute(link.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
+              <Icon size={18} />
+              <span className="aq-nav-label">{link.label}</span>
+            </NavLink>
+          );
+        })}
         {companyName && <p className="mt-2 truncate">{companyName}</p>}
         <SidebarShortcutsButton catalog={catalog} />
         <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
