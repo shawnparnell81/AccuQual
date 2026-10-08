@@ -59,6 +59,17 @@ export const CANONICAL_FOLDER_HOMES: Readonly<Record<string, readonly string[]>>
   "Process Flow Diagrams": ["ISO Compliance Documents", "Quality", "Risk Management"],
 };
 
+/**
+ * Same folder aside from capitalization, extra spaces, underscores, and a
+ * leading number from an old Windows export (`01 Quality Manual`, `01_Quality_Manual`).
+ * `8D` stays `8d`: the digits are the name, not a prefix.
+ */
+export function folderIdentityKey(name: string): string {
+  const collapsed = name.trim().replace(/[_]+/g, " ").replace(/\s+/g, " ");
+  const stripped = collapsed.replace(/^\d{1,3}[\s.-]+/, "");
+  return stripped.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function savedItem(node: MergeFolder): boolean {
   return node.pdfPath != null || node.documentId != null || (node.linkedPath != null && node.linkedPath !== "");
 }
@@ -244,6 +255,63 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
   }
 
   return merges;
+}
+
+function collapsedName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+function preferredSpelling(names: string[], options: DuplicateMergeOptions, key: string): string {
+  const official = [...options.mainIsoNames, ...Object.keys(options.canonicalHomes)];
+  for (const name of official) {
+    if (folderIdentityKey(name) === key) return name;
+  }
+  const cleaned = names.map(collapsedName);
+  const plain = cleaned.find((name) => !/^\d{1,3}[\s.-]/.test(name));
+  return plain ?? cleaned[0] ?? key;
+}
+
+/**
+ * Folds only case, space, underscore, and number-prefix copies.
+ * Two folders that already share the exact same spelling are left for the
+ * one-time fold, so a pair created on purpose after that fold is not pulled in here.
+ */
+export function planLooseFolderMerges(folders: MergeFolder[], options: DuplicateMergeOptions): FolderMerge[] {
+  const groups = new Map<string, MergeFolder[]>();
+  for (const folder of folders) {
+    if (folder.name === "Library Pool" || folder.name === options.isoName) continue;
+    const key = folderIdentityKey(folder.name);
+    const list = groups.get(key) ?? [];
+    list.push(folder);
+    groups.set(key, list);
+  }
+
+  const variantIds = new Set<number>();
+  const spelling = new Map<number, string>();
+  for (const [key, copies] of groups) {
+    const distinct = new Set(copies.map((folder) => collapsedName(folder.name)));
+    if (distinct.size < 2) continue;
+    const preferred = preferredSpelling(copies.map((folder) => folder.name), options, key);
+    for (const copy of copies) {
+      spelling.set(copy.id, preferred);
+      if (collapsedName(copy.name) !== preferred) variantIds.add(copy.id);
+    }
+  }
+  if (variantIds.size === 0) return [];
+
+  const rewritten = folders.map((folder) => {
+    const name = spelling.get(folder.id);
+    return name ? { ...folder, name } : folder;
+  });
+  const kept: FolderMerge[] = [];
+  for (const move of planDuplicateFolderMerges(rewritten, options)) {
+    const sourceVariant = variantIds.has(move.sourceId);
+    const destVariant = variantIds.has(move.destId);
+    if (sourceVariant && destVariant) kept.push(move);
+    else if (sourceVariant) kept.push(move);
+    else if (destVariant) kept.push({ sourceId: move.destId, destId: move.sourceId });
+  }
+  return kept;
 }
 
 /** Appended when a blank-topic folder uses a name a company folder already has. */

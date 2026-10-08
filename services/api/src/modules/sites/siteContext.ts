@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { AppError } from "../../utils/appError.js";
-import { isSiteAdmin, pickCurrentSiteId } from "./siteAccess.js";
+import { isRetiredPlant, isSiteAdmin, pickCurrentSiteId } from "./siteAccess.js";
 
 export const SITE_HEADER = "x-accuqual-site";
 
@@ -27,11 +27,11 @@ export async function withSiteContext(req: Request, _res: Response, next: NextFu
       return next(AppError.unauthorized("Missing company context"));
     }
 
-    const headerSiteId = readHeaderSiteId(req);
+    let headerSiteId = readHeaderSiteId(req);
     const admin = isSiteAdmin(req.user.roleName);
 
     const [siteRows, userRow, membershipRows] = await Promise.all([
-      req.db.select({ id: sites.id, isDefault: sites.isDefault, status: sites.status }).from(sites),
+      req.db.select({ id: sites.id, isDefault: sites.isDefault, status: sites.status, deletedAt: sites.deletedAt }).from(sites),
       req.db.select({ currentSiteId: users.currentSiteId }).from(users).where(eq(users.id, req.user.id)),
       admin
         ? Promise.resolve([] as { siteId: number }[])
@@ -41,17 +41,27 @@ export async function withSiteContext(req: Request, _res: Response, next: NextFu
             .where(and(eq(userSites.userId, req.user.id))),
     ]);
 
-    const allowedIds = admin ? siteRows.map((site) => site.id) : membershipRows.map((row) => row.siteId);
-    if (headerSiteId != null && !allowedIds.includes(headerSiteId)) {
+    const living = siteRows.filter((site) => !isRetiredPlant(site));
+    const retired = siteRows.filter((site) => isRetiredPlant(site));
+    const retiredIds = new Set(retired.map((site) => site.id));
+    // A tab still pointing at a deleted plant must not fail every request.
+    if (headerSiteId != null && retiredIds.has(headerSiteId)) headerSiteId = null;
+
+    const memberIds = membershipRows.map((row) => row.siteId);
+    const allowedLiving = admin ? living.map((site) => site.id) : memberIds.filter((id) => living.some((site) => site.id === id));
+    const allowedRetired = admin ? retired.map((site) => site.id) : memberIds.filter((id) => retiredIds.has(id));
+    if (headerSiteId != null && !allowedLiving.includes(headerSiteId)) {
       return next(AppError.forbidden("You aren't assigned to that plant."));
     }
 
-    req.allowedSiteIds = allowedIds;
+    // Retired plants stay in the read set so existing records still open.
+    // The working plant is always a living one.
+    req.allowedSiteIds = [...allowedLiving, ...allowedRetired];
     req.siteId = pickCurrentSiteId({
-      allowedIds,
+      allowedIds: allowedLiving,
       headerSiteId,
       savedSiteId: userRow[0]?.currentSiteId ?? null,
-      sites: siteRows,
+      sites: living,
     });
     next();
   } catch (err) {

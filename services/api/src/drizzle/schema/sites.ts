@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, serial, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
@@ -9,6 +10,10 @@ import { users } from "./users.js";
  * `isDefault` is the plant migration attaches pre-existing records to, and
  * the plant a new user is assigned to until an admin says otherwise. Only
  * one default per company (partial unique index in the migration).
+ *
+ * Deleting a plant does not remove the row. `deletedAt` hides it from every
+ * list, and `nameSnapshot` is the name records keep showing. The code unique
+ * index ignores deleted and inactive plants so the same code can be used again.
  */
 export const sites = pgTable(
   "sites",
@@ -18,11 +23,16 @@ export const sites = pgTable(
     code: text("code").notNull(),
     status: text("status").notNull().default("active"), // active, inactive
     isDefault: boolean("is_default").notNull().default(false),
+    /** Set when the plant is deleted. The row stays so foreign keys on records do not break. */
+    deletedAt: timestamp("deleted_at"),
+    /** Name at the moment of deletion. Historical records show this, even if `name` later changes. */
+    nameSnapshot: text("name_snapshot"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    codeUnique: uniqueIndex("sites_code_idx").on(table.code),
+    codeUnique: uniqueIndex("sites_code_idx").on(table.code).where(sql`${table.deletedAt} IS NULL AND ${table.status} = 'active'`),
+    nameUnique: uniqueIndex("sites_name_active_idx").on(sql`lower(${table.name})`).where(sql`${table.deletedAt} IS NULL AND ${table.status} = 'active'`),
   })
 );
 

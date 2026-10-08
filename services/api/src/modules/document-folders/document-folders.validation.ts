@@ -22,3 +22,11 @@ export const fileFormRecordSchema = z.object({
   folderId: z.number().int().positive(),
   partNumber: z.string().trim().max(80).optional(),
 });
+
+export const renameFormFolderSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+});
+
+export const retireFolderSchema = z.object({
+  destinationId: z.number().int().positive().nullable().optional(),
+});

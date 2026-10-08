@@ -20,6 +20,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { company } from "../../drizzle/schema/company.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { isBlankTemplateStartPath } from "./formFiling.js";
+import { deletedDocumentFolderTokens, isTombstoned } from "./folderTombstones.js";
 
 export const ISO_ROOT_NAME = "ISO Compliance Documents";
 
@@ -204,13 +205,15 @@ export async function ensureMainIsoFolders(db: Db, all: FolderRow[]): Promise<Fo
     await markIsoMainFoldersReady(db);
     return all;
   }
-  if (plan.names.length === 0) {
+  const removed = await deletedDocumentFolderTokens(db);
+  const names = plan.names.filter((name) => !isTombstoned(removed, ISO_ROOT_NAME, name));
+  if (names.length === 0) {
     await markIsoMainFoldersReady(db);
     return all;
   }
 
   let list = all;
-  for (const name of plan.names) {
+  for (const name of names) {
     if (list.some((folder) => folder.parentId === plan.isoId && folder.name === name)) continue;
     const [created] = await db.insert(documentFolders).values({ name, parentId: plan.isoId, sortOrder: 0 }).returning();
     if (!created) throw new Error(`Could not create the ${name} folder`);

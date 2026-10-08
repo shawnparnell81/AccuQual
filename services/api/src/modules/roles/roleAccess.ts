@@ -5,8 +5,17 @@ export const IMPORT_DATA_PERMISSION = "import_data";
 /** Create forms and edit their structure. Filling a copy does not use this. Owner and Administrator are not listed; they already have full access. */
 export const FORM_BUILDER_PERMISSION = "form_builder";
 
+/** Delete a folder. Assigned on the role. Not implied by a role name. */
+export const FOLDERS_DELETE_PERMISSION = "folders.delete";
+
+/** Rename a folder. Assigned on the role. Not implied by a role name. */
+export const FOLDERS_RENAME_PERMISSION = "folders.rename";
+
 /** Lets an Owner or Administrator return a document from Obsolete / Archive. Other roles never can. */
 export const RESTORE_ARCHIVED_DOCUMENTS = "restore_archived_documents";
+
+/** Delete a plant. Granted on the role, not by matching a role name. */
+export const PLANTS_DELETE_PERMISSION = "plants.delete";
 
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
@@ -42,6 +51,11 @@ export function isBroadViewRole(roleName: string | null | undefined): boolean {
 export function roleHasImportPermission(roleName: string | null | undefined, permissions: readonly string[] | null | undefined): boolean {
   if (isFullAccessRole(roleName)) return true;
   return (permissions ?? []).includes(IMPORT_DATA_PERMISSION);
+}
+
+/** True only when the role's permission list includes plants.delete. */
+export function roleHasPlantDeletePermission(permissions: readonly string[] | null | undefined): boolean {
+  return (permissions ?? []).includes(PLANTS_DELETE_PERMISSION);
 }
 
 /** Owner and Administrator only, and only when the role carries restore_archived_documents. */

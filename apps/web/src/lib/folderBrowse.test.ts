@@ -297,6 +297,8 @@ describe("folder browse", () => {
     assert.match(page, /folderTreeOpen\(treeOpen\[folder\.id\], depth\)/);
     assert.match(page, /treeOpenForTarget/);
     assert.match(page, /collapsed\[sub\.id\] !== false/);
+    assert.match(page, /folderNodePath\(visibleFolders, activeDept\.id\)/);
+    assert.match(page, /<FolderPathBar path=\{deptPath\} \/>/);
     assert.doesNotMatch(page, /treeOpen\[folder\.id\] \?\? isoRoot/);
   });
 });

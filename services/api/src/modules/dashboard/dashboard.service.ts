@@ -19,6 +19,7 @@ import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { listEquipmentWithSummary } from "../calibration/calibration.service.js";
+import { isRetiredPlant, plantDisplayName } from "../sites/siteAccess.js";
 import { canSeeCompanyAuditRow, visibleEntityTypes } from "../audit-trail/auditTrailVisibility.js";
 import {
   buildDashboardOverview,
@@ -83,7 +84,7 @@ export async function loadDashboardOverview(
   const [siteRows, ncrRows, capaRows, docRows, assignmentRows, membershipRows, auditRows, changeRows, ppapRows, scarRows, people, equipmentRows, validationRows, isoRows, riskRows, workOrderRows] = await Promise.all([
     allowed.length === 0
       ? Promise.resolve([])
-      : db.select({ id: sites.id, name: sites.name, code: sites.code, status: sites.status }).from(sites).where(inArray(sites.id, allowed)),
+      : db.select({ id: sites.id, name: sites.name, code: sites.code, status: sites.status, deletedAt: sites.deletedAt, nameSnapshot: sites.nameSnapshot }).from(sites).where(inArray(sites.id, allowed)),
     can("ncr") && allowed.length > 0
       ? db
           .select({
@@ -334,8 +335,9 @@ export async function loadDashboardOverview(
     if (activity.length >= ACTIVITY_LIMIT) break;
   }
 
-  const siteRefs: SiteRef[] = siteRows.map((row) => ({ id: row.id, name: row.name, code: row.code }));
-  const kpiSites = siteRefs.filter((row) => kpiSiteIds.includes(row.id));
+  const siteRefs: SiteRef[] = siteRows.map((row) => ({ id: row.id, name: plantDisplayName(row), code: row.code, retired: isRetiredPlant(row) }));
+  const listedRefs = siteRefs.filter((row) => !row.retired);
+  const kpiSites = listedRefs.filter((row) => kpiSiteIds.includes(row.id));
   const names: Record<number, string | null> = {};
   for (const person of people) names[person.id] = person.name;
   const now = new Date();
@@ -344,7 +346,7 @@ export async function loadDashboardOverview(
     now,
     userId: user.id,
     scope: { allPlants: opts.allPlants, siteIds: kpiSiteIds, sites: kpiSites },
-    comparisonSites: siteRefs,
+    comparisonSites: listedRefs,
     access: {
       ncr: can("ncr"),
       capa: can("capa"),
@@ -389,6 +391,7 @@ export async function loadDashboardOverview(
     allPlants: opts.allPlants,
     siteIds: kpiSiteIds,
     sites: kpiSites.map((site) => ({ id: site.id, name: site.name })),
+    plantNames: siteRefs.map((site) => ({ id: site.id, name: site.name })),
     access: {
       ncr: can("ncr"),
       capa: can("capa"),

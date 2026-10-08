@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "../src/utils/appError.js";
-import { assertRecordOnAllowedSite, isSiteAdmin, pickCurrentSiteId, slugifyPlantCode } from "../src/modules/sites/siteAccess.js";
+import { assertRecordOnAllowedSite, isRetiredPlant, isSiteAdmin, pickCurrentSiteId, plantDeleteDescription, plantDisplayName, slugifyPlantCode } from "../src/modules/sites/siteAccess.js";
 
 const plants = [
   { id: 1, isDefault: true, status: "active" },
   { id: 2, isDefault: false, status: "active" },
   { id: 3, isDefault: false, status: "inactive" },
+  { id: 4, isDefault: false, status: "active", deletedAt: new Date("2026-01-01T00:00:00.000Z") },
 ];
 
 describe("plant access", () => {
@@ -26,6 +27,16 @@ describe("plant access", () => {
     expect(pickCurrentSiteId({ allowedIds: [1, 2], headerSiteId: null, savedSiteId: null, sites: plants })).toBe(1);
     expect(pickCurrentSiteId({ allowedIds: [2], headerSiteId: null, savedSiteId: 1, sites: plants })).toBe(2);
     expect(pickCurrentSiteId({ allowedIds: [], headerSiteId: null, savedSiteId: null, sites: plants })).toBeNull();
+    expect(pickCurrentSiteId({ allowedIds: [4, 2], headerSiteId: 4, savedSiteId: 4, sites: plants })).toBe(2);
+  });
+
+  it("treats a deleted or deactivated plant as retired and keeps the frozen name", () => {
+    expect(isRetiredPlant({ status: "inactive", deletedAt: null })).toBe(true);
+    expect(isRetiredPlant({ status: "active", deletedAt: new Date() })).toBe(true);
+    expect(isRetiredPlant({ status: "active", deletedAt: null })).toBe(false);
+    expect(plantDisplayName({ name: "Renamed", nameSnapshot: "Harbor" })).toBe("Harbor");
+    expect(plantDisplayName({ name: "Harbor", nameSnapshot: null })).toBe("Harbor");
+    expect(plantDeleteDescription("Harbor", "harbor")).toMatch(/Deleted plant "Harbor" \(harbor\)/);
   });
 
   it("hides a record from a plant the caller is not assigned to", () => {
