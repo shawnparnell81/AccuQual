@@ -98,8 +98,20 @@ describe("living controlled lists API", () => {
     expect(folders.find((folder) => folder.parentId === logs?.id && folder.linkedPath === "/documents/nonconformance-log")?.name).toBe("LST-NCR-001");
     expect(folders.some((folder) => folder.name === "LST-NCR-001" && folder.parentId !== logs?.id)).toBe(false);
     const engineering = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Engineering Logs");
-    expect(folders.find((folder) => folder.parentId === engineering?.id && folder.linkedPath === "/documents/engineering-request-log")?.name).toBe("LST-ENG-001");
+    const livingEng = folders.find((folder) => folder.parentId === engineering?.id && folder.linkedPath === "/documents/engineering-request-log");
+    expect(livingEng?.name).toBe("LST-ENG-001");
     expect(folders.some((folder) => folder.name === "LST-ENG-001" && folder.parentId !== engineering?.id)).toBe(false);
+    const [nestedEng] = await db
+      .insert(documentFolders)
+      .values({ name: "LST-ENG-001", parentId: livingEng!.id, linkedPath: "/documents/engineering-request-log" })
+      .returning();
+    const flattened = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    expect(flattened.status).toBe(200);
+    const flatFolders = flattened.body as { id: number; name: string; parentId: number | null; linkedPath?: string | null }[];
+    expect(flatFolders.some((folder) => folder.id === nestedEng!.id)).toBe(false);
+    expect(flatFolders.filter((folder) => folder.linkedPath === "/documents/engineering-request-log")).toEqual([
+      expect.objectContaining({ id: livingEng!.id, name: "LST-ENG-001", parentId: engineering?.id }),
+    ]);
     expect(folders.some((folder) => folder.parentId != null && folder.parentId !== projects?.id && folder.linkedPath === "/documents/development-log")).toBe(false);
 
     const [oldCopy] = await db.insert(documents).values({ title: "Master Equipment List", status: "approved" }).returning();

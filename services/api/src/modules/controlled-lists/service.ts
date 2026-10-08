@@ -198,6 +198,7 @@ async function fileLivingNodes(db: Db, userId: number) {
     const named = folders.find((folder) => folder.parentId === parent.id && folder.name === nodeName && !folder.pdfPath && folder.documentId == null && !folder.linkedPath);
     if (named) {
       await db.update(documentFolders).set({ linkedPath: spec.route, updatedAt: new Date() }).where(eq(documentFolders.id, named.id));
+      named.linkedPath = spec.route;
       await recordAuditTrail(db, {
         entityType: "DocumentFolder",
         entityId: named.id,
@@ -222,6 +223,59 @@ async function fileLivingNodes(db: Db, userId: number) {
       changes: { summary: `Filed ${nodeName} in ${parentName}. Opening it edits the list in the app.`, name: nodeName, linkedPath: spec.route },
     });
   }
+  await collapseDuplicateLivingListNodes(db, folders, userId);
+}
+
+/**
+ * One folder row per living list. A second row with the same route, left
+ * behind when two copies of a drawer were folded together, is removed.
+ * The shallower row stays, so the path is the drawer plus the list name.
+ */
+export async function collapseDuplicateLivingListNodes<T extends { id: number; name: string; parentId: number | null; linkedPath?: string | null }>(
+  db: Db,
+  folders: T[],
+  performedBy?: number,
+): Promise<T[]> {
+  const routes = new Set(Object.values(LISTS).map((spec) => spec.route));
+  let current = folders;
+  for (const route of routes) {
+    const matches = current.filter((folder) => folder.linkedPath === route);
+    if (matches.length < 2) continue;
+    const byId = new Map(current.map((folder) => [folder.id, folder]));
+    const depthOf = (id: number) => {
+      let depth = 0;
+      let cursor = byId.get(id);
+      const seen = new Set<number>();
+      while (cursor && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        if (cursor.parentId == null) break;
+        depth += 1;
+        cursor = byId.get(cursor.parentId);
+      }
+      return depth;
+    };
+    const ranked = [...matches].sort((a, b) => depthOf(a.id) - depthOf(b.id) || a.id - b.id);
+    const keeper = ranked[0];
+    if (!keeper) continue;
+    for (const extra of ranked.slice(1)) {
+      if (current.some((folder) => folder.parentId === extra.id)) continue;
+      await db.delete(documentFolders).where(eq(documentFolders.id, extra.id));
+      current = current.filter((folder) => folder.id !== extra.id);
+      await recordAuditTrail(db, {
+        entityType: "DocumentFolder",
+        entityId: extra.id,
+        action: "delete",
+        performedBy,
+        changes: {
+          summary: `Removed the extra ${extra.name} filing. The list stays at ${keeper.name}.`,
+          name: extra.name,
+          linkedPath: route,
+          keptId: keeper.id,
+        },
+      });
+    }
+  }
+  return current;
 }
 
 async function canEditDocuments(req: Request): Promise<boolean> {
