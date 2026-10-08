@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { isListKey, type CellPatch } from "./logic.js";
-import { changeControlledListRows, downloadControlledList, insertControlledListLocation, openControlledList, saveControlledList } from "./service.js";
+import { changeControlledListColumns, changeControlledListRows, downloadControlledList, insertControlledListLocation, openControlledList, saveControlledList } from "./service.js";
 
 function keyFrom(req: Request) {
   const key = String(req.params.key ?? "");
@@ -24,10 +24,19 @@ export const saveControlledListHandler = asyncHandler(async (req: Request, res: 
 });
 
 export const rowsControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { sheet?: string; op?: string; row?: number };
-  if (body.op !== "add" && body.op !== "delete") throw AppError.badRequest("Choose add or delete.");
+  const body = req.body as { sheet?: string; op?: string; row?: number; rows?: number[]; place?: string };
+  if (body.op !== "add" && body.op !== "delete" && body.op !== "insert") throw AppError.badRequest("Choose add, insert, or delete.");
   if (!body.sheet) throw AppError.badRequest("Choose a sheet.");
-  res.json(await changeControlledListRows(req, keyFrom(req), body.sheet, body.op, body.row));
+  const place = body.place === "below" ? "below" : body.place === "above" ? "above" : undefined;
+  const rows = Array.isArray(body.rows) ? body.rows.filter((row) => typeof row === "number") : undefined;
+  res.json(await changeControlledListRows(req, keyFrom(req), body.sheet, body.op, body.row, rows, place));
+});
+
+export const columnsControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { sheet?: string; op?: string; col?: string; name?: string };
+  if (body.op !== "add" && body.op !== "rename" && body.op !== "remove") throw AppError.badRequest("Choose add, rename, or remove.");
+  if (!body.sheet) throw AppError.badRequest("Choose a sheet.");
+  res.json(await changeControlledListColumns(req, keyFrom(req), body.sheet, body.op, body.col, body.name));
 });
 
 export const locationControlledListHandler = asyncHandler(async (req: Request, res: Response) => {

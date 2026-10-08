@@ -27,9 +27,11 @@
 }
 
 .controlled-list-cell input,
+.controlled-list-cell textarea,
 .controlled-list-cell select {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   border: 0;
   background: transparent;
   color: inherit;
@@ -39,6 +41,7 @@
 }
 
 .controlled-list-cell input:focus,
+.controlled-list-cell textarea:focus,
 .controlled-list-cell select:focus {
   outline: 2px solid #0a3c7b;
   outline-offset: -2px;
@@ -93,6 +96,52 @@
   text-align: inherit;
   padding: 0;
   cursor: text;
+}
+
+.controlled-list-header-band {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+
+.controlled-list-header-band .controlled-list-cell {
+  overflow: visible;
+  height: auto;
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+}
+
+.controlled-list-header-band .controlled-list-cell > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.controlled-list-header-band textarea.controlled-list-editor {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.15;
+  field-sizing: content;
+}
+
+.controlled-list-cell[data-active="true"] {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary));
+  z-index: 1;
+}
+
+.controlled-list-cell[data-row-selected="true"] {
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.7);
+}
+
+.controlled-list-cell[data-active="true"][data-row-selected="true"] {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary));
+}
+
+.controlled-list-formula {
+  color: inherit;
 }
 
 .controlled-list-long .controlled-list-cell {
@@ -164,6 +213,10 @@
 :root[data-theme="dark"] .controlled-list-cell[data-fill="closed"] button {
   background: #b8dcab;
   color: #111;
+}
+
+:root[data-theme="dark"] .controlled-list-cell[data-active="true"] {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary));
 }
 
 :root[data-theme="dark"] .controlled-list-cell[data-fill="tone"],
@@ -276,6 +329,15 @@
   .controlled-list-cell[data-fill="tone"] button {
     background: var(--cell-fill) !important;
     color: var(--cell-ink, #111) !important;
+  }
+  .controlled-list-cell[data-active="true"],
+  .controlled-list-cell[data-row-selected="true"] {
+    box-shadow: none !important;
+  }
+  .controlled-list-header-band .controlled-list-cell {
+    overflow: visible !important;
+    height: auto !important;
+    white-space: pre-wrap !important;
   }
   .controlled-list-print-value {
     display: block !important;

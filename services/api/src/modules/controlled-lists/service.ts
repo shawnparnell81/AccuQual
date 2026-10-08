@@ -3,6 +3,7 @@ import { unlink } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import type { Request } from "express";
 import { calibrations, equipment } from "../../drizzle/schema/calibration.js";
+import { company } from "../../drizzle/schema/company.js";
 import { controlledLists } from "../../drizzle/schema/controlledLists.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -15,23 +16,34 @@ import { ensureCompanyDocumentFolders } from "../document-folders/companyDocumen
 import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 import { listMasterDocuments } from "../documents/masterDocumentList.js";
 import { purgeExistingRecord } from "../records/recordDeletion.js";
+import { canEditFormBuilder } from "../form-builder/access.js";
+import { formBuilderAccess } from "../form-builder/service.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import {
   EQUIPMENT_STATUSES,
   LISTS,
   addDataRow,
+  addListColumn,
   appendDocuments,
   appendEquipment,
   applyInputPatch,
   changeSummary,
   freshSheets,
+  insertDataRow,
   insertLocationPath,
   isLivingListPath,
   planListCleanup,
-  removeDataRow,
+  removeDataRows,
+  removeListColumn,
+  renameListColumn,
   restoreHeaderBlock,
+  revCells,
+  revisionLetter,
   rowSummary,
+  rowValueList,
+  rowsDeletedSummary,
+  structureSummary,
   titleMatchesAuditSchedule,
   titleMatchesDevLog,
   titleMatchesEngLog,
@@ -55,6 +67,9 @@ export interface ControlledListView {
   landscape: boolean;
   resource: "documents" | "calibration";
   statuses: readonly string[];
+  dataStart: Record<string, number>;
+  /** Adding, renaming, or removing a column. Same permission as Form Builder structure edits. */
+  canEditStructure: boolean;
   sheets: StoredSheet[];
 }
 
@@ -63,7 +78,21 @@ async function personName(db: Db, userId: number): Promise<string> {
   return (person?.name || person?.email || "Someone").trim() || "Someone";
 }
 
-function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, key: ListKey): ControlledListView {
+async function acted(db: Db, userId: number): Promise<{ who: string; when: string }> {
+  const who = await personName(db, userId);
+  const [profile] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const timeZone = profile?.profile?.timezone || "UTC";
+  const when = new Intl.DateTimeFormat("en-US", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  return { who, when };
+}
+
+async function structureAllowed(req: Request): Promise<boolean> {
+  if (!req.db || !req.user) return false;
+  const access = await formBuilderAccess(req.db, { id: req.user.id, roleName: req.user.roleName, department: req.user.department });
+  return canEditFormBuilder(access);
+}
+
+function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, key: ListKey, canEditStructure: boolean): ControlledListView {
   const spec = LISTS[key];
   return {
     id: row.id,
@@ -75,8 +104,25 @@ function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, ke
     landscape: spec.landscape,
     resource: spec.resource,
     statuses: key === "lst-eqp-001" ? EQUIPMENT_STATUSES : [],
+    dataStart: spec.dataStart,
+    canEditStructure,
     sheets: row.sheets,
   };
+}
+
+async function present(req: Request, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }): Promise<ControlledListView> {
+  return viewOf(row, key, await structureAllowed(req));
+}
+
+function revisionAfterEdits(key: ListKey, current: string, changes: Array<{ sheet: string; addr: string; next: string }>): string {
+  let revision = current;
+  const locks = revCells(key);
+  for (const change of changes) {
+    if (!locks.some((item) => item.sheet === change.sheet && item.addr === change.addr)) continue;
+    const letter = revisionLetter(change.next === "blank" ? "" : change.next);
+    if (letter) revision = letter;
+  }
+  return revision;
 }
 
 async function loadRow(db: Db, key: ListKey) {
@@ -407,7 +453,7 @@ export async function openControlledList(req: Request, key: ListKey): Promise<Co
   await ensureLivingControlledLists(req);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
-  return viewOf(row, key);
+  return present(req, key, row);
 }
 
 export async function saveControlledList(req: Request, key: ListKey, patches: Array<{ name: string; cells: Record<string, CellPatch> }>): Promise<ControlledListView> {
@@ -416,26 +462,24 @@ export async function saveControlledList(req: Request, key: ListKey, patches: Ar
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
   const applied = applyInputPatch(key, row.sheets, patches);
-  if (applied.changes.length === 0) return viewOf(row, key);
+  if (applied.changes.length === 0) return present(req, key, row);
+  const revision = revisionAfterEdits(key, row.revision, applied.changes);
   const [updated] = await req
     .db!.update(controlledLists)
-    .set({ sheets: applied.sheets, updatedAt: new Date() })
+    .set({ sheets: applied.sheets, revision, updatedAt: new Date() })
     .where(eq(controlledLists.id, row.id))
     .returning();
   if (!updated) throw AppError.notFound(LISTS[key].title);
-  if (updated.revision !== row.revision) {
-    await req.db!.update(controlledLists).set({ revision: row.revision }).where(eq(controlledLists.id, row.id));
-    updated.revision = row.revision;
-  }
-  const who = await personName(req.db!, req.user!.id);
+  const { who, when } = await acted(req.db!, req.user!.id);
+  const stayed = revision === row.revision ? ` Revision stayed ${revision}.` : ` Revision is now ${revision}.`;
   await recordAuditTrail(req.db!, {
     entityType: "ControlledList",
     entityId: row.id,
     action: "update",
     performedBy: req.user!.id,
-    changes: { summary: changeSummary(who, applied.changes), cells: applied.changes, revision: row.revision },
+    changes: { summary: `${changeSummary(who, applied.changes, when)}${stayed}`, cells: applied.changes, revision },
   });
-  return viewOf({ ...updated, revision: row.revision }, key);
+  return present(req, key, { ...updated, revision });
 }
 
 /** Puts the list's current folder path into Location cells. Does nothing until this is called. */
@@ -450,44 +494,65 @@ export async function insertControlledListLocation(req: Request, key: ListKey, s
   const sheet = row.sheets.find((item) => item.name === sheetName);
   if (!sheet) throw AppError.badRequest("Choose a sheet.");
   const applied = insertLocationPath(key, row.sheets, sheetName, trimmed);
-  if (applied.changes.length === 0) return viewOf(row, key);
+  if (applied.changes.length === 0) return present(req, key, row);
   const [updated] = await req.db!.update(controlledLists).set({ sheets: applied.sheets, updatedAt: new Date() }).where(eq(controlledLists.id, row.id)).returning();
   if (!updated) throw AppError.notFound(LISTS[key].title);
-  const who = await personName(req.db!, req.user!.id);
+  const { who, when } = await acted(req.db!, req.user!.id);
   await recordAuditTrail(req.db!, {
     entityType: "ControlledList",
     entityId: row.id,
     action: "update",
     performedBy: req.user!.id,
     changes: {
-      summary: `${who} inserted the folder path into Location on ${sheetName}. Revision stayed ${row.revision}.`,
+      summary: `${who} inserted the folder path into Location on ${sheetName} on ${when}. Revision stayed ${row.revision}.`,
       cells: applied.changes,
       revision: row.revision,
     },
   });
-  return viewOf({ ...updated, revision: row.revision }, key);
+  return present(req, key, { ...updated, revision: row.revision });
 }
 
-export async function changeControlledListRows(req: Request, key: ListKey, sheetName: string, op: "add" | "delete", row?: number): Promise<ControlledListView> {
+export async function changeControlledListRows(
+  req: Request,
+  key: ListKey,
+  sheetName: string,
+  op: "add" | "delete" | "insert",
+  row?: number,
+  rows?: number[],
+  place?: "above" | "below",
+): Promise<ControlledListView> {
   await requireLevel(req, key, "edit");
   await ensureLivingControlledLists(req);
   const current = await loadRow(req.db!, key);
   if (!current) throw AppError.notFound(LISTS[key].title);
-  const who = await personName(req.db!, req.user!.id);
+  const { who, when } = await acted(req.db!, req.user!.id);
   let sheets = current.sheets;
   let summary = "";
   if (op === "add") {
     const added = addDataRow(key, sheets, sheetName);
     if (!added) throw AppError.badRequest("That sheet does not take new rows.");
     sheets = added.sheets;
-    summary = rowSummary(who, "added", sheetName, added.row);
+    summary = rowSummary(who, "added", sheetName, added.row, undefined, when);
+  } else if (op === "insert") {
+    if (row == null) throw AppError.badRequest("Choose a row.");
+    const at = place === "below" ? row + 1 : row;
+    const inserted = insertDataRow(key, sheets, sheetName, at);
+    if (!inserted) throw AppError.badRequest("Choose a data row.");
+    sheets = inserted.sheets;
+    summary = rowSummary(who, "inserted", sheetName, inserted.row, undefined, when);
   } else {
-    if (row == null) throw AppError.badRequest("Choose a row to delete.");
-    const label = current.sheets.find((sheet) => sheet.name === sheetName)?.cells[`A${row}`]?.v;
-    const removed = removeDataRow(key, sheets, sheetName, row);
+    const targets = rows && rows.length > 0 ? rows : row == null ? [] : [row];
+    if (targets.length === 0) throw AppError.badRequest("Choose a row to delete.");
+    const sheet = current.sheets.find((item) => item.name === sheetName);
+    if (!sheet) throw AppError.badRequest("Choose a sheet.");
+    const described = [...new Set(targets)].sort((a, b) => a - b).map((line) => {
+      const label = sheet.cells[`A${line}`]?.v;
+      return { row: line, label: typeof label === "string" ? label : undefined, values: rowValueList(sheet, line) };
+    });
+    const removed = removeDataRows(key, sheets, sheetName, targets);
     if (!removed) throw AppError.badRequest("That row is part of the header.");
     sheets = removed;
-    summary = rowSummary(who, "deleted", sheetName, row, typeof label === "string" ? label : undefined);
+    summary = rowsDeletedSummary(who, sheetName, described, when);
   }
   const [updated] = await req.db!.update(controlledLists).set({ sheets, updatedAt: new Date() }).where(eq(controlledLists.id, current.id)).returning();
   if (!updated) throw AppError.notFound(LISTS[key].title);
@@ -498,7 +563,47 @@ export async function changeControlledListRows(req: Request, key: ListKey, sheet
     performedBy: req.user!.id,
     changes: { summary, revision: current.revision },
   });
-  return viewOf({ ...updated, revision: current.revision }, key);
+  return present(req, key, { ...updated, revision: current.revision });
+}
+
+const STRUCTURE_DENIED = "Adding, renaming, or removing a column changes the list structure. An administrator can turn that on with Can build forms under Users & Roles.";
+
+export async function changeControlledListColumns(
+  req: Request,
+  key: ListKey,
+  sheetName: string,
+  op: "add" | "rename" | "remove",
+  col?: string,
+  name?: string,
+): Promise<ControlledListView> {
+  await requireLevel(req, key, "edit");
+  if (!(await structureAllowed(req))) throw AppError.forbidden(STRUCTURE_DENIED);
+  await ensureLivingControlledLists(req);
+  const current = await loadRow(req.db!, key);
+  if (!current) throw AppError.notFound(LISTS[key].title);
+  const edited =
+    op === "add"
+      ? addListColumn(key, current.sheets, current.revision, sheetName, col ?? null)
+      : op === "rename"
+        ? renameListColumn(key, current.sheets, current.revision, sheetName, col ?? "", name ?? "")
+        : removeListColumn(key, current.sheets, current.revision, sheetName, col ?? "");
+  if (!edited) throw AppError.badRequest("That column could not be changed.");
+  if (!edited.bumped) return present(req, key, current);
+  const [updated] = await req
+    .db!.update(controlledLists)
+    .set({ sheets: edited.sheets, revision: edited.revision, updatedAt: new Date() })
+    .where(eq(controlledLists.id, current.id))
+    .returning();
+  if (!updated) throw AppError.notFound(LISTS[key].title);
+  const { who, when } = await acted(req.db!, req.user!.id);
+  await recordAuditTrail(req.db!, {
+    entityType: "ControlledList",
+    entityId: current.id,
+    action: "update",
+    performedBy: req.user!.id,
+    changes: { summary: structureSummary(who, edited.detail, current.revision, edited.revision, when), revision: edited.revision },
+  });
+  return present(req, key, updated);
 }
 
 export async function downloadControlledList(req: Request, key: ListKey): Promise<{ filename: string; body: Buffer }> {
