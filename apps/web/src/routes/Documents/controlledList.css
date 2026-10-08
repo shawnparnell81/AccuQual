@@ -74,6 +74,14 @@
   color: #111;
 }
 
+.controlled-list-cell[data-fill="tone"],
+.controlled-list-cell[data-fill="tone"] input,
+.controlled-list-cell[data-fill="tone"] select,
+.controlled-list-cell[data-fill="tone"] button {
+  background: var(--cell-fill);
+  color: var(--cell-ink, #111);
+}
+
 .controlled-list-pick {
   display: block;
   width: 100%;
@@ -156,6 +164,14 @@
 :root[data-theme="dark"] .controlled-list-cell[data-fill="closed"] button {
   background: #b8dcab;
   color: #111;
+}
+
+:root[data-theme="dark"] .controlled-list-cell[data-fill="tone"],
+:root[data-theme="dark"] .controlled-list-cell[data-fill="tone"] input,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="tone"] select,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="tone"] button {
+  background: var(--cell-fill);
+  color: var(--cell-ink, #111);
 }
 
 @page controlled-landscape {
@@ -253,6 +269,13 @@
   .controlled-list-cell[data-fill="closed"] button {
     background: #b8dcab !important;
     color: #111 !important;
+  }
+  .controlled-list-cell[data-fill="tone"],
+  .controlled-list-cell[data-fill="tone"] input,
+  .controlled-list-cell[data-fill="tone"] select,
+  .controlled-list-cell[data-fill="tone"] button {
+    background: var(--cell-fill) !important;
+    color: var(--cell-ink, #111) !important;
   }
   .controlled-list-print-value {
     display: block !important;

@@ -21,6 +21,7 @@ const RULES: SurfaceRule[] = [
   { test: /^\/documents\/internal-audit-schedule$/, kind: "list", access: "documents" },
   { test: /^\/documents\/development-log$/, kind: "list", access: "documents" },
   { test: /^\/documents\/nonconformance-log$/, kind: "list", access: "documents" },
+  { test: /^\/documents\/engineering-request-log$/, kind: "list", access: "documents" },
   { test: /^\/calibration\/master-list$/, kind: "list", access: "calibration" },
   { test: /^\/iso-forms\/record\/\d+$/, kind: "form", access: "documents" },
   { test: /^\/qms-forms\/[^/]+\/\d+$/, kind: "form", access: "qms_forms" },

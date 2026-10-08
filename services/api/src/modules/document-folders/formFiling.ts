@@ -12,8 +12,9 @@
  * with `start` and does not change the template.
  *
  * Master Document List (LST-GEN-001), Master Equipment List (LST-EQP-001),
- * Internal Audit Schedule (LST-GEN-002), and Scope of Laboratory Activities
- * (LST-GEN-003) are living documents. They stay out of Blank Forms Templates.
+ * Internal Audit Schedule (LST-GEN-002), Scope of Laboratory Activities
+ * (LST-GEN-003), and the Engineering Request Change Log (LST-ENG-001) are
+ * living documents. They stay out of Blank Forms Templates.
  * A separate change removes those blanks.
  */
 export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
@@ -51,9 +52,9 @@ export function blankTemplateLabel(formId: string, title: string): string {
   return id ? `${id} ${title}` : title;
 }
 
-const LIVING_DOCUMENT_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003"]);
-const LIVING_DOCUMENT_IDS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-002", "LST-GEN-003"]);
-const LIVING_DOCUMENT_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities", "internal audit schedule", "lst-gen-002"]);
+const LIVING_DOCUMENT_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003", "lst-eng-001"]);
+const LIVING_DOCUMENT_IDS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-002", "LST-GEN-003", "LST-ENG-001"]);
+const LIVING_DOCUMENT_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities", "internal audit schedule", "lst-gen-002", "engineering request change log", "ecr tracker", "lst-eng-001"]);
 
 /**
  * Living in-app documents, not blank templates.

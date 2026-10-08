@@ -538,4 +538,147 @@ describe("living controlled lists", () => {
     expect(dev.sheets[0]?.cells.C2?.v).toBe(`Location: ${devPath}`);
     expect(dev.sheets[1]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects");
   });
+
+  it("keeps the engineering request change log as Rev A and does not number new rows", async () => {
+    const sheetName = "LST-ENG-001 - ECR Tracker - Rev";
+    const location = "Location: X:\\ISO Compliance Documents\\12_Engineering_Logs";
+    const sheets = freshSheets("lst-eng-001");
+    expect(sheets.map((sheet) => sheet.name)).toEqual([sheetName]);
+    expect(LISTS["lst-eng-001"].revision).toBe("A");
+    expect(LISTS["lst-eng-001"].folder).toBe("Engineering Logs");
+    expect(workbookFileName("lst-eng-001")).toBe("LST-ENG-001.xlsx");
+    const sheet = sheets[0]!;
+    expect(sheet.maxCol).toBe(11);
+    expect(sheet.maxRow).toBe(55);
+    expect(sheet.cells.A1).toMatchObject({ v: "ENGINEERING REQUEST CHANGE LOG", bold: true, size: 26, align: "center" });
+    expect(sheet.cells.B2?.v).toBe("LST-ENG-001");
+    expect(sheet.cells.D2).toMatchObject({ v: "A", kind: "rev" });
+    expect(sheet.cells.E2?.v).toBe(location);
+    expect(sheet.cells.H2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
+    expect(sheet.cells.K2).toMatchObject({ v: "2026-07-02", nf: "mm-dd-yy", kind: "input" });
+    expect(sheet.cells.A3?.v).toBe("STATUS KEY: Open (Red), Closed (Green)");
+    expect(sheet.cells.E3?.v).toContain("Save Document as ECR-YEAR-XXX");
+    expect(sheet.cells.A5?.v).toBe("ECR Number");
+    expect(sheet.cells.K5?.v).toBe("Closed / Verified By");
+    expect(sheet.merges).toEqual(expect.arrayContaining(["A1:K1", "E2:F2", "H2:I2", "A3:D3", "E3:K3", "A4:K4"]));
+    expect(sheet.colWidths[0]).toBeCloseTo(16.5703125, 5);
+    expect(sheet.colWidths[5]).toBeCloseTo(40.28515625, 5);
+    expect(sheet.cells.A6?.v).toBe("ECR-2026-001");
+    expect(sheet.cells.B6).toMatchObject({ v: "2026-07-02", nf: "mm-dd-yy" });
+    expect(sheet.cells.G6?.v).toBe(0);
+    expect(sheet.cells.I6?.v).toBe("Pending");
+    expect(sheet.cells.A55?.v).toBe("ECR-2026-050");
+    expect(sheet.cells.I9).toMatchObject({ v: "Closed", font: "Arial" });
+    expect(toneFill(sheet, "I6", "Pending")).toBe("FFFFFF00");
+    expect(toneFill(sheet, "I7", "Approved")).toBe("FF00B050");
+    expect(toneFill(sheet, "I8", "Rejected")).toBe("FFFF0000");
+    expect(toneFill(sheet, "I9", "Closed")).toBeNull();
+    expect(listOptions(sheet, "E6")).toEqual(["APM", "SENSEN", "Linyi", "XJ", "ADD", "Jinbo", "JH", "GACI", "Aborn", "Taizan", "Zoran"]);
+    expect(listOptions(sheet, "H6")).toEqual(["Yes", "No"]);
+    expect(listOptions(sheet, "I6")).toEqual(["Pending", "Approved", "Rejected"]);
+    expect(listOptions(sheet, "I9")).toEqual(["Pending", "Approved", "Rejected", "Closed"]);
+    expect(shownCell(sheet, "G6").text).toBe("0");
+
+    const edited = applyInputPatch("lst-eng-001", sheets, [
+      { name: sheetName, cells: { A6: { v: "ECR-2026-099" }, D2: { v: "B" }, E2: { v: "moved" }, H2: { v: "Shawn Parnell" }, K2: { v: "2026-08-01" } } },
+    ]);
+    expect(edited.sheets[0]?.cells.A6?.v).toBe("ECR-2026-099");
+    expect(edited.sheets[0]?.cells.D2?.v).toBe("A");
+    expect(edited.sheets[0]?.cells.E2?.v).toBe(location);
+    expect(edited.sheets[0]?.cells.H2?.v).toBe("Shawn Parnell");
+    expect(edited.sheets[0]?.cells.K2?.v).toBe("2026-08-01");
+    expect(LISTS["lst-eng-001"].revision).toBe("A");
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["A6", "H2", "K2"]);
+
+    const added = addDataRow("lst-eng-001", sheets, sheetName);
+    expect(added?.row).toBe(56);
+    expect(added?.sheets[0]?.cells.A56).toBeUndefined();
+    expect(listOptions(added!.sheets[0]!, "E56")).toContain("SENSEN");
+    expect(listOptions(added!.sheets[0]!, "I56")).toEqual(["Pending", "Approved", "Rejected"]);
+
+    const removed = removeDataRow("lst-eng-001", sheets, sheetName, 6);
+    expect(removed?.[0]?.cells.A6?.v).toBe("ECR-2026-002");
+    expect(removed?.[0]?.cells.A54?.v).toBe("ECR-2026-050");
+
+    expect(restoreHeaderBlock("lst-eng-001", freshSheets("lst-eng-001")).changed).toBe(false);
+    const path = "ISO Compliance Documents\\Engineering Logs\\LST-ENG-001";
+    const inserted = insertLocationPath("lst-eng-001", sheets, sheetName, path);
+    expect(inserted.sheets[0]?.cells.E2).toMatchObject({ v: `Location: ${path}`, kind: "location" });
+    const kept = restoreHeaderBlock("lst-eng-001", inserted.sheets);
+    expect(kept.sheets[0]?.cells.E2?.v).toBe(`Location: ${path}`);
+    expect(kept.sheets[0]?.cells.D2?.v).toBe("A");
+
+    const cleaned = planListCleanup(
+      [
+        { id: 1, name: "ISO Compliance Documents", parentId: null },
+        { id: 2, name: "Engineering Logs", parentId: 1 },
+        { id: 3, name: "LST-ENG-001", parentId: 2, linkedPath: "/documents/engineering-request-log" },
+        { id: 4, name: "ENGINEERING REQUEST CHANGE LOG.xlsx", parentId: 2, documentId: 40, pdfPath: "files/ecr.xlsx" },
+        { id: 5, name: "Blank Forms Templates", parentId: 1 },
+        { id: 6, name: "ECR Tracker", parentId: 5 },
+        { id: 7, name: "Engineering Change Request", parentId: 5 },
+      ],
+      [
+        { id: 40, title: "ENGINEERING REQUEST CHANGE LOG" },
+        { id: 41, title: "Engineering Change Request" },
+      ],
+      [
+        { id: 8, formKey: "lst-eng-001", formId: "LST-ENG-001", title: "ECR Tracker" },
+        { id: 9, formKey: "ecr", formId: "", title: "Engineering Change Request" },
+      ],
+    );
+    expect(cleaned.documentIds).toEqual([40]);
+    expect(cleaned.templateIds).toEqual([8]);
+    expect(cleaned.folderNodeIds).toEqual(expect.arrayContaining([4, 6]));
+    expect(cleaned.folderNodeIds).not.toContain(3);
+    expect(cleaned.folderNodeIds).not.toContain(7);
+    const again = planListCleanup(
+      [
+        { id: 1, name: "ISO Compliance Documents", parentId: null },
+        { id: 2, name: "Engineering Logs", parentId: 1 },
+        { id: 3, name: "LST-ENG-001", parentId: 2, linkedPath: "/documents/engineering-request-log" },
+      ],
+      [],
+      [{ id: 9, formKey: "ecr", formId: "", title: "Engineering Change Request" }],
+    );
+    expect(again).toEqual({ documentIds: [], templateIds: [], folderNodeIds: [] });
+
+    const body = await buildListWorkbook("lst-eng-001", sheets);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(body);
+    expect(book.worksheets.map((item) => item.name)).toEqual([sheetName]);
+    const ws = book.getWorksheet(sheetName);
+    expect(ws?.getCell("A1").value).toBe("ENGINEERING REQUEST CHANGE LOG");
+    expect(ws?.getCell("A1").font?.bold).toBe(true);
+    expect(ws?.getCell("A1").font?.size).toBe(26);
+    expect(ws?.getCell("D2").value).toBe("A");
+    expect(ws?.getCell("E2").value).toBe(location);
+    expect(ws?.getCell("H2").value).toBe("Maxwell Tollefson");
+    expect(ws?.getCell("K2").value).toBeInstanceOf(Date);
+    expect((ws?.getCell("K2").value as Date).toISOString().slice(0, 10)).toBe("2026-07-02");
+    expect(ws?.getCell("K2").numFmt).toBe("mm-dd-yy");
+    expect(ws?.getCell("B6").numFmt).toBe("mm-dd-yy");
+    expect((ws?.getCell("B6").value as Date).toISOString().slice(0, 10)).toBe("2026-07-02");
+    expect(ws?.getCell("G6").value).toBe(0);
+    expect(ws?.getCell("A55").value).toBe("ECR-2026-050");
+    expect(ws?.getCell("I9").font?.name).toBe("Arial");
+    expect(ws?.getColumn(1).width).toBeCloseTo(16.57, 1);
+    expect(ws?.getColumn(6).width).toBeCloseTo(40.29, 1);
+    expect(ws?.pageSetup.orientation).toBe("landscape");
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:K1", "A3:D3", "E3:K3", "A4:K4"]));
+    expect(ws?.getCell("A1").border?.left?.style).toBe("thin");
+    expect(ws?.getCell("A1").border?.right?.style).toBeUndefined();
+    const rules = JSON.stringify(ws?.conditionalFormattings ?? []);
+    expect(rules).toContain("Pending");
+    expect(rules).toContain("Approved");
+    expect(rules).toContain("Rejected");
+    expect(rules).toContain("FFFFFF00");
+    expect(rules).toContain("FF00B050");
+    expect(rules).toContain("FFFF0000");
+    const validations = JSON.stringify(ws?.dataValidations.model ?? {});
+    expect(validations).toContain("SENSEN");
+    expect(validations).toContain("Pending");
+    expect(validations).toContain("Yes");
+    expect(validations).toContain("Closed");
+  });
 });

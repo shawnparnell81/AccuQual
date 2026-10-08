@@ -97,6 +97,21 @@ describe("living controlled lists API", () => {
     const logs = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality Logs");
     expect(folders.find((folder) => folder.parentId === logs?.id && folder.linkedPath === "/documents/nonconformance-log")?.name).toBe("LST-NCR-001");
     expect(folders.some((folder) => folder.name === "LST-NCR-001" && folder.parentId !== logs?.id)).toBe(false);
+    const engineering = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Engineering Logs");
+    const livingEng = folders.find((folder) => folder.parentId === engineering?.id && folder.linkedPath === "/documents/engineering-request-log");
+    expect(livingEng?.name).toBe("LST-ENG-001");
+    expect(folders.some((folder) => folder.name === "LST-ENG-001" && folder.parentId !== engineering?.id)).toBe(false);
+    const [nestedEng] = await db
+      .insert(documentFolders)
+      .values({ name: "LST-ENG-001", parentId: livingEng!.id, linkedPath: "/documents/engineering-request-log" })
+      .returning();
+    const flattened = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    expect(flattened.status).toBe(200);
+    const flatFolders = flattened.body as { id: number; name: string; parentId: number | null; linkedPath?: string | null }[];
+    expect(flatFolders.some((folder) => folder.id === nestedEng!.id)).toBe(false);
+    expect(flatFolders.filter((folder) => folder.linkedPath === "/documents/engineering-request-log")).toEqual([
+      expect.objectContaining({ id: livingEng!.id, name: "LST-ENG-001", parentId: engineering?.id }),
+    ]);
     expect(folders.some((folder) => folder.parentId != null && folder.parentId !== projects?.id && folder.linkedPath === "/documents/development-log")).toBe(false);
 
     const [oldCopy] = await db.insert(documents).values({ title: "Master Equipment List", status: "approved" }).returning();
@@ -155,6 +170,55 @@ describe("living controlled lists API", () => {
     expect(ncr.body.sheets[2].cells.B2.v).toBe("Rev: E");
     expect(ncr.body.sheets[3].cells.B2.v).toBe("Rev: E");
     expect(ncr.body.sheets[0].cells.C2.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    const ecr = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`);
+    expect(ecr.status).toBe(200);
+    expect(ecr.body.title).toBe("LST-ENG-001");
+    expect(ecr.body.revision).toBe("A");
+    expect(ecr.body.sheets.map((sheet: { name: string }) => sheet.name)).toEqual(["LST-ENG-001 - ECR Tracker - Rev"]);
+    expect(ecr.body.sheets[0].cells.A1.v).toBe("ENGINEERING REQUEST CHANGE LOG");
+    expect(ecr.body.sheets[0].cells.D2.v).toBe("A");
+    expect(ecr.body.sheets[0].cells.E2.v).toBe("Location: X:\\ISO Compliance Documents\\12_Engineering_Logs");
+    expect(ecr.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
+    expect(ecr.body.sheets[0].cells.A55.v).toBe("ECR-2026-050");
+    const [ecrCopy] = await db.insert(documents).values({ title: "ENGINEERING REQUEST CHANGE LOG", status: "approved" }).returning();
+    const [ecrUpload] = await db
+      .insert(documentFolders)
+      .values({ name: "LST-ENG-001.xlsx", parentId: engineering!.id, documentId: ecrCopy!.id, pdfPath: null })
+      .returning();
+    const [ecrBlank] = await db.insert(documentFolders).values({ name: "ECR Tracker", parentId: blanks!.id }).returning();
+    await db.insert(controlledFormTemplates).values({
+      formKey: `lst-eng-blank-${suffix}`,
+      formId: "LST-ENG-001",
+      title: "ENGINEERING REQUEST CHANGE LOG",
+      subjectRoute: "/change",
+    });
+    const filedEng = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`);
+    expect(filedEng.status).toBe(200);
+    expect(filedEng.body.revision).toBe("A");
+    expect(await db.select().from(documents).where(eq(documents.id, ecrCopy!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, ecrUpload!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, ecrBlank!.id))).toEqual([]);
+    expect(await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, `lst-eng-blank-${suffix}`))).toEqual([]);
+    expect(await db.select().from(controlledLists).where(eq(controlledLists.listKey, "lst-eng-001"))).toHaveLength(1);
+    const ecrAgain = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`);
+    expect(ecrAgain.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
+    expect(await db.select().from(controlledLists).where(eq(controlledLists.listKey, "lst-eng-001"))).toHaveLength(1);
+    const ecrFile = await request(app)
+      .get("/controlled-lists/lst-eng-001/xlsx")
+      .set("Authorization", `Bearer ${token}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    expect(ecrFile.status).toBe(200);
+    expect(String(ecrFile.headers["content-disposition"] ?? "")).toContain("LST-ENG-001.xlsx");
+    const ecrBook = new ExcelJS.Workbook();
+    await ecrBook.xlsx.load(ecrFile.body as Buffer);
+    const ecrSheet = ecrBook.getWorksheet("LST-ENG-001 - ECR Tracker - Rev");
+    expect(JSON.stringify(ecrSheet?.conditionalFormattings ?? [])).toContain("Pending");
+    expect(JSON.stringify(ecrSheet?.dataValidations.model ?? {})).toContain("Approved");
     const filed = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
     const filedFolders = filed.body as { name: string; parentId: number | null; linkedPath?: string | null }[];
     const filedProjects = filedFolders.find((folder) => folder.parentId === iso?.id && folder.name === "Test Data Projects");
@@ -176,6 +240,9 @@ describe("living controlled lists API", () => {
     expect(titles).not.toContain("Non-Conformance Log");
     expect(titles).not.toContain("Internal Audit Schedule");
     expect(titles).not.toContain("LST-GEN-002");
+    expect(titles).not.toContain("ENGINEERING REQUEST CHANGE LOG");
+    expect(titles).not.toContain("ECR Tracker");
+    expect(titles).toContain("Engineering Change Request");
   });
 
   it("files the internal audit schedule once under Management System and replaces an uploaded copy", async () => {

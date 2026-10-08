@@ -9,6 +9,7 @@ import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
 import { isLocationLine } from "../../lib/folderPath";
+import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
 import {
   columnIndex,
@@ -24,7 +25,7 @@ import {
 } from "../../lib/controlledListMath";
 import "./controlledList.css";
 
-export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-002" | "lst-gen-003" | "lst-dev-001" | "lst-ncr-001";
+export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-002" | "lst-gen-003" | "lst-dev-001" | "lst-ncr-001" | "lst-eng-001";
 
 const LIST_ROUTES: Record<ControlledListKey, string> = {
   "lst-eqp-001": "/calibration/master-list",
@@ -33,6 +34,7 @@ const LIST_ROUTES: Record<ControlledListKey, string> = {
   "lst-gen-003": "/documents/laboratory-scope",
   "lst-dev-001": "/documents/development-log",
   "lst-ncr-001": "/documents/nonconformance-log",
+  "lst-eng-001": "/documents/engineering-request-log",
 };
 
 interface ControlledListView {
@@ -59,6 +61,7 @@ const DATA_START: Record<ControlledListKey, Record<string, number>> = {
   "lst-gen-003": { "LST-GEN-003 - Scope of Laborato": 6 },
   "lst-dev-001": { "Test Reports": 5, "Validation Report": 5 },
   "lst-ncr-001": { "LST-NCR-001 - NCR": 5, "LST-NCR-001 - QTN": 5, "LST-NCR-001 - CAR": 5, "LST-NCR-001 - RPN": 5 },
+  "lst-eng-001": { "LST-ENG-001 - ECR Tracker - Rev": 6 },
 };
 
 function sheetHasLocation(sheet: StoredSheet | undefined): boolean {
@@ -147,6 +150,9 @@ function SheetGrid({
       const span = origins.get(addr);
       const shown = shownCell(sheet, addr);
       const fill = toneFill(sheet, addr, shown.text);
+      const legacyFill = fill === "FFFF0000" || fill === "FFB8DCAB";
+      const toneHex = fill && !legacyFill ? `#${fill.slice(-6)}` : undefined;
+      const toneInk = toneHex ? inkOnFill(toneHex) : undefined;
       const editable = canEdit && (cell?.kind === "input" || (!cell && row >= start));
       const choices = editable ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= start ? statuses : listOptions(sheet, addr)) : null;
       const date = Boolean(editable && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
@@ -156,7 +162,7 @@ function SheetGrid({
           className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
           data-addr={addr}
           data-header={row <= 3 ? "true" : undefined}
-          data-fill={fill === "FFFF0000" ? "open" : fill ? "closed" : undefined}
+          data-fill={fill === "FFFF0000" ? "open" : fill === "FFB8DCAB" ? "closed" : fill ? "tone" : undefined}
           data-size={cell?.size ?? undefined}
           title={cell?.comment}
           style={{
@@ -165,7 +171,9 @@ function SheetGrid({
             fontFamily: cell?.font,
             fontWeight: cell?.bold ? 700 : undefined,
             fontSize: cell?.size ? `${cell.size}px` : "11px",
-            color: cell?.color ? `#${cell.color.slice(-6)}` : undefined,
+            color: toneInk ?? (cell?.color ? `#${cell.color.slice(-6)}` : undefined),
+            ["--cell-fill" as string]: toneHex,
+            ["--cell-ink" as string]: toneInk,
             justifyContent: cell?.align === "center" ? "center" : cell?.align === "right" ? "flex-end" : "flex-start",
             textAlign: cell?.align === "center" ? "center" : cell?.align === "right" ? "right" : "left",
             whiteSpace: cell?.wrap ? "pre-wrap" : "nowrap",

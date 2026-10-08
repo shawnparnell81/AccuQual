@@ -29,7 +29,7 @@ import { roles } from "../../drizzle/schema/roles.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
 import { LIST_KEYS } from "../controlled-lists/logic.js";
-import { ensureLivingControlledLists } from "../controlled-lists/service.js";
+import { collapseDuplicateLivingListNodes, ensureLivingControlledLists } from "../controlled-lists/service.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { getFormFolder, listFormFolders, renameFormFolder, retireFormFolder } from "./formFolders.js";
@@ -389,8 +389,9 @@ function markRemovedFromLibraryPool<T extends { id: number }>(folders: T[], remo
 }
 
 async function folderListResponse(db: Db, folders: (typeof documentFolders.$inferSelect)[]) {
-  const removed = await detachRemovedFromPool(db, folders);
-  const presented = await withLinkedDocumentInfo(db, presentDocumentFolders(folders));
+  const collapsed = await collapseDuplicateLivingListNodes(db, folders);
+  const removed = await detachRemovedFromPool(db, collapsed);
+  const presented = await withLinkedDocumentInfo(db, presentDocumentFolders(collapsed));
   return markRemovedFromLibraryPool(presented, removed);
 }
 
