@@ -258,6 +258,8 @@ export async function collapseDuplicateLivingListNodes<T extends { id: number; n
     const keeper = ranked[0];
     if (!keeper) continue;
     for (const extra of ranked.slice(1)) {
+      // A different document may point at the same page. Only a second copy of this list is removed.
+      if (extra.name !== keeper.name) continue;
       if (current.some((folder) => folder.parentId === extra.id)) continue;
       await db.delete(documentFolders).where(eq(documentFolders.id, extra.id));
       current = current.filter((folder) => folder.id !== extra.id);

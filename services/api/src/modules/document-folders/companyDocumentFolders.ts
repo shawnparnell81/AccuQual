@@ -372,7 +372,7 @@ async function mergeDocumentFolder(db: Db, list: FolderRow[], sourceId: number, 
   if (hasFolderPayload(sourceNow)) {
     // Two filings of the same living list are one item. Nesting the copy
     // under the keeper made the path read LST-ENG-001\LST-ENG-001.
-    const sameLivingList = sourceNow.linkedPath != null && sourceNow.linkedPath === dest?.linkedPath && !list.some((folder) => folder.parentId === sourceNow.id);
+    const sameLivingList = sourceNow.linkedPath != null && sourceNow.linkedPath === dest?.linkedPath && sourceNow.name === dest?.name && !list.some((folder) => folder.parentId === sourceNow.id);
     if (sameLivingList) {
       await db.delete(documentFolders).where(eq(documentFolders.id, sourceId));
       return list.filter((folder) => folder.id !== sourceId);
