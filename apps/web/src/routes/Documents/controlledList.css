@@ -99,16 +99,21 @@
 }
 
 .controlled-list-header-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-bottom: 8px;
 }
 
 .controlled-list-header-band .controlled-list-cell {
-  overflow: visible;
+  min-width: 0;
   height: auto;
   align-items: flex-start;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  overflow-wrap: break-word;
 }
 
 .controlled-list-header-band .controlled-list-cell > * {
@@ -116,15 +121,23 @@
   min-width: 0;
   max-width: 100%;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .controlled-list-header-band textarea.controlled-list-editor {
   display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   resize: none;
   overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
   line-height: 1.15;
-  field-sizing: content;
+  field-sizing: fixed;
 }
 
 .controlled-list-cell[data-active="true"] {

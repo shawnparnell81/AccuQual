@@ -195,8 +195,16 @@ function SheetGrid({
           title={cell?.comment ?? (formula ? "Calculated from a formula" : undefined)}
           onMouseDown={(event) => onPick(row, addr, event.shiftKey)}
           style={{
-            gridColumn: `${col} / span ${span?.cols ?? 1}`,
-            gridRow: `${row - fromRow + 1} / span ${rowSpan}`,
+            ...(band
+              ? {
+                  flex: (span?.cols ?? 1) >= sheet.maxCol ? "1 1 100%" : `${Math.max(span?.cols ?? 1, 1)} 1 11rem`,
+                  minWidth: (span?.cols ?? 1) >= sheet.maxCol ? "100%" : "11rem",
+                  maxWidth: "100%",
+                }
+              : {
+                  gridColumn: `${col} / span ${span?.cols ?? 1}`,
+                  gridRow: `${row - fromRow + 1} / span ${rowSpan}`,
+                }),
             fontFamily: cell?.font,
             fontWeight: cell?.bold ? 700 : undefined,
             fontSize: cell?.size ? `${cell.size}px` : "11px",
