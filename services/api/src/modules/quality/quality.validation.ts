@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const DISPOSITIONS = ["use-as-is", "rework", "repair", "scrap", "return-to-supplier", "sort"] as const;
 
 export const createDiscrepancySchema = z.object({
+  recordNumber: recordNumberSchema,
   title: z.string().min(1),
   description: z.string().optional(),
   severity: z.enum(["minor", "major", "critical"]).optional(),
@@ -10,6 +12,7 @@ export const createDiscrepancySchema = z.object({
 
 /** Status moves only through /investigate, /dispose, and /close. */
 export const updateDiscrepancySchema = z.object({
+  recordNumber: recordNumberSchema,
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   severity: z.enum(["minor", "major", "critical"]).optional(),

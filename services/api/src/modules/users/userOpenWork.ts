@@ -14,6 +14,7 @@ import { audits } from "../../drizzle/schema/audits.js";
 import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { eightDIsClosed } from "../quality-automation/logic.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { OPEN_NCR_STATUSES } from "../ncr/ncr.workflow.js";
 
@@ -74,10 +75,10 @@ async function openEightDs(db: Db, userId: number): Promise<OpenWorkItem[]> {
   const owned = await db.select({ id: ncr.id }).from(ncr).where(openNcrWhere(userId));
   if (owned.length === 0) return [];
   const reports = await db
-    .select({ id: eightD.id, data: eightD.data })
+    .select({ id: eightD.id, data: eightD.data, recordNumber: eightD.recordNumber })
     .from(eightD)
     .where(inArray(eightD.ncrId, owned.map((row) => row.id)));
-  return reports.filter((row) => !eightDIsClosed((row.data ?? {}) as Record<string, unknown>)).map((row) => ({ id: row.id, title: `8D #${row.id}` }));
+  return reports.filter((row) => !eightDIsClosed((row.data ?? {}) as Record<string, unknown>)).map((row) => ({ id: row.id, title: showRecordNumber(row.recordNumber) || "8D" }));
 }
 
 /** Open items this person still owns, assigned, or is waiting to sign. */
@@ -105,21 +106,21 @@ export async function loadOpenWork(db: Db, userId: number): Promise<OpenWorkGrou
   ]);
 
   const groups = [
-    group("open_ncrs", "open NCRs", ncrs.map((row) => ({ id: row.id, title: clip(row.title, `NCR #${row.id}`) }))),
-    group("open_capas", "open CAPAs", capas.map((row) => ({ id: row.id, title: clip(row.title, `CAPA #${row.id}`) }))),
+    group("open_ncrs", "open NCRs", ncrs.map((row) => ({ id: row.id, title: clip(row.title, "NCR") }))),
+    group("open_capas", "open CAPAs", capas.map((row) => ({ id: row.id, title: clip(row.title, "CAPA") }))),
     group("open_eightds", "open 8D reports", eightds),
     group("document_reviews", "documents in draft or review", docs.map((row) => ({ id: row.id, title: clip(row.title, `Document #${row.id}`) }))),
-    group("pending_reviews", "reviews waiting on them", reviews.map((row) => ({ id: row.id, title: `${row.subjectType} #${row.subjectId}` }))),
+    group("pending_reviews", "reviews waiting on them", reviews.map((row) => ({ id: row.id, title: row.subjectType }))),
     group("direct_reports", "people who report to them", reports.map((row) => ({ id: row.id, title: row.name?.trim() || row.email }))),
-    group("complaints", "open complaints", complaintsRows.map((row) => ({ id: row.id, title: clip(row.title, `Complaint #${row.id}`) }))),
-    group("investigations", "open investigations", investigations.map((row) => ({ id: row.id, title: clip(row.title, `Investigation #${row.id}`) }))),
-    group("training", "training assignments", training.map((row) => ({ id: row.id, title: clip(row.title, `Training #${row.id}`) }))),
-    group("risks", "open risks", risks.map((row) => ({ id: row.id, title: clip(row.title, `Risk #${row.id}`) }))),
-    group("risk_actions", "risk actions", actions.map((row) => ({ id: row.id, title: clip(row.title, `Risk action #${row.id}`) }))),
-    group("audits", "open audits", auditRows.map((row) => ({ id: row.id, title: clip(row.title, `Audit #${row.id}`) }))),
-    group("feasibility", "feasibility reviews", feasibility.map((row) => ({ id: row.id, title: `Feasibility review #${row.id}` }))),
-    group("ppap", "PPAP packages", ppaps.map((row) => ({ id: row.id, title: clip(row.title, `PPAP #${row.id}`) }))),
-    group("evaluations", "competency evaluations", evaluations.map((row) => ({ id: row.id, title: `Competency evaluation #${row.id}` }))),
+    group("complaints", "open complaints", complaintsRows.map((row) => ({ id: row.id, title: clip(row.title, "Complaint") }))),
+    group("investigations", "open investigations", investigations.map((row) => ({ id: row.id, title: clip(row.title, "Investigation") }))),
+    group("training", "training assignments", training.map((row) => ({ id: row.id, title: clip(row.title, "Training") }))),
+    group("risks", "open risks", risks.map((row) => ({ id: row.id, title: clip(row.title, "Risk") }))),
+    group("risk_actions", "risk actions", actions.map((row) => ({ id: row.id, title: clip(row.title, "Risk action") }))),
+    group("audits", "open audits", auditRows.map((row) => ({ id: row.id, title: clip(row.title, "Audit") }))),
+    group("feasibility", "feasibility reviews", feasibility.map((row) => ({ id: row.id, title: "Feasibility review" }))),
+    group("ppap", "PPAP packages", ppaps.map((row) => ({ id: row.id, title: clip(row.title, "PPAP") }))),
+    group("evaluations", "competency evaluations", evaluations.map((row) => ({ id: row.id, title: "Competency evaluation" }))),
   ];
   return groups.filter((item): item is OpenWorkGroup => item !== null);
 }

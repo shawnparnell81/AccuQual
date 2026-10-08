@@ -27,7 +27,9 @@ import {
   type CsaCriterionResult,
   type CsaState,
 } from "./csaFai.logic.js";
-import { nextCsaNumber, persistCsa } from "./csaFai.persist.js";
+import { persistCsa } from "./csaFai.persist.js";
+import { CSA_FAI_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, showRecordNumber } from "../records/userRecordNumber.js";
 import { requirePlantId } from "../sites/siteAccess.js";
 import { loadNcrStatus, notifySla } from "./csaFai.actions.js";
 
@@ -190,7 +192,9 @@ export async function submitCsa(db: Db, actor: { id: number; roleName: string | 
   if (errors.length > 0) throw AppError.badRequest(errors.join(" "));
   const workflow = await ensureCsaDraft(db, actor);
   const now = new Date();
-  const number = await nextCsaNumber(db, now.getUTCFullYear());
+  const numberBody: Record<string, unknown> = { number: input.number };
+  await applyRecordNumber(db, numberBody, CSA_FAI_NUMBER);
+  const number = showRecordNumber(numberBody.number);
   const state = emptyState(typeof input.dateOpened === "string" && input.dateOpened ? new Date(input.dateOpened).toISOString() : now.toISOString());
   state.number = number;
   state.partNumber = String(input.partNumber).trim();
@@ -280,6 +284,17 @@ export async function submitCsa(db: Db, actor: { id: number; roleName: string | 
   });
   const fresh = await loadRow(db, row.id);
   return { ...present(fresh, readCsa((fresh.packet ?? {}) as Record<string, unknown>)), pendingApproval: (run?.context as { pendingApproval?: unknown } | null)?.pendingApproval ?? null };
+}
+
+export async function updateCsaNumber(db: Db, id: number, value: unknown, userId: number) {
+  const row = await loadRow(db, id);
+  const body: Record<string, unknown> = { number: value };
+  const change = await applyRecordNumber(db, body, CSA_FAI_NUMBER, { id, current: row.number, row });
+  const stored = typeof body.number === "string" ? body.number : null;
+  const packet = { ...((row.packet ?? {}) as Record<string, unknown>), number: stored ?? "" };
+  await db.update(csaFaiRecords).set({ number: stored, packet, updatedAt: new Date() }).where(eq(csaFaiRecords.id, id));
+  if (change) await recordAuditTrail(db, { entityType: "CsaFai", entityId: id, action: "update", changes: change, performedBy: userId });
+  return getCsa(db, id);
 }
 
 export async function getCsa(db: Db, id: number) {

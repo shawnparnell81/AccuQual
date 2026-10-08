@@ -13,14 +13,9 @@ import { erpPurchaseOrders } from "./erp.js";
  * movement, no automatic erp_purchase_orders change, no background job, no
  * "system" user (createdBy/approvedByUserId are always a real user or null).
  *
- * rmaNumber is a real, persisted, auto-generated column — a deliberate,
- * narrow departure from this app's usual "the serial id is the record's
- * number" convention (ncr/capa/erp_purchase_orders/inventory_items all have
- * none). An RMA is the one document here that's actually handed to a third
- * party (the supplier) on paperwork, so a clean sequential "RMA-000123" is
- * worth persisting; see rma.service.ts's generateRmaNumber() for how it's
- * produced (derived from the row's own id post-insert — no separate counter
- * table, so there's nothing to race).
+ * rmaNumber is the company's own number, typed by the person who opens the
+ * return. It stays blank until they enter one. The same text can be used on
+ * a different record type.
  *
  * status: draft | submitted_to_supplier | approved_by_supplier | in_transit |
  *         received_by_supplier | closed | cancelled
@@ -29,7 +24,7 @@ import { erpPurchaseOrders } from "./erp.js";
  */
 export const rma = pgTable("rma", {
   id: serial("id").primaryKey(),
-  rmaNumber: text("rma_number").notNull().unique(),
+  rmaNumber: text("rma_number"),
   status: text("status").notNull().default("draft"),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   reasonCode: text("reason_code"),

@@ -18,6 +18,7 @@ import { users } from "./users.js";
  */
 export const riskAssessments = pgTable("risk_assessments", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   title: text("title").notNull(),
   description: text("description"),
   category: text("category"), // supplier | process | product | safety | regulatory | other

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ISO_FORM_TYPES } from "../../drizzle/schema/isoQualityForms.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 import { SIGNATURE_REQUIRED_KEY, signatureRequiredField } from "../signatures/signatureRequired.js";
 
 const cellValue = z.union([z.string().max(20_000), z.number(), z.boolean(), z.null()]);
@@ -64,11 +65,13 @@ const formData = z.object({
 
 export const createIsoQualityFormSchema = z.object({
   formType: z.enum(ISO_FORM_TYPES),
+  recordNumber: recordNumberSchema,
   data: formData.optional(),
 });
 
 export const updateIsoQualityFormSchema = z.object({
-  data: formData,
+  recordNumber: recordNumberSchema,
+  data: formData.optional(),
 });
 
 export const signIsoQualityFormSchema = z.object({

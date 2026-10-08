@@ -67,7 +67,8 @@ export const revisionsHandler = asyncHandler(async (req: Request, res: Response)
 });
 
 export const openFillHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.status(201).json(await openBuiltFill(req.db!, actor(req), idOf(req.params.id)));
+  const recordNumber = (req.body as { recordNumber?: unknown } | undefined)?.recordNumber;
+  res.status(201).json(await openBuiltFill(req.db!, actor(req), idOf(req.params.id), recordNumber));
 });
 
 export const getFillHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -75,7 +76,7 @@ export const getFillHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const saveFillHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { title?: string; answers?: Record<string, unknown> };
+  const body = req.body as { title?: string; answers?: Record<string, unknown>; recordNumber?: unknown };
   res.json(await saveBuiltFill(req.db!, actor(req), idOf(req.params.fillId), body));
 });
 

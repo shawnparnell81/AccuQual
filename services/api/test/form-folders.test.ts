@@ -107,6 +107,28 @@ describe("form folders", () => {
     ).toBe("FRM-NCR-001_4_2026-10-05");
     expect(
       savedFillFileName({
+        formId: "FRM-NCR-001",
+        title: "NON-CONFORMANCE REPORT (NCR)",
+        recordId: 4,
+        savedAt: "2026-10-05T15:00:00.000Z",
+        pattern: "{formId}_{recordNumber}_{date}",
+        recordLabel: "NON-CONFORMANCE REPORT (NCR)",
+        number: "",
+      }),
+    ).toBe("FRM-NCR-001__2026-10-05");
+    expect(
+      savedFillFileName({
+        formId: "FRM-NCR-001",
+        title: "NON-CONFORMANCE REPORT (NCR)",
+        recordId: 4,
+        savedAt: "2026-10-05T15:00:00.000Z",
+        pattern: "{formId}_{recordNumber}_{date}",
+        recordLabel: "NON-CONFORMANCE REPORT (NCR)",
+        number: "QA-14",
+      }),
+    ).toBe("FRM-NCR-001_QA-14_2026-10-05");
+    expect(
+      savedFillFileName({
         formId: "",
         title: "Corrective Action Request",
         recordId: 8,

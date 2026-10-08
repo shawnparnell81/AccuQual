@@ -110,8 +110,11 @@ interface KindSpec {
 
 export function deletionSummary(label: string, recordNumber: string | number, title: string | null | undefined): string {
   const trimmed = title?.trim();
-  if (trimmed) return `Deleted ${label} #${recordNumber} "${trimmed}"`;
-  return `Deleted ${label} #${recordNumber}`;
+  const shown = typeof recordNumber === "string" ? recordNumber.trim() : "";
+  if (trimmed && shown) return `Deleted ${label} ${shown} "${trimmed}"`;
+  if (trimmed) return `Deleted ${label} "${trimmed}"`;
+  if (shown) return `Deleted ${label} ${shown}`;
+  return `Deleted ${label}`;
 }
 
 export function userMayDeleteRecord(roleName: string | null | undefined, userId: number | undefined, owners: number[]): boolean {
@@ -138,9 +141,7 @@ function textOf(row: Row, keys: string[], max = 160): string | null {
 }
 
 function recordNumberOf(row: Row, fields: string[] | undefined): string {
-  const fromField = textOf(row, fields ?? []);
-  if (fromField) return fromField;
-  return String(row.id);
+  return textOf(row, fields ?? []) ?? "";
 }
 
 function jsonSnapshot(value: unknown): unknown {
@@ -429,6 +430,7 @@ const specs: Record<RecordKind, KindSpec> = {
   ncr: {
     entityType: "NCR",
     label: "NCR",
+    numberFields: ["recordNumber"],
     attachmentTypes: ["ncr"],
     formKeys: ["ncr"],
     siteScoped: true,
@@ -458,6 +460,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   capa: {
     entityType: "CAPA",
+    numberFields: ["recordNumber"],
     label: "CAPA",
     attachmentTypes: ["capa"],
     formKeys: ["capa"],
@@ -473,6 +476,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   eight_d: {
     entityType: "8D Report",
+    numberFields: ["recordNumber"],
     label: "8D",
     attachmentTypes: ["eight_d"],
     formKeys: ["eight_d"],
@@ -485,6 +489,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   validation_report: {
     entityType: "Validation Report",
+    numberFields: ["recordNumber"],
     label: "Validation Report",
     attachmentTypes: ["validation_report"],
     formKeys: ["validation_report"],
@@ -505,6 +510,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   audit: {
     entityType: "Audit",
+    numberFields: ["recordNumber"],
     label: "Audit",
     attachmentTypes: ["audit", "audits"],
     formKeys: ["audit", "audits", "audit_plan", "audit_checklist", "lpa"],
@@ -546,6 +552,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   risk: {
     entityType: "RiskAssessment",
+    numberFields: ["recordNumber"],
     label: "Risk",
     attachmentTypes: ["risk"],
     formKeys: ["risk", "fmea"],
@@ -560,6 +567,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   complaint: {
     entityType: "Complaint",
+    numberFields: ["recordNumber"],
     label: "Complaint",
     attachmentTypes: ["complaint", "complaints"],
     formKeys: ["complaint"],
@@ -570,6 +578,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   change: {
     entityType: "Change request",
+    numberFields: ["recordNumber"],
     label: "Change request",
     attachmentTypes: ["change"],
     formKeys: ["change", "pcn"],
@@ -580,6 +589,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   ppap: {
     entityType: "PPAP package",
+    numberFields: ["recordNumber"],
     label: "PPAP",
     attachmentTypes: ["ppap"],
     formKeys: ["ppap", "control_plan", "appearance_approval", "apqp_summary", "dimensional_report", "process_flow_diagram", "dvpr", "final_inspection_release_checklist"],
@@ -615,6 +625,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   work_order: {
     entityType: "WorkOrder",
+    numberFields: ["recordNumber"],
     label: "Work order",
     attachmentTypes: ["work_order", "work_orders"],
     formKeys: ["work_order", "maintenance_work_order"],
@@ -687,6 +698,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   quality: {
     entityType: "Discrepancy investigation",
+    numberFields: ["recordNumber"],
     label: "Discrepancy",
     attachmentTypes: ["quality", "di"],
     formKeys: ["di", "discrepancy_inspection"],
@@ -721,6 +733,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   quality_inspection: {
     entityType: "QualityInspectionReport",
+    numberFields: ["recordNumber"],
     label: "Quality inspection",
     attachmentTypes: ["quality_inspection"],
     formKeys: ["quality_inspection"],
@@ -774,6 +787,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   iso_quality_form: {
     entityType: "ISO form",
+    numberFields: ["recordNumber"],
     label: "ISO form",
     attachmentTypes: ["iso_quality_form"],
     formKeys: ["iso_quality_form"],

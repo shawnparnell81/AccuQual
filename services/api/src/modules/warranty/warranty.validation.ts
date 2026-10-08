@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const WARRANTY_STATUSES = ["new", "inspection", "supplier_review", "approved", "rejected", "replaced", "repaired", "closed"] as const;
 export const WARRANTY_COST_TYPES = ["parts", "labor", "shipping", "replacement_unit", "other"] as const;
 
 export const createWarrantyClaimSchema = z.object({
+  claimNumber: recordNumberSchema,
   customerId: z.coerce.number().int().optional(),
   productId: z.coerce.number().int().optional(),
   serialNumber: z.string().optional(),
@@ -25,6 +27,7 @@ export const createWarrantyClaimSchema = z.object({
  * rma.validation.ts's updateRmaSchema).
  */
 export const updateWarrantyClaimSchema = z.object({
+  claimNumber: recordNumberSchema,
   customerId: z.coerce.number().int().nullable().optional(),
   productId: z.coerce.number().int().nullable().optional(),
   serialNumber: z.string().nullable().optional(),

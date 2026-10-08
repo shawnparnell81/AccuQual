@@ -9,6 +9,7 @@ import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { diffSignatureRequired, flushSignatureRequiredAudit, rememberSignatureRequiredAudit, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { ISO_NUMBER } from "../records/recordNumberSpecs.js";
 import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcrWorkflow } from "../change-requests/changeRequestWorkflow.js";
 import { CHANGE_REQUEST_KINDS, changeRequestByFormType } from "../change-requests/changeRequestKinds.js";
 import { stampNewEcr } from "../change-requests/ecr.controller.js";
@@ -30,6 +31,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(isoQualityForms, {
   entityName: "ISO form",
   idColumn: "id",
+  recordNumber: ISO_NUMBER,
   prepareCreate: (body) => {
     const formType = String(body.formType ?? "");
     const data = withSanitizedRequired(

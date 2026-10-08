@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
@@ -11,11 +10,14 @@ import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from
 import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, overallBrake, overallInjector } from "../../lib/partInspection";
 import { cellsFromData, formTypeOf, overallResult, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
+import { showRecordNumber } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 interface ValidationReport {
   id: number;
+  recordNumber?: string | null;
   data: { formType?: ValidationFormType; cells?: Record<string, CellValue> };
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -49,18 +51,19 @@ export function ValidationReportsPanel() {
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
   const { data: rows = [], isLoading, isError } = hooks.useList();
-  const filing = useFormTemplates();
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
   const [copyPart, setCopyPart] = useState("");
   const [copyKind, setCopyKind] = useState<ValidationFormType>("csa");
 
-  function start(formType: ValidationFormType) {
+  async function start(formType: ValidationFormType, recordNumber: string) {
     setPendingKind(formType);
-    createReport.mutate({ data: { formType, cells: {} } } as never, {
-      onSuccess: (created) => navigate(`/validation-reports/${created.id}`),
-      onSettled: () => setPendingKind(null),
-    });
+    try {
+      const created = await createReport.mutateAsync({ recordNumber: recordNumber.trim() || null, data: { formType, cells: {} } } as never);
+      navigate(`/validation-reports/${created.id}`);
+    } finally {
+      setPendingKind(null);
+    }
   }
 
   return (
@@ -103,15 +106,15 @@ export function ValidationReportsPanel() {
         {canEdit && (
           <div className="flex flex-wrap gap-2">
             {(Object.keys(VALIDATION_FORMS) as ValidationFormType[]).map((kind) => (
-              <button
+              <NumberedCreateButton
                 key={kind}
-                type="button"
-                onClick={() => start(kind)}
-                disabled={createReport.isPending}
+                label={pendingKind === kind ? "Creating…" : `New ${VALIDATION_FORMS[kind].title}`}
+                numberLabel="Report No."
+                dialogTitle={`New ${VALIDATION_FORMS[kind].title}`}
+                pending={createReport.isPending && pendingKind === kind}
                 className={`rounded-md px-3 py-2 text-sm font-medium disabled:opacity-60 ${kind === "csa" ? "bg-primary text-primary-foreground" : "border border-border bg-card hover:bg-muted"}`}
-              >
-                {pendingKind === kind ? "Creating…" : `New ${VALIDATION_FORMS[kind].title}`}
-              </button>
+                onCreate={(recordNumber) => start(kind, recordNumber)}
+              />
             ))}
           </div>
         )}
@@ -142,8 +145,7 @@ export function ValidationReportsPanel() {
                 const passed = result === "Pass" || result === "Passed" || result === "PASS";
                 const failed = result === "Fail" || result === "Failed" || result === "FAIL";
                 const color = passed ? VALIDATION_FORMS[kind].pass : failed ? "#FF0000" : "transparent";
-                const number = filing.data?.find((item) => item.formKey === VALIDATION_FORMS[kind].formKey)?.formId?.trim() ?? "";
-                const name = number ? `${number} #${row.id}` : `${VALIDATION_FORMS[kind].title} #${row.id}`;
+                const name = showRecordNumber(row.recordNumber) || VALIDATION_FORMS[kind].title;
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">

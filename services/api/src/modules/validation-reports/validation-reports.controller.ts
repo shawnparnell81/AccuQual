@@ -4,6 +4,7 @@ import { validationReports } from "../../drizzle/schema/validationReport.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { VALIDATION_NUMBER } from "../records/recordNumberSpecs.js";
 import { validationFormKeyFor, validationKind } from "../document-folders/editableForms.js";
 import { snapshotFormNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
@@ -22,6 +23,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(validationReports, {
   entityName: "Validation Report",
   idColumn: "id",
+  recordNumber: VALIDATION_NUMBER,
   prepareCreate: (body) => {
     const incoming = asRecord(body.data);
     const kind = validationKind(incoming);
@@ -100,7 +102,7 @@ export const validationPdfHandler = asyncHandler(async (req: Request, res: Respo
   const id = Number(req.params.id);
   const [row] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!row) throw AppError.notFound("Validation Report");
-  const data = asRecord(row.data);
+  const data = { ...asRecord(row.data), recordNumber: typeof row.recordNumber === "string" ? row.recordNumber.trim() : "" };
   const chrome = await loadPdfChrome(req.db!, "validation_report", id, data);
   const bytes = await renderValidationReportPdf(data, "AccuQual", chrome);
   const identity = validationExportIdentity(data, "AccuQual");
@@ -108,7 +110,8 @@ export const validationPdfHandler = asyncHandler(async (req: Request, res: Respo
   await persistPdfExport(req.db!, bytes, frame, { entityType: "validation_report", entityId: id, actorId: req.user?.id });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("X-Export-Id", chrome.exportId);
-  res.setHeader("Content-Disposition", `attachment; filename="validation-${id}.pdf"`);
+  const fileNumber = identity.recordNumber.replace(/[^a-zA-Z0-9._-]+/g, "-");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileNumber || "validation-report"}.pdf"`);
   res.send(Buffer.from(bytes));
 });
 

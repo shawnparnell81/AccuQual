@@ -9,12 +9,14 @@ import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/Signatur
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { faiFill } from "../../lib/qualitySheetLogic";
+import { RecordNumberEditor, RecordNumberField } from "../../components/forms/RecordNumberField";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import "../IsoForms/isoForm.css";
 
 interface CsaListRow {
   id: number;
-  number: string;
+  number: string | null;
   partNumber: string;
   supplierName: string;
   status: string;
@@ -46,7 +48,7 @@ interface CsaResultRow {
 
 interface CsaRecord {
   id: number;
-  number: string;
+  number: string | null;
   partNumber: string;
   partDescription: string;
   supplierName: string;
@@ -110,7 +112,7 @@ async function downloadCsaPdf(id: number, number: string) {
   const url = URL.createObjectURL(response.data);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${number}.pdf`;
+  link.download = `${number.trim() || "csa-first-article"}.pdf`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -120,9 +122,10 @@ export function CsaFaiListPage() {
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["csa-fai"], queryFn: async () => (await apiClient.get<CsaListRow[]>("/fai/csa")).data });
   const [form, setForm] = useState(BLANK);
+  const [number, setNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const submit = useMutation({
-    mutationFn: async () => (await apiClient.post<CsaRecord>("/fai/csa", form)).data,
+    mutationFn: async () => (await apiClient.post<CsaRecord>("/fai/csa", { ...form, number: number.trim() || null })).data,
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["csa-fai"] });
       navigate(`/fai/csa/${created.id}`);
@@ -161,6 +164,7 @@ export function CsaFaiListPage() {
         }}
       >
         <h2 className="sm:col-span-2 text-sm font-medium">Submit a CSA FAI</h2>
+        <RecordNumberField label="CSA FAI No." value={number} error={error} onChange={(value) => { setError(null); setNumber(value); }} />
         <CopyFromPrevious
           partNumber={form.partNumber}
           previousPath="/fai/csa/previous"
@@ -206,7 +210,7 @@ export function CsaFaiListPage() {
         <tbody>
           {(list.data ?? []).map((row) => (
             <tr key={row.id} className="border-b border-border">
-              <td className="py-2"><Link to={`/fai/csa/${row.id}`} className="text-primary hover:underline">{row.number}</Link></td>
+              <td className="py-2"><Link to={`/fai/csa/${row.id}`} className="text-primary hover:underline">{showRecordNumber(row.number)}</Link></td>
               <td>{row.partNumber}</td>
               <td>{row.supplierName}</td>
               <td><StatusBadge value={row.status} /></td>
@@ -325,7 +329,8 @@ export function CsaFaiRecordPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground"><Link to="/fai/csa" className="text-primary hover:underline">CSA first articles</Link></p>
-          <h1 className="text-2xl font-semibold">{data.number}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("CSA first article", data.number)}</h1>
+          <RecordNumberEditor label="CSA FAI No." value={data.number} canEdit onSave={async (next) => { await apiClient.patch(`/fai/csa/${data.id}`, { number: next.trim() || null }); await refresh(); }} />
           <p className="text-sm">{data.partNumber} — {data.partDescription}</p>
           <p className="text-sm text-muted-foreground">{data.supplierName} · {data.vehicleYear} {data.vehicleMake} {data.vehicleModel} {data.position} · {data.productFamily}</p>
         </div>
@@ -336,7 +341,7 @@ export function CsaFaiRecordPage() {
           <span>Approved supplier: {data.approvedSupplier}</span>
           {data.slaStatus && <span>SLA: {data.slaStatus}</span>}
           {(data.status === "Approved" || data.status === "Closed") && (
-            <button type="button" className="rounded-md border border-border px-3 py-1.5" onClick={() => void downloadCsaPdf(data.id, data.number)}>Download report</button>
+            <button type="button" className="rounded-md border border-border px-3 py-1.5" onClick={() => void downloadCsaPdf(data.id, showRecordNumber(data.number))}>Download report</button>
           )}
         </div>
       </div>

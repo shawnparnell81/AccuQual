@@ -13,7 +13,9 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
+import { recordHeading } from "../../lib/userRecordNumber";
 import type { Rma, RmaItem, InventoryItem, Ncr, Capa, RmaStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -162,10 +164,10 @@ export function RmaDetailPage() {
   const { id } = useParams();
   const rmaId = Number(id);
   const { data: record, isLoading, isError } = rmaHooks.useOne(rmaId);
+  const updateRma = rmaHooks.useUpdate();
   const currentUser = useCurrentUser();
   const { data: ncrs = [] } = ncrHooks.useList();
   const { data: capas = [] } = capaHooks.useList();
-  const updateRma = rmaHooks.useUpdate();
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
@@ -191,7 +193,8 @@ export function RmaDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <h1 className="text-2xl font-semibold">{record.rmaNumber}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("RMA", record.rmaNumber)}</h1>
+          <RecordNumberEditor label="RMA No." value={record.rmaNumber} canEdit={canEditFull} onSave={(next) => updateRma.mutateAsync({ id: record.id, rmaNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={record.status} />
             <span className="text-sm text-muted-foreground">{record.reasonCode?.replace(/_/g, " ") ?? "No reason code set"}</span>
@@ -203,12 +206,12 @@ export function RmaDetailPage() {
               + Add Item
             </button>
           )}
-          <DeleteRecordButton resource="rma" id={record.id} kind="RMA" title={record.rmaNumber} ownerIds={[record.createdByUserId]} navigateTo="/rma" />
+          <DeleteRecordButton resource="rma" id={record.id} kind="RMA" number={record.rmaNumber} ownerIds={[record.createdByUserId]} navigateTo="/rma" />
         </div>
       </div>
 
       <div className="hidden print:block">
-        <h1 className="text-2xl font-semibold">{record.rmaNumber}</h1>
+        <h1 className="text-2xl font-semibold">{recordHeading("RMA", record.rmaNumber)}</h1>
         <p className="text-sm text-muted-foreground">Status: {record.status.replace(/_/g, " ")} — {record.reasonCode?.replace(/_/g, " ") ?? "No reason code set"}</p>
       </div>
 

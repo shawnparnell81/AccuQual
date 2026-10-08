@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { warrantyClaims } from "./warranty.js";
 import { supplierRmaRequests } from "./supplierRma.js";
@@ -32,7 +32,7 @@ export const rmaLogRecords = pgTable(
     id: serial("id").primaryKey(),
     status: text("status").notNull().default("open"),
 
-    rmaNumber: text("rma_number").notNull(),
+    rmaNumber: text("rma_number"),
     dateIssued: timestamp("date_issued").notNull().defaultNow(),
     trackingNumber: text("tracking_number"),
     customerName: text("customer_name"),
@@ -62,9 +62,6 @@ export const rmaLogRecords = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },
-  (table) => ({
-    rmaNumberUnique: uniqueIndex("rma_log_rma_number_idx").on(table.rmaNumber),
-  })
 );
 
 export type RmaLogRecord = typeof rmaLogRecords.$inferSelect;

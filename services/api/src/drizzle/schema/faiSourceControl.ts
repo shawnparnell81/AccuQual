@@ -69,7 +69,7 @@ export const faiNumberCounters = pgTable("fai_number_counters", {
 
 export const faiRecords = pgTable("fai_records", {
   id: serial("id").primaryKey(),
-  number: text("number").notNull().unique(),
+  number: text("number"),
   planId: integer("plan_id")
     .references(() => faiInspectionPlans.id)
     .notNull(),

@@ -233,9 +233,11 @@ describe("dashboard overview", () => {
         capas: [{ id: 9, siteId: 1, ncrId: null, status: "open", ownerId: 7, dueDate: daysAgo(4), closedAt: null, createdAt: daysAgo(4), actionPlan: "Secret", rootCause: null }],
       }),
     );
-    expect(overview.tasks.map((task) => task.ref)).toEqual(["NCR-1"]);
+    expect(overview.tasks.map((task) => task.ref)).toEqual([""]);
+    expect(overview.tasks[0]?.href).toBe("/ncr/1");
+    expect(overview.tasks[0]?.ref).not.toBe("NCR-1");
     expect(overview.stuck).toEqual([
-      expect.objectContaining({ ref: "NCR-1", tone: "warn", who: "Dana Wells", why: "open for 40 days" }),
+      expect.objectContaining({ ref: "", href: "/ncr/1", tone: "warn", who: "Dana Wells", why: "open for 40 days" }),
     ]);
     expect(overview.kpis.overdueFixes.access).toBe(false);
     expect(overview.kpis.overdueFixes.value).toBeNull();

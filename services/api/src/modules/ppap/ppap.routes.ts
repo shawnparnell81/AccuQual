@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createPpapSchema } from "./ppap.validation.js";
+import { createPpapSchema, updatePpapSchema } from "./ppap.validation.js";
 import { baseHandlers } from "./ppap.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 
@@ -16,4 +16,5 @@ ppapRouter.use(requireAuth, withDb, requireDepartmentAccess("ppap"));
 ppapRouter.get("/", baseHandlers.list);
 ppapRouter.post("/", validate(createPpapSchema), baseHandlers.create);
 ppapRouter.get("/:id", baseHandlers.getOne);
+ppapRouter.patch("/:id", validate(updatePpapSchema), baseHandlers.update);
 ppapRouter.delete("/:id", deleteRecordHandler("ppap"));

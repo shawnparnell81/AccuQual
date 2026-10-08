@@ -6,6 +6,9 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 
 const ppapHooks = createResourceHooks<PpapPackage>("ppap");
 
@@ -28,6 +31,8 @@ export function PpapDetailPage() {
   const { id } = useParams();
   const ppapId = Number(id);
   const { data: ppap, isLoading, isError } = ppapHooks.useOne(ppapId);
+  const updatePpap = ppapHooks.useUpdate();
+  const canEdit = useCanEditWorkflow("ppap");
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !ppap) return <LoadingPlaceholder />;
@@ -35,11 +40,12 @@ export function PpapDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <DeleteRecordButton resource="ppap" id={ppap.id} kind="PPAP" title={ppap.partNumber} ownerIds={[ppap.ownerId]} navigateTo="/ppap" />
+        <DeleteRecordButton resource="ppap" id={ppap.id} kind="PPAP" title={ppap.partNumber} number={ppap.recordNumber} ownerIds={[ppap.ownerId]} navigateTo="/ppap" />
         <div>
           <h1 className="text-2xl font-semibold">
-            PPAP #{ppap.id} — {ppap.partNumber}
+            {recordHeading("PPAP", ppap.recordNumber)} — {ppap.partNumber}
           </h1>
+          <RecordNumberEditor label="PPAP No." value={ppap.recordNumber} canEdit={canEdit} onSave={(next) => updatePpap.mutateAsync({ id: ppap.id, recordNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={ppap.status} />
             {ppap.partName && <span className="text-sm text-muted-foreground">{ppap.partName}</span>}
@@ -58,7 +64,7 @@ export function PpapDetailPage() {
                 <OpenFormButton
                   formType={doc.formType}
                   entityId={ppap.id}
-                  title={`PPAP #${ppap.id} — ${doc.label}`}
+                  title={`${recordHeading("PPAP", ppap.recordNumber)} — ${doc.label}`}
                   label="Open"
                 />
               </div>

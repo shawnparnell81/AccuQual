@@ -89,6 +89,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: ncr.id,
+            recordNumber: ncr.recordNumber,
             siteId: ncr.siteId,
             title: ncr.title,
             status: ncr.status,
@@ -109,6 +110,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: capa.id,
+            recordNumber: capa.recordNumber,
             siteId: capa.siteId,
             ncrId: capa.ncrId,
             status: capa.status,
@@ -158,6 +160,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: audits.id,
+            recordNumber: audits.recordNumber,
             siteId: audits.siteId,
             name: audits.name,
             status: audits.status,
@@ -172,6 +175,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: changeRequests.id,
+            recordNumber: changeRequests.recordNumber,
             title: changeRequests.title,
             status: changeRequests.status,
             requestedBy: changeRequests.requestedBy,
@@ -185,6 +189,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: ppapPackages.id,
+            recordNumber: ppapPackages.recordNumber,
             partNumber: ppapPackages.partNumber,
             partName: ppapPackages.partName,
             status: ppapPackages.status,
@@ -223,6 +228,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: validationReports.id,
+            recordNumber: validationReports.recordNumber,
             data: validationReports.data,
             createdAt: validationReports.createdAt,
             updatedAt: validationReports.updatedAt,
@@ -235,6 +241,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: isoQualityForms.id,
+            recordNumber: isoQualityForms.recordNumber,
             formType: isoQualityForms.formType,
             data: isoQualityForms.data,
             createdAt: isoQualityForms.createdAt,
@@ -249,6 +256,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: riskAssessments.id,
+            recordNumber: riskAssessments.recordNumber,
             title: riskAssessments.title,
             status: riskAssessments.status,
             ownerId: riskAssessments.ownerId,
@@ -264,6 +272,7 @@ export async function loadDashboardOverview(
       ? db
           .select({
             id: workOrders.id,
+            recordNumber: workOrders.recordNumber,
             status: workOrders.status,
             notes: workOrders.notes,
             createdBy: workOrders.createdBy,

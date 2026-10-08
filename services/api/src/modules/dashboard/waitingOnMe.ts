@@ -4,6 +4,8 @@
  * A module they cannot read is left out. Nothing here invents a module.
  */
 
+import { showRecordNumber } from "../records/userRecordNumber.js";
+
 const DAY_MS = 86_400_000;
 
 export interface WaitingAccess {
@@ -41,6 +43,7 @@ export const DEFAULT_WAITING_PREFS: WaitingPrefs = { sort: "due", group: "module
 
 export interface WaitingNcr {
   id: number;
+  recordNumber?: string | null;
   title: string;
   status: string;
   assignedTo: number | null;
@@ -51,6 +54,7 @@ export interface WaitingNcr {
 
 export interface WaitingCapa {
   id: number;
+  recordNumber?: string | null;
   status: string;
   ownerId: number | null;
   verifiedBy: number | null;
@@ -61,7 +65,7 @@ export interface WaitingCapa {
 
 export interface WaitingFai {
   id: number;
-  number: string;
+  number: string | null;
   partNumber: string;
   status: string;
   assignedTo: number | null;
@@ -186,7 +190,7 @@ export function buildWaitingItems(input: WaitingInput): WaitingItem[] {
       items.push(item({
         id: `ncr-${row.id}`,
         module: "NCR",
-        number: `NCR-${row.id}`,
+        number: showRecordNumber(row.recordNumber),
         description: row.title,
         assignedTo: nameOf(names, row.assignedTo),
         status: row.status,
@@ -205,8 +209,8 @@ export function buildWaitingItems(input: WaitingInput): WaitingItem[] {
       items.push(item({
         id: `capa-${row.id}`,
         module: "CAPA",
-        number: `CAPA-${row.id}`,
-        description: row.rootCause?.trim() || `CAPA ${row.id}`,
+        number: showRecordNumber(row.recordNumber),
+        description: row.rootCause?.trim() || "CAPA",
         assignedTo: nameOf(names, row.ownerId),
         status: row.status,
         href: `/capa/${row.id}`,
@@ -222,7 +226,7 @@ export function buildWaitingItems(input: WaitingInput): WaitingItem[] {
       items.push(item({
         id: `fai-${row.id}`,
         module: "FAI",
-        number: row.number,
+        number: showRecordNumber(row.number),
         description: `${row.partNumber} · ${row.supplierName}`,
         assignedTo: nameOf(names, row.assignedTo),
         status: row.status,

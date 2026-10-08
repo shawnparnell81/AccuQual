@@ -11,6 +11,8 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { parseLimitOffset } from "../../utils/listQuery.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { RMA_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts's assertDepartment — the department PERMISSION_MATRIX entry is binary (read/edit) and can't express these per-action splits on its own. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -56,23 +58,12 @@ const ALLOWED_NEXT: Record<string, string[]> = {
 };
 
 /** Fields quality may touch on an existing RMA — "can link NCR/CAPA, can add notes, cannot submit or close" (the spec's own words). Everything else on PATCH is purchasing/material_management/admin only. */
-const QUALITY_EDITABLE_FIELDS = ["linkedNcrId", "linkedCapaId", "notes"];
+const QUALITY_EDITABLE_FIELDS = ["linkedNcrId", "linkedCapaId", "notes", "rmaNumber"];
 
 async function loadRma(req: Request, id: number) {
   const [row] = await req.db!.select().from(rma).where(and(eq(rma.id, id)));
   if (!row) throw AppError.notFound("Rma");
   return row;
-}
-
-/**
- * Derived from the row's own serial id, after insert — not a separate
- * counter table (nothing to race between two concurrent creates) and not
- * guessed from a pre-insert COUNT(*) (which two simultaneous requests could
- * both read before either commits). Zero-padded to 6 digits purely for a
- * tidy, consistent look on supplier-facing paperwork.
- */
-function generateRmaNumber(id: number): string {
-  return `RMA-${String(id).padStart(6, "0")}`;
 }
 
 async function itemsWithContext(req: Request, rmaId: number) {
@@ -152,13 +143,12 @@ export const createRmaHandler = asyncHandler(async (req: Request, res: Response)
     if (!linked) throw AppError.badRequest(`CAPA #${linkedCapaId} not found`);
   }
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, RMA_NUMBER);
   const [created] = await req
     .db!.insert(rma)
     .values({
-      // Placeholder, real value written right after — rmaNumber is NOT NULL
-      // UNIQUE and derived from the id this insert produces (see
-      // generateRmaNumber's own comment), so it can't be known before insert.
-      rmaNumber: `RMA-PENDING-${Date.now()}`,
+      rmaNumber: (body.rmaNumber as string | null) ?? null,
       supplierId,
       reasonCode,
       linkedNcrId,
@@ -168,10 +158,8 @@ export const createRmaHandler = asyncHandler(async (req: Request, res: Response)
     })
     .returning();
 
-  const [withNumber] = await req.db!.update(rma).set({ rmaNumber: generateRmaNumber(created!.id) }).where(eq(rma.id, created!.id)).returning();
-
-  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
-  res.status(201).json(withNumber);
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(created);
 });
 
 export const getRmaHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -211,12 +199,14 @@ export const updateRmaHandler = asyncHandler(async (req: Request, res: Response)
     throw AppError.badRequest(`Cannot change supplier/reason code — RMA is "${record.status}", not "draft"`);
   }
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, RMA_NUMBER, { id: record.id, current: record.rmaNumber, row: record });
   const [updated] = await req
     .db!.update(rma)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(eq(rma.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const createComplaintSchema = z.object({
+  recordNumber: recordNumberSchema,
   customerName: z.string().optional(),
   productAffected: z.string().optional(),
   description: z.string().min(1),

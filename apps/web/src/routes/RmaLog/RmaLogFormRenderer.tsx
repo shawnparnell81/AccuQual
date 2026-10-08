@@ -50,13 +50,7 @@ export function RmaLogFormRenderer({
                   label={f.label}
                   type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
                   value={f.type === "date" ? toDateInputValue(raw) : (raw as string | number) ?? ""}
-                  // rmaNumber is always disabled here — auto-generated from
-                  // the record's own id at creation (see
-                  // rmaLog.controller.ts's generateRmaLogNumber), same
-                  // "never hand-editable after the fact" rule the RMA/RGA
-                  // and Supplier RMA Request modules already follow for
-                  // their own auto-numbering.
-                  disabled={readOnly || f.name === "rmaNumber"}
+                  disabled={readOnly}
                   onChange={(e) => onChange({ [f.name]: e.target.value || null } as Partial<RmaLogRecord>)}
                 />
               </div>

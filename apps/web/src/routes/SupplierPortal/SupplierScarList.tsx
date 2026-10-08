@@ -26,13 +26,13 @@ export function SupplierScarList({ supplierId }: { supplierId?: number }) {
           canOpen ? (
             <li key={s.id}>
               <Link to={`/scar-forms/${s.id}`} className="flex items-center justify-between rounded-md border border-border p-2 text-sm hover:bg-muted">
-                <span>{s.scarNumber ?? `SCAR #${s.id}`}</span>
+                <span>{s.scarNumber?.trim() || "SCAR"}</span>
                 <StatusBadge value={s.status} />
               </Link>
             </li>
           ) : (
             <li key={s.id} className="flex items-center justify-between rounded-md border border-border p-2 text-sm">
-              <span>{s.scarNumber ?? `SCAR #${s.id}`}</span>
+              <span>{s.scarNumber?.trim() || "SCAR"}</span>
               <StatusBadge value={s.status} />
             </li>
           )

@@ -46,8 +46,8 @@ describe("validation forms file into one Documents folder", () => {
     expect(filed.status).toBe(201);
     expect(filed.body.parentId).toBe(firstFolder.body.id);
     expect(filed.body.parentPath).toContain(`CSA saves ${suffix}`);
-    // The filename number on the CSA template is part of the folder name.
-    expect(filed.body.fileName).toMatch(new RegExp(`^FRM-VAL-001_${recordId}_`));
+    expect(filed.body.fileName).toMatch(/^FRM-VAL-001__\d{4}-\d{2}-\d{2}$/);
+    expect(filed.body.fileName).not.toMatch(new RegExp(`_${recordId}_`));
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const copies = (tree.body as { id: number; parentId: number | null; linkedPath: string | null }[]).filter((row) => row.linkedPath === `/validation-reports/${recordId}`);
@@ -89,7 +89,8 @@ describe("validation forms file into one Documents folder", () => {
       .send({ formKey: "frm-val-007", recordId, folderId: folder.body.id });
     expect(filed.status).toBe(201);
     expect(filed.body.parentId).toBe(folder.body.id);
-    expect(filed.body.fileName).toMatch(new RegExp(`^FRM-VAL-007_${recordId}_`));
+    expect(filed.body.fileName).toMatch(/^FRM-VAL-007__\d{4}-\d{2}-\d{2}$/);
+    expect(filed.body.fileName).not.toMatch(new RegExp(`_${recordId}_`));
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const copies = (tree.body as { linkedPath: string | null }[]).filter((row) => row.linkedPath === `/validation-reports/${recordId}`);

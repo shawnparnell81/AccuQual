@@ -10,10 +10,14 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface Complaint {
   id: number;
+  recordNumber?: string | null;
   customerName: string | null;
   productAffected: string | null;
   description: string;
@@ -38,6 +42,8 @@ export function ComplaintDetailPage() {
   const complaintId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "complaints", complaintId]];
   const { data: complaint, isLoading, isError } = complaintHooks.useOne(complaintId);
+  const updateComplaint = complaintHooks.useUpdate();
+  const canEdit = useCanEditWorkflow("complaints");
 
   const investigate = useWorkflowAction("complaints", "investigate", { successMessage: "Investigation started.", invalidateKeys: historyKey });
   const resolve = useWorkflowAction<{ id: number; resolution: string }>("complaints", "resolve", { successMessage: "Marked resolved.", invalidateKeys: historyKey });
@@ -75,20 +81,21 @@ export function ComplaintDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold">
-            Complaint #{complaint.id} {complaint.customerName && <span className="text-muted-foreground">— {complaint.customerName}</span>}
+            {recordHeading("Complaint", complaint.recordNumber)} {complaint.customerName && <span className="text-muted-foreground">— {complaint.customerName}</span>}
           </h1>
+          <RecordNumberEditor label="Complaint No." value={complaint.recordNumber} canEdit={canEdit} onSave={(next) => updateComplaint.mutateAsync({ id: complaint.id, recordNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={complaint.status} />
             <StatusBadge value={complaint.severity} />
             {complaint.linkedNcrId && (
               <Link to={`/ncr/${complaint.linkedNcrId}`} className="text-xs text-primary hover:underline">
-                Linked NCR #{complaint.linkedNcrId}
+                Linked NCR
               </Link>
             )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <OpenFormButton formType="complaint" entityId={complaint.id} title={`Complaint #${complaint.id} Form`} />
+          <OpenFormButton formType="complaint" entityId={complaint.id} title={`${recordHeading("Complaint", complaint.recordNumber)} Form`} />
           <WorkflowActionButton
             label="Escalate to NCR"
             navKey="complaints"

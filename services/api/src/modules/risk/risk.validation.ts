@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const RISK_CATEGORIES = ["supplier", "process", "product", "safety", "regulatory", "other"] as const;
 export const RISK_SOURCE_TYPES = ["NCR", "Supplier", "Receiving", "WorkOrder", "Customer", "Manual"] as const;
@@ -7,6 +8,7 @@ export const RISK_STATUSES = ["open", "mitigation", "monitoring", "closed"] as c
 export const MITIGATION_STATUSES = ["planned", "in_progress", "completed"] as const;
 
 export const createRiskSchema = z.object({
+  recordNumber: recordNumberSchema,
   title: z.string().min(1),
   description: z.string().optional(),
   category: z.enum(RISK_CATEGORIES).optional(),
@@ -25,6 +27,7 @@ export const createRiskSchema = z.object({
 // workOrders.controller.ts's updateWorkOrderHandler doesn't accept a raw
 // status field either.
 export const updateRiskSchema = z.object({
+  recordNumber: recordNumberSchema,
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   category: z.enum(RISK_CATEGORIES).optional(),

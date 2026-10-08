@@ -8,6 +8,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { applyStepCompletion } from "./blank8dForm.js";
+import { EIGHT_D_NUMBER } from "../records/recordNumberSpecs.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -16,6 +17,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(eightD, {
   entityName: "8D Report",
   idColumn: "id",
+  recordNumber: EIGHT_D_NUMBER,
   prepareCreate: (body) => ({
     ...body,
     data: answersWithTemplateStamp("form:eight_d", undefined, asRecord(body.data), true),

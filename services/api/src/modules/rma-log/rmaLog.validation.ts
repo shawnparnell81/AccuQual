@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 /** "Warranty, scrap, repair, replace, credit" — literal list. */
 export const DISPOSITION_ACTIONS = ["warranty", "scrap", "repair", "replace", "credit"] as const;
@@ -8,6 +9,7 @@ export const DISPOSITION_ACTIONS = ["warranty", "scrap", "repair", "replace", "c
 export const RMA_LOG_STATUSES = ["open", "received", "under_review", "dispositioned", "closed"] as const;
 
 const contentFields = {
+  rmaNumber: recordNumberSchema,
   dateIssued: reasonableDate.optional(),
   trackingNumber: z.string().nullable().optional(),
   customerName: z.string().nullable().optional(),

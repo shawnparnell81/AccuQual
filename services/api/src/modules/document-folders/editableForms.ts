@@ -252,7 +252,7 @@ export function validationKindForKey(formKey: string): ValidationKind | null {
   return VALIDATION_KEY_KIND[formKey] ?? null;
 }
 
-const VALIDATION_RECORD_KEYS = new Set(Object.keys(VALIDATION_KEY_KIND));
+export const VALIDATION_RECORD_KEYS = new Set(Object.keys(VALIDATION_KEY_KIND));
 
 export function recordLinkedPath(formKey: string, recordId: number): string {
   if (formKey === "frm-msa-001") return `/calibration/${recordId}`;

@@ -12,6 +12,8 @@ import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { pool } from "../../db/index.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { RMA_LOG_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 /** A fixed, linear lifecycle matching the field list's own natural progression — see rmaLog.validation.ts's own comment. completed (closed) is terminal. */
 const ALLOWED_NEXT: Record<string, string[]> = {
@@ -21,12 +23,6 @@ const ALLOWED_NEXT: Record<string, string[]> = {
   dispositioned: ["closed"],
   closed: [],
 };
-
-/** RMA-YYYY-XXXX, derived from the real row's own post-insert id — same convention rmaRequest.controller.ts's generateSupplierRmaNumber already established for a customer-facing (as opposed to rma.controller.ts's plain RMA-000123 supplier-facing) numbering format. */
-function generateRmaLogNumber(id: number): string {
-  const year = new Date().getFullYear();
-  return `RMA-${year}-${String(id).padStart(4, "0")}`;
-}
 
 const LINK_FIELDS = ["warrantyId", "supplierRmaRequestId", "qualityId"] as const;
 
@@ -88,17 +84,17 @@ export const listRmaLogHandler = asyncHandler(async (req: Request, res: Response
 
 /** POST /rma-log — the "Add New" button's endpoint. Router already requires rma_log edit; every field is open to whoever has that (no separate create-only carve-out, unlike CRAR's quality-only rule). Prepopulates rmaNumber + dateIssued exactly as "Add New" behavior spec describes. */
 export const createRmaLogHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as Record<string, unknown>;
+  const body = { ...(req.body as Record<string, unknown>) };
   await validateLinks(req, body);
+  await applyRecordNumber(req.db!, body, RMA_LOG_NUMBER);
 
   const [created] = await req
     .db!.insert(rmaLogRecords)
-    .values({ rmaNumber: `RMA-PENDING-${Date.now()}`, dateIssued: (body.dateIssued as Date) ?? new Date(), ...body, createdByUserId: req.user?.id })
+    .values({ ...body, rmaNumber: (body.rmaNumber as string | null) ?? null, dateIssued: (body.dateIssued as Date) ?? new Date(), createdByUserId: req.user?.id })
     .returning();
-  const [numbered] = await req.db!.update(rmaLogRecords).set({ rmaNumber: generateRmaLogNumber(created!.id) }).where(eq(rmaLogRecords.id, created!.id)).returning();
 
-  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: numbered!.id, action: "create", changes: req.body, performedBy: req.user?.id });
-  res.status(201).json(numbered);
+  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(created);
 });
 
 export const getRmaLogHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -144,14 +140,16 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
     }
   }
 
-  await validateLinks(req, req.body as Record<string, unknown>);
+  const body = { ...(req.body as Record<string, unknown>) };
+  await validateLinks(req, body);
+  const numberChange = await applyRecordNumber(req.db!, body, RMA_LOG_NUMBER, { id: record.id, current: record.rmaNumber, row: record });
 
   const [updated] = await req
     .db!.update(rmaLogRecords)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(eq(rmaLogRecords.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

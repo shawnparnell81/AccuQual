@@ -6,6 +6,7 @@ import { sites } from "./sites.js";
 
 export const capa = pgTable("capa", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   // Same plant rule as ncr.siteId — omitted inserts land on the default plant.
   siteId: integer("site_id").references(() => sites.id),
   ncrId: integer("ncr_id").references(() => ncr.id),

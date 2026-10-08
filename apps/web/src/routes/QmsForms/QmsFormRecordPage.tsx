@@ -82,7 +82,7 @@ export function QmsFormRecordPage() {
           {retired ? "← Master Document List" : "← Back to list"}
         </button>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} title={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} />
+          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} number={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} />
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export function QmsFormRecordPage() {
           </div>
           <div className="text-right text-xs text-muted-foreground print:text-black">
             <div>FORM NO.</div>
-            <div className="text-lg font-semibold text-foreground print:text-black">#{record.id}</div>
+            <div className="text-lg font-semibold text-foreground print:text-black">{record.formNo?.trim() || ""}</div>
           </div>
         </div>
 

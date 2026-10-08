@@ -9,7 +9,9 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { SelectField, TextField, TextAreaField } from "../../components/forms/Field";
+import { recordHeading } from "../../lib/userRecordNumber";
 import type { WorkOrder, InventoryItem, AiSuggestion } from "../../api/types";
 
 const woHooks = createResourceHooks<WorkOrder>("work-orders");
@@ -22,6 +24,8 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: { isOpen: boolean; on
   const [itemId, setItemId] = useState("");
   const [quantityPlanned, setQuantityPlanned] = useState("");
   const [notes, setNotes] = useState("");
+  const [recordNumber, setRecordNumber] = useState("");
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   return (
     <Modal title="New Work Order" isOpen={isOpen} onClose={onClose}>
@@ -30,21 +34,29 @@ function NewWorkOrderModal({ isOpen, onClose, onCreated }: { isOpen: boolean; on
         onSubmit={(e) => {
           e.preventDefault();
           createWo.mutate(
-            { itemId: Number(itemId), quantityPlanned: Number(quantityPlanned), notes: notes || undefined } as never,
+            { itemId: Number(itemId), quantityPlanned: Number(quantityPlanned), notes: notes || undefined, recordNumber: recordNumber.trim() || null } as never,
             {
               onSuccess: (created) => {
-                toast.success(`Work Order #${created.id} created.`);
+                toast.success(`${recordHeading("Work order", created.recordNumber)} created.`);
                 setItemId("");
                 setQuantityPlanned("");
                 setNotes("");
+                setRecordNumber("");
+                setNumberError(null);
                 onClose();
                 onCreated(created);
               },
-              onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create work order.")),
+              onError: (err) => {
+                const message = extractErrorMessage(err, "Couldn't create work order.");
+                const duplicate = duplicateNumberError(message);
+                if (duplicate) setNumberError(duplicate);
+                else toast.error(message);
+              },
             }
           );
         }}
       >
+        <RecordNumberField label="Work Order No." value={recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setRecordNumber(value); }} />
         <SelectField label="Item" required value={itemId} onChange={(e) => setItemId(e.target.value)}>
           <option value="">Select an item…</option>
           {items.map((it) => (
@@ -181,7 +193,7 @@ export function WorkOrderListPage() {
 
       <DataTable<WorkOrder>
         columns={[
-          { header: "ID", accessor: (wo) => `#${wo.id}` },
+          { header: "Work Order No.", accessor: (wo) => wo.recordNumber?.trim() || "" },
           { header: "Item", accessor: (wo) => wo.sku ?? `Item #${wo.itemId}` },
           { header: "Qty Planned", accessor: (wo) => wo.quantityPlanned },
           { header: "Qty Completed", accessor: (wo) => wo.quantityCompleted },

@@ -3,6 +3,7 @@ import { users } from "./users.js";
 
 export const complaints = pgTable("complaints", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   customerName: text("customer_name"),
   productAffected: text("product_affected"),
   description: text("description").notNull(),

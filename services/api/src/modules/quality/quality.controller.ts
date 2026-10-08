@@ -8,6 +8,8 @@ import { assertCompanyUser } from "../../utils/assertCompanyUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncDiRecordToForm } from "./quality.formSync.js";
+import { DISCREPANCY_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 // Creating a discrepancy also seeds its investigation form (title/severity/
 // description/status), so the form isn't blank when someone opens it — see
@@ -15,6 +17,7 @@ import { syncDiRecordToForm } from "./quality.formSync.js";
 export const baseHandlers = crudFactory(discrepancyInvestigations, {
   entityName: "Discrepancy investigation",
   idColumn: "id",
+  recordNumber: DISCREPANCY_NUMBER,
   afterCreate: async (created, req) => {
     await syncDiRecordToForm(req.db!, created as unknown as DiscrepancyInvestigation, req.user?.id);
   },
@@ -35,16 +38,18 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
   if (current.status === "closed") throw AppError.badRequest("A closed discrepancy investigation cannot be edited.");
   if (req.body.assignedTo) await assertCompanyUser(req.db!, req.body.assignedTo);
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  const numberChange = await applyRecordNumber(req.db!, body, DISCREPANCY_NUMBER, { id: current.id, current: current.recordNumber, row: current });
   const [updated] = await req
     .db!.update(discrepancyInvestigations)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, updatedAt: new Date() })
     .where(and(eq(discrepancyInvestigations.id, current.id)))
     .returning();
   await recordAuditTrail(req.db!, {
     entityType: "Discrepancy investigation",
     entityId: current.id,
     action: "update",
-    changes: req.body,
+    changes: changesWithNumberEdit(req.body, numberChange),
     performedBy: req.user?.id,
   });
   await syncDiRecordToForm(req.db!, updated!, req.user?.id);

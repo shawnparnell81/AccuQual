@@ -3,7 +3,9 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { Modal } from "../../components/modals/Modal";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
+import { recordHeading } from "../../lib/userRecordNumber";
 import type { WarrantyClaim, InventoryItem, Supplier } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -29,10 +31,13 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
     failureDescription: "",
     warrantyCostEstimate: "",
     supplierId: "",
+    claimNumber: "",
   });
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   const reset = () =>
-    setForm({ productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "" });
+    setForm({ productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "", claimNumber: "" });
+    setNumberError(null);
 
   return (
     <Modal title="New Warranty Claim" isOpen={isOpen} onClose={onClose}>
@@ -49,19 +54,26 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
               failureDescription: form.failureDescription || undefined,
               warrantyCostEstimate: form.warrantyCostEstimate ? Number(form.warrantyCostEstimate) : undefined,
               supplierId: form.supplierId ? Number(form.supplierId) : undefined,
+              claimNumber: form.claimNumber.trim() || null,
             } as never,
             {
               onSuccess: (created) => {
-                toast.success(`${created.claimNumber} created.`);
+                toast.success(`${recordHeading("Warranty claim", created.claimNumber)} created.`);
                 reset();
                 onClose();
                 onCreated(created);
               },
-              onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create the warranty claim.")),
+              onError: (err) => {
+                const message = extractErrorMessage(err, "Couldn't create the warranty claim.");
+                const duplicate = duplicateNumberError(message);
+                if (duplicate) setNumberError(duplicate);
+                else toast.error(message);
+              },
             }
           );
         }}
       >
+        <RecordNumberField label="Claim No." value={form.claimNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, claimNumber: value }); }} />
         <SelectField label="Product" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
           <option value="">Select a product…</option>
           {products.map((p) => (

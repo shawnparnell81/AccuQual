@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { recordNumberSchema } from "../records/userRecordNumber.js";
 
 export const createAuditSchema = z.object({
+  recordNumber: recordNumberSchema,
   name: z.string().min(1),
   type: z.enum(["internal", "supplier", "customer", "certification"]).optional(),
   auditorId: z.number().int().optional(),

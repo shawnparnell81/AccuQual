@@ -5,12 +5,16 @@ import type { RiskAssessment } from "../../api/types";
 import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
+import { showRecordNumber } from "../../lib/userRecordNumber";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useToast } from "../../components/shared/ToastProvider";
 import { RISK_CATEGORIES, RISK_STATUSES } from "../../components/shared/riskConstants";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
 
-const emptyForm = { title: "", description: "", category: "process", processArea: "", department: "", severity: "", probability: "" };
+const emptyForm = { title: "", description: "", category: "process", processArea: "", department: "", severity: "", probability: "", recordNumber: "" };
 
 /**
  * Risk / FMEA list — the Risk Register (general severity x probability
@@ -24,11 +28,13 @@ export function RiskPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [numberError, setNumberError] = useState<string | null>(null);
+  const toast = useToast();
 
   const filtered = useMemo(() => risks.filter((r) => !statusFilter || r.status === statusFilter), [risks, statusFilter]);
 
   const columns: Column<RiskAssessment>[] = [
-    { header: "ID", accessor: (r) => `#${r.id}` },
+    { header: "Risk No.", accessor: (r) => showRecordNumber(r.recordNumber) },
     { header: "Title", accessor: (r) => r.title },
     { header: "Category", accessor: (r) => r.category ?? "—" },
     { header: "Level", accessor: (r) => (r.riskLevel ? <StatusBadge value={r.riskLevel} /> : "—") },
@@ -77,6 +83,7 @@ export function RiskPage() {
             createRisk.mutate(
               {
                 title: form.title,
+                recordNumber: form.recordNumber.trim() || null,
                 description: form.description || undefined,
                 category: form.category as never,
                 processArea: form.processArea || undefined,
@@ -88,12 +95,20 @@ export function RiskPage() {
                 onSuccess: (created) => {
                   setCreateOpen(false);
                   setForm(emptyForm);
+                  setNumberError(null);
                   navigate(`/risk/${created.id}`);
+                },
+                onError: (err) => {
+                  const message = extractErrorMessage(err, "Couldn't create this risk.");
+                  const duplicate = duplicateNumberError(message);
+                  if (duplicate) setNumberError(duplicate);
+                  else toast.error(message);
                 },
               }
             );
           }}
         >
+          <RecordNumberField label="Risk No." value={form.recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, recordNumber: value }); }} />
           <TextField label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
           <TextAreaField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <SelectField label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>

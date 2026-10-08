@@ -72,14 +72,15 @@ describe("Warranty module (real DB + real HTTP path)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("customer_service creates a claim, gets a real claim number, and a 'new' workflow entry", async () => {
+  it("customer_service creates a claim with no auto number, and a 'new' workflow entry", async () => {
     const res = await request(app)
       .post("/warranty/claims")
       .set("Authorization", `Bearer ${customerServiceToken}`)
       .send({ customerId, serialNumber: "SN-12345", failureDescription: "Unit won't power on", warrantyCostEstimate: 150 });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("new");
-    expect(res.body.claimNumber).toMatch(/^WC-\d{6}$/);
+    expect(res.body.claimNumber).toBeNull();
+    expect(res.body.claimNumber).not.toBe(String(res.body.id));
     claimId = res.body.id;
 
     const workflow = await db.select().from(warrantyClaimWorkflow).where(eq(warrantyClaimWorkflow.claimId, claimId));

@@ -81,7 +81,7 @@ export function QualityInspectionReportDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="quality-inspection-reports" id={reportId} kind="Quality inspection" title={report.partMaterialNo} ownerIds={[report.createdBy]} navigateTo="/quality-inspection-reports" />
+          <DeleteRecordButton resource="quality-inspection-reports" id={reportId} kind="Quality inspection" title={report.partMaterialNo} number={report.recordNumber} ownerIds={[report.createdBy]} navigateTo="/quality-inspection-reports" />
         </div>
       </div>
 
@@ -95,8 +95,8 @@ export function QualityInspectionReportDetailPage() {
             </div>
           </div>
           <div className="text-right text-xs text-muted-foreground print:text-black">
-            <div>REPORT ID</div>
-            <div className="text-lg font-semibold text-foreground print:text-black">#{report.id}</div>
+            <div>REPORT NO.</div>
+            <div className="text-lg font-semibold text-foreground print:text-black">{report.recordNumber?.trim() || ""}</div>
           </div>
         </div>
 
@@ -104,6 +104,7 @@ export function QualityInspectionReportDetailPage() {
           1. General Information
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Report No." value={report.recordNumber} onSave={(v) => patch.mutate({ recordNumber: v || null })} />
           <Field label="Inspection Date" type="date" value={report.inspectionDate?.slice(0, 10)} onSave={(v) => patch.mutate({ inspectionDate: v || null })} />
           <Field label="Inspector Name" value={report.inspectorName} onSave={(v) => patch.mutate({ inspectorName: v || null })} />
           <div>

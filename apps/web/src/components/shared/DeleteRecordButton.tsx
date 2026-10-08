@@ -14,6 +14,8 @@ interface DeleteRecordButtonProps {
   id: number;
   kind: string;
   title?: string | null;
+  /** User-entered record number. Blank stays blank. Never the database id. */
+  number?: string | null;
   ownerIds?: Array<number | null | undefined>;
   /** Where to go after a successful delete. Omit on a list row so the page stays put. */
   navigateTo?: string;
@@ -24,7 +26,7 @@ interface DeleteRecordButtonProps {
   label?: string;
 }
 
-export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], navigateTo, className, allowed = false, label = "Delete" }: DeleteRecordButtonProps) {
+export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds = [], navigateTo, className, allowed = false, label = "Delete" }: DeleteRecordButtonProps) {
   const user = useCurrentUser();
   const confirm = useConfirm();
   const toast = useToast();
@@ -41,7 +43,7 @@ export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], n
 
   if (!allowed && !canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
 
-  const recordName = recordDeleteLabel(kind, id, title);
+  const recordName = recordDeleteLabel(kind, title, number);
 
   async function onClick() {
     const ok = await confirm({

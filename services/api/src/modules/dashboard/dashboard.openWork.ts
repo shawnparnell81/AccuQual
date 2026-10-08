@@ -11,6 +11,7 @@
  */
 
 import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 import { signatureBlocksFor, signatureRequired } from "../signatures/signatureRequired.js";
 
 const DAY_MS = 86_400_000;
@@ -99,6 +100,7 @@ export interface OpenStamp {
 }
 
 export interface OpenNcr extends OpenStamp {
+  recordNumber?: string | null;
   siteId: number | null;
   title: string;
   status: string;
@@ -108,6 +110,7 @@ export interface OpenNcr extends OpenStamp {
 }
 
 export interface OpenCapa extends OpenStamp {
+  recordNumber?: string | null;
   siteId: number | null;
   ncrId: number | null;
   status: string;
@@ -127,12 +130,14 @@ export interface OpenScar extends OpenStamp {
 }
 
 export interface OpenChange extends OpenStamp {
+  recordNumber?: string | null;
   title: string;
   status: string;
   requestedBy: number | null;
 }
 
 export interface OpenPpap extends OpenStamp {
+  recordNumber?: string | null;
   partNumber: string;
   partName: string | null;
   status: string;
@@ -140,12 +145,14 @@ export interface OpenPpap extends OpenStamp {
 }
 
 export interface OpenRisk extends OpenStamp {
+  recordNumber?: string | null;
   title: string;
   status: string;
   ownerId: number | null;
 }
 
 export interface OpenWorkOrder extends OpenStamp {
+  recordNumber?: string | null;
   status: string;
   notes: string | null;
   createdBy: number | null;
@@ -156,6 +163,7 @@ export interface OpenWorkOrder extends OpenStamp {
 export interface OpenForm extends OpenStamp {
   formType: string;
   data: unknown;
+  recordNumber?: string | null;
 }
 
 export interface OpenAssignment {
@@ -328,8 +336,8 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `ncr-${row.id}`,
         module: "NCR",
         href: `/ncr/${row.id}`,
-        number: `NCR-${row.id}`,
-        title: row.title.trim() || `Issue #${row.id}`,
+        number: showRecordNumber(row.recordNumber),
+        title: row.title.trim() || "Issue",
         status: canonicalNcrStep(row.status),
         plantId: row.siteId,
         owner: personName(names, row.assignedTo),
@@ -348,8 +356,8 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `capa-${row.id}`,
         module: "CAPA",
         href: `/capa/${row.id}`,
-        number: `CAPA-${row.id}`,
-        title: text || (row.ncrId ? `Fix for issue #${row.ncrId}` : `Fix #${row.id}`),
+        number: showRecordNumber(row.recordNumber),
+        title: text || (row.ncrId ? "Fix for a linked issue" : "Fix"),
         status: row.status,
         plantId: row.siteId,
         owner: personName(names, row.ownerId),
@@ -369,7 +377,7 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `scar-${row.id}`,
         module: "CAR",
         href: `/scar-forms/${row.id}`,
-        number: row.scarNumber?.trim() || `SCAR-${row.id}`,
+        number: showRecordNumber(row.scarNumber),
         title,
         status: row.status,
         plantId: null,
@@ -389,7 +397,7 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `val-${row.id}`,
         module: "VAL",
         href: `/validation-reports/${row.id}`,
-        number: `VAL-${row.id}`,
+        number: showRecordNumber(row.recordNumber),
         title: VALIDATION_TITLE[kind] ?? "Validation report",
         status: "in_progress",
         plantId: null,
@@ -405,7 +413,7 @@ function buildRecords(input: OpenWorkInput): Built {
           id: `fai-${row.id}`,
           module: "FAI",
           href: `/iso-forms/record/${row.id}`,
-          number: `FAI-${row.id}`,
+          number: showRecordNumber(row.recordNumber),
           title,
           status: "in_progress",
           plantId: null,
@@ -425,7 +433,7 @@ function buildRecords(input: OpenWorkInput): Built {
           id: `trp-${row.id}`,
           module: "TRP",
           href: `/iso-forms/record/${row.id}`,
-          number: `TRP-${row.id}`,
+          number: showRecordNumber(row.recordNumber),
           title,
           status: tested ? "tested" : "in_progress",
           plantId: null,
@@ -445,7 +453,7 @@ function buildRecords(input: OpenWorkInput): Built {
           id: `ecr-${row.id}`,
           module: "ECR",
           href: `/iso-forms/record/${row.id}`,
-          number: `ECR-${row.id}`,
+          number: showRecordNumber(row.recordNumber),
           title,
           status,
           plantId: null,
@@ -465,8 +473,8 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `chg-${row.id}`,
         module: "Change",
         href: `/change/${row.id}`,
-        number: `CHG-${row.id}`,
-        title: row.title.trim() || `Change request #${row.id}`,
+        number: showRecordNumber(row.recordNumber),
+        title: row.title.trim() || "Change request",
         status: row.status,
         plantId: null,
         owner: personName(names, row.requestedBy),
@@ -480,12 +488,12 @@ function buildRecords(input: OpenWorkInput): Built {
     modules.push({ key: "PPAP", label: "PPAP" });
     for (const row of input.ppaps) {
       if (row.status !== "open" && row.status !== "submitted") continue;
-      const title = [row.partNumber.trim(), row.partName?.trim() ?? ""].filter(Boolean).join(" — ") || `PPAP #${row.id}`;
+      const title = [row.partNumber.trim(), row.partName?.trim() ?? ""].filter(Boolean).join(" — ") || "PPAP";
       pushRecord(records, {
         id: `ppap-${row.id}`,
         module: "PPAP",
         href: `/ppap/${row.id}`,
-        number: `PPAP-${row.id}`,
+        number: showRecordNumber(row.recordNumber),
         title,
         status: row.status,
         plantId: null,
@@ -504,8 +512,8 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `risk-${row.id}`,
         module: "Risk",
         href: `/risk/${row.id}`,
-        number: `RISK-${row.id}`,
-        title: row.title.trim() || `Risk #${row.id}`,
+        number: showRecordNumber(row.recordNumber),
+        title: row.title.trim() || "Risk",
         status: row.status,
         plantId: null,
         owner: personName(names, row.ownerId),
@@ -524,8 +532,8 @@ function buildRecords(input: OpenWorkInput): Built {
         id: `wo-${row.id}`,
         module: "Work order",
         href: `/work-orders/${row.id}`,
-        number: `WO-${row.id}`,
-        title: item || row.notes?.trim() || `Work order #${row.id}`,
+        number: showRecordNumber(row.recordNumber),
+        title: item || row.notes?.trim() || "Work order",
         status: row.status,
         plantId: null,
         owner: personName(names, row.createdBy),

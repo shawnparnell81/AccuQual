@@ -137,7 +137,7 @@ export function useWorkflowDashboardData() {
   // ---- Pending decisions, cross-module (only where a real "awaiting X" state exists) ----
   const pending: PendingItem[] = [
     ...documents.filter((d) => d.status === "in_review").map((d) => ({ module: "documents" as const, label: d.title, detail: "Awaiting approval", link: `/documents/${d.id}` })),
-    ...capas.filter((c) => c.status === "verifying").map((c) => ({ module: "capa" as const, label: `CAPA #${c.id}`, detail: "Awaiting verification", link: `/capa/${c.id}` })),
+    ...capas.filter((c) => c.status === "verifying").map((c) => ({ module: "capa" as const, label: c.recordNumber?.trim() ? `CAPA ${c.recordNumber.trim()}` : "CAPA", detail: "Awaiting verification", link: `/capa/${c.id}` })),
   ];
 
   function refetch() {

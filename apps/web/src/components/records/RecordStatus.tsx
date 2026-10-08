@@ -82,6 +82,7 @@ export function RecordGlance({
   accessNote,
   actions,
   trail,
+  numberControl,
 }: {
   crumbs?: { label: string; to?: string }[];
   title: string;
@@ -98,6 +99,7 @@ export function RecordGlance({
   accessNote?: string | null;
   actions?: ReactNode;
   trail?: ReactNode;
+  numberControl?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -106,6 +108,7 @@ export function RecordGlance({
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold">{title}</h1>
           {standard && <p className="text-xs text-muted-foreground">{standard}</p>}
+          {numberControl && <div className="mt-3 max-w-xs">{numberControl}</div>}
         </div>
         {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
       </div>

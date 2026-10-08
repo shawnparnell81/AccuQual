@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { z } from "zod";
-import { copyCsaHandler, csaPdfHandler, getCsaHandler, listCsaHandler, listPreviousCsaHandler, saveCsaResultsHandler, submitCsaHandler } from "./csaFai.controller.js";
+import { copyCsaHandler, csaPdfHandler, getCsaHandler, listCsaHandler, listPreviousCsaHandler, saveCsaResultsHandler, submitCsaHandler, updateCsaNumberHandler } from "./csaFai.controller.js";
 
 const submitSchema = z.object({
   partNumber: z.string().min(1),
@@ -17,6 +17,7 @@ const submitSchema = z.object({
   inspectorName: z.string().min(1),
   inspectorUserId: z.number().int().positive().nullable().optional(),
   dateOpened: z.string().optional(),
+  number: z.string().trim().max(120).optional(),
   dampingTestRequired: z.boolean().optional(),
   vehicleFitmentPerformed: z.boolean().optional(),
 }).strict();
@@ -42,4 +43,5 @@ csaFaiRouter.post("/copy", copyCsaHandler);
 csaFaiRouter.post("/", validate(submitSchema), submitCsaHandler);
 csaFaiRouter.get("/:id/pdf", csaPdfHandler);
 csaFaiRouter.get("/:id", getCsaHandler);
+csaFaiRouter.patch("/:id", validate(z.object({ number: z.string().trim().max(120).nullable().optional() })), updateCsaNumberHandler);
 csaFaiRouter.put("/:id/results", validate(resultsSchema), saveCsaResultsHandler);

@@ -24,7 +24,7 @@ export function DocumentChangeRequestDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber || dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
+          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber} number={dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
         </div>
       </div>
 

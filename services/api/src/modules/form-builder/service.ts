@@ -8,6 +8,8 @@ import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type AccessLevel } from "../../middleware/departmentAccess.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { BUILT_FILL_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { BLANK_FORMS_FOLDER } from "../document-folders/formFiling.js";
 import { folderLocationLabel, folderPathParts, joinFolderPath } from "../document-folders/mainIsoFolders.js";
 import { FORM_BUILDER_PERMISSION } from "../roles/roleAccess.js";
@@ -353,7 +355,7 @@ export async function deleteBuiltForm(db: Db, actor: Actor, id: number) {
   await db.delete(builtForms).where(eq(builtForms.id, id));
 }
 
-export async function openBuiltFill(db: Db, actor: Actor, formId: number) {
+export async function openBuiltFill(db: Db, actor: Actor, formId: number, recordNumber?: unknown) {
   await requireFiller(db, actor);
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
   if (!form) throw AppError.notFound("Form");
@@ -369,6 +371,8 @@ export async function openBuiltFill(db: Db, actor: Actor, formId: number) {
   if (JSON.stringify(template) !== JSON.stringify({ ...template, structure: form.publishedStructure })) {
     throw new Error("Opening a copy changed the template");
   }
+  const numberBody: Record<string, unknown> = { recordNumber, formId: form.id };
+  await applyRecordNumber(db, numberBody, BUILT_FILL_NUMBER);
   const [created] = await db
     .insert(builtFormFills)
     .values({
@@ -378,6 +382,7 @@ export async function openBuiltFill(db: Db, actor: Actor, formId: number) {
       structure: copy.structure,
       title: form.title,
       answers: copy.answers,
+      recordNumber: (numberBody.recordNumber as string | null) ?? null,
       createdBy: actor.id,
       updatedBy: actor.id,
     })
@@ -410,7 +415,7 @@ function mergeAnswers(previous: Record<string, unknown>, incoming: Record<string
   return next;
 }
 
-export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { title?: string; answers?: Record<string, unknown> }) {
+export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { title?: string; answers?: Record<string, unknown>; recordNumber?: unknown }) {
   await requireFiller(db, actor);
   const [current] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!current) throw AppError.notFound("Filled form");
@@ -427,18 +432,34 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
     },
     answers,
   );
+  const patch: Record<string, unknown> = {
+    title: input.title?.trim() || current.title,
+    answers: kept.answers,
+    templateRevision: current.templateRevision,
+    structure: current.structure,
+    updatedBy: actor.id,
+    updatedAt: new Date(),
+  };
+  let numberChange: { numberEdit: { label: string; from: string; to: string } } | null = null;
+  if ("recordNumber" in input) {
+    const numberBody: Record<string, unknown> = { recordNumber: input.recordNumber, formId: current.formId };
+    numberChange = await applyRecordNumber(db, numberBody, BUILT_FILL_NUMBER, { id, current: current.recordNumber, row: current });
+    patch.recordNumber = (numberBody.recordNumber as string | null) ?? null;
+  }
   const [updated] = await db
     .update(builtFormFills)
-    .set({
-      title: input.title?.trim() || current.title,
-      answers: kept.answers,
-      templateRevision: current.templateRevision,
-      structure: current.structure,
-      updatedBy: actor.id,
-      updatedAt: new Date(),
-    })
+    .set(patch)
     .where(eq(builtFormFills.id, id))
     .returning();
+  if (numberChange) {
+    await recordAuditTrail(db, {
+      entityType: "BuiltFormFill",
+      entityId: id,
+      action: "update",
+      changes: changesWithNumberEdit({}, numberChange),
+      performedBy: actor.id,
+    });
+  }
   if (template) {
     const [after] = await db.select().from(builtForms).where(eq(builtForms.id, template.id));
     if (!after || after.revision !== template.revision || JSON.stringify(after.structure) !== JSON.stringify(template.structure)) {

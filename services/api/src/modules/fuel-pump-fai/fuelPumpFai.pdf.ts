@@ -20,7 +20,7 @@ export async function renderFuelPumpPdf(state: FpmState, chrome?: PdfChrome | nu
     dateOpened: state.dateOpened.slice(0, 10),
     stage: state.stage,
     productionRelease: state.productionRelease,
-    ncrNumber: state.ncrId ? `NCR-${state.ncrId}` : "",
+    ncrNumber: "",
     flowRateResult: state.flowRateResult ?? "",
     pressureResult: state.pressureResult ?? "",
     currentDrawResult: state.currentDrawResult ?? "",

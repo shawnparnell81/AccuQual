@@ -4,7 +4,7 @@ import { ensureTestCompany } from "../helpers/company.js";
 // RBAC build, 2026-09-16) — NOT the automated Supplier RMA Request event
 // trail, which was renamed to rma_activity_log at the same time (see
 // supplier-rma-request.test.ts for that). Covers the "Add New" endpoint's
-// auto-generated rmaNumber/dateIssued, the full 17-column field list, the
+// a user-typed rmaNumber (blank until typed) and dateIssued, the full 17-column field list, the
 // fixed status workflow (with auto-stamped dateReceived/dateClosed), the
 // separate rma_log.status.write / rma_log.linkage.write sub-permissions
 // layered on top of the base rma_log.read/write level, warranty/supplier-
@@ -74,10 +74,15 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
     expect(create.status).toBe(403);
   });
 
-  it("\"Add New\": quality creates an entry with just a customer name — rmaNumber and dateIssued are auto-generated", async () => {
-    const res = await request(app).post("/rma-log").set("Authorization", `Bearer ${qualityToken}`).send({ customerName: "Acme Co", partNumber: "PN-100", customerReasonForReturn: "Cracked housing" });
+  it("\"Add New\": quality creates an entry with just a customer name — the number stays blank until typed", async () => {
+    const blank = await request(app).post("/rma-log").set("Authorization", `Bearer ${qualityToken}`).send({ customerName: "Blank Co" });
+    expect(blank.status).toBe(201);
+    expect(blank.body.rmaNumber).toBeNull();
+
+    const res = await request(app).post("/rma-log").set("Authorization", `Bearer ${qualityToken}`).send({ customerName: "Acme Co", partNumber: "PN-100", customerReasonForReturn: "Cracked housing", rmaNumber: `RMA-LOG-${suffix}` });
     expect(res.status).toBe(201);
-    expect(res.body.rmaNumber).toMatch(/^RMA-\d{4}-\d{4}$/);
+    expect(res.body.rmaNumber).toBe(`RMA-LOG-${suffix}`);
+    expect(res.body.rmaNumber).not.toBe(`RMA-${new Date().getFullYear()}-${String(res.body.id).padStart(4, "0")}`);
     expect(res.body.dateIssued).toBeTruthy();
     expect(res.body.status).toBe("open");
     recordId = res.body.id;
@@ -177,8 +182,9 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
       const byStatus = await request(app).get("/rma-log").set("Authorization", `Bearer ${qualityToken}`).query({ status: "closed" });
       expect(byStatus.body.some((r: { id: number }) => r.id === recordId)).toBe(true);
 
-      const rmaNumber = (await request(app).get(`/rma-log/${recordId}`).set("Authorization", `Bearer ${qualityToken}`)).body.rmaNumber;
-      const bySearch = await request(app).get("/rma-log").set("Authorization", `Bearer ${qualityToken}`).query({ q: rmaNumber.slice(-4) });
+      const rmaNumber = (await request(app).get(`/rma-log/${recordId}`).set("Authorization", `Bearer ${qualityToken}`)).body.rmaNumber as string;
+      expect(rmaNumber).toBe(`RMA-LOG-${suffix}`);
+      const bySearch = await request(app).get("/rma-log").set("Authorization", `Bearer ${qualityToken}`).query({ q: rmaNumber });
       expect(bySearch.body.some((r: { id: number }) => r.id === recordId)).toBe(true);
     });
   });

@@ -8,6 +8,8 @@ import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js"
 import { deleteRecord } from "../records/recordDeletion.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
+import { DCR_NUMBER } from "../records/recordNumberSpecs.js";
+import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 async function loadDcr(req: Request, id: number) {
   const [row] = await req.db!.select().from(documentChangeRequests).where(and(eq(documentChangeRequests.id, id)));
@@ -25,7 +27,9 @@ export const listDcrHandler = asyncHandler(async (req: Request, res: Response) =
 
 export const createDcrHandler = asyncHandler(async (req: Request, res: Response) => {
   const revision = templateRevisionFor("dcr").revision;
-  const [created] = await req.db!.insert(documentChangeRequests).values({ ...req.body, revision, createdBy: req.user?.id }).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await applyRecordNumber(req.db!, body, DCR_NUMBER);
+  const [created] = await req.db!.insert(documentChangeRequests).values({ ...body, revision, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -41,6 +45,7 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
   const record = await loadDcr(req, Number(req.params.id));
   const body = { ...(req.body as Record<string, unknown>) };
   delete body.revision;
+  const numberChange = await applyRecordNumber(req.db!, body, DCR_NUMBER, { id: record.id, current: record.formNo, row: record });
   // SIGN cells are written only by the PIN endpoint.
   delete body.requesterApprovalSignature;
   delete body.requesterApprovalDate;
@@ -56,7 +61,7 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
   });
   const revision = keptRevision(record.revision, templateRevisionFor("dcr").revision);
   const [updated] = await req.db!.update(documentChangeRequests).set({ ...body, revision, updatedAt: new Date() }).where(eq(documentChangeRequests.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   res.json(updated);
 });
 

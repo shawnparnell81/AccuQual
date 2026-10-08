@@ -10,8 +10,9 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { parseLimitOffset } from "../../utils/listQuery.js";
 import { capaMatchesNcr, openRepeatCapa } from "../quality-automation/qualityAutomation.service.js";
 import { missingRequiredLabels, requiredMoveError } from "../workflow/requiredFields.js";
+import { CAPA_NUMBER } from "../records/recordNumberSpecs.js";
 
-export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true });
+export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true, recordNumber: CAPA_NUMBER });
 
 /**
  * GET /capa — supplier, owner, status, limit, and offset use the shared list.
@@ -33,9 +34,7 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
     conditions.push(capaMatchesNcr(ncrId));
   }
   if (q) {
-    const asId = /^\d+$/.test(q) ? Number(q) : null;
-    const text = ilike(capa.rootCause, `%${q}%`);
-    conditions.push(asId != null ? or(text, eq(capa.id, asId))! : text);
+    conditions.push(or(ilike(capa.rootCause, `%${q}%`), ilike(capa.recordNumber, `%${q}%`))!);
   }
   const supplierId = typeof req.query.supplierId === "string" ? req.query.supplierId : "";
   if (supplierId) conditions.push(eq(capa.supplierId, Number(supplierId)));

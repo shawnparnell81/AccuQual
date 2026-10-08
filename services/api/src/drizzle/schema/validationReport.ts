@@ -1,4 +1,4 @@
-import { pgTable, serial, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 /**
  * Validation Reports folder records.
@@ -8,6 +8,7 @@ import { pgTable, serial, timestamp, jsonb } from "drizzle-orm/pg-core";
  */
 export const validationReports = pgTable("validation_reports", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   data: jsonb("data")
     .$type<{
       formType?:

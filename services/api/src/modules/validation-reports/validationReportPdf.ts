@@ -28,8 +28,11 @@ function cellText(value: unknown): string {
 export function validationExportIdentity(data: Record<string, unknown>, generatedBy: string) {
   const kind = typeof data.formType === "string" && TITLES[data.formType] ? data.formType : "csa";
   const meta = TITLES[kind]!;
-  const cells = data.cells && typeof data.cells === "object" && !Array.isArray(data.cells) ? (data.cells as Record<string, unknown>) : {};
-  return { sourceModule: meta.title, recordNumber: cellText(cells.B6), revision: meta.revision, generatedBy, formNumber: meta.title };
+  return { sourceModule: meta.title, recordNumber: typedRecordNumber(data), revision: meta.revision, generatedBy, formNumber: meta.title };
+}
+
+function typedRecordNumber(data: Record<string, unknown>): string {
+  return typeof data.recordNumber === "string" ? data.recordNumber.trim() : "";
 }
 
 /** Sheet order: header cells, then one row per filled sheet row. */
@@ -92,7 +95,7 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
   };
   const built = emptyFrame({
     sourceModule: meta.title,
-    recordNumber: cellText(cells.B6),
+    recordNumber: typedRecordNumber(data),
     revision: meta.revision,
     generatedBy,
     formNumber: meta.title,

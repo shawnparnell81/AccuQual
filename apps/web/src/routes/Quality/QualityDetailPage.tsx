@@ -8,10 +8,14 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface DiscrepancyInvestigation {
   id: number;
+  recordNumber?: string | null;
   title: string;
   description: string | null;
   severity: string | null;
@@ -40,6 +44,8 @@ export function QualityDetailPage() {
   const discrepancyId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "di", discrepancyId]];
   const { data: discrepancy, isLoading, isError } = qualityHooks.useOne(discrepancyId);
+  const updateDiscrepancy = qualityHooks.useUpdate();
+  const canEdit = useCanEditWorkflow("di");
   // Status moves only through these dedicated, sequence-checked endpoints
   // (open -> investigating -> disposed -> closed); the generic PATCH no
   // longer accepts `status`.
@@ -61,20 +67,21 @@ export function QualityDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">
-            Discrepancy #{discrepancy.id} — {discrepancy.title}
+            {recordHeading("Discrepancy", discrepancy.recordNumber)} — {discrepancy.title}
           </h1>
+          <RecordNumberEditor label="Record No." value={discrepancy.recordNumber} canEdit={canEdit} onSave={(next) => updateDiscrepancy.mutateAsync({ id: discrepancy.id, recordNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={discrepancy.status} />
             <StatusBadge value={discrepancy.severity} />
             {discrepancy.autoCreated && (
               <button onClick={() => navigate(`/audits/${discrepancy.sourceAuditId}`)} className="text-xs text-primary hover:underline">
-                Auto-opened from Audit #{discrepancy.sourceAuditId}
+                Auto-opened from an audit
               </button>
             )}
           </div>
         </div>
         <div className="flex gap-2">
-          <OpenFormButton formType="discrepancy_inspection" entityId={discrepancy.id} title={`Discrepancy #${discrepancy.id} Investigation`} />
+          <OpenFormButton formType="discrepancy_inspection" entityId={discrepancy.id} title={`${recordHeading("Discrepancy", discrepancy.recordNumber)} Investigation`} />
           <WorkflowActionButton
             label="Mark Investigating"
             navKey="di"

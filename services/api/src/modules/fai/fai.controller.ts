@@ -56,6 +56,10 @@ export const openRecordHandler = asyncHandler(async (req: Request, res: Response
   res.status(201).json(await fai.openRecord(req.db!, req.user!.id, req.body));
 });
 
+export const updateRecordNumberHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await fai.updateRecordNumber(req.db!, req.user!.id, idOf(req.params.id, "first article"), req.body.number));
+});
+
 export const getRecordHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await fai.getRecord(req.db!, idOf(req.params.id, "first article")));
 });

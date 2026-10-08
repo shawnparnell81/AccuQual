@@ -6,6 +6,8 @@
  * unavailable instead of being filled in.
  */
 
+import { showRecordNumber } from "../records/userRecordNumber.js";
+
 const DAY_MS = 86_400_000;
 const TREND_WEEKS = 12;
 const SPARK_WEEKS = 8;
@@ -25,6 +27,7 @@ export interface SiteRef {
 
 export interface DashNcr {
   id: number;
+  recordNumber?: string | null;
   siteId: number | null;
   title: string;
   status: string;
@@ -39,6 +42,7 @@ export interface DashNcr {
 
 export interface DashCapa {
   id: number;
+  recordNumber?: string | null;
   siteId: number | null;
   ncrId: number | null;
   status: string;
@@ -79,6 +83,7 @@ export interface DashEquipment {
 
 export interface DashAudit {
   id: number;
+  recordNumber?: string | null;
   siteId: number | null;
   name: string;
   status: string;
@@ -108,6 +113,7 @@ export interface DashPpap {
 
 export interface DashScar {
   id: number;
+  scarNumber?: string | null;
   supplierName: string;
   status: string;
   responseDueDate: Date | string | null;
@@ -351,7 +357,7 @@ function activityText(entry: DashActivity, meta: { label: string }): string {
 function capaTitle(capa: DashCapa): string {
   const text = capa.actionPlan?.trim() || capa.rootCause?.trim();
   if (text) return text;
-  return capa.ncrId ? `Fix for issue #${capa.ncrId}` : `Fix #${capa.id}`;
+  return capa.ncrId ? "Fix for a linked issue" : "Fix";
 }
 
 export function buildDashboardOverview(source: DashboardSource): DashboardOverview {
@@ -442,12 +448,12 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
   const tasks: DashListItem[] = [];
   if (access.ncr) {
     for (const row of openNcrs.filter((item) => item.assignedTo === source.userId)) {
-      tasks.push({ id: `ncr-${row.id}`, href: `/ncr/${row.id}`, ref: `NCR-${row.id}`, title: row.title, kind: "Issue assigned to you", due: iso(row.dueDate) });
+      tasks.push({ id: `ncr-${row.id}`, href: `/ncr/${row.id}`, ref: showRecordNumber(row.recordNumber), title: row.title, kind: "Issue assigned to you", due: iso(row.dueDate) });
     }
   }
   if (access.capa) {
     for (const row of openCapas.filter((item) => item.ownerId === source.userId)) {
-      tasks.push({ id: `capa-${row.id}`, href: `/capa/${row.id}`, ref: `CAPA-${row.id}`, title: capaTitle(row), kind: "Fix you own", due: iso(row.dueDate) });
+      tasks.push({ id: `capa-${row.id}`, href: `/capa/${row.id}`, ref: showRecordNumber(row.recordNumber), title: capaTitle(row), kind: "Fix you own", due: iso(row.dueDate) });
     }
   }
   if (access.approveDocuments) {
@@ -456,7 +462,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       tasks.push({
         id: `doc-${row.id}`,
         href: `/documents/${row.id}`,
-        ref: `DOC-${row.id}`,
+        ref: row.revisionCode?.trim() || "",
         title: rev ? `Approve ${rev} — ${row.title}` : `Approve — ${row.title}`,
         kind: "Waiting for your sign-off",
         due: null,
@@ -470,7 +476,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       tasks.push({
         id: `trn-${row.id}`,
         href: `/training/${row.courseId}`,
-        ref: `TRN-${row.id}`,
+        ref: "",
         title: row.courseTitle?.trim() || `Course #${row.courseId}`,
         kind: "Training assigned to you",
         due: iso(row.dueAt),
@@ -482,7 +488,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       tasks.push({
         id: `aud-${row.id}`,
         href: `/audits/${row.id}`,
-        ref: `AUD-${row.id}`,
+        ref: showRecordNumber(row.recordNumber),
         title: row.name,
         kind: row.status === "in_progress" ? "Audit in progress" : "Audit you lead",
         due: iso(row.scheduledAt),
@@ -494,7 +500,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       tasks.push({
         id: `eq-${row.id}`,
         href: `/calibration/${row.id}`,
-        ref: `GAGE-${row.id}`,
+        ref: "",
         title: `${row.name} calibration ${row.dueStatus === "failed" ? "failed" : "overdue"}`,
         kind: "Gage overdue",
         due: iso(row.nextDueAt),
@@ -515,7 +521,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       stuck.push({
         id: `ncr-${row.id}`,
         href: `/ncr/${row.id}`,
-        ref: `NCR-${row.id}`,
+        ref: showRecordNumber(row.recordNumber),
         title: row.title,
         why: `${row.status.replace(/_/g, " ")} for ${age} days`,
         tone: "warn",
@@ -529,7 +535,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       stuck.push({
         id: `capa-${row.id}`,
         href: `/capa/${row.id}`,
-        ref: `CAPA-${row.id}`,
+        ref: showRecordNumber(row.recordNumber),
         title: capaTitle(row),
         why: `Late by ${late}d`,
         tone: "bad",
@@ -542,7 +548,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       stuck.push({
         id: `doc-${row.id}`,
         href: `/documents/${row.id}`,
-        ref: `DOC-${row.id}`,
+        ref: row.revisionCode?.trim() || "",
         title: row.title,
         why: "Waiting for approval",
         tone: "warn",
@@ -558,7 +564,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
       stuck.push({
         id: `scar-${row.id}`,
         href: `/scar-forms/${row.id}`,
-        ref: `SCAR-${row.id}`,
+        ref: showRecordNumber(row.scarNumber),
         title: `${row.supplierName} — no response`,
         why: `Response late by ${-late}d`,
         tone: "bad",

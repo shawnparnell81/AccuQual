@@ -14,12 +14,15 @@ import * as quarantineService from "../quarantine/quarantine.service.js";
 import { noteRepeatNcr, repeatReport } from "../quality-automation/qualityAutomation.service.js";
 import { canonicalNcrStep, decorateNcrBody, ncrStatusAliases } from "./ncr.workflow.js";
 import { ncrProcessMetrics, type NcrMetricSource } from "./ncrSla.js";
+import { NCR_NUMBER } from "../records/recordNumberSpecs.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
   idColumn: "id",
   softDelete: true,
   siteScoped: true,
+  recordNumber: NCR_NUMBER,
   expandStatusFilter: ncrStatusAliases,
   prepareCreate: (body) => ({ ...body, status: typeof body.status === "string" ? canonicalNcrStep(body.status) : "ncr_created" }),
   // Phase 2 NCR unified-data-model fix — see ncr.formSync.ts's own comment.
@@ -27,12 +30,12 @@ export const baseHandlers = crudFactory(ncr, {
   // starts totally blank again); a direct PATCH to description/severity
   // keeps that document's matching fields in step.
   afterCreate: async (created, req) => {
-    const row = created as { id: number; description: string | null; severity: string | null; createdAt: Date | string };
+    const row = created as { id: number; description: string | null; severity: string | null; createdAt: Date | string; recordNumber?: string | null };
     await syncNcrFormData(
       req.db!,
       row.id,
       {
-        ncrNumber: `NCR-${row.id}`,
+        ncrNumber: showRecordNumber(row.recordNumber) || undefined,
         dateIssued: ncrIsoDate(row.createdAt ?? new Date()),
         documentStatus: "Active",
         nonconformanceDescription: row.description ?? undefined,
@@ -43,10 +46,14 @@ export const baseHandlers = crudFactory(ncr, {
     await noteRepeatNcr(req.db!, row.id);
   },
   afterUpdate: async (updated, req) => {
-    const row = updated as { id: number; description: string | null; severity: string | null };
+    const row = updated as { id: number; description: string | null; severity: string | null; recordNumber?: string | null };
     const patch: Parameters<typeof syncNcrFormData>[2] = {};
     if ("description" in req.body) patch.nonconformanceDescription = row.description ?? undefined;
     if ("severity" in req.body) patch.ncrClassification = mapSeverityToClassification(row.severity);
+    if ("recordNumber" in req.body) {
+      patch.ncrNumber = showRecordNumber(row.recordNumber);
+      patch.forceNcrNumber = true;
+    }
     if (Object.keys(patch).length > 0) await syncNcrFormData(req.db!, row.id, patch, req.user?.id);
     await noteRepeatNcr(req.db!, row.id);
   },

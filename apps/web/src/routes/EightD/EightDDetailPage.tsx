@@ -8,6 +8,8 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import type { Ncr, Capa } from "../../api/types";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 import { SaveStatus } from "../../components/shared/SaveStatus";
@@ -20,6 +22,7 @@ import { worksheetsFromReport, type WorksheetKey, type WorksheetValues } from ".
 interface EightDReport {
   id: number;
   ncrId: number | null;
+  recordNumber?: string | null;
   currentStep: number;
   data: Record<string, unknown>;
   problemDescriptionD2?: Record<string, string>;
@@ -180,26 +183,32 @@ export function EightDDetailPage() {
         <RecordCrumbs
           items={[
             { label: "NCR", to: "/ncr" },
-            ...(report.ncrId ? [{ label: `NCR #${report.ncrId}`, to: `/ncr/${report.ncrId}` }] : []),
-            ...(linkedCapa ? [{ label: `CAPA #${linkedCapa.id}`, to: `/capa/${linkedCapa.id}` }] : []),
-            { label: `8D #${report.id}` },
+            ...(report.ncrId ? [{ label: "NCR", to: `/ncr/${report.ncrId}` }] : []),
+            ...(linkedCapa ? [{ label: recordHeading("CAPA", linkedCapa.recordNumber), to: `/capa/${linkedCapa.id}` }] : []),
+            { label: recordHeading("8D", report.recordNumber) },
           ]}
         />
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">8D report #{report.id}</h1>
+            <h1 className="text-2xl font-semibold">{recordHeading("8D report", report.recordNumber)}</h1>
+            <RecordNumberEditor
+              label="8D No."
+              value={report.recordNumber}
+              canEdit={canEdit}
+              onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })}
+            />
             <p className="text-sm text-muted-foreground">
               {nextStep ? `Next: ${nextStep.label}` : "Eight-step writeup"}
               {report.ncrId ? (
                 <>
                   {" "}
-                  · from <Link to={`/ncr/${report.ncrId}`} className="text-primary hover:underline">NCR #{report.ncrId}</Link>
+                  · from <Link to={`/ncr/${report.ncrId}`} className="text-primary hover:underline">{recordHeading("NCR", linkedNcr?.recordNumber)}</Link>
                 </>
               ) : null}
               {linkedCapa ? (
                 <>
                   {" "}
-                  · <Link to={`/capa/${linkedCapa.id}`} className="text-primary hover:underline">CAPA #{linkedCapa.id}</Link>
+                  · <Link to={`/capa/${linkedCapa.id}`} className="text-primary hover:underline">{recordHeading("CAPA", linkedCapa.recordNumber)}</Link>
                 </>
               ) : report.ncrId ? (
                 <> · no CAPA linked yet</>
@@ -207,7 +216,7 @@ export function EightDDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} navigateTo="/8d" />
+            <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} number={report.recordNumber} navigateTo="/8d" />
             {linkedNcr && canEdit && (
               <AiStructuredSuggestion<EightDSuggestion>
                 endpoint="/ai/8d"

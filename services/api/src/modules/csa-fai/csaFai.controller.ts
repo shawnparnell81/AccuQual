@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { copyCsa, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa } from "./csaFai.service.js";
+import { copyCsa, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa, updateCsaNumber } from "./csaFai.service.js";
 import { renderCsaPdf } from "./csaFai.pdf.js";
 import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
 import { emptyFrame } from "../forms/controlledPdf.js";
@@ -31,6 +31,12 @@ export const submitCsaHandler = asyncHandler(async (req: Request, res: Response)
 
 export const getCsaHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await getCsa(req.db!, Number(req.params.id)));
+});
+
+export const updateCsaNumberHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a CSA first article.");
+  res.json(await updateCsaNumber(req.db!, id, (req.body as { number?: unknown }).number, req.user!.id));
 });
 
 export const saveCsaResultsHandler = asyncHandler(async (req: Request, res: Response) => {

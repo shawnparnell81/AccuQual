@@ -496,10 +496,22 @@ function dedupe(lines: string[]): string[] {
   return kept;
 }
 
+function numberEditSentence(changes: Record<string, unknown> | null): string | null {
+  const edit = changes && typeof changes.numberEdit === "object" && changes.numberEdit ? (changes.numberEdit as Record<string, unknown>) : null;
+  if (!edit) return null;
+  const label = typeof edit.label === "string" && edit.label.trim() ? edit.label.trim() : "Record No.";
+  const from = typeof edit.from === "string" && edit.from.trim() ? edit.from.trim() : "(blank)";
+  const to = typeof edit.to === "string" && edit.to.trim() ? edit.to.trim() : "(blank)";
+  return `${label} changed from ${from} to ${to}.`;
+}
+
 function auditDescription(action: string, changes: Record<string, unknown> | null | undefined, fieldChanges?: AuditFieldChange[] | null): string {
   const record = asRecord(changes);
   const summary = stringField(record, "summary");
-  if (summary && !summary.startsWith("{") && !summary.startsWith("[")) return summary;
+  const numberLine = numberEditSentence(record);
+  if (summary && !summary.startsWith("{") && !summary.startsWith("[")) {
+    return numberLine && !summary.includes(numberLine) ? `${numberLine} ${summary}` : summary;
+  }
 
   const fields = fieldSentences(fieldChanges ?? []);
   const code = specificCode(record);
@@ -513,6 +525,7 @@ function auditDescription(action: string, changes: Record<string, unknown> | nul
   if (action !== "permission_denied" && action !== "transition_failed") {
     for (const note of noteSentences(record)) parts.push(note);
   }
+  if (numberLine) parts.unshift(numberLine);
   const unique = dedupe(parts);
   return unique.length > 0 ? unique.join(" ") : AUDIT_DETAIL_FALLBACK;
 }

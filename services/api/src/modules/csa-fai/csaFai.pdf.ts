@@ -20,7 +20,7 @@ export async function renderCsaPdf(state: CsaState, chrome?: PdfChrome | null): 
     dateOpened: state.dateOpened.slice(0, 10),
     stage: state.stage,
     productionRelease: state.productionRelease,
-    ncrNumber: state.ncrId ? `NCR-${state.ncrId}` : "",
+    ncrNumber: "",
   };
   const sections: FormLayout["sections"] = [
     {

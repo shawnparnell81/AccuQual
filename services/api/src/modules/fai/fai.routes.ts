@@ -4,7 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
-import { assignFaiSchema, assignPullSchema, completePullSchema, faiDecisionSchema, openFaiSchema, savePlanSchema, saveResultsSchema } from "./fai.validation.js";
+import { assignFaiSchema, assignPullSchema, completePullSchema, faiDecisionSchema, openFaiSchema, savePlanSchema, saveResultsSchema, updateFaiNumberSchema } from "./fai.validation.js";
 import { csaFaiRouter } from "../csa-fai/csaFai.routes.js";
 import { fuelPumpFaiRouter } from "../fuel-pump-fai/fuelPumpFai.routes.js";
 import {
@@ -23,6 +23,7 @@ import {
   copyRecordHandler,
   listPreviousRecordsHandler,
   openRecordHandler,
+  updateRecordNumberHandler,
   pdfHandler,
   queueHandler,
   rejectRecordHandler,
@@ -54,6 +55,7 @@ faiRouter.post("/records/copy", copyRecordHandler);
 faiRouter.post("/records", validate(openFaiSchema), openRecordHandler);
 faiRouter.get("/records/:id/pdf", pdfHandler);
 faiRouter.get("/records/:id", getRecordHandler);
+faiRouter.patch("/records/:id", validate(updateFaiNumberSchema), updateRecordNumberHandler);
 faiRouter.patch("/records/:id/lines", validate(saveResultsSchema), saveResultsHandler);
 faiRouter.post("/records/:id/assign", validate(assignFaiSchema), assignRecordHandler);
 faiRouter.post("/records/:id/submit", submitRecordHandler);

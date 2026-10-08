@@ -44,6 +44,7 @@ export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
 export const isoQualityForms = pgTable("iso_quality_forms", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   formType: text("form_type").$type<IsoFormType>().notNull(),
   data: jsonb("data")
     .$type<{

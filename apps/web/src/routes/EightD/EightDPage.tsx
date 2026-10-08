@@ -7,11 +7,14 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../../components/shared/ToastProvider";
 import type { Ncr } from "../../api/types";
+import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 
 interface EightDReport {
   id: number;
   ncrId: number | null;
   currentStep: number;
+  recordNumber?: string | null;
 }
 
 const eightDHooks = createResourceHooks<EightDReport>("8d");
@@ -25,7 +28,7 @@ function NcrPicker({ value, onChange }: { value: number | null; onChange: (id: n
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const rows = needle
-      ? ncrs.filter((ncr) => String(ncr.id).includes(needle) || ncr.title.toLowerCase().includes(needle))
+      ? ncrs.filter((ncr) => showRecordNumber(ncr.recordNumber).toLowerCase().includes(needle) || ncr.title.toLowerCase().includes(needle))
       : ncrs;
     return rows.slice(0, 12);
   }, [ncrs, query]);
@@ -39,7 +42,7 @@ function NcrPicker({ value, onChange }: { value: number | null; onChange: (id: n
         aria-controls="ncr-picker-list"
         role="combobox"
         placeholder="Search by NCR number or title"
-        value={selected && !open ? `NCR #${selected.id} — ${selected.title}` : query}
+        value={selected && !open ? `${recordHeading("NCR", selected.recordNumber)} — ${selected.title}` : query}
         onChange={(event) => {
           setQuery(event.target.value);
           if (value != null) onChange(null);
@@ -69,7 +72,7 @@ function NcrPicker({ value, onChange }: { value: number | null; onChange: (id: n
                   setOpen(false);
                 }}
               >
-                NCR #{ncr.id} — {ncr.title}
+                {recordHeading("NCR", ncr.recordNumber)} — {ncr.title}
               </button>
             </li>
           ))}
@@ -87,19 +90,28 @@ export function EightDPage() {
   const createReport = eightDHooks.useCreate();
   const [createOpen, setCreateOpen] = useState(false);
   const [ncrId, setNcrId] = useState<number | null>(null);
+  const [recordNumber, setRecordNumber] = useState("");
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   function openCreate() {
     setNcrId(null);
+    setRecordNumber("");
+    setNumberError(null);
     setCreateOpen(true);
   }
 
   function create() {
-    createReport.mutate(ncrId ? { ncrId } : {}, {
+    createReport.mutate({ ...(ncrId ? { ncrId } : {}), recordNumber: recordNumber.trim() || null }, {
       onSuccess: (created) => {
         setCreateOpen(false);
         navigate(`/8d/${created.id}`);
       },
-      onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create this 8D report.")),
+      onError: (err) => {
+        const message = extractErrorMessage(err, "Couldn't create this 8D report.");
+        const duplicate = duplicateNumberError(message);
+        if (duplicate) setNumberError(duplicate);
+        else toast.error(message);
+      },
     });
   }
 
@@ -111,8 +123,8 @@ export function EightDPage() {
         canCreate={false}
         onRowClick={(row) => navigate(`/8d/${row.id}`)}
         columns={[
-          { header: "ID", accessor: (row) => `#${row.id}` },
-          { header: "Linked NCR", accessor: (row) => (row.ncrId ? `#${row.ncrId}` : "—") },
+          { header: "8D No.", accessor: (row) => showRecordNumber(row.recordNumber) },
+          { header: "Linked NCR", accessor: (row) => (row.ncrId ? "Linked" : "—") },
           { header: "Current step", accessor: (row) => `D${row.currentStep}` },
         ]}
         headerActions={
@@ -125,6 +137,7 @@ export function EightDPage() {
       />
       <Modal title="Create 8D report" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="flex flex-col gap-4">
+          <RecordNumberField label="8D No." value={recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setRecordNumber(value); }} />
           <NcrPicker value={ncrId} onChange={setNcrId} />
           <button type="button" onClick={create} disabled={createReport.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             {createReport.isPending ? "Creating…" : "Create"}

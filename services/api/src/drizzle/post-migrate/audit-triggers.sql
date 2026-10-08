@@ -169,7 +169,11 @@ BEGIN
       ('sso_domains',                 ARRAY[]::text[]),
       ('user_identities',             ARRAY['last_login_at']),
       ('controlled_versions',         ARRAY['payload']),
-      ('quality_engineering_reports', ARRAY['supplier_data'])
+      ('quality_engineering_reports', ARRAY['supplier_data']),
+      ('fai_records',                 ARRAY[]::text[]),
+      ('csa_fai_records',             ARRAY[]::text[]),
+      ('fuel_pump_fai_records',       ARRAY[]::text[]),
+      ('built_form_fills',            ARRAY[]::text[])
     ) AS s(tbl, excluded)
   LOOP
     CONTINUE WHEN to_regclass('public.' || spec.tbl) IS NULL;

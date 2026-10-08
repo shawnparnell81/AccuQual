@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import type { QmsForm, QmsFormStatus } from "../../api/types";
 import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { getQmsFormDefinition, isRetiredQmsFormType } from "./qmsFormDefinitions";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
@@ -23,8 +24,7 @@ export function QmsFormTypePage() {
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
 
   const columns: Column<QmsForm>[] = [
-    { header: "ID", accessor: (r) => `#${r.id}` },
-    { header: "Form No.", accessor: (r) => r.formNo ?? "—" },
+    { header: "Form No.", accessor: (r) => r.formNo?.trim() || "" },
     { header: "Revision", accessor: (r) => r.revision ?? "A" },
     { header: "Prepared By", accessor: (r) => r.preparedBy ?? "—" },
     { header: "Approved By", accessor: (r) => r.approvedBy ?? "—" },
@@ -41,13 +41,16 @@ export function QmsFormTypePage() {
           <h1 className="text-2xl font-semibold">{definition.title}</h1>
           <p className="text-sm text-muted-foreground">{definition.subtitle}</p>
         </div>
-        <button
-          onClick={() => createForm.mutate({ formType } as never, { onSuccess: (created) => navigate(`/qms-forms/${formType}/${created.id}`) })}
-          disabled={createForm.isPending}
-          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-        >
-          {createForm.isPending ? "Creating…" : `+ New ${definition.title}`}
-        </button>
+        <NumberedCreateButton
+          label={`+ New ${definition.title}`}
+          numberLabel="Form No."
+          dialogTitle={`New ${definition.title}`}
+          pending={createForm.isPending}
+          onCreate={async (recordNumber) => {
+            const created = await createForm.mutateAsync({ formType, formNo: recordNumber.trim() || null } as never);
+            navigate(`/qms-forms/${formType}/${created.id}`);
+          }}
+        />
       </div>
 
       <div className="flex gap-3">

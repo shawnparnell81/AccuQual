@@ -5,6 +5,8 @@ import { sites } from "./sites.js";
 
 export const ncr = pgTable("ncr", {
   id: serial("id").primaryKey(),
+  /** Company record number. Blank until someone types it. Never filled from this id. */
+  recordNumber: text("record_number"),
   // Plant this issue belongs to. Nullable in the type so inserts that omit
   // it still compile; the database column is NOT NULL and a BEFORE INSERT
   // trigger fills the company's default plant when the caller doesn't (see

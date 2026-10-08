@@ -9,6 +9,7 @@ import { users } from "./users.js";
  */
 export const ppapPackages = pgTable("ppap_packages", {
   id: serial("id").primaryKey(),
+  recordNumber: text("record_number"),
   partNumber: text("part_number").notNull(),
   partName: text("part_name"),
   customer: text("customer"),

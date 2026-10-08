@@ -70,7 +70,7 @@ export function WarrantyCrarPanel({ claimId }: { claimId: number }) {
           {rows.map((c) => (
             <li key={c.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
               <button onClick={() => navigate(`/crar/${c.id}`)} className="text-left text-primary hover:underline">
-                {c.customerClaim ? `Claim ${c.customerClaim}` : `CRAR #${c.id}`}
+                {c.customerClaim?.trim() ? `Claim ${c.customerClaim.trim()}` : "CRAR"}
               </button>
               <StatusBadge value={c.status} />
             </li>

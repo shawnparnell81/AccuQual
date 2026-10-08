@@ -10,6 +10,8 @@ type Row = Record<string, unknown>;
 
 export interface NcrFormSyncPatch {
   ncrNumber?: string;
+  /** When the record's own number changed, write it onto the form even if a number was already there. */
+  forceNcrNumber?: boolean;
   dateIssued?: string;
   documentStatus?: "Draft" | "Active" | "Closed";
   nonconformanceDescription?: string;
@@ -79,7 +81,7 @@ export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncP
   // afterward — they're document-control fields a quality engineer might
   // deliberately edit by hand later (e.g. a real revision-controlled NCR
   // number scheme), and re-stamping them on every sync would fight that.
-  if (patch.ncrNumber !== undefined && data.ncrNumber === undefined) data.ncrNumber = patch.ncrNumber;
+  if (patch.ncrNumber !== undefined && (data.ncrNumber === undefined || patch.forceNcrNumber)) data.ncrNumber = patch.ncrNumber;
   if (patch.dateIssued !== undefined && data.dateIssued === undefined) data.dateIssued = patch.dateIssued;
 
   if (patch.documentStatus !== undefined) data.documentStatus = setSingleCheckboxRow(data.documentStatus, "status", patch.documentStatus);

@@ -7,7 +7,10 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { TextField } from "../../components/forms/Field";
+import { recordHeading } from "../../lib/userRecordNumber";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { ProductionWorkOrderTraveler } from "./ProductionWorkOrderTraveler";
 import type { WorkOrder, WorkOrderStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -18,6 +21,8 @@ export function WorkOrderDetailPage() {
   const { id } = useParams();
   const workOrderId = Number(id);
   const { data: record, isLoading, isError } = woHooks.useOne(workOrderId);
+  const updateWo = woHooks.useUpdate();
+  const canEdit = useCanEditWorkflow("work_orders");
   const [quantityCompleted, setQuantityCompleted] = useState("");
 
   const startAction = useWorkflowAction<{ id: number }>("work-orders", "start", { successMessage: "Work order started.", invalidateKeys: [["workflow-history", "work_orders", workOrderId]] });
@@ -36,7 +41,8 @@ export function WorkOrderDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
-          <h1 className="text-2xl font-semibold">Work Order #{record.id}</h1>
+          <h1 className="text-2xl font-semibold">{recordHeading("Work order", record.recordNumber)}</h1>
+          <RecordNumberEditor label="Work Order No." value={record.recordNumber} canEdit={canEdit} onSave={(next) => updateWo.mutateAsync({ id: record.id, recordNumber: next.trim() || null })} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={record.status} />
             <span className="text-sm text-muted-foreground">
@@ -45,7 +51,7 @@ export function WorkOrderDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="work-orders" id={record.id} kind="Work order" title={record.item?.sku} ownerIds={[record.createdBy]} navigateTo="/work-orders" />
+          <DeleteRecordButton resource="work-orders" id={record.id} kind="Work order" title={record.item?.sku} number={record.recordNumber} ownerIds={[record.createdBy]} navigateTo="/work-orders" />
         </div>
       </div>
 

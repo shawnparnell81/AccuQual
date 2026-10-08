@@ -16,7 +16,7 @@ export const fuelPumpFaiCounters = pgTable("fuel_pump_fai_counters", {
 
 export const fuelPumpFaiRecords = pgTable("fuel_pump_fai_records", {
   id: serial("id").primaryKey(),
-  faiNumber: text("fai_number").notNull().unique(),
+  faiNumber: text("fai_number"),
   partNumber: text("part_number").notNull(),
   partDescription: text("part_description").notNull().default(""),
   supplier: text("supplier").notNull(),
