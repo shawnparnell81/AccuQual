@@ -56,6 +56,25 @@ describe("form builder revision", () => {
     expect(changed.revision).toBe("B");
     expect(changed.recordHistory).toBe(true);
   });
+
+  it("bumps the revision when a published document header changes", () => {
+    const published = { kind: "document", html: "<p>Body</p>", showLogo: true, showPageNumbers: true, header: null, footer: null };
+    const withHeader = {
+      ...published,
+      header: { differentFirstPage: false, differentOddEven: false, defaultHtml: "<p>ACME Quality</p>", firstHtml: "", evenHtml: "" },
+    };
+    const decision = decideStructureSave({
+      mode: "save",
+      status: "published",
+      revision: "A",
+      publishedStructure: published,
+      nextStructure: withHeader,
+    });
+    expect(decision.bumped).toBe(true);
+    expect(decision.revision).toBe("B");
+    expect(decision.recordHistory).toBe(true);
+    expect(decision.publishedStructure).toEqual(withHeader);
+  });
 });
 
 describe("form builder permission", () => {
@@ -96,6 +115,28 @@ describe("form builder fill copies", () => {
     expect(saved.answers).toEqual({ A1: "12" });
     expect(saved.templateRevision).toBe("A");
     expect(saved.structure).not.toBe(template.structure);
+  });
+
+  it("copies the template header and footer onto a fill without changing the template revision", () => {
+    const header = { differentFirstPage: true, differentOddEven: false, defaultHtml: "<p>Odd</p>", firstHtml: "<p>First</p>", evenHtml: "" };
+    const footer = { differentFirstPage: false, differentOddEven: false, defaultHtml: "<p>Controlled</p>", firstHtml: "", evenHtml: "" };
+    const template: BuiltTemplate = {
+      id: 8,
+      title: "Work instruction",
+      formNumber: "WI-14",
+      revision: "C",
+      structure: { kind: "document", html: "<p>Body</p>", showLogo: true, showPageNumbers: true, header, footer },
+    };
+    const before = JSON.stringify(template);
+    const fill = openFillCopy(template);
+    expect(fill.templateRevision).toBe("C");
+    expect(fill.templateFormNumber).toBe("WI-14");
+    expect(fill.structure).toEqual(template.structure);
+    expect(fill.structure).not.toBe(template.structure);
+    const copy = fill.structure as { header: { defaultHtml: string } };
+    copy.header.defaultHtml = "<p>Changed on the copy</p>";
+    expect(JSON.stringify(template)).toBe(before);
+    expect(template.revision).toBe("C");
   });
 });
 

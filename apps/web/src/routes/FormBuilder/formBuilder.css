@@ -80,6 +80,87 @@
   break-after: page;
   page-break-after: always;
 }
+.fb-print-flow {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+.fb-print-flow > thead > tr > td,
+.fb-print-flow > tbody > tr > td,
+.fb-print-flow > tfoot > tr > td {
+  border: 0;
+  padding: 0;
+  vertical-align: top;
+}
+.fb-band {
+  color: #1a1a1a;
+  background: transparent;
+}
+.fb-band-header {
+  border-bottom: 1px solid #1a1a1a;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+}
+.fb-band-footer {
+  border-top: 1px solid #1a1a1a;
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.fb-band-empty {
+  border: 1px dashed #d0d5dd;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+}
+.fb-band-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #667085;
+}
+.fb-band-bar input {
+  margin-right: 4px;
+}
+.fb-band-body {
+  min-height: 1.4em;
+  outline: none;
+  white-space: pre-wrap;
+}
+.fb-band img,
+.fb-print-page-header img,
+.fb-print-page-footer img {
+  max-height: 52px;
+  width: auto;
+  vertical-align: middle;
+}
+.fb-band table,
+.fb-print-page-header table,
+.fb-print-page-footer table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 4px 0;
+}
+.fb-band td,
+.fb-band th,
+.fb-print-page-header td,
+.fb-print-page-footer td {
+  border: 1px solid #1a1a1a;
+  padding: 4px 6px;
+}
+.fb-doc-field {
+  display: inline-block;
+  border: 1px solid #0a3c7b;
+  border-radius: 3px;
+  padding: 0 4px;
+  color: #0a3c7b;
+  background: #eef3f9;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 .fb-note {
   margin-top: 0;
   font-size: 12px;

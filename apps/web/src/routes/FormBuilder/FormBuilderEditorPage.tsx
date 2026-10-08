@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { BLANK_FORMS_TEMPLATES_FOLDER, type BrowseFolder } from "../../lib/folderBrowse";
+import { bandHasContent, type DocumentBand } from "../../lib/documentBands";
 import { blankDocument, blankFields, blankGrid, downloadGridWorkbook, importGridFile, type BuiltStructure, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
 import { DocumentFormEditor } from "./DocumentFormEditor";
 import { FieldsFormEditor } from "./FieldsFormEditor";
@@ -215,8 +216,8 @@ export function FormBuilderEditorPage() {
                 const body = new FormData();
                 body.append("file", file);
                 try {
-                  const res = await apiClient.post<{ html: string }>("/form-builder/import-docx", body);
-                  editStructure({ ...asDocument(structure), html: res.data.html });
+                  const res = await apiClient.post<{ html: string; header: DocumentBand | null; footer: DocumentBand | null }>("/form-builder/import-docx", body);
+                  editStructure({ ...asDocument(structure), html: res.data.html, header: res.data.header, footer: res.data.footer });
                 } catch (err) {
                   toast.error(extractErrorMessage(err, "Couldn't read that Word file."));
                 }
@@ -244,8 +245,14 @@ export function FormBuilderEditorPage() {
           </button>
         </div>
       )}
-      <Paper wide={form.data.kind === "grid"}>
-        <FormMasthead formNumber={formNumber} revision={form.data.revision} title={title} />
+      <Paper
+        wide={form.data.kind === "grid"}
+        docId={structure.kind === "document" ? formNumber : undefined}
+        rev={structure.kind === "document" ? form.data.revision : undefined}
+      >
+        {structure.kind === "document" && bandHasContent(asDocument(structure).header) ? null : (
+          <FormMasthead formNumber={formNumber} revision={form.data.revision} title={title} />
+        )}
         {form.data.kind === "grid" && (
           <GridFormEditor
             structure={asGrid(structure)}
@@ -273,7 +280,15 @@ export function FormBuilderEditorPage() {
             onAnswer={(key, value) => setPreviewAnswers((current) => ({ ...current, [key]: value }))}
           />
         )}
-        <p className="fb-note mt-4">{structure.kind === "document" && asDocument(structure).showPageNumbers ? "Page numbers print at the bottom of each page." : "Page numbers print with the shared Print button."}</p>
+        <p className="fb-note no-print mt-4">
+          {structure.kind === "document" && bandHasContent(asDocument(structure).footer)
+            ? "This document prints its own footer. Page, Doc ID, Rev, and date fields fill in when you print."
+            : structure.kind === "document" && bandHasContent(asDocument(structure).header)
+              ? "This document prints its own header. The standard footer and page numbers still print."
+              : structure.kind === "document" && asDocument(structure).showPageNumbers
+                ? "Page numbers print at the bottom of each page."
+                : "Page numbers print with the shared Print button."}
+        </p>
       </Paper>
       <section className="no-print">
         <h2 className="text-sm font-medium">Revision history</h2>

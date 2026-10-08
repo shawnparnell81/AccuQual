@@ -1,4 +1,5 @@
-import { formatDateTime } from "./dates";
+import { formatDate, formatDateTime } from "./dates";
+import { bandHtmlForPage, bandHasContent, bandVaries, printBandChoice, resolveDocumentFields, type DocumentBand } from "./documentBands";
 import type { PreviewKind } from "./filePreview";
 import { recordSurface } from "./recordSurface";
 
@@ -122,31 +123,160 @@ export function landscapeMarks(root: ParentNode): LandscapeMark[] {
 
 const PRINT_FOOTER_ID = "aq-print-footer";
 
+function storedBand(root: ParentNode, name: "header" | "footer"): DocumentBand | null {
+  const el = root.querySelector(`[data-print-band="${name}"]`);
+  if (!(el instanceof HTMLElement)) return null;
+  const variant = (slot: string) => {
+    const node = el.querySelector(`[data-variant="${slot}"]`);
+    return node instanceof HTMLElement ? node.innerHTML : "";
+  };
+  const band: DocumentBand = {
+    differentFirstPage: el.getAttribute("data-different-first") === "true",
+    differentOddEven: el.getAttribute("data-different-even") === "true",
+    defaultHtml: variant("default"),
+    firstHtml: variant("first"),
+    evenHtml: variant("even"),
+  };
+  return bandHasContent(band) ? band : null;
+}
+
+function printIdentity(root: HTMLElement): { docId: string; rev: string } {
+  const shown = readFormIdentity(root.innerText || "");
+  const docId = root.querySelector("[data-doc-id]")?.getAttribute("data-doc-id") || shown.docId;
+  const rev = root.querySelector("[data-doc-rev]")?.getAttribute("data-doc-rev") || shown.rev;
+  return { docId, rev };
+}
+
+function slicePages(body: HTMLElement): string[] {
+  const blocks = [...body.children];
+  if (!blocks.length) return [body.innerHTML || "<p></p>"];
+  const limit = 780;
+  const pages: string[][] = [];
+  let current: string[] = [];
+  let used = 0;
+  const push = () => {
+    if (current.length) pages.push(current);
+    current = [];
+    used = 0;
+  };
+  for (const block of blocks) {
+    if (block.classList.contains("aq-page-break")) {
+      push();
+      continue;
+    }
+    const height = Math.max(block instanceof HTMLElement ? block.offsetHeight : 24, 24);
+    if (current.length && used + height > limit) push();
+    current.push(block.outerHTML);
+    used += height;
+  }
+  push();
+  return pages.length ? pages.map((page) => page.join("")) : ["<p></p>"];
+}
+
+/** Puts the document's own header and footer on the pages, and puts the editor back after. */
+function mountDocumentPrint(root: HTMLElement, now: Date): () => void {
+  const header = storedBand(root, "header");
+  const footer = storedBand(root, "footer");
+  const choice = printBandChoice(header, footer);
+  const identity = printIdentity(root);
+  const date = formatDate(now);
+
+  if (!bandVaries(header) && !bandVaries(footer)) {
+    const saved: { kind: "header" | "footer"; html: string }[] = [];
+    const paint = (kind: "header" | "footer", html: string) => {
+      const body = root.querySelector(`[data-testid="document-${kind}"] .fb-band-body`);
+      if (!(body instanceof HTMLElement)) return;
+      saved.push({ kind, html: body.innerHTML });
+      body.innerHTML = html;
+    };
+    if (choice.header === "custom" && header) {
+      paint("header", resolveDocumentFields(header.defaultHtml, { page: "counter", pages: "counter", ...identity, date }));
+    }
+    if (choice.footer === "custom" && footer) {
+      paint("footer", resolveDocumentFields(footer.defaultHtml, { page: "counter", pages: "counter", ...identity, date }));
+    }
+    return () => {
+      for (const item of saved) {
+        const body = root.querySelector(`[data-testid="document-${item.kind}"] .fb-band-body`);
+        if (body instanceof HTMLElement) body.innerHTML = item.html;
+      }
+    };
+  }
+
+  document.documentElement.classList.add("aq-print-paginated");
+  const flow = root.querySelector(".fb-print-flow");
+  const doc = root.querySelector(".fb-print-flow .fb-doc");
+  const pages = doc instanceof HTMLElement ? slicePages(doc) : ["<p></p>"];
+  const host = document.createElement("div");
+  host.className = "fb-print-pages";
+  pages.forEach((pageHtml, index) => {
+    const page = index + 1;
+    const section = document.createElement("section");
+    section.className = "fb-print-page";
+    if (choice.header === "custom" && header) {
+      const node = document.createElement("div");
+      node.className = "fb-print-page-header";
+      node.innerHTML = resolveDocumentFields(bandHtmlForPage(header, page), { page, pages: pages.length, ...identity, date });
+      section.appendChild(node);
+    }
+    const body = document.createElement("div");
+    body.className = "fb-doc";
+    body.innerHTML = pageHtml;
+    section.appendChild(body);
+    if (choice.footer === "custom" && footer) {
+      const node = document.createElement("div");
+      node.className = "fb-print-page-footer";
+      node.innerHTML = resolveDocumentFields(bandHtmlForPage(footer, page), { page, pages: pages.length, ...identity, date });
+      section.appendChild(node);
+    }
+    host.appendChild(section);
+  });
+  if (flow instanceof HTMLElement && flow.parentElement) {
+    flow.parentElement.insertBefore(host, flow);
+    flow.classList.add("fb-flow-suppressed");
+  }
+  return () => {
+    host.remove();
+    if (flow instanceof HTMLElement) flow.classList.remove("fb-flow-suppressed");
+    document.documentElement.classList.remove("aq-print-paginated");
+  };
+}
+
 /**
  * Print the page that is already on screen. The browser dialog is the same
  * path presentPdf uses after a file is ready. Footer text and landscape are
  * applied first so paper matches the open form, including calculated cells.
+ * A Word-style document with its own header or footer prints that side instead.
  * Audit history has no client write for "printed", so this does not invent one.
  */
 export function printScreen(root: HTMLElement, meta: { printedBy: string; now?: Date }): void {
-  const identity = readFormIdentity(root.innerText || "");
+  const choice = printBandChoice(storedBand(root, "header"), storedBand(root, "footer"));
+  const identity = printIdentity(root);
   const printedAt = formatDateTime(meta.now ?? new Date());
-  let footer = document.getElementById(PRINT_FOOTER_ID);
-  if (!footer) {
-    footer = document.createElement("div");
-    footer.id = PRINT_FOOTER_ID;
-    footer.className = "aq-print-footer";
-    footer.setAttribute("aria-hidden", "true");
-    document.body.appendChild(footer);
+  let footer: HTMLElement | null = null;
+  if (choice.footer === "standard") {
+    footer = document.getElementById(PRINT_FOOTER_ID);
+    if (!footer) {
+      footer = document.createElement("div");
+      footer.id = PRINT_FOOTER_ID;
+      footer.className = "aq-print-footer";
+      footer.setAttribute("aria-hidden", "true");
+      document.body.appendChild(footer);
+    }
+    footer.textContent = formatPrintFooter({ ...identity, printedBy: meta.printedBy, printedAt });
   }
-  footer.textContent = formatPrintFooter({ ...identity, printedBy: meta.printedBy, printedAt });
-  document.documentElement.classList.toggle("aq-print-landscape", needsLandscape(landscapeMarks(root)));
+  const landscape = needsLandscape(landscapeMarks(root));
+  document.documentElement.classList.toggle("aq-print-custom-header", choice.header === "custom");
+  document.documentElement.classList.toggle("aq-print-custom-footer", choice.footer === "custom");
+  document.documentElement.classList.toggle("aq-print-landscape", landscape);
+  const restoreBands = choice.header === "custom" || choice.footer === "custom" ? mountDocumentPrint(root, meta.now ?? new Date()) : () => undefined;
 
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    document.documentElement.classList.remove("aq-print-landscape");
+    document.documentElement.classList.remove("aq-print-landscape", "aq-print-custom-header", "aq-print-custom-footer", "aq-print-paginated");
+    restoreBands();
     footer?.remove();
     window.removeEventListener("afterprint", cleanup);
   };

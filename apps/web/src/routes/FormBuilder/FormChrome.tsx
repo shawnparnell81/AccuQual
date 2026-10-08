@@ -17,6 +17,14 @@ export function FormMasthead({ formNumber, revision, title }: { formNumber: stri
   );
 }
 
-export function Paper({ wide, children }: { wide?: boolean; children: ReactNode }) {
-  return <div className={`aq-paper aq-print-sheet mx-auto max-w-full overflow-auto p-4 shadow-sm ${wide ? "aq-print-wide" : ""}`}>{children}</div>;
+export function Paper({ wide, children, docId, rev }: { wide?: boolean; children: ReactNode; docId?: string | null; rev?: string | null }) {
+  return (
+    <div
+      className={`aq-paper aq-print-sheet mx-auto max-w-full overflow-auto p-4 shadow-sm ${wide ? "aq-print-wide" : ""}`}
+      data-doc-id={docId?.trim() || undefined}
+      data-doc-rev={rev?.trim() || undefined}
+    >
+      {children}
+    </div>
+  );
 }
