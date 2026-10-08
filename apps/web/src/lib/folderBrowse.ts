@@ -164,7 +164,7 @@ export function blankFormsFolderHref(): string {
 export const SEEDED_FORMS_DRAWER = "Forms & Templates";
 
 /** Living controlled lists. Opening one edits the grid in the app. */
-const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope", "/documents/development-log", "/documents/nonconformance-log"]);
+const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope", "/documents/internal-audit-schedule", "/documents/development-log", "/documents/nonconformance-log"]);
 
 export function isLivingListPath(linkedPath: string | null | undefined): boolean {
   if (!linkedPath) return false;

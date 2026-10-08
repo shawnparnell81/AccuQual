@@ -62,6 +62,7 @@ describe("print document", () => {
     assert.equal(offersScreenPrint("/qms-forms/incoming_inspection_record/2"), true);
     assert.equal(offersScreenPrint("/fai/records/3"), true);
     assert.equal(offersScreenPrint("/documents/master-list"), true);
+    assert.equal(offersScreenPrint("/documents/internal-audit-schedule"), true);
     assert.equal(offersScreenPrint("/calibration/master-list"), true);
     assert.equal(offersScreenPrint("/blank-forms"), false);
     assert.equal(offersScreenPrint("/documents/folders"), false);

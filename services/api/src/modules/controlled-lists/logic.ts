@@ -1,5 +1,6 @@
 import rawLists from "./seeds/lists.json" with { type: "json" };
 import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
+import auditSchedule from "./seeds/lst-gen-002.json" with { type: "json" };
 import ncrLog from "./seeds/lst-ncr-001.json" with { type: "json" };
 import {
   appendSheetRow,
@@ -15,7 +16,7 @@ import {
 
 export type { StoredCell, StoredSheet } from "./math.js";
 
-export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-003", "lst-dev-001", "lst-ncr-001"] as const;
+export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003", "lst-dev-001", "lst-ncr-001"] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
 
 export const OMITTED_DOCUMENT_IDS = new Set(["FRM-TST-001", "FRM-TST-002"]);
@@ -24,6 +25,7 @@ export const LIVING_LIST_PATHS = [
   "/documents/master-list",
   "/calibration/master-list",
   "/documents/laboratory-scope",
+  "/documents/internal-audit-schedule",
   "/documents/development-log",
   "/documents/nonconformance-log",
 ] as const;
@@ -54,6 +56,7 @@ export interface ListCatalog {
 
 const EQUIPMENT_SHEET = "LST-EQP-001 - Master Equipment ";
 const LAB_SHEET = "LST-GEN-003 - Scope of Laborato";
+const AUDIT_SCHEDULE_SHEET = "LST-GEN-002 - Internal Audit Sc";
 
 export const LISTS: Record<ListKey, ListCatalog> = {
   "lst-eqp-001": {
@@ -80,6 +83,20 @@ export const LISTS: Record<ListKey, ListCatalog> = {
     rev: { sheet: "Internal Documents", addr: "D2" },
     dataStart: { "Internal Documents": 4, "External Documents": 3 },
     idColumn: "A",
+  },
+  "lst-gen-002": {
+    key: "lst-gen-002",
+    title: "LST-GEN-002",
+    docId: "LST-GEN-002",
+    revision: "A",
+    route: "/documents/internal-audit-schedule",
+    resource: "documents",
+    landscape: false,
+    rev: { sheet: AUDIT_SCHEDULE_SHEET, addr: "D2" },
+    folder: "Management System",
+    nodeName: "LST-GEN-002",
+    fileName: "LST-GEN-002.xlsx",
+    dataStart: { [AUDIT_SCHEDULE_SHEET]: 6 },
   },
   "lst-gen-003": {
     key: "lst-gen-003",
@@ -154,6 +171,7 @@ export function isLivingListPath(linkedPath: string | null | undefined): boolean
 function seedBook(): Record<ListKey, { sheets: StoredSheet[] }> {
   const book = structuredClone(rawLists) as unknown as Record<ListKey, { sheets: StoredSheet[] }>;
   book["lst-dev-001"] = structuredClone(devLog) as unknown as { sheets: StoredSheet[] };
+  book["lst-gen-002"] = structuredClone(auditSchedule) as unknown as { sheets: StoredSheet[] };
   book["lst-ncr-001"] = structuredClone(ncrLog) as unknown as { sheets: StoredSheet[] };
   return book;
 }
@@ -553,6 +571,9 @@ export const RETIRED_LIST_NUMBERS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-
 export const RETIRED_LIST_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-003"]);
 const DEV_LOG_TITLES = new Set(["lst-dev-001", "development log", "development log (register)"]);
 const DEV_LOG_NUMBERS = new Set(["LST-DEV-001"]);
+const AUDIT_SCHEDULE_TITLES = new Set(["lst-gen-002", "internal audit schedule"]);
+const AUDIT_SCHEDULE_NUMBERS = new Set(["LST-GEN-002"]);
+const AUDIT_SCHEDULE_KEYS = new Set(["lst-gen-002"]);
 
 export function normalizeListTitle(name: string): string {
   return name.replace(/\.(xlsx|xls|xlsm|pdf|docx)$/i, "").trim().toLowerCase();
@@ -564,6 +585,10 @@ export function titleMatchesList(name: string): boolean {
 
 export function titleMatchesDevLog(name: string): boolean {
   return DEV_LOG_TITLES.has(normalizeListTitle(name));
+}
+
+export function titleMatchesAuditSchedule(name: string): boolean {
+  return AUDIT_SCHEDULE_TITLES.has(normalizeListTitle(name));
 }
 
 export interface CleanupFolder {
@@ -630,8 +655,10 @@ function filedRecord(linkedPath: string | null | undefined): boolean {
 
 /**
  * Old Quality Manual uploads of the three lists, Development Log copies under Test Data Projects,
- * and blank templates with those titles. A Non-Conformance Log blank is not one of these and stays
- * in Blank Forms Templates. Living list links and filled records stay.
+ * Internal Audit Schedule uploads, and blank templates with those titles.
+ * A Non-Conformance Log blank is not one of these and stays in Blank Forms Templates.
+ * Living list links and filled records stay. The Audits drawer named Internal Audit Schedule
+ * stays too, unless that row itself is an uploaded file.
  */
 export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocument[], templates: CleanupTemplate[]): CleanupPlan {
   const docs = new Map(documents.filter((doc) => !doc.isDeleted).map((doc) => [doc.id, doc]));
@@ -641,7 +668,16 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
 
   for (const template of templates) {
     const number = template.formId.trim().toUpperCase();
-    if (RETIRED_LIST_KEYS.has(template.formKey) || titleMatchesList(template.title) || RETIRED_LIST_NUMBERS.has(number) || titleMatchesDevLog(template.title) || DEV_LOG_NUMBERS.has(number)) {
+    if (
+      RETIRED_LIST_KEYS.has(template.formKey) ||
+      titleMatchesList(template.title) ||
+      RETIRED_LIST_NUMBERS.has(number) ||
+      titleMatchesDevLog(template.title) ||
+      DEV_LOG_NUMBERS.has(number) ||
+      AUDIT_SCHEDULE_KEYS.has(template.formKey) ||
+      titleMatchesAuditSchedule(template.title) ||
+      AUDIT_SCHEDULE_NUMBERS.has(number)
+    ) {
       templateIds.add(template.id);
     }
   }
@@ -653,11 +689,13 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
     const linked = folder.documentId == null ? undefined : docs.get(folder.documentId);
     const nameHit = titleMatchesList(folder.name) || (linked ? titleMatchesList(linked.title) : false);
     const devHit = titleMatchesDevLog(folder.name) || (linked ? titleMatchesDevLog(linked.title) : false);
-    if (!nameHit && !devHit) continue;
+    const auditHit = titleMatchesAuditSchedule(folder.name) || (linked ? titleMatchesAuditSchedule(linked.title) : false);
+    if (!nameHit && !devHit && !auditHit) continue;
     const filedHere = Boolean(folder.pdfPath || folder.documentId != null);
     const inManual = nameHit && underQualityManual(names) && filedHere;
     const inProjects = devHit && underIsoChild(names, "Test Data Projects") && filedHere;
-    if (inManual || inProjects) {
+    const auditUpload = auditHit && filedHere && names.includes("ISO Compliance Documents");
+    if (inManual || inProjects || auditUpload) {
       if (folder.documentId != null && docs.has(folder.documentId)) documentIds.add(folder.documentId);
       folderNodeIds.add(folder.id);
       continue;

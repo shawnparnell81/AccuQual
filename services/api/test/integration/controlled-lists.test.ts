@@ -174,5 +174,102 @@ describe("living controlled lists API", () => {
     expect(titles).toContain("NON-CONFORMANCE REPORT (NCR)");
     expect(titles).toContain("Nonconformance Report");
     expect(titles).not.toContain("Non-Conformance Log");
+    expect(titles).not.toContain("Internal Audit Schedule");
+    expect(titles).not.toContain("LST-GEN-002");
+  });
+
+  it("files the internal audit schedule once under Management System and replaces an uploaded copy", async () => {
+    const opened = await request(app).get("/controlled-lists/lst-gen-002").set("Authorization", `Bearer ${token}`);
+    expect(opened.status).toBe(200);
+    expect(opened.body.title).toBe("LST-GEN-002");
+    expect(opened.body.docId).toBe("LST-GEN-002");
+    expect(opened.body.revision).toBe("A");
+    expect(opened.body.landscape).toBe(false);
+    expect(opened.body.sheets.map((sheet: { name: string }) => sheet.name)).toEqual(["LST-GEN-002 - Internal Audit Sc"]);
+    expect(opened.body.sheets[0].cells.A1.v).toBe("INTERNAL AUDIT SCHEDULE");
+    expect(opened.body.sheets[0].cells.D2.v).toBe("A");
+    expect(opened.body.sheets[0].cells.B3.v).toBe("2026-07-14");
+    expect(opened.body.sheets[0].cells.F3.v).toBe("Ron Wertz & Maxwell Tollefson");
+    expect(opened.body.sheets[0].cells.A6.v).toBe("H1 - 2027");
+    expect(await db.select().from(controlledLists).where(eq(controlledLists.listKey, "lst-gen-002"))).toHaveLength(1);
+
+    const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    const folders = tree.body as { id: number; name: string; parentId: number | null; linkedPath?: string | null }[];
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
+    const management = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Management System");
+    const blanks = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Blank Forms Templates");
+    const audits = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Audits");
+    expect(management?.id).toBeTruthy();
+    const filed = folders.filter((folder) => folder.linkedPath === "/documents/internal-audit-schedule");
+    expect(filed).toEqual([expect.objectContaining({ name: "LST-GEN-002", parentId: management?.id })]);
+    expect(folders.some((folder) => folder.name === "LST-GEN-002" && folder.parentId !== management?.id)).toBe(false);
+    expect(folders.find((folder) => folder.parentId === audits?.id && folder.name === "Internal Audit Schedule")).toBeTruthy();
+
+    const again = await request(app).get("/controlled-lists/lst-gen-002").set("Authorization", `Bearer ${token}`);
+    expect(again.body.id).toBe(opened.body.id);
+    expect(again.body.revision).toBe("A");
+    expect(await db.select().from(controlledLists).where(eq(controlledLists.listKey, "lst-gen-002"))).toHaveLength(1);
+    const filedAgain = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    const filedFolders = filedAgain.body as { name: string; parentId: number | null; linkedPath?: string | null }[];
+    expect(filedFolders.filter((folder) => folder.linkedPath === "/documents/internal-audit-schedule")).toHaveLength(1);
+
+    const [copy] = await db.insert(documents).values({ title: "Internal Audit Schedule", status: "approved" }).returning();
+    const [upload] = await db
+      .insert(documentFolders)
+      .values({ name: "Internal Audit Schedule.xlsx", parentId: management!.id, documentId: copy!.id, pdfPath: null })
+      .returning();
+    const [blankNode] = await db.insert(documentFolders).values({ name: "LST-GEN-002", parentId: blanks!.id }).returning();
+    await db.insert(controlledFormTemplates).values({
+      formKey: `lst-gen-002-blank-${suffix}`,
+      formId: "LST-GEN-002",
+      title: "Internal Audit Schedule",
+      subjectRoute: "/documents/internal-audit-schedule",
+    });
+
+    const saved = await request(app)
+      .put("/controlled-lists/lst-gen-002")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheets: [{ name: "LST-GEN-002 - Internal Audit Sc", cells: { E6: { v: `Complete ${suffix}` }, D2: { v: "Z" } } }] });
+    expect(saved.status).toBe(200);
+    expect(saved.body.revision).toBe("A");
+    expect(saved.body.sheets[0].cells.E6.v).toBe(`Complete ${suffix}`);
+    expect(saved.body.sheets[0].cells.D2.v).toBe("A");
+    expect(saved.body.sheets[0].cells.A6.v).toBe("H1 - 2027");
+    const auditsTrail = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ControlledList"), eq(auditTrail.entityId, opened.body.id)));
+    const entry = auditsTrail.find((row) => String((row.changes as { summary?: string } | null)?.summary ?? "").includes(`Complete ${suffix}`));
+    expect(entry?.performedBy).toBeTruthy();
+    expect(entry?.createdAt).toBeInstanceOf(Date);
+    expect(String((entry?.changes as { summary?: string } | null)?.summary ?? "")).toContain("changed");
+
+    expect(await db.select().from(documents).where(eq(documents.id, copy!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, upload!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, blankNode!.id))).toEqual([]);
+    expect(await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, `lst-gen-002-blank-${suffix}`))).toEqual([]);
+    const after = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    const afterFolders = after.body as { name: string; parentId: number | null; linkedPath?: string | null }[];
+    expect(afterFolders.filter((folder) => folder.linkedPath === "/documents/internal-audit-schedule")).toHaveLength(1);
+    expect(afterFolders.find((folder) => folder.parentId === audits?.id && folder.name === "Internal Audit Schedule")).toBeTruthy();
+
+    const file = await request(app)
+      .get("/controlled-lists/lst-gen-002/xlsx")
+      .set("Authorization", `Bearer ${token}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    expect(file.status).toBe(200);
+    expect(String(file.headers["content-disposition"])).toContain("LST-GEN-002.xlsx");
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(file.body as Buffer);
+    const ws = book.getWorksheet("LST-GEN-002 - Internal Audit Sc");
+    expect(ws?.getCell("A1").value).toBe("INTERNAL AUDIT SCHEDULE");
+    expect(ws?.getCell("D2").value).toBe("A");
+    expect(ws?.getCell("F3").value).toBe("Ron Wertz & Maxwell Tollefson");
+    expect(ws?.getCell("E6").value).toBe(`Complete ${suffix}`);
+    expect((ws?.getCell("B3").value as Date).toISOString().slice(0, 10)).toBe("2026-07-14");
+    expect(ws?.pageSetup.orientation).toBe("portrait");
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1"]));
   });
 });
