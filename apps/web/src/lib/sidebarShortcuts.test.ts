@@ -18,6 +18,16 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(PINNABLE_SHORTCUTS.some((item) => item.label === "FMEA"), true);
   });
 
+  it("keeps Home first when a pin would otherwise lead the menu", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: ["home"],
+      pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
+    });
+    assert.equal(next[0]?.key, "home");
+    assert.equal(next[1]?.key, "my-shortcuts");
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path === "/home"), true);
+  });
+
   it("hides a shared item and pins a page that is not already showing", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: ["pareto"],

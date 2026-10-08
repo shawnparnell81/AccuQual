@@ -1,0 +1,117 @@
+import type { SidebarPlacementInput } from "./users.validation.js";
+
+/** Folder Explorer opened on Blank Forms Templates. Kept in sync with apps/web blankFormsFolderHref(). */
+const BLANK_FORMS_TEMPLATES_HREF = "/documents/folders?name=Blank%20Forms%20Templates";
+const BLANK_FORMS_PIN_KEY = "pin-blank-form-templates";
+
+/**
+ * Menu rows the app always keeps. Matches LOCKED_SIDEBAR_KEYS in the web catalog.
+ * Home is the first item. A saved layout that hid it or nested it is repaired on read.
+ */
+const LOCKED_SIDEBAR_KEYS = ["home"] as const;
+
+export interface SidebarShortcutPrefs {
+  hidden: string[];
+  pinned: { key: string; label: string; path: string }[];
+  layout: SidebarPlacementInput[] | null;
+  groups: { key: string; label: string }[];
+}
+
+export function emptySidebarShortcuts(): SidebarShortcutPrefs {
+  return { hidden: [], pinned: [], layout: null, groups: [] };
+}
+
+function isLockedSidebarKey(key: string): boolean {
+  return (LOCKED_SIDEBAR_KEYS as readonly string[]).includes(key);
+}
+
+function cleanPin(pin: { key: string; label: string; path: string }): { key: string; label: string; path: string } {
+  if (pin.key === "blank-forms" || pin.path === "/blank-forms") {
+    return { key: BLANK_FORMS_PIN_KEY, label: "Blank Forms Templates", path: BLANK_FORMS_TEMPLATES_HREF };
+  }
+  return pin;
+}
+
+function cleanSidebarLayout(nodes: { key: string; children?: unknown }[] | null | undefined): SidebarPlacementInput[] | null {
+  if (!nodes) return null;
+  const seen = new Set<string>();
+  let count = 0;
+  function walk(items: { key: string; children?: unknown }[], depth: number): SidebarPlacementInput[] {
+    if (depth > 8) return [];
+    const out: SidebarPlacementInput[] = [];
+    for (const node of items) {
+      if (count > 400 || !node || typeof node.key !== "string") continue;
+      const key = node.key === "blank-forms" ? BLANK_FORMS_PIN_KEY : node.key;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      count += 1;
+      const nested = Array.isArray(node.children) ? walk(node.children as { key: string; children?: unknown }[], depth + 1) : undefined;
+      out.push(nested && nested.length > 0 ? { key, children: nested } : { key });
+    }
+    return out;
+  }
+  const layout = walk(nodes, 0);
+  return layout.length > 0 ? layout : null;
+}
+
+/** Puts locked rows first. Inserts Home when a saved arrangement left it out. A null layout stays null. */
+export function hoistLockedLayout(nodes: SidebarPlacementInput[] | null): SidebarPlacementInput[] | null {
+  if (!nodes) return null;
+  const found = new Map<string, SidebarPlacementInput>();
+  function pull(items: SidebarPlacementInput[]): SidebarPlacementInput[] {
+    const out: SidebarPlacementInput[] = [];
+    for (const node of items) {
+      const children = node.children ? pull(node.children) : undefined;
+      if (isLockedSidebarKey(node.key)) {
+        if (!found.has(node.key)) found.set(node.key, children && children.length > 0 ? { key: node.key, children } : { key: node.key });
+        continue;
+      }
+      out.push(children && children.length > 0 ? { key: node.key, children } : { key: node.key });
+    }
+    return out;
+  }
+  const rest = pull(nodes);
+  const locked = LOCKED_SIDEBAR_KEYS.map((key) => found.get(key) ?? { key });
+  return [...locked, ...rest];
+}
+
+function normalizeSidebarShortcuts(raw: {
+  hidden?: string[];
+  pinned?: { key: string; label: string; path: string }[];
+  layout?: { key: string; children?: unknown }[] | null;
+  groups?: { key: string; label: string }[];
+} | null | undefined): SidebarShortcutPrefs {
+  const hidden = [...new Set((raw?.hidden ?? []).filter((key) => typeof key === "string" && key.length > 0 && key !== "blank-forms" && !isLockedSidebarKey(key)))];
+  const hiddenSet = new Set(hidden);
+  const seen = new Set<string>();
+  const pinned: SidebarShortcutPrefs["pinned"] = [];
+  for (const pin of raw?.pinned ?? []) {
+    if (!pin) continue;
+    const next = cleanPin(pin);
+    if (hiddenSet.has(next.key) || seen.has(next.key)) continue;
+    seen.add(next.key);
+    pinned.push(next);
+  }
+  const layout = hoistLockedLayout(cleanSidebarLayout(raw?.layout));
+  const layoutKeys = new Set<string>();
+  function collect(nodes: { key: string; children?: { key: string }[] }[] | null | undefined) {
+    for (const node of nodes ?? []) {
+      layoutKeys.add(node.key);
+      collect(node.children as { key: string; children?: { key: string }[] }[] | undefined);
+    }
+  }
+  collect(layout);
+  if (layoutKeys.has(BLANK_FORMS_PIN_KEY) && !seen.has(BLANK_FORMS_PIN_KEY) && !hiddenSet.has(BLANK_FORMS_PIN_KEY)) {
+    pinned.push({ key: BLANK_FORMS_PIN_KEY, label: "Blank Forms Templates", path: BLANK_FORMS_TEMPLATES_HREF });
+  }
+  const groups: { key: string; label: string }[] = [];
+  const groupSeen = new Set<string>();
+  for (const group of raw?.groups ?? []) {
+    if (!group || groupSeen.has(group.key)) continue;
+    groupSeen.add(group.key);
+    groups.push(group);
+  }
+  return { hidden, pinned, layout: layout ?? null, groups };
+}
+
+export { normalizeSidebarShortcuts };

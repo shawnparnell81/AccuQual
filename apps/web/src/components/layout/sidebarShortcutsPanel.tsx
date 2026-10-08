@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { GripVertical, SlidersHorizontal } from "lucide-react";
+import { GripVertical, Lock, SlidersHorizontal } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { useCurrentUser } from "../../hooks/useAuth";
@@ -170,29 +170,33 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   return (
     <Modal title="Customize sidebar" isOpen={open} onClose={onClose} wide>
       <div className="flex flex-col gap-4 text-sm" data-testid="customize-sidebar-dialog">
-        <p className="text-muted-foreground">Choose what shows, the order, and your own sections. This is your menu only. Reset puts the original menu back.</p>
+        <p className="text-muted-foreground">Choose what shows, the order, and your own sections. Home stays pinned at the top. Settings stays at the bottom. This is your menu only. Reset puts the original menu back.</p>
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <h3 className="mb-2 font-medium">Your menu</h3>
             <ul className="max-h-80 overflow-auto rounded-md border border-border" data-testid="customize-sidebar-rows">
-              {rows.map((row) => (
-                <MenuRow
-                  key={row.key}
-                  row={row}
-                  destinations={sidebarDestinations(tree, row.key)}
-                  onToggle={() => setDraft((current) => toggleHidden(current, row.key))}
-                  onNudge={(direction) => setDraft((current) => nudgeDraft(current, row.key, direction))}
-                  onMove={(parentKey) => setDraft((current) => moveDraftInto(current, row.key, parentKey))}
-                  onRemove={
-                    row.kind === "pin"
-                      ? () => setDraft((current) => removePin(current, row.key))
-                      : row.key.startsWith("group:")
-                        ? () => setDraft((current) => removeGroup(current, row.key))
-                        : undefined
-                  }
-                  onDrop={place}
-                />
-              ))}
+              {rows.map((row) =>
+                row.locked ? (
+                  <LockedMenuRow key={row.key} row={row} />
+                ) : (
+                  <MenuRow
+                    key={row.key}
+                    row={row}
+                    destinations={sidebarDestinations(tree, row.key)}
+                    onToggle={() => setDraft((current) => toggleHidden(current, row.key))}
+                    onNudge={(direction) => setDraft((current) => nudgeDraft(current, row.key, direction))}
+                    onMove={(parentKey) => setDraft((current) => moveDraftInto(current, row.key, parentKey))}
+                    onRemove={
+                      row.kind === "pin"
+                        ? () => setDraft((current) => removePin(current, row.key))
+                        : row.key.startsWith("group:")
+                          ? () => setDraft((current) => removeGroup(current, row.key))
+                          : undefined
+                    }
+                    onDrop={place}
+                  />
+                ),
+              )}
             </ul>
             <div className="mt-2 flex gap-2">
               <input
@@ -321,6 +325,21 @@ function Choice({ label, showing, onPin }: { label: string; showing: boolean; on
           Pin
         </button>
       )}
+    </li>
+  );
+}
+
+function LockedMenuRow({ row }: { row: { key: string; label: string; depth: number } }) {
+  return (
+    <li
+      className="aq-side-locked flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0"
+      style={{ paddingLeft: 8 + row.depth * 14 }}
+      data-testid="customize-sidebar-locked"
+      title={`${row.label} stays at the top of the sidebar`}
+    >
+      <Lock size={14} className="aq-side-locked-mark shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate font-medium">{row.label}</span>
+      <span className="aq-side-locked-mark text-xs">Pinned</span>
     </li>
   );
 }

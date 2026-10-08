@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
+import { PERMANENT_SIDEBAR_LINKS, SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
 import { blankFormsFolderHref } from "./folderBrowse.ts";
 import { EMPTY_SIDEBAR_SHORTCUTS } from "./sidebarShortcuts.ts";
 import {
@@ -9,7 +9,9 @@ import {
   addPin,
   draftFromPrefs,
   draftToPrefs,
+  layoutRows,
   moveDraftInto,
+  moveDraftItem,
   nudgeDraft,
   readSidebarCache,
   removePin,
@@ -117,6 +119,92 @@ describe("per-user sidebar layout", () => {
     assert.equal(readSidebarCache(storage, 8), null);
     writeSidebarCache(storage, 7, { prefs: EMPTY_SIDEBAR_SHORTCUTS });
     assert.equal(readSidebarCache(storage, 7)?.levels?.admin_console, "none");
+  });
+
+  it("puts Home back at the top when a saved layout hid it", () => {
+    const prefs = {
+      hidden: ["home", "document-control", "quality", "form-folders", "reporting", "calendar", "settings", "page-settings"],
+      pinned: [
+        { key: "pin-engineering-planner", label: "Engineering Planner", path: "https://mtollefson-rgb.github.io/Engineering-Planner/" },
+        { key: "pin-master-document-list", label: "Master Document List", path: "/documents/master-list" },
+      ],
+      groups: [],
+      layout: [
+        { key: "my-shortcuts", children: [{ key: "pin-engineering-planner" }, { key: "pin-master-document-list" }] },
+        { key: "fai" },
+        { key: "repairs" },
+        { key: "warranty" },
+        { key: "recalls" },
+        { key: "admin" },
+      ],
+    };
+    const shown = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, allowAll);
+    assert.equal(shown[0]?.key, "home");
+    assert.ok(isFolder(shown[0]!));
+    assert.equal(shown[0].path, "/home");
+    assert.ok(shown.findIndex((node) => node.key === "my-shortcuts") > 0);
+    assert.equal(shown.some((node) => node.key === "fai"), true);
+
+    const unread = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, { levels: null });
+    assert.equal(unread[0]?.key, "home");
+    assert.ok(isFolder(unread[0]!));
+    assert.equal(unread[0].path, "/home");
+
+    const draft = draftFromPrefs(SIDEBAR_FOLDERS, prefs);
+    assert.equal(draft.layout[0]?.key, "home");
+    assert.equal(draft.hidden.includes("home"), false);
+    const rows = layoutRows(draft, SIDEBAR_FOLDERS);
+    assert.equal(rows[0]?.key, "home");
+    assert.equal(rows[0]?.locked, true);
+    assert.equal(rows[0]?.hidden, false);
+    assert.equal(toggleHidden(draft, "home"), draft);
+    assert.equal(nudgeDraft(draft, "home", 1).layout[0]?.key, "home");
+    assert.equal(moveDraftInto(draft, "home", "quality").layout[0]?.key, "home");
+    const bumped = moveDraftItem(draft, "fai", null, 0);
+    assert.equal(bumped.layout[0]?.key, "home");
+    assert.notEqual(bumped.layout[1]?.key, "home");
+
+    const saved = draftToPrefs(draft);
+    assert.equal(saved.hidden.includes("home"), false);
+    assert.equal(saved.layout?.[0]?.key, "home");
+    assert.equal(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll)[0]?.key, "home");
+  });
+
+  it("lifts Home out of a section and keeps it first for a person who cannot open Admin", () => {
+    const staff: SidebarAccess = {
+      levels: new Proxy({} as Record<string, string>, { get: (_target, prop) => (prop === "admin_console" ? "none" : "edit") }),
+    };
+    const prefs = {
+      hidden: [],
+      pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
+      groups: [],
+      layout: [{ key: "quality", children: [{ key: "home", children: [{ key: "calendar" }] }, { key: "fai" }] }, { key: "admin" }],
+    };
+    const shown = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, staff);
+    assert.equal(shown[0]?.key, "home");
+    assert.ok(isFolder(shown[0]!));
+    assert.equal(shown[0].children.some((child) => child.key === "calendar"), true);
+    assert.equal(shown.some((node) => node.key === "admin"), false);
+    const quality = shown.find((node) => node.key === "quality");
+    assert.ok(!quality || (isFolder(quality) && !quality.children.some((child) => child.key === "home")));
+    assert.ok(shown.findIndex((node) => node.key === "my-shortcuts") > 0);
+  });
+
+  it("leaves Settings on the permanent footer, outside the layout a person can hide", () => {
+    const settings = PERMANENT_SIDEBAR_LINKS.find((link) => link.key === "settings");
+    assert.equal(settings?.path, "/settings");
+    assert.equal(settings?.label, "Settings");
+    assert.equal(
+      SIDEBAR_FOLDERS.some((node) => node.key === "settings" || ("path" in node && node.path === "/settings")),
+      false,
+    );
+    const shown = resolveUserSidebar(
+      SIDEBAR_FOLDERS,
+      { hidden: ["settings", "page-settings"], pinned: [], groups: [], layout: [{ key: "fai" }] },
+      allowAll,
+    );
+    assert.equal(shown[0]?.key, "home");
+    assert.equal(PERMANENT_SIDEBAR_LINKS.some((link) => link.path === "/settings"), true);
   });
 
   it("hides Admin when the permissions payload does not grant the console", () => {
