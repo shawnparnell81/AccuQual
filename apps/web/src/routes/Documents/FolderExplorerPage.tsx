@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, t
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
-import { joinFolderPath } from "../../lib/folderPath";
+import { folderNodePath, joinFolderPath } from "../../lib/folderPath";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -20,7 +20,9 @@ import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/lis
 import { Modal } from "../../components/modals/Modal";
 import { CopyPathButton, FolderPathBar } from "../../components/documents/FolderPathBar";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
+import { DeleteFolderDialog, FolderActionButtons, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
 import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
+import { documentFolderHasContents, folderPathLabel } from "../../lib/folderActions";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
@@ -109,6 +111,8 @@ function FolderTreeBranch({
   onGapLeave,
   onGapDrop,
   onMove,
+  onEditFolder,
+  onDeleteFolder,
 }: {
   folder: DocumentFolder;
   depth: number;
@@ -134,7 +138,12 @@ function FolderTreeBranch({
   onGapLeave: (key: string) => void;
   onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
   onMove?: (folder: DocumentFolder) => void;
+  onEditFolder?: (folder: DocumentFolder) => void;
+  onDeleteFolder?: (folder: DocumentFolder) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const nameLocked = folder.name === "ISO Compliance Documents" || folder.name === LIBRARY_POOL_NAME;
+  const showFolderActions = !nameLocked && (onEditFolder != null || onDeleteFolder != null);
   const children = listFolder(folders, folder.id).folders;
   const open = folderTreeOpen(treeOpen[folder.id], depth);
   const selected = selectedId === folder.id;
@@ -169,6 +178,11 @@ function FolderTreeBranch({
           onLeaveRow(folder.id);
         }}
         onDrop={(event) => onDropRow(event, folder)}
+        onContextMenu={(event) => {
+          if (!showFolderActions) return;
+          event.preventDefault();
+          setMenuOpen(true);
+        }}
       >
         {children.length > 0 ? (
           <button
@@ -201,6 +215,56 @@ function FolderTreeBranch({
           >
             Move to…
           </button>
+        )}
+        {showFolderActions && (
+          <span className="relative mr-1 shrink-0">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label={`Folder actions for ${folder.name}`}
+              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                setMenuOpen((open) => !open);
+              }}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <span role="menu" className="absolute right-0 top-7 z-20 flex min-w-36 flex-col rounded-md border border-border bg-card p-1 text-left shadow-sm">
+                {onEditFolder && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpen(false);
+                      onEditFolder(folder);
+                    }}
+                  >
+                    Edit folder
+                  </button>
+                )}
+                {onDeleteFolder && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="rounded px-2 py-1 text-left text-xs text-destructive hover:bg-muted"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpen(false);
+                      onDeleteFolder(folder);
+                    }}
+                  >
+                    Delete folder
+                  </button>
+                )}
+              </span>
+            )}
+          </span>
         )}
         {draggable && <GripVertical size={12} className="mr-1 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-70" />}
       </div>
@@ -239,6 +303,8 @@ function FolderTreeBranch({
               onGapLeave={onGapLeave}
               onGapDrop={onGapDrop}
               onMove={onMove}
+              onEditFolder={onEditFolder}
+              onDeleteFolder={onDeleteFolder}
             />
           ))}
         </ul>
@@ -320,7 +386,21 @@ function useUpdateFolder() {
   return useMutation({
     mutationFn: async ({ id, ...patch }: { id: number; name?: string; parentId?: number | null; sortOrder?: number }) =>
       (await apiClient.patch<DocumentFolder>(`/document-folders/${id}`, patch)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
+    onMutate: async (patch) => {
+      await qc.cancelQueries({ queryKey: ["document-folders"] });
+      const previous = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
+      if (previous) {
+        qc.setQueryData<DocumentFolder[]>(
+          ["document-folders"],
+          previous.map((folder) => (folder.id === patch.id ? { ...folder, ...("name" in patch && patch.name ? { name: patch.name } : {}), ...("parentId" in patch ? { parentId: patch.parentId ?? null } : {}) } : folder)),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) qc.setQueryData(["document-folders"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
   });
 }
 
@@ -328,7 +408,42 @@ function useDeleteFolder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => apiClient.delete(`/document-folders/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["document-folders"] });
+      const previous = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
+      if (previous) qc.setQueryData<DocumentFolder[]>(["document-folders"], previous.filter((folder) => folder.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(["document-folders"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
+  });
+}
+
+function useRetireFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, destinationId }: { id: number; destinationId: number | null }) => apiClient.post(`/document-folders/${id}/retire`, { destinationId }),
+    onMutate: async ({ id, destinationId }) => {
+      await qc.cancelQueries({ queryKey: ["document-folders"] });
+      const previous = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
+      if (previous) {
+        qc.setQueryData<DocumentFolder[]>(
+          ["document-folders"],
+          previous.flatMap((folder) => {
+            if (folder.id === id) return [];
+            if (folder.parentId === id && destinationId != null) return [{ ...folder, parentId: destinationId }];
+            return [folder];
+          }),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _patch, context) => {
+      if (context?.previous) qc.setQueryData(["document-folders"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
   });
 }
 
@@ -382,6 +497,8 @@ export function FolderExplorerPage() {
   const { data: folders = [], isLoading, isFetching } = useDocumentFolders();
   const { effective, isLoading: permissionsLoading } = useEffectivePermissions();
   const canManageFolders = !permissionsLoading && effective?.documents === "edit";
+  const canRenameFolders = !permissionsLoading && effective?.["folders.rename"] === "edit";
+  const canDeleteFolders = !permissionsLoading && effective?.["folders.delete"] === "edit";
   const visibleFolders = useMemo(() => {
     const seen = new Set<number>();
     return visibleExplorerFolders(folders).filter((folder) => {
@@ -393,6 +510,9 @@ export function FolderExplorerPage() {
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
+  const retireFolder = useRetireFolder();
+  const [nameEdit, setNameEdit] = useState<DocumentFolder | null>(null);
+  const [retireTarget, setRetireTarget] = useState<DocumentFolder | null>(null);
   const uploadTemplate = useUploadTemplate();
   const uploadDocument = useUploadDocument();
   const removeTemplate = useRemoveTemplate();
@@ -860,6 +980,9 @@ export function FolderExplorerPage() {
     );
   }
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
+  const deptChain = folderChain(visibleFolders, activeDept.id);
+  const deptPath = folderNodePath(visibleFolders, activeDept.id);
+  const deptParent = deptChain.length > 1 ? deptChain[deptChain.length - 2] : undefined;
   const movingFolder = movingId == null ? undefined : folders.find((folder) => folder.id === movingId);
 
   const query = search.trim().toLowerCase();
@@ -938,6 +1061,8 @@ export function FolderExplorerPage() {
                 onGapLeave={leaveGap}
                 onGapDrop={dropGap}
                 onMove={canManageFolders ? (row) => openMove(row.id) : undefined}
+                onEditFolder={canRenameFolders ? (row) => setNameEdit(row) : undefined}
+                onDeleteFolder={canDeleteFolders ? (row) => setRetireTarget(row) : undefined}
               />
             ))}
           </ul>
@@ -1017,9 +1142,19 @@ export function FolderExplorerPage() {
               onUploadFiles={uploadFiles}
               onUploadClick={requestDocumentUpload}
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
-              onRename={(id, name) => updateFolder.mutate({ id, name })}
+              onRename={(id, name) =>
+                updateFolder.mutate(
+                  { id, name },
+                  {
+                    onError: (err) => void extractErrorMessageAsync(err, "Couldn't rename that folder.").then((message) => toast.error(message)),
+                  },
+                )
+              }
               onMove={(id) => openMove(id)}
               onDelete={canManageFolders ? (id) => deleteFolder.mutate(id) : undefined}
+              onEditFolder={canRenameFolders ? (row) => setNameEdit(row) : undefined}
+              onDeleteFolder={canDeleteFolders ? (row) => setRetireTarget(row) : undefined}
+              folderActionPending={updateFolder.isPending || retireFolder.isPending}
               canManage={canManageFolders}
               onSendToLibrary={sendToLibrary}
               onAttach={requestUpload}
@@ -1033,15 +1168,22 @@ export function FolderExplorerPage() {
           ) : (
           <>
           <ExplorerPathBar
-            crumbs={explorerCrumbs(activeDept ? [{ id: activeDept.id, name: activeDept.name }] : [])}
+            crumbs={explorerCrumbs(deptChain)}
             canBack={canGoBack(history)}
             canForward={canGoForward(history)}
-            canUp={false}
+            canUp={deptParent != null}
             onBack={() => goHistory(-1)}
             onForward={() => goHistory(1)}
-            onUp={showDepartmentList}
-            onCrumb={() => showDepartmentList()}
+            onUp={() => {
+              if (deptParent) selectTreeFolder(deptParent);
+            }}
+            onCrumb={(id) => {
+              if (id == null) return;
+              const target = visibleFolders.find((row) => row.id === id);
+              if (target) selectTreeFolder(target);
+            }}
           />
+          <FolderPathBar path={deptPath} />
           <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
             <FolderOpen size={18} className="shrink-0 text-primary" />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
@@ -1053,6 +1195,15 @@ export function FolderExplorerPage() {
                 Move to…
               </button>
             )}
+            {activeDept.name !== LIBRARY_POOL_NAME && activeDept.name !== "ISO Compliance Documents" && (
+              <FolderActionButtons
+                canRename={canRenameFolders}
+                canDelete={canDeleteFolders}
+                pending={updateFolder.isPending || retireFolder.isPending}
+                onEdit={() => setNameEdit(activeDept)}
+                onDelete={() => setRetireTarget(activeDept)}
+              />
+            )}
             <button
               onClick={() => requestDocumentUpload(activeDept.id)}
               className="ml-1 flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
@@ -1060,15 +1211,6 @@ export function FolderExplorerPage() {
             >
               <UploadCloud size={13} />
               Upload Document
-            </button>
-            <button
-              onClick={() => {
-                if (confirm(`Delete the "${activeDept.name}" department? Only works if it's empty.`)) deleteFolder.mutate(activeDept.id);
-              }}
-              className="ml-1 text-muted-foreground hover:text-destructive"
-              aria-label={`Delete ${activeDept.name}`}
-            >
-              <X size={14} />
             </button>
           </div>
 
@@ -1161,16 +1303,17 @@ export function FolderExplorerPage() {
                   >
                     <UploadCloud size={14} />
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${sub.name}"? This only works if it's empty.`)) deleteFolder.mutate(sub.id);
-                    }}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${sub.name}`}
-                  >
-                    <X size={13} />
-                  </button>
+                  {sub.name !== LIBRARY_POOL_NAME && sub.name !== "ISO Compliance Documents" && (
+                    <span onClick={(event) => event.stopPropagation()}>
+                      <FolderActionButtons
+                        canRename={canRenameFolders}
+                        canDelete={canDeleteFolders}
+                        pending={updateFolder.isPending || retireFolder.isPending}
+                        onEdit={() => setNameEdit(sub)}
+                        onDelete={() => setRetireTarget(sub)}
+                      />
+                    </span>
+                  )}
                 </div>
                 {!isCollapsed && (
                   <div
@@ -1540,6 +1683,51 @@ export function FolderExplorerPage() {
       {movingFolder && (
         <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={movePending} onClose={() => { if (!movePending) setMovingId(null); }} onMove={(parentId) => void moveInto(parentId)} />
       )}
+      <RenameFolderDialog
+        open={nameEdit != null}
+        name={nameEdit?.name ?? ""}
+        pending={updateFolder.isPending}
+        onClose={() => {
+          if (!updateFolder.isPending) setNameEdit(null);
+        }}
+        onSave={(name) => {
+          if (!nameEdit) return;
+          updateFolder.mutate(
+            { id: nameEdit.id, name },
+            {
+              onSuccess: () => {
+                toast.success("Folder renamed.");
+                setNameEdit(null);
+              },
+              onError: (err) => void extractErrorMessageAsync(err, "Couldn't rename that folder.").then((message) => toast.error(message)),
+            },
+          );
+        }}
+      />
+      <DeleteFolderDialog
+        open={retireTarget != null}
+        folderName={retireTarget?.name ?? ""}
+        folderId={retireTarget?.id ?? null}
+        folders={visibleFolders}
+        savedCount={retireTarget ? (documentFolderHasContents(retireTarget, visibleFolders) ? Math.max(1, visibleFolders.filter((folder) => folder.parentId === retireTarget.id).length) : 0) : 0}
+        pending={retireFolder.isPending}
+        onClose={() => {
+          if (!retireFolder.isPending) setRetireTarget(null);
+        }}
+        onConfirm={(destinationId) => {
+          if (!retireTarget) return;
+          retireFolder.mutate(
+            { id: retireTarget.id, destinationId },
+            {
+              onSuccess: () => {
+                toast.success("Folder deleted.");
+                setRetireTarget(null);
+              },
+              onError: (err) => void extractErrorMessageAsync(err, "Couldn't delete that folder.").then((message) => toast.error(message)),
+            },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -1735,6 +1923,7 @@ function ExplorerPathBar({
   onUp: () => void;
   onCrumb: (id: number | null) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5">
       <button type="button" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Back" disabled={!canBack} onClick={onBack}>
@@ -1745,6 +1934,19 @@ function ExplorerPathBar({
       </button>
       <button type="button" className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" disabled={!canUp} onClick={onUp}>
         Up
+      </button>
+      <button
+        type="button"
+        data-testid="copy-folder-path"
+        className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={() => {
+          const path = folderPathLabel(crumbs.map((crumb) => crumb.name));
+          void navigator.clipboard?.writeText(path);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? "Copied" : "Copy path"}
       </button>
       <nav aria-label="Folder path" data-testid="folder-breadcrumbs" className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm">
         {crumbs.map((crumb, index) => {
@@ -1821,6 +2023,9 @@ function FolderBrowser({
   onRename,
   onMove,
   onDelete,
+  onEditFolder,
+  onDeleteFolder,
+  folderActionPending,
   canManage,
   onSendToLibrary,
   onAttach,
@@ -1854,6 +2059,9 @@ function FolderBrowser({
   onRename: (id: number, name: string) => void;
   onMove: (id: number) => void;
   onDelete?: (id: number) => void;
+  onEditFolder?: (folder: DocumentFolder) => void;
+  onDeleteFolder?: (folder: DocumentFolder) => void;
+  folderActionPending?: boolean;
   canManage: boolean;
   onSendToLibrary: (id: number) => void;
   onAttach: (id: number) => void;
@@ -1917,17 +2125,29 @@ function FolderBrowser({
           <UploadCloud size={13} />
           Upload Document
         </button>
-        {canRename && !renaming && (
-          <button
-            type="button"
-            onClick={() => {
-              setRename(folder.name);
-              setRenaming(true);
-            }}
-            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-          >
-            Rename
-          </button>
+        {onEditFolder || onDeleteFolder ? (
+          folder.name !== LIBRARY_POOL_NAME && folder.name !== "ISO Compliance Documents" && (
+            <FolderActionButtons
+              canRename={onEditFolder != null}
+              canDelete={onDeleteFolder != null}
+              pending={folderActionPending}
+              onEdit={() => onEditFolder?.(folder)}
+              onDelete={() => onDeleteFolder?.(folder)}
+            />
+          )
+        ) : (
+          canRename && !renaming && (
+            <button
+              type="button"
+              onClick={() => {
+                setRename(folder.name);
+                setRenaming(true);
+              }}
+              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+            >
+              Edit folder
+            </button>
+          )
         )}
         {canManage && folder.name !== LIBRARY_POOL_NAME && (
           <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => onMove(folder.id)}>
@@ -1953,8 +2173,8 @@ function FolderBrowser({
           <div className="w-full max-w-xs">
             <TextField label="Folder name" value={rename} onChange={(event) => setRename(event.target.value)} />
           </div>
-          <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-            Save name
+          <button type="submit" disabled={folderActionPending} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60">
+            {folderActionPending ? "Saving…" : "Save name"}
           </button>
           <button type="button" onClick={() => setRenaming(false)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
             Cancel

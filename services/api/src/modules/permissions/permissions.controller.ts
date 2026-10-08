@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { FORM_BUILDER_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -44,14 +44,21 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   // Roles & Permissions still lists only VISIBLE_RESOURCE_KEYS.
   const adminConsole = isFullAccessRole(user.roleName) ? "edit" : "none";
   const effective = Object.fromEntries(entries) as Record<string, AccessLevel>;
-  if (await roleHasFormBuilderPermission(db, user.roleName)) effective.form_builder = "edit";
+  const granted = await rolePermissionSet(db, user.roleName);
+  if (granted.has(FORM_BUILDER_PERMISSION)) effective.form_builder = "edit";
+  effective["folders.delete"] = granted.has(FOLDERS_DELETE_PERMISSION) ? "edit" : "none";
+  effective["folders.rename"] = granted.has(FOLDERS_RENAME_PERMISSION) ? "edit" : "none";
   res.json({ ...effective, admin_console: adminConsole });
 });
 
-async function roleHasFormBuilderPermission(db: Db, roleName: string | null): Promise<boolean> {
-  if (!roleName) return false;
+async function rolePermissionSet(db: Db, roleName: string | null): Promise<Set<string>> {
+  if (!roleName) return new Set();
   const [role] = await db.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, roleName));
-  return (role?.permissions ?? []).includes(FORM_BUILDER_PERMISSION);
+  return new Set(role?.permissions ?? []);
+}
+
+async function roleHasFormBuilderPermission(db: Db, roleName: string | null): Promise<boolean> {
+  return (await rolePermissionSet(db, roleName)).has(FORM_BUILDER_PERMISSION);
 }
 
 // ---------------------------------------------------------------------------

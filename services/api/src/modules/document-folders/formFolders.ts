@@ -1,9 +1,11 @@
 import { eq, inArray, isNotNull } from "drizzle-orm";
+import { company } from "../../drizzle/schema/company.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
 import { documentChangeRequests } from "../../drizzle/schema/documentChangeRequests.js";
+import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
@@ -12,7 +14,12 @@ import { qmsForms } from "../../drizzle/schema/qmsForms.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import type { Db } from "../../lib/requestDb.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
+import { folderIdentityKey } from "./duplicateFolders.js";
+import { rememberDeletedFormFolders, rememberFormFolderName } from "./folderTombstones.js";
+import { folderIsBlankLibrary } from "./formFiling.js";
+import { folderLocationLabel } from "./mainIsoFolders.js";
 import { FILEABLE_FORM_KEYS, recordLinkedPath } from "./editableForms.js";
 import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, type FormTemplateSeed } from "./formFiling.js";
 import { listFormTemplates } from "./formTemplates.js";
@@ -22,11 +29,15 @@ import { listFormTemplates } from "./formTemplates.js";
  * Saved copies are listed separately. A blank template is not a saved file.
  */
 export interface FormFolderSummary {
+  /** Stable id for the folder. One of `formKeys`. */
   formKey: string;
-  /** Blank or QMS title. */
+  /** Every source that belongs in this one folder (module form and blank template). */
+  formKeys: string[];
+  /** Clean title, without an internal key or a trailing acronym. */
   title: string;
+  /** Real document number when this folder has one. Empty when it does not. */
   formId: string;
-  /** Title, with the form number when two forms share a title. */
+  /** What the Folders tab shows. */
   name: string;
   savedCount: number;
 }
@@ -43,6 +54,7 @@ export interface SavedFill {
 
 export interface FormFolderDetail {
   formKey: string;
+  formKeys: string[];
   title: string;
   formId: string;
   name: string;
@@ -108,23 +120,105 @@ export function formKeyForSharedTitle(matches: { formKey: string; match: string 
   return hit?.formKey ?? fallback;
 }
 
-/** Folders for every form that can be filled or saved. Registers that are not blanks stay out. */
+/**
+ * A controlled document number such as FRM-VAL-010. An empty id is not one.
+ * A lowercase key such as frm-fai-001 is not one either: that is the internal
+ * id, and it must not keep two copies of the same form apart.
+ */
+export function isRealFormNumber(formId: string): boolean {
+  return /^[A-Z]{2,6}-[A-Z0-9]+-\d{2,4}$/.test(formId.trim());
+}
+
+/**
+ * Title used to decide that two sources are the same form.
+ * Case and extra spaces drop out. A trailing acronym such as (ECR) drops out.
+ * An internal key such as (first_article_inspection) or (frm-fai-001) drops out.
+ * A real form number such as (FRM-VAL-010) stays, so it cannot glue two forms together.
+ */
+export function cleanFormFolderTitle(title: string): string {
+  let name = title.trim().replace(/\s+/g, " ");
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = name.replace(/\s*\(([^)]+)\)\s*$/, (whole, inner: string) => {
+      const token = inner.trim();
+      if (isRealFormNumber(token)) return whole;
+      if (/^[A-Za-z]{2,8}$/.test(token)) return "";
+      if (/^[a-z0-9]+(?:[_-][a-z0-9]+)+$/i.test(token)) return "";
+      return whole;
+    });
+    if (next === name) break;
+    name = next.trim();
+  }
+  return name.replace(/\s+/g, " ").trim();
+}
+
+export function formFolderMatchKey(title: string): string {
+  return cleanFormFolderTitle(title).toLowerCase();
+}
+
+function isShouting(name: string): boolean {
+  const letters = name.replace(/[^A-Za-z]/g, "");
+  return letters.length > 0 && letters === letters.toUpperCase();
+}
+
+/** Prefer a readable mixed-case title over an all-caps import of the same words. */
+export function preferredFormFolderName(titles: string[]): string {
+  const cleaned = titles.map((title) => cleanFormFolderTitle(title)).filter((title) => title.length > 0);
+  const quiet = cleaned.find((title) => !isShouting(title));
+  return quiet ?? cleaned[0] ?? "Form";
+}
+
+interface GroupMember {
+  formKey: string;
+  title: string;
+  formId: string;
+  realNumber: string | null;
+}
+
+function finishFormFolderGroup(members: GroupMember[], distinguish: boolean, formId: string): Omit<FormFolderSummary, "savedCount"> {
+  const formKeys = [...new Set(members.map((member) => member.formKey))].sort((a, b) => a.localeCompare(b));
+  const numbered = members.find((member) => member.realNumber === formId);
+  const formKey = (distinguish ? numbered?.formKey : members.find((member) => member.realNumber)?.formKey) ?? formKeys[0]!;
+  const title = preferredFormFolderName(members.map((member) => member.title));
+  const name = distinguish && formId ? `${title} (${formId})` : title;
+  return { formKey, formKeys, title, formId: distinguish ? formId : (members.find((member) => member.realNumber)?.realNumber ?? ""), name };
+}
+
+/**
+ * One Folders row per form name.
+ * A module form and a blank template for the same form become one row.
+ * Two blanks that carry different document numbers stay two rows.
+ */
 export function formFolderIndex(templates: FolderTemplate[]): Omit<FormFolderSummary, "savedCount">[] {
   const live = templates.filter((template) => template.start != null || FILEABLE_FORM_KEYS.has(template.formKey));
-  const titleCount = new Map<string, number>();
+  const buckets = new Map<string, GroupMember[]>();
   for (const template of live) {
     const title = template.title.trim() || template.formKey;
-    titleCount.set(title, (titleCount.get(title) ?? 0) + 1);
+    const realNumber = isRealFormNumber(template.formId) ? template.formId.trim().toUpperCase() : null;
+    const key = formFolderMatchKey(title);
+    const list = buckets.get(key) ?? [];
+    list.push({ formKey: template.formKey, title, formId: template.formId.trim(), realNumber });
+    buckets.set(key, list);
   }
-  return live
-    .map((template) => {
-      const title = template.title.trim() || template.formKey;
-      const formId = template.formId.trim();
-      const shared = (titleCount.get(title) ?? 0) > 1;
-      const name = shared ? (formId ? `${title} (${formId})` : `${title} (${template.formKey})`) : title;
-      return { formKey: template.formKey, title, formId, name };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.formKey.localeCompare(b.formKey));
+
+  const groups: Omit<FormFolderSummary, "savedCount">[] = [];
+  for (const members of buckets.values()) {
+    const numbers = [...new Set(members.map((member) => member.realNumber).filter((number): number is string => number != null))].sort();
+    if (numbers.length >= 2) {
+      for (const number of numbers) {
+        groups.push(finishFormFolderGroup(members.filter((member) => member.realNumber === number), true, number));
+      }
+      const plain = members.filter((member) => member.realNumber == null);
+      if (plain.length > 0) groups.push(finishFormFolderGroup(plain, false, ""));
+    } else {
+      groups.push(finishFormFolderGroup(members, false, numbers[0] ?? ""));
+    }
+  }
+  return groups.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.formKey.localeCompare(b.formKey));
+}
+
+/** Saved copies from every source in the folder, newest first. */
+export function combinedSavedFills(fills: Map<string, SavedFill[]>, formKeys: readonly string[]): SavedFill[] {
+  return sortSavedFills(formKeys.flatMap((key) => fills.get(key) ?? []));
 }
 
 function bodyString(seed: FormTemplateSeed, key: string): string | null {
@@ -185,7 +279,7 @@ const SHARED_GROUPS: SharedGroup[] = [
 async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: Map<string, SavedFill[]> }> {
   const { templates } = await listFormTemplates(db);
   const index = formFolderIndex(templates);
-  const fills = new Map<string, SavedFill[]>(index.map((folder) => [folder.formKey, []]));
+  const fills = new Map<string, SavedFill[]>(index.flatMap((folder) => folder.formKeys.map((key) => [key, [] as SavedFill[]])));
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));
   const seeds = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed]));
 
@@ -328,30 +422,175 @@ async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: M
     }
   }
 
-  for (const list of fills.values()) list.sort(compareSavedFills);
+  const combined = new Map<string, SavedFill[]>();
+  for (const folder of index) {
+    const rows = combinedSavedFills(fills, folder.formKeys);
+    combined.set(folder.formKey, rows);
+    for (const key of folder.formKeys) combined.set(key, rows);
+  }
 
   return {
-    folders: index.map((folder) => ({ ...folder, savedCount: fills.get(folder.formKey)?.length ?? 0 })),
-    fills,
+    folders: index.map((folder) => ({ ...folder, savedCount: combined.get(folder.formKey)?.length ?? 0 })),
+    fills: combined,
   };
+}
+
+async function folderProfile(db: Db) {
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  return row?.profile ?? {};
+}
+
+function hiddenFormFolder(formKeys: readonly string[], deleted: ReadonlySet<string>): boolean {
+  return formKeys.some((key) => deleted.has(key));
+}
+
+function withAlias<T extends { formKey: string; formKeys: string[]; name: string }>(folder: T, aliases: Record<string, string> | undefined): T {
+  const alias = folder.formKeys.map((key) => aliases?.[key]).find((name) => name && name.trim()) ?? aliases?.[folder.formKey];
+  if (!alias?.trim()) return folder;
+  return { ...folder, name: alias.trim().replace(/\s+/g, " ") };
 }
 
 export async function listFormFolders(db: Db): Promise<FormFolderSummary[]> {
   const { folders } = await catalog(db);
-  return folders;
+  const profile = await folderProfile(db);
+  const deleted = new Set(profile.deletedFormFolderKeys ?? []);
+  return folders.filter((folder) => !hiddenFormFolder(folder.formKeys, deleted)).map((folder) => withAlias(folder, profile.formFolderDisplayNames));
 }
 
 export async function getFormFolder(db: Db, formKey: string): Promise<FormFolderDetail> {
   const key = formKey.trim();
   if (!key) throw AppError.badRequest("Form is required");
   const { folders, fills } = await catalog(db);
-  const folder = folders.find((item) => item.formKey === key);
-  if (!folder) throw AppError.notFound("Form folder");
+  const profile = await folderProfile(db);
+  const deleted = new Set(profile.deletedFormFolderKeys ?? []);
+  const found = folders.find((item) => item.formKey === key || item.formKeys.includes(key));
+  if (!found || hiddenFormFolder(found.formKeys, deleted)) throw AppError.notFound("Form folder");
+  const folder = withAlias(found, profile.formFolderDisplayNames);
   return {
     formKey: folder.formKey,
+    formKeys: folder.formKeys,
     title: folder.title,
     formId: folder.formId,
     name: folder.name,
     fills: fills.get(folder.formKey) ?? [],
   };
+}
+
+function sameFolderName(left: string, right: string): boolean {
+  return folderIdentityKey(left) === folderIdentityKey(right);
+}
+
+export async function renameFormFolder(db: Db, formKey: string, name: string, performedBy?: number): Promise<FormFolderSummary> {
+  const next = name.trim().replace(/\s+/g, " ");
+  if (!next) throw AppError.badRequest("Folder name is required");
+  const folders = await listFormFolders(db);
+  const folder = folders.find((item) => item.formKey === formKey || item.formKeys.includes(formKey));
+  if (!folder) throw AppError.notFound("Form folder");
+  if (folders.some((item) => item.formKey !== folder.formKey && sameFolderName(item.name, next))) {
+    throw AppError.badRequest("A folder with that name is already here.");
+  }
+  const previous = folder.name;
+  if (previous !== next) {
+    await rememberFormFolderName(db, folder.formKeys, next);
+    const [template] = await db.select({ id: controlledFormTemplates.id }).from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, folder.formKey));
+    await recordAuditTrail(db, {
+      entityType: "FormFolder",
+      entityId: template?.id ?? 0,
+      action: "update",
+      performedBy,
+      changes: {
+        event: "renamed",
+        summary: `Renamed the folder from "${previous}" to "${next}".`,
+        from: previous,
+        to: next,
+        formKeys: folder.formKeys,
+      },
+    });
+  }
+  return { ...folder, name: next };
+}
+
+export async function retireFormFolder(db: Db, formKey: string, destinationId: number | null, performedBy?: number): Promise<void> {
+  const detail = await getFormFolder(db, formKey);
+  if (detail.fills.length > 0) {
+    if (destinationId == null) throw AppError.badRequest("Choose a folder for the saved forms.");
+    const all = await db.select().from(documentFolders);
+    const destination = all.find((folder) => folder.id === destinationId);
+    if (!destination) throw AppError.notFound("Destination folder");
+    if (folderIsBlankLibrary(all, destination.id)) {
+      throw AppError.badRequest("Blank Forms Templates holds empty blanks. Pick another folder for the saved forms.");
+    }
+    const filings = await db.select().from(formFilings).where(inArray(formFilings.formKey, [...detail.formKeys]));
+    const filingByRecord = new Map(filings.map((row) => [`${row.formKey}:${row.recordId}`, row]));
+    let sortOrder = all.filter((folder) => folder.parentId === destination.id).length;
+    for (const fill of detail.fills) {
+      const filing = detail.formKeys.map((key) => filingByRecord.get(`${key}:${fill.recordId}`)).find((row) => row);
+      const node = filing?.folderNodeId == null ? undefined : all.find((folder) => folder.id === filing.folderNodeId);
+      if (node) {
+        if (node.parentId === destination.id) continue;
+        const fromParentId = node.parentId;
+        const fromLabel = folderLocationLabel(all, fromParentId);
+        const toLabel = folderLocationLabel(all, destination.id);
+        await db.update(documentFolders).set({ parentId: destination.id, updatedAt: new Date() }).where(eq(documentFolders.id, node.id));
+        node.parentId = destination.id;
+        await recordAuditTrail(db, {
+          entityType: "DocumentFolder",
+          entityId: node.id,
+          action: "update",
+          performedBy,
+          changes: {
+            event: "moved",
+            summary: `Moved the saved form "${node.name}" from ${fromLabel} → ${toLabel}.`,
+            name: node.name,
+            from: fromLabel,
+            to: toLabel,
+            fromParentId,
+            toParentId: destination.id,
+          },
+        });
+        continue;
+      }
+      const [created] = await db
+        .insert(documentFolders)
+        .values({ name: fill.fileName, parentId: destination.id, sortOrder, linkedPath: fill.openPath })
+        .returning();
+      sortOrder += 1;
+      if (created && filing) {
+        await db.update(formFilings).set({ folderNodeId: created.id, updatedAt: new Date() }).where(eq(formFilings.id, filing.id));
+      }
+      if (created) {
+        await recordAuditTrail(db, {
+          entityType: "DocumentFolder",
+          entityId: created.id,
+          action: "update",
+          performedBy,
+          changes: {
+            event: "moved",
+            summary: `Moved the saved form "${fill.fileName}" into ${folderLocationLabel(all, destination.id)}.`,
+            name: fill.fileName,
+            to: folderLocationLabel(all, destination.id),
+            toParentId: destination.id,
+          },
+        });
+      }
+    }
+  }
+  await rememberDeletedFormFolders(db, detail.formKeys);
+  const [template] = await db.select({ id: controlledFormTemplates.id }).from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, detail.formKey));
+  await recordAuditTrail(db, {
+    entityType: "FormFolder",
+    entityId: template?.id ?? 0,
+    action: "delete",
+    performedBy,
+    changes: {
+      event: "deleted",
+      name: detail.name,
+      summary:
+        detail.fills.length > 0
+          ? `Deleted the folder "${detail.name}" after moving ${detail.fills.length} saved form${detail.fills.length === 1 ? "" : "s"}. It will not be created again.`
+          : `Deleted the folder "${detail.name}". It was empty, and it will not be created again.`,
+      formKeys: detail.formKeys,
+      destinationId,
+    },
+  });
 }

@@ -21,16 +21,19 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
-import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce, rehomeStrayBlankShortcuts } from "./companyDocumentFolders.js";
-import { documentNodeKind, folderMoveAudit, folderRenameAudit, itemFolderPath } from "./mainIsoFolders.js";
+import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce, mergeLooseFolderDuplicates, moveDocumentFolderContents, rehomeStrayBlankShortcuts } from "./companyDocumentFolders.js";
+import { folderIdentityKey } from "./duplicateFolders.js";
+import { isTombstoned, rememberDeletedDocumentFolder, deletedDocumentFolderTokens } from "./folderTombstones.js";
+import { FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION } from "../roles/roleAccess.js";
+import { roles } from "../../drizzle/schema/roles.js";
+import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
 import { LIST_KEYS } from "../controlled-lists/logic.js";
 import { ensureLivingControlledLists } from "../controlled-lists/service.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
-import { getFormFolder, listFormFolders } from "./formFolders.js";
+import { getFormFolder, listFormFolders, renameFormFolder, retireFormFolder } from "./formFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
-import { folderNameKey } from "./editableForms.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
@@ -176,6 +179,7 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
     if (!parentFolder) continue;
     // A folder that was moved still has this name. Don't put a second copy back in the old place.
     if (list.some((f) => f.name === subfolder)) continue;
+    if (isTombstoned(await deletedDocumentFolderTokens(db), parentFolder.name, subfolder)) continue;
     const siblingCount = list.filter((f) => f.parentId === parentFolder.id).length;
     const [created] = await db.insert(documentFolders).values({ name: subfolder, parentId: parentFolder.id, sortOrder: siblingCount }).returning();
     if (created) list = [...list, created];
@@ -262,6 +266,23 @@ export const formFolders = asyncHandler(async (req: Request, res: Response) => {
 /** Saved filled copies of one form, newest save date first. */
 export const formFolderDetail = asyncHandler(async (req: Request, res: Response) => {
   res.json(await getFormFolder(req.db!, String(req.params.formKey ?? "")));
+});
+
+/** Renames one Folders tab row. The name is remembered so a later template sync does not put the old title back. */
+export const renameFormFolderHandler = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  await assertFolderPermission(db, req.user?.roleName, FOLDERS_RENAME_PERMISSION);
+  const folder = await renameFormFolder(db, String(req.params.formKey ?? ""), (req.body as { name?: string }).name ?? "", req.user?.id);
+  res.json(folder);
+});
+
+/** Hides one Folders tab row. Saved copies move into the chosen Documents folder first. */
+export const retireFormFolderHandler = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  await assertFolderPermission(db, req.user?.roleName, FOLDERS_DELETE_PERMISSION);
+  const destinationId = (req.body as { destinationId?: number | null }).destinationId ?? null;
+  await retireFormFolder(db, String(req.params.formKey ?? ""), destinationId, req.user?.id);
+  res.status(204).send();
 });
 
 type FolderNode = { id: number; name: string; parentId: number | null };
@@ -402,7 +423,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const withPool = existing.some((folder) => folder.id === pool.id) ? existing : [...existing, pool];
     await linkKnownForms(db, withPool);
     const filed = await rehomeStrayBlankShortcuts(db, withPool, settled.blankFormsTemplatesFolderId, req.user?.id);
-    return res.json(await folderListResponse(db, filed));
+    const merged = await mergeLooseFolderDuplicates(db, filed, req.user?.id);
+    return res.json(await folderListResponse(db, merged));
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -435,7 +457,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const siblings = all.filter((folder) => (parentId === undefined ? folder.parentId === null : folder.parentId === parentId));
-  const existing = siblings.find((folder) => folderNameKey(folder.name) === folderNameKey(name));
+  const existing = siblings.find((folder) => folderIdentityKey(folder.name) === folderIdentityKey(name));
   if (existing) {
     const [row] = await db.select().from(documentFolders).where(eq(documentFolders.id, existing.id));
     if (row) {
@@ -464,15 +486,31 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 export const update = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const id = Number(req.params.id);
-  const { name, parentId, sortOrder, documentId } = req.body as {
+  const body = req.body as {
     name?: string;
     parentId?: number | null;
     sortOrder?: number;
     documentId?: number | null;
   };
+  let name = body.name;
+  const { parentId, sortOrder, documentId } = body;
 
   const [current] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!current) throw AppError.notFound("Document folder");
+
+  const renaming = name !== undefined && name.trim().replace(/\s+/g, " ") !== current.name;
+  if (renaming) {
+    await assertFolderPermission(db, req.user?.roleName, FOLDERS_RENAME_PERMISSION);
+    const nextName = name!.trim().replace(/\s+/g, " ");
+    if (!nextName) throw AppError.badRequest("Folder name is required");
+    if (current.name === "ISO Compliance Documents" || current.name === LIBRARY_POOL_NAME) {
+      throw AppError.badRequest("That folder keeps its name.");
+    }
+    const siblings = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+    const clash = siblings.find((folder) => folder.id !== current.id && folder.parentId === current.parentId && folderIdentityKey(folder.name) === folderIdentityKey(nextName));
+    if (clash) throw AppError.badRequest("A folder with that name is already here.");
+    name = nextName;
+  }
 
   const parentChanging = parentId !== undefined && parentId !== current.parentId;
   let nodes: FolderNode[] | null = null;
@@ -498,8 +536,9 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
   if (parentChanging) await forgetRemovedFromLibraryPool(db, id);
+  if (renaming) await rememberDeletedDocumentFolder(db, await parentNameOf(db, current.parentId), current.name);
 
-  const nameChanged = name !== undefined && name !== current.name;
+  const nameChanged = renaming;
   let changes: Record<string, unknown>;
   if (parentChanging) {
     nodes = nodes ?? (await loadFolderNodes(db));
@@ -560,9 +599,22 @@ export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Resp
   res.status(204).send();
 });
 
+async function assertFolderPermission(db: Db, roleName: string | null | undefined, permission: string) {
+  if (!roleName) throw AppError.forbidden("You don't have permission to do that");
+  const [role] = await db.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, roleName));
+  if (!(role?.permissions ?? []).includes(permission)) throw AppError.forbidden("You don't have permission to do that");
+}
+
+async function parentNameOf(db: Db, parentId: number | null): Promise<string | null> {
+  if (parentId == null) return null;
+  const [parent] = await db.select({ name: documentFolders.name }).from(documentFolders).where(eq(documentFolders.id, parentId));
+  return parent?.name ?? null;
+}
+
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const id = Number(req.params.id);
+  await assertFolderPermission(db, req.user?.roleName, FOLDERS_DELETE_PERMISSION);
 
   const children = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, id)));
   if (children.length > 0) {
@@ -570,6 +622,9 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   }
   const [current] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
   if (!current) throw AppError.notFound("Document folder");
+  if (current.name === "ISO Compliance Documents" || current.name === LIBRARY_POOL_NAME) {
+    throw AppError.badRequest("That folder stays.");
+  }
   const linkedRecord = current.linkedPath != null && !isBlankTemplateStartPath(current.linkedPath);
   if (current.pdfPath != null || current.documentId != null || linkedRecord) {
     throw AppError.badRequest("Move the records out of this folder before removing it");
@@ -584,14 +639,94 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!deleted) throw AppError.notFound("Document folder");
 
+  await rememberDeletedDocumentFolder(db, await parentNameOf(db, deleted.parentId), deleted.name);
+
   await recordAuditTrail(db, {
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "delete",
-    changes: { name: deleted.name },
+    changes: {
+      event: "deleted",
+      name: deleted.name,
+      summary: `Deleted the folder "${deleted.name}". It was empty, and it will not be created again.`,
+    },
     performedBy: req.user?.id,
   });
 
+  res.status(204).send();
+});
+
+/**
+ * Deletes a folder. When it holds folders or saved files, those move to
+ * `destinationId` first (the client defaults that to the parent). Nothing
+ * saved is removed.
+ */
+export const retire = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  const id = Number(req.params.id);
+  await assertFolderPermission(db, req.user?.roleName, FOLDERS_DELETE_PERMISSION);
+  const destinationId = (req.body as { destinationId?: number | null }).destinationId ?? null;
+
+  const all = await db.select().from(documentFolders);
+  const current = all.find((folder) => folder.id === id);
+  if (!current) throw AppError.notFound("Document folder");
+  if (current.name === "ISO Compliance Documents" || current.name === LIBRARY_POOL_NAME) {
+    throw AppError.badRequest("That folder stays.");
+  }
+  const children = all.filter((folder) => folder.parentId === id);
+  const holdsSomething = children.length > 0 || current.pdfPath != null || current.documentId != null || current.linkedPath != null;
+  const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
+  if (!holdsSomething && !filing) {
+    await db.delete(documentFolders).where(eq(documentFolders.id, id));
+    await rememberDeletedDocumentFolder(db, await parentNameOf(db, current.parentId), current.name);
+    await recordAuditTrail(db, {
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: id,
+      action: "delete",
+      changes: { event: "deleted", name: current.name, summary: `Deleted the folder "${current.name}". It was empty, and it will not be created again.` },
+      performedBy: req.user?.id,
+    });
+    res.status(204).send();
+    return;
+  }
+  if (destinationId == null) throw AppError.badRequest("Choose a folder for what's inside.");
+  if (destinationId === id) throw AppError.badRequest("Choose a different folder.");
+  const nodes = all.map((folder) => ({ id: folder.id, name: folder.name, parentId: folder.parentId }));
+  if (!nodes.some((node) => node.id === destinationId)) throw AppError.notFound("Destination folder");
+  if (folderParentCycles(nodes, id, destinationId)) throw AppError.badRequest("That move would nest a folder inside itself");
+
+  const moved = await moveDocumentFolderContents(db, all, id, destinationId);
+  for (const move of moved.moves) {
+    await recordAuditTrail(db, {
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: move.id,
+      action: "update",
+      performedBy: req.user?.id,
+      changes: folderMoveAudit({
+        name: move.name,
+        kind: all.some((folder) => folder.parentId === move.id) ? "folder" : "saved item",
+        fromParentId: move.fromParentId,
+        toParentId: move.toParentId,
+        fromLabel: move.fromLabel,
+        toLabel: move.toLabel,
+      }),
+    });
+  }
+  await rememberDeletedDocumentFolder(db, await parentNameOf(db, current.parentId), current.name);
+  if (moved.removedId != null) {
+    await recordAuditTrail(db, {
+      entityType: AUDIT_ENTITY_TYPE,
+      entityId: id,
+      action: "delete",
+      changes: {
+        event: "deleted",
+        name: current.name,
+        summary: `Deleted the folder "${current.name}" after moving its contents to ${folderLocationLabel(nodes, destinationId)}. It will not be created again.`,
+        destinationId,
+      },
+      performedBy: req.user?.id,
+    });
+  }
   res.status(204).send();
 });
 

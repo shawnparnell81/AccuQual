@@ -25,7 +25,7 @@ async function wipeDatabase(): Promise<void> {
         ('director', 'Director — can view the quality system and approve work', 40, true, '[]'::jsonb),
         ('quality_manager', 'Manages NCR/CAPA/Audits/Suppliers', 50, true, '[]'::jsonb),
         ('lead', 'Lead — supervises day-to-day work', 60, true, '[]'::jsonb),
-        ('operator', 'Shop-floor / production user', 80, true, '[]'::jsonb),
+        ('operator', 'Shop-floor / production user', 80, true, '["folders.delete", "folders.rename"]'::jsonb),
         ('staff', 'Staff — day-to-day work', 80, true, '[]'::jsonb),
         ('read_only', 'Read-only — can view records but not change them', 90, true, '[]'::jsonb),
         ('auditor', 'Conducts audits and reviews findings', 92, true, '[]'::jsonb),

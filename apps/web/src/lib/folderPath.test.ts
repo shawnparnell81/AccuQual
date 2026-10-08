@@ -30,6 +30,12 @@ test("a moved item's path follows its new parent", () => {
   assert.equal(folderNodePath(moved, 3), "ISO Compliance Documents\\Test Data Projects\\LST-NCR-001");
 });
 
+test("a renamed folder's path uses the new name", () => {
+  const renamed = tree.map((row) => (row.id === 2 ? { ...row, name: "Plant Logs" } : row));
+  assert.equal(folderNodePath(renamed, 2), "ISO Compliance Documents\\Plant Logs");
+  assert.equal(folderNodePath(renamed, 3), "ISO Compliance Documents\\Plant Logs\\LST-NCR-001");
+});
+
 test("document pages resolve the folder the person can already open", () => {
   assert.equal(folderPathLookupEnabled("/documents/folders"), false);
   assert.equal(folderPathLookupEnabled("/dashboard"), false);

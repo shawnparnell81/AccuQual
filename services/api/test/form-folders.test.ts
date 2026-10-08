@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { FILEABLE_FORM_KEYS } from "../src/modules/document-folders/editableForms.js";
 import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
-import { compareSavedFills, formFolderIndex, formKeyForSharedTitle, savedFillFileName, sortSavedFills } from "../src/modules/document-folders/formFolders.js";
+import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
 
 describe("form folders", () => {
   const folders = formFolderIndex(FORM_TEMPLATES);
 
   it("uses a folder name for every form that can be filled or saved", () => {
-    const keys = new Set(folders.map((folder) => folder.formKey));
+    const keys = new Set(folders.flatMap((folder) => folder.formKeys));
     for (const key of FILEABLE_FORM_KEYS) expect(keys.has(key)).toBe(true);
     expect(keys.has("incoming_inspection_record")).toBe(true);
     expect(keys.has("ncr")).toBe(true);
@@ -21,6 +21,66 @@ describe("form folders", () => {
   it("keeps two forms that share a title as two folders", () => {
     const struts = folders.filter((folder) => folder.title === "AIR STRUT VALIDATION DOCUMENT").map((folder) => folder.name);
     expect(struts.sort()).toEqual(["AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)", "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)"]);
+  });
+
+  it("groups the live duplicate pairs and keeps different form numbers apart", () => {
+    const names = folders.map((folder) => folder.name);
+    const once = (name: string) => expect(names.filter((item) => item === name)).toEqual([name]);
+    once("Document Change Request");
+    once("Engineering Change Request");
+    once("First Article Inspection Report");
+    expect(names).not.toContain("DOCUMENT CHANGE REQUEST");
+    expect(names).not.toContain("ENGINEERING CHANGE REQUEST (ECR)");
+    expect(names.some((name) => name.includes("first_article_inspection") || name.includes("frm-fai-001"))).toBe(false);
+
+    expect(folders.find((folder) => folder.name === "Document Change Request")?.formKeys.sort()).toEqual(["dcr", "frm-doc-001"]);
+    expect(folders.find((folder) => folder.name === "Engineering Change Request")?.formKeys.sort()).toEqual(["ecr", "frm-ecr-001"]);
+    expect(folders.find((folder) => folder.name === "First Article Inspection Report")?.formKeys.sort()).toEqual(["first_article_inspection", "frm-fai-001"]);
+
+    expect(names.filter((name) => name.startsWith("AIR STRUT VALIDATION DOCUMENT")).sort()).toEqual([
+      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)",
+      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)",
+    ]);
+    expect(names.filter((name) => name.startsWith("ASTM E542 Gravimetric Volume Calculator")).sort()).toEqual([
+      "ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)",
+      "ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)",
+    ]);
+  });
+
+  it("strips a trailing acronym or internal key and keeps a real form number", () => {
+    expect(cleanFormFolderTitle("Document Change Request")).toBe("Document Change Request");
+    expect(cleanFormFolderTitle("DOCUMENT CHANGE REQUEST")).toBe("DOCUMENT CHANGE REQUEST");
+    expect(cleanFormFolderTitle("Engineering Change Request")).toBe("Engineering Change Request");
+    expect(cleanFormFolderTitle("ENGINEERING CHANGE REQUEST (ECR)")).toBe("ENGINEERING CHANGE REQUEST");
+    expect(cleanFormFolderTitle("First Article Inspection Report (first_article_inspection)")).toBe("First Article Inspection Report");
+    expect(cleanFormFolderTitle("First Article Inspection Report (frm-fai-001)")).toBe("First Article Inspection Report");
+    expect(cleanFormFolderTitle("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)")).toBe("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)");
+    expect(cleanFormFolderTitle("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)")).toBe("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)");
+    expect(cleanFormFolderTitle("ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)")).toBe("ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)");
+    expect(cleanFormFolderTitle("ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)")).toBe("ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)");
+
+    const listed: FolderTemplate[] = [
+      { formKey: "dcr", title: "Document Change Request", formId: "", start: {} },
+      { formKey: "frm-doc-001", title: "DOCUMENT CHANGE REQUEST", formId: "FRM-DOC-001", start: {} },
+      { formKey: "ecr", title: "Engineering Change Request", formId: "", start: {} },
+      { formKey: "frm-ecr-001", title: "ENGINEERING CHANGE REQUEST (ECR)", formId: "FRM-ECR-001", start: {} },
+      { formKey: "first_article_inspection", title: "First Article Inspection Report (first_article_inspection)", formId: "", start: {} },
+      { formKey: "frm-fai-001", title: "First Article Inspection Report (frm-fai-001)", formId: "", start: {} },
+      { formKey: "frm-val-010", title: "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)", formId: "FRM-VAL-010", start: {} },
+      { formKey: "frm-val-011", title: "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)", formId: "FRM-VAL-011", start: {} },
+      { formKey: "frm-tst-001", title: "ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)", formId: "FRM-TST-001", start: {} },
+      { formKey: "frm-tst-002", title: "ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)", formId: "FRM-TST-002", start: {} },
+    ];
+    const grouped = formFolderIndex(listed).map((folder) => folder.name).sort();
+    expect(grouped).toEqual([
+      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)",
+      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)",
+      "ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)",
+      "ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)",
+      "Document Change Request",
+      "Engineering Change Request",
+      "First Article Inspection Report",
+    ]);
   });
 
   it("orders saved copies by save date, then file name", () => {

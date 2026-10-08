@@ -33,6 +33,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   Document: "documents",
   DocumentChangeRequest: "documents",
   DocumentFolder: "documents",
+  FormFolder: "documents",
   Equipment: "calibration",
   Quarantine: "quarantine",
   WorkerProfile: "worker_profile",
