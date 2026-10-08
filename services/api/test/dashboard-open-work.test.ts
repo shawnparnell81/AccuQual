@@ -298,6 +298,6 @@ describe("open quality work", () => {
       }),
     );
     expect(work.plants.map((plant) => plant.name)).toEqual(["Dayton Machining", "Greenville Stamping"]);
-    expect(work.records.find((row) => row.number === "NCR-8")).toMatchObject({ plant: "Harbor", title: "Issue at harbor" });
+    expect(work.records.find((row) => row.href === "/ncr/8")).toMatchObject({ plant: "Harbor", title: "Issue at harbor", number: "" });
   });
 });
