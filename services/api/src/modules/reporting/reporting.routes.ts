@@ -19,6 +19,7 @@ import {
   updateReportScheduleHandler,
   deleteReportScheduleHandler,
   sendReportScheduleNowHandler,
+  recipientPeopleHandler,
   exportReportHandler,
 } from "./reporting.controller.js";
 
@@ -83,6 +84,7 @@ reportingRouter.post("/summary", validate(reportSummarySchema), reportSummaryHan
  * thing" (Settings → ERP Sync, company AI config, notification retry) is
  * already admin-only throughout.
  */
+reportingRouter.get("/recipient-people", requireRole("admin"), recipientPeopleHandler);
 reportingRouter.get("/schedules", requireRole("admin"), listReportSchedulesHandler);
 reportingRouter.post("/schedules", requireRole("admin"), validate(createReportScheduleSchema), createReportScheduleHandler);
 reportingRouter.patch("/schedules/:id", requireRole("admin"), validate(updateReportScheduleSchema), updateReportScheduleHandler);

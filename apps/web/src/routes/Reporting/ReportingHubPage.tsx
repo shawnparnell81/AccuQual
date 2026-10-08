@@ -7,7 +7,8 @@ import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { TextField, SelectField } from "../../components/forms/Field";
+import { SelectField } from "../../components/forms/Field";
+import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
 import { TrendLineChart, type TrendDatum } from "../../components/charts/TrendLineChart";
 import { RiskHeatmap } from "../../components/charts/RiskHeatmap";
 import { ReportExportButtons } from "../../components/shared/ReportExportButtons";
@@ -293,7 +294,11 @@ function ScheduledReportsSection() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: schedules = [], isLoading } = useQuery<ReportSchedule[]>({ queryKey: ["reporting", "schedules"], queryFn: async () => (await apiClient.get("/reporting/schedules")).data });
-  const [form, setForm] = useState({ reportType: "ncr_summary", frequency: "weekly" as "daily" | "weekly" | "monthly", recipients: "" });
+  const { data: people = [] } = useQuery<RecipientPerson[]>({
+    queryKey: ["reporting", "recipient-people"],
+    queryFn: async () => (await apiClient.get("/reporting/recipient-people")).data,
+  });
+  const [form, setForm] = useState({ reportType: "ncr_summary", frequency: "weekly" as "daily" | "weekly" | "monthly", recipients: [] as string[] });
 
   const create = useMutation({
     mutationFn: async () =>
@@ -301,12 +306,12 @@ function ScheduledReportsSection() {
         await apiClient.post("/reporting/schedules", {
           reportType: form.reportType,
           frequency: form.frequency,
-          recipients: form.recipients.split(",").map((r) => r.trim()).filter(Boolean),
+          recipients: form.recipients,
         })
       ).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reporting", "schedules"] });
-      setForm({ reportType: "ncr_summary", frequency: "weekly", recipients: "" });
+      setForm({ reportType: "ncr_summary", frequency: "weekly", recipients: [] });
       toast.success("Report schedule created.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create this schedule.")),
@@ -354,8 +359,8 @@ function ScheduledReportsSection() {
           <option value="weekly">Weekly</option>
           <option value="monthly">Monthly</option>
         </SelectField>
-        <TextField label="Recipients (comma-separated)" value={form.recipients} onChange={(e) => setForm({ ...form, recipients: e.target.value })} placeholder="quality@company.com, ops@company.com" />
-        <button type="submit" disabled={create.isPending || !form.recipients.trim()} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+        <ReportRecipientsField label="Email recipients" value={form.recipients} onChange={(recipients) => setForm({ ...form, recipients })} people={people} />
+        <button type="submit" disabled={create.isPending || form.recipients.length === 0} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
           {create.isPending ? "Creating…" : "Create Schedule"}
         </button>
       </form>
@@ -391,7 +396,9 @@ function ScheduledReportsSection() {
                 <tr key={s.id} className="border-b border-border last:border-0">
                   <td className="p-3">{REPORT_TYPE_OPTIONS.find((o) => o.value === s.reportType)?.label ?? s.reportType}</td>
                   <td className="p-3 capitalize">{s.frequency}</td>
-                  <td className="p-3 text-xs">{s.recipients.join(", ")}</td>
+                  <td className="p-3 align-top">
+                    <ScheduleRecipients schedule={s} people={people} />
+                  </td>
                   <td className="p-3">
                     {s.lastRunAt ? (
                       <>
@@ -421,6 +428,55 @@ function ScheduledReportsSection() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleRecipients({ schedule, people }: { schedule: ReportSchedule; people: RecipientPerson[] }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(schedule.recipients);
+
+  const save = useMutation({
+    mutationFn: async () => (await apiClient.patch(`/reporting/schedules/${schedule.id}`, { recipients: draft })).data,
+    onSuccess: () => {
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["reporting", "schedules"] });
+      toast.success("Recipients saved.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save recipients.")),
+  });
+
+  if (!editing) {
+    return (
+      <div className="flex min-w-[14rem] flex-col gap-2">
+        <ReportRecipientsField label="Email recipients" value={schedule.recipients} onChange={() => {}} people={people} disabled hideLabel />
+        <button
+          type="button"
+          className="self-start text-xs text-primary hover:underline"
+          onClick={() => {
+            setDraft(schedule.recipients);
+            setEditing(true);
+          }}
+        >
+          Edit recipients
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-[16rem] flex-col gap-2">
+      <ReportRecipientsField label="Email recipients" value={draft} onChange={setDraft} people={people} hideLabel />
+      <div className="flex gap-2">
+        <button type="button" disabled={save.isPending || draft.length === 0} className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50" onClick={() => save.mutate()}>
+          {save.isPending ? "Saving…" : "Save recipients"}
+        </button>
+        <button type="button" className="rounded-md border border-border px-2 py-1 text-xs" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
       </div>
     </div>
   );

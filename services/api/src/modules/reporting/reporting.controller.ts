@@ -9,6 +9,7 @@ import { reportSchedules } from "../../drizzle/schema/reporting.js";
 import { company } from "../../drizzle/schema/company.js";
 import { users } from "../../drizzle/schema/users.js";
 import * as reportingService from "./reporting.service.js";
+import { listRecipientPeople } from "./recipientPeople.js";
 import { computeNextRunAt, runReportSchedule } from "./reporting.scheduler.js";
 import { toCsv, toExcel, toPdf, type ExportableReport } from "./reporting.export.js";
 import type { Db } from "../../lib/requestDb.js";
@@ -120,9 +121,14 @@ export const deleteReportScheduleHandler = asyncHandler(async (req: Request, res
 /** POST /reporting/schedules/:id/send-now — manual dispatch, bypassing nextRunAt; updates the same lastRunAt/lastRunStatus fields a real scheduled run would. */
 export const sendReportScheduleNowHandler = asyncHandler(async (req: Request, res: Response) => {
   const existing = await loadSchedule(req, Number(req.params.id));
-  await runReportSchedule(existing.id);
+  await runReportSchedule(existing.id, req.user?.id);
   const refreshed = await loadSchedule(req, existing.id);
   res.json(refreshed);
+});
+
+/** GET /reporting/recipient-people — names for the schedule recipient picker. Same admin gate as schedules. */
+export const recipientPeopleHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listRecipientPeople(req.db!));
 });
 
 // ---------------------------------------------------------------------------
