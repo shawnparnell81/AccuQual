@@ -20,6 +20,7 @@ import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { workflowRuns } from "../../drizzle/schema/workflow.js";
 import { AGING_LABELS, agingLabel, type ReportSection, type SectionKey, type SectionSpec } from "./reports.model.js";
+import { plantDisplayName } from "../sites/siteAccess.js";
 
 export interface SectionContext {
   db: Db;
@@ -260,9 +261,10 @@ async function plantSection(spec: SectionSpec, ctx: SectionContext): Promise<Rep
   if (siteIds.length === 0) {
     return section(spec, { plants: 0 }, [], "No plant is assigned, so there is nothing to compare.");
   }
-  const plantRows = await db.select({ id: sites.id, name: sites.name }).from(sites).where(inArray(sites.id, siteIds));
+  const plantRows = await db.select({ id: sites.id, name: sites.name, nameSnapshot: sites.nameSnapshot }).from(sites).where(inArray(sites.id, siteIds));
   const rows: ReportSection["rows"] = [];
   for (const plant of plantRows) {
+    const plantName = plantDisplayName(plant);
     if (has(ctx, "ncr") && ctx.can("ncr")) {
       const opened = await countFrom(
         db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(eq(ncr.isDeleted, false), eq(ncr.siteId, plant.id), during(ncr.createdAt, from, to))),
@@ -270,8 +272,8 @@ async function plantSection(spec: SectionSpec, ctx: SectionContext): Promise<Rep
       const openNow = await countFrom(
         db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(eq(ncr.isDeleted, false), eq(ncr.siteId, plant.id), ne(ncr.status, "closed"))),
       );
-      rows.push({ label: `${plant.name} · NCR opened`, value: opened });
-      rows.push({ label: `${plant.name} · NCR open now`, value: openNow });
+      rows.push({ label: `${plantName} · NCR opened`, value: opened });
+      rows.push({ label: `${plantName} · NCR open now`, value: openNow });
     }
     if (has(ctx, "capa") && ctx.can("capa")) {
       const opened = await countFrom(
@@ -280,8 +282,8 @@ async function plantSection(spec: SectionSpec, ctx: SectionContext): Promise<Rep
       const openNow = await countFrom(
         db.select({ count: sql<number>`count(*)::int` }).from(capa).where(and(eq(capa.siteId, plant.id), ne(capa.status, "closed"))),
       );
-      rows.push({ label: `${plant.name} · CAPA opened`, value: opened });
-      rows.push({ label: `${plant.name} · CAPA open now`, value: openNow });
+      rows.push({ label: `${plantName} · CAPA opened`, value: opened });
+      rows.push({ label: `${plantName} · CAPA open now`, value: openNow });
     }
   }
   return section(spec, { plants: plantRows.length }, rows);

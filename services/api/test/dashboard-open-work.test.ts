@@ -273,4 +273,24 @@ describe("open quality work", () => {
     expect(work.cards.find((card) => card.key === "ncr")?.value).toBe(301);
     expect(work.records[0]?.number).toBe("NCR-301");
   });
+
+  it("keeps a deleted plant's name on the record and leaves it out of the filter", () => {
+    const work = buildOpenWork(
+      input({
+        siteIds: [1, 2, 9],
+        sites: [
+          { id: 1, name: "Dayton Machining" },
+          { id: 2, name: "Greenville Stamping" },
+        ],
+        plantNames: [
+          { id: 1, name: "Dayton Machining" },
+          { id: 2, name: "Greenville Stamping" },
+          { id: 9, name: "Harbor" },
+        ],
+        ncrs: [{ id: 8, siteId: 9, title: "Issue at harbor", status: "open", severity: "low", assignedTo: null, isDeleted: false, createdAt: daysAgo(1), updatedAt: null }],
+      }),
+    );
+    expect(work.plants.map((plant) => plant.name)).toEqual(["Dayton Machining", "Greenville Stamping"]);
+    expect(work.records.find((row) => row.number === "NCR-8")).toMatchObject({ plant: "Harbor", title: "Issue at harbor" });
+  });
 });

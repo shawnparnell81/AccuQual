@@ -25,6 +25,23 @@ test("a status change names the actor, the action, and the old and new values", 
   assert.doesNotMatch(line.description, /\{/);
 });
 
+test("deleting a plant records who deleted it and a plain description", () => {
+  const line = formatAuditLine({
+    action: "delete",
+    performedByName: "Shawn Parnell",
+    changes: {
+      name: "Harbor",
+      code: "harbor",
+      summary: 'Deleted plant "Harbor" (harbor). Records that already used this plant keep the name. It no longer appears in plant lists.',
+    },
+  });
+
+  assert.equal(line.who, "Shawn Parnell");
+  assert.equal(line.what, "Deleted");
+  assert.match(line.description, /Deleted plant "Harbor"/);
+  assert.match(line.description, /keep the name/);
+});
+
 test("a delete keeps the stored summary and still says who deleted it", () => {
   const line = formatAuditLine({
     action: "delete",

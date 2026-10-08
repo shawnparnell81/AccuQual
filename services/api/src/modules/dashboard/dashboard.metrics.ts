@@ -20,6 +20,7 @@ export interface SiteRef {
   id: number;
   name: string;
   code: string;
+  retired?: boolean;
 }
 
 export interface DashNcr {

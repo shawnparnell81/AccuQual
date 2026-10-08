@@ -5,6 +5,7 @@ import { logger } from "../../utils/logger.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { users } from "../../drizzle/schema/users.js";
 import { sites } from "../../drizzle/schema/sites.js";
+import { isRetiredPlant, plantDisplayName } from "../sites/siteAccess.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { ENTITY_TYPE_TO_RESOURCE } from "../audit-trail/auditTrailVisibility.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
@@ -92,13 +93,13 @@ export async function runQualityReport(db: Db, input: RunReportInput): Promise<Q
   const range = resolveRange(input.kind, input.from, input.to, now);
   const present = await loadPresentTables(db);
   const siteRows = present.has("sites") && input.allowedSiteIds.length > 0
-    ? await db.select({ id: sites.id, name: sites.name }).from(sites).where(inArray(sites.id, input.allowedSiteIds))
+    ? await db.select({ id: sites.id, name: sites.name, nameSnapshot: sites.nameSnapshot, status: sites.status, deletedAt: sites.deletedAt }).from(sites).where(inArray(sites.id, input.allowedSiteIds))
     : [];
   const plant = resolvePlant({
     plantId: input.plantId,
     allowedSiteIds: input.allowedSiteIds,
     currentSiteId: input.currentSiteId,
-    sites: siteRows,
+    sites: siteRows.filter((site) => !isRetiredPlant(site)).map((site) => ({ id: site.id, name: plantDisplayName(site) })),
   });
 
   const [person] = await db
