@@ -102,6 +102,7 @@
   width: 100%;
   border-collapse: collapse;
   background: transparent;
+  color: inherit;
 }
 .fb-print-flow > thead > tr > td,
 .fb-print-flow > tbody > tr > td,
@@ -109,6 +110,8 @@
   border: 0;
   padding: 0;
   vertical-align: top;
+  background: transparent;
+  color: inherit;
 }
 .fb-band,
 .fb-band-body {
