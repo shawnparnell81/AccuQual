@@ -5,6 +5,12 @@ export const IMPORT_DATA_PERMISSION = "import_data";
 /** Create forms and edit their structure. Filling a copy does not use this. Owner and Administrator are not listed; they already have full access. */
 export const FORM_BUILDER_PERMISSION = "form_builder";
 
+/** Delete a folder. Assigned on the role. Not implied by a role name. */
+export const FOLDERS_DELETE_PERMISSION = "folders.delete";
+
+/** Rename a folder. Assigned on the role. Not implied by a role name. */
+export const FOLDERS_RENAME_PERMISSION = "folders.rename";
+
 /** Lets an Owner or Administrator return a document from Obsolete / Archive. Other roles never can. */
 export const RESTORE_ARCHIVED_DOCUMENTS = "restore_archived_documents";
 

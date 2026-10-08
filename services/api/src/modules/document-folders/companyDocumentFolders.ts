@@ -36,11 +36,14 @@ import {
   CANONICAL_FOLDER_HOMES,
   namesOutsideBlankDrawers,
   planBlankShortcutReturns,
+  folderIdentityKey,
   planBlankTopicRenames,
   planDuplicateFolderMerges,
+  planLooseFolderMerges,
   type BlankTopicRename,
 } from "./duplicateFolders.js";
 import { ensureMainIsoFolders, folderLocationLabel, folderRenameAudit, itemFolderPath, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
+import { deletedDocumentFolderTokens, isTombstoned } from "./folderTombstones.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
 /** Blank shelves only. ISO itself is not a shelf: every real folder sits under it. */
@@ -324,7 +327,7 @@ async function mergeDocumentFolder(db: Db, list: FolderRow[], sourceId: number, 
 
   const children = list.filter((folder) => folder.parentId === sourceId).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
   for (const child of children) {
-    const existing = list.filter((folder) => folder.parentId === destId && folder.name === child.name).sort((a, b) => a.id - b.id)[0];
+    const existing = list.filter((folder) => folder.parentId === destId && folder.id !== child.id && folderIdentityKey(folder.name) === folderIdentityKey(child.name)).sort((a, b) => a.id - b.id)[0];
     if (!existing) {
       await db.update(documentFolders).set({ parentId: destId, updatedAt: new Date() }).where(eq(documentFolders.id, child.id));
       list = list.map((folder) => (folder.id === child.id ? { ...folder, parentId: destId } : folder));
@@ -377,6 +380,65 @@ async function mergeDocumentFolder(db: Db, list: FolderRow[], sourceId: number, 
   return list;
 }
 
+export interface FolderContentMove {
+  id: number;
+  name: string;
+  fromParentId: number | null;
+  toParentId: number;
+  fromLabel: string;
+  toLabel: string;
+}
+
+function containerRow(list: FolderRow[], folder: FolderRow): boolean {
+  if (list.some((row) => row.parentId === folder.id)) return true;
+  return !hasFolderPayload(folder);
+}
+
+/**
+ * Moves everything inside a folder to `destinationId`, folding a same-named
+ * container into the one already there. A folder that itself holds a file
+ * moves as that file and is not deleted. An emptied container is deleted.
+ */
+export async function moveDocumentFolderContents(
+  db: Db,
+  list: FolderRow[],
+  sourceId: number,
+  destinationId: number,
+): Promise<{ list: FolderRow[]; moves: FolderContentMove[]; removedId: number | null }> {
+  const source = list.find((folder) => folder.id === sourceId);
+  if (!source) return { list, moves: [], removedId: null };
+  const moves: FolderContentMove[] = [];
+  const children = list.filter((folder) => folder.parentId === sourceId).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  let current = list;
+  for (const child of children) {
+    const fromLabel = folderLocationLabel(current, child.parentId);
+    const toLabel = folderLocationLabel(current, destinationId);
+    const existing = current
+      .filter((folder) => folder.parentId === destinationId && folder.id !== child.id && folderIdentityKey(folder.name) === folderIdentityKey(child.name))
+      .sort((a, b) => a.id - b.id)[0];
+    if (existing && containerRow(current, child) && containerRow(current, existing)) {
+      current = await mergeDocumentFolder(db, current, child.id, existing.id);
+    } else {
+      await db.update(documentFolders).set({ parentId: destinationId, updatedAt: new Date() }).where(eq(documentFolders.id, child.id));
+      current = current.map((folder) => (folder.id === child.id ? { ...folder, parentId: destinationId } : folder));
+    }
+    moves.push({ id: child.id, name: child.name, fromParentId: sourceId, toParentId: destinationId, fromLabel, toLabel });
+  }
+
+  const left = current.find((folder) => folder.id === sourceId);
+  if (!left) return { list: current, moves, removedId: sourceId };
+  if (hasFolderPayload(left) || current.some((folder) => folder.parentId === left.id)) {
+    const fromLabel = folderLocationLabel(current, left.parentId);
+    const toLabel = folderLocationLabel(current, destinationId);
+    await db.update(documentFolders).set({ parentId: destinationId, updatedAt: new Date() }).where(eq(documentFolders.id, left.id));
+    current = current.map((folder) => (folder.id === left.id ? { ...folder, parentId: destinationId } : folder));
+    moves.push({ id: left.id, name: left.name, fromParentId: left.parentId, toParentId: destinationId, fromLabel, toLabel });
+    return { list: current, moves, removedId: null };
+  }
+  await db.delete(documentFolders).where(eq(documentFolders.id, left.id));
+  return { list: current.filter((folder) => folder.id !== left.id), moves, removedId: left.id };
+}
+
 async function repairFaiValidation(db: Db, list: FolderRow[]): Promise<FolderRow[]> {
   let current = list;
   for (const move of planFaiValidationRepair(current)) {
@@ -411,13 +473,16 @@ async function repairQualityTraining(db: Db, list: FolderRow[]): Promise<FolderR
   return current;
 }
 
-/** Inserts any missing drawers. Returns the list including rows just created. */
+/** Inserts any missing drawers. Returns the list including rows just created. A deleted folder stays deleted. */
 export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Promise<FolderRow[]> {
   let list = await repairFaiValidation(db, all);
+  const removed = await deletedDocumentFolderTokens(db);
 
   async function ensureLevel(nodes: DefaultFolderSeed[], parentId: number | null): Promise<void> {
+    const parentName = parentId == null ? null : list.find((folder) => folder.id === parentId)?.name ?? null;
     for (const node of nodes) {
       let current = locateSeedFolder(list, node.name, parentId);
+      if (!current && isTombstoned(removed, parentName, node.name)) continue;
       if (!current) {
         const siblingCount = list.filter((folder) => folder.parentId === parentId).length;
         const [created] = await db
@@ -428,6 +493,7 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
         list = [...list, created];
         current = created;
       }
+      if (!current) continue;
       if (node.children.length > 0) await ensureLevel(node.children, current.id);
     }
   }
@@ -614,35 +680,18 @@ async function returnMisfiledBlanks(db: Db, list: FolderRow[], shelfId: number, 
   return current;
 }
 
-/**
- * Folds every repeated company folder name into one home, once per company.
- * Blank topic folders stay under Blank Forms Templates. A topic whose name
- * matches a company folder is renamed with " Forms" on that same pass.
- * A main drawer Shawn deleted is not recreated. Opening Documents again
- * does not run the fold a second time, so a pair created later stays.
- * A company that already ran the fold and had blanks moved out gets those
- * blanks back. A blank moved after that stays where it was put.
- */
-export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
-  const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
-  if (!row) return list;
+const MERGE_OPTIONS = {
+  isoName: ISO_FOLDER_NAME,
+  blankShelfNames: ["Blank Forms Templates"],
+  legacyDrawerNames: ["Blank Form Templates"],
+  mainIsoNames: MAIN_ISO_FOLDER_NAMES,
+  canonicalHomes: CANONICAL_FOLDER_HOMES,
+};
 
-  if (row.profile?.folderNamesUnified === true) {
-    const shelf = resolveBlankShelf(list, row.profile.blankFormsTemplatesFolderId);
-    if (!shelf) return list;
-    return returnMisfiledBlanks(db, list, shelf.id, performedBy, true);
-  }
-
-  const plan = planDuplicateFolderMerges(list, {
-    isoName: ISO_FOLDER_NAME,
-    blankShelfNames: ["Blank Forms Templates"],
-    legacyDrawerNames: ["Blank Form Templates"],
-    mainIsoNames: MAIN_ISO_FOLDER_NAMES,
-    canonicalHomes: CANONICAL_FOLDER_HOMES,
-  }).sort((a, b) => folderDepth(list, b.sourceId) - folderDepth(list, a.sourceId) || a.sourceId - b.sourceId);
-
+async function applyFolderMerges(db: Db, list: FolderRow[], plan: { sourceId: number; destId: number }[], performedBy?: number): Promise<FolderRow[]> {
+  const ordered = [...plan].sort((a, b) => folderDepth(list, b.sourceId) - folderDepth(list, a.sourceId) || a.sourceId - b.sourceId);
   let current = list;
-  for (const move of plan) {
+  for (const move of ordered) {
     const source = current.find((folder) => folder.id === move.sourceId);
     const dest = current.find((folder) => folder.id === move.destId);
     if (!source || !dest || descendsFrom(current, dest.id, source.id)) continue;
@@ -667,12 +716,48 @@ export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], perfo
       },
     });
   }
+  return current;
+}
+
+/**
+ * Case, space, and number-prefix copies of one name fold every time the
+ * folder list is read. An exact second copy made after the one-time fold
+ * is not part of this pass.
+ */
+export async function mergeLooseFolderDuplicates(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
+  const plan = planLooseFolderMerges(list, MERGE_OPTIONS);
+  if (plan.length === 0) return list;
+  return applyFolderMerges(db, list, plan, performedBy);
+}
+
+/**
+ * Folds every repeated company folder name into one home, once per company.
+ * Blank topic folders stay under Blank Forms Templates. A topic whose name
+ * matches a company folder is renamed with " Forms" on that same pass.
+ * A main drawer Shawn deleted is not recreated. Opening Documents again
+ * does not run the exact-name fold a second time, so a pair created later stays.
+ * A company that already ran the fold and had blanks moved out gets those
+ * blanks back. A blank moved after that stays where it was put.
+ * Spelling variants still fold on every later open.
+ */
+export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
+  const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+  if (!row) return list;
+
+  if (row.profile?.folderNamesUnified === true) {
+    const shelf = resolveBlankShelf(list, row.profile.blankFormsTemplatesFolderId);
+    const current = shelf ? await returnMisfiledBlanks(db, list, shelf.id, performedBy, true) : list;
+    return mergeLooseFolderDuplicates(db, current, performedBy);
+  }
+
+  let current = await applyFolderMerges(db, list, planDuplicateFolderMerges(list, MERGE_OPTIONS), performedBy);
 
   const shelf = resolveBlankShelf(current, row.profile?.blankFormsTemplatesFolderId);
   if (shelf) {
     current = await applyBlankTopicRenames(db, current, shelf.id, performedBy);
     current = await returnMisfiledBlanks(db, current, shelf.id, performedBy, false);
   }
+  current = await mergeLooseFolderDuplicates(db, current, performedBy);
 
   const [fresh] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
   if (fresh) {

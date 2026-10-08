@@ -7,7 +7,9 @@ import {
   namesOutsideBlankDrawers,
   planBlankShortcutReturns,
   planBlankTopicRenames,
+  folderIdentityKey,
   planDuplicateFolderMerges,
+  planLooseFolderMerges,
   repeatedSeedFolderNames,
   type MergeFolder,
 } from "../src/modules/document-folders/duplicateFolders.js";
@@ -134,6 +136,43 @@ describe("duplicate folder merge plan", () => {
       { shortcutId: 10, formKey: "dcr", topic: "Document Control", folderName: "Document Control Forms" },
       { shortcutId: 12, formKey: "training-record", topic: "Training", folderName: "Training" },
     ]);
+  });
+
+  it("folds case, space, underscore, and number-prefix copies, and leaves different departments alone", () => {
+    expect(folderIdentityKey("quality ")).toBe("quality");
+    expect(folderIdentityKey("01 Quality Manual")).toBe("quality manual");
+    expect(folderIdentityKey("01_Quality_Manual")).toBe("quality manual");
+    expect(folderIdentityKey("8D")).toBe("8d");
+    expect(folderIdentityKey("Engineering")).not.toBe(folderIdentityKey("Engineering Standards"));
+    const folders: MergeFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: "quality ", parentId: 1 },
+      { id: 4, name: "Quality Manual", parentId: 1 },
+      { id: 5, name: "01 Quality Manual", parentId: 1 },
+      { id: 6, name: "Notes", parentId: 2 },
+      { id: 7, name: "Notes", parentId: 2 },
+      { id: 8, name: "Engineering", parentId: 1 },
+      { id: 9, name: "Engineering Standards", parentId: 1 },
+      { id: 10, name: "01_Quality_Manual", parentId: null },
+      { id: 11, name: "Calibration & Measurement", parentId: 8 },
+      { id: 12, name: "SOP", parentId: 1 },
+      { id: 13, name: "CAPA", parentId: 1 },
+      { id: 14, name: "Production", parentId: 1 },
+      { id: 15, name: "Work Instruction", parentId: 1 },
+      { id: 16, name: "NCR", parentId: 1 },
+      { id: 17, name: "Shipping & Receiving", parentId: 1 },
+      { id: 18, name: "Training", parentId: 1 },
+      { id: 19, name: "Audits", parentId: 1 },
+      { id: 20, name: "Material Management", parentId: 1 },
+      { id: 21, name: "Safety", parentId: 1 },
+    ];
+    expect(ids(planLooseFolderMerges(folders, options))).toEqual([
+      [3, 2],
+      [5, 4],
+      [10, 4],
+    ]);
+    expect(ids(planDuplicateFolderMerges(folders, options)).some((pair) => pair[0] === 8 || pair[1] === 8)).toBe(false);
   });
 
   it("folds Calibration Certificates into the Quality equipment drawer", () => {

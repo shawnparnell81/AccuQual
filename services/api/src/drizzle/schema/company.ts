@@ -249,6 +249,17 @@ export const company = pgTable("company", {
      * in the pool. Company Settings spreads this object. No new column.
      */
     libraryPoolRemovedIds?: number[];
+    /**
+     * Document folders an administrator deleted. Each entry is
+     * `parent identity` + NUL + `folder identity`, so seeding does not put
+     * that folder back. A person can create the name again by hand.
+     * Company Settings spreads this object. No new column.
+     */
+    deletedDocumentFolders?: string[];
+    /** Form keys hidden from the Folders tab. Seeding does not put that row back. */
+    deletedFormFolderKeys?: string[];
+    /** Display name an administrator typed for a Folders tab row, keyed by form key. */
+    formFolderDisplayNames?: Record<string, string>;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

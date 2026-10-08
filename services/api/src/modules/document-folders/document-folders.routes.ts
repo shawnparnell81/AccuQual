@@ -4,8 +4,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createDocumentFolderSchema, fileFormRecordSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail } from "./document-folders.controller.js";
+import { createDocumentFolderSchema, fileFormRecordSchema, renameFormFolderSchema, retireFolderSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
+import { list, create, update, remove, retire, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail, renameFormFolderHandler, retireFormFolderHandler } from "./document-folders.controller.js";
 import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
 
 export const documentFoldersRouter = Router();
@@ -28,12 +28,15 @@ documentFoldersRouter.patch("/form-templates/:formKey", validate(updateFormNumbe
 documentFoldersRouter.get("/form-filings", formFiling);
 documentFoldersRouter.post("/form-filings", validate(fileFormRecordSchema), fileForm);
 documentFoldersRouter.get("/form-folders", formFolders);
+documentFoldersRouter.patch("/form-folders/:formKey", validate(renameFormFolderSchema), renameFormFolderHandler);
+documentFoldersRouter.post("/form-folders/:formKey/retire", validate(retireFolderSchema), retireFormFolderHandler);
 documentFoldersRouter.get("/form-folders/:formKey", formFolderDetail);
 documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
 // Fixed literal path before ":id"-shaped ones — the one-step "create a
 // leaf + attach a file" upload, not scoped to an existing node.
 documentFoldersRouter.post("/upload", upload.single("file"), uploadDocument);
 documentFoldersRouter.patch("/:id", validate(updateDocumentFolderSchema), update);
+documentFoldersRouter.post("/:id/retire", validate(retireFolderSchema), retire);
 documentFoldersRouter.delete("/:id/pool", removeFromLibraryPool);
 documentFoldersRouter.delete("/:id", remove);
 
