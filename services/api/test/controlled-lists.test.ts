@@ -11,6 +11,7 @@ import {
   freshSheets,
   planListCleanup,
   removeDataRow,
+  restoreHeaderBlock,
 } from "../src/modules/controlled-lists/logic.js";
 import { workbookFileName } from "../src/modules/controlled-lists/workbook.js";
 import parity from "../src/modules/controlled-lists/seeds/formula-parity.json" with { type: "json" };
@@ -22,7 +23,8 @@ describe("living controlled lists", () => {
     expect(equipment.cells.A1).toMatchObject({ v: "MASTER EQUIPMENT LIST", bold: true, size: 26 });
     expect(equipment.cells.B2).toMatchObject({ v: "Rev: A", kind: "rev" });
     expect(equipment.cells.D2).toMatchObject({ v: "2026-01-26", nf: "mm-dd-yy" });
-    expect(equipment.cells.F2?.v).toBe("Maxwell Tollefson");
+    expect(equipment.cells.E2?.v).toBe("Authorized By:");
+    expect(equipment.cells.F2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
     expect(equipment.cells.B6?.v).toBe("Strut and Shock Dyno");
     expect(equipment.cells.D38?.comment).toBe("Quality Auditor:");
     expect(equipment.merges).toEqual(expect.arrayContaining(["A1:J1", "A3:J3", "A4:J4", "F2:J2"]));
@@ -38,8 +40,13 @@ describe("living controlled lists", () => {
     expect(sheets.map((sheet) => sheet.name)).toEqual(["Internal Documents", "External Documents"]);
     const internal = sheets[0]!;
     expect(internal.cells.A1).toMatchObject({ v: "Master Document List", size: 22 });
+    expect(internal.cells.A2?.v).toBe("Document ID:");
+    expect(internal.cells.B2?.v).toBe("LST-GEN-001");
+    expect(internal.cells.C2?.v).toBe("Structure Rev: ");
     expect(internal.cells.D2).toMatchObject({ v: "B", kind: "rev" });
+    expect(internal.cells.E2?.v).toBe("Last Updated:");
     expect(internal.cells.F2).toMatchObject({ v: "2026-01-26", nf: "d-mmm-yy" });
+    expect(sheets[1]?.cells.F2?.v).toBe("Owner");
     expect(internal.cells.A4?.v).toBe("FRM-CAR-001");
     expect(Object.values(internal.cells).some((cell) => cell.v === "FRM-TST-001" || cell.v === "FRM-TST-002")).toBe(false);
     expect(Object.values(internal.cells).some((cell) => cell.v === "FRM-VAL-001")).toBe(true);
@@ -54,6 +61,10 @@ describe("living controlled lists", () => {
     const lab = freshSheets("lst-gen-003")[0]!;
     expect(lab.cells.A1?.v).toBe("SCOPE OF LABORATORY ACTIVITIES");
     expect(lab.cells.D2).toMatchObject({ v: "A", kind: "rev" });
+    expect(lab.cells.A3?.v).toBe("Date:");
+    expect(lab.cells.B3).toMatchObject({ v: "2026-07-14", nf: "mm-dd-yy", kind: "input" });
+    expect(lab.cells.C3?.v).toBe("Owner:");
+    expect(lab.cells.D3).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
     expect(lab.cells.A6?.v).toBe("Mechanical & Dynamic Testing");
     expect(lab.merges).toContain("A1:F1");
     expect(lab.merges).toContain("E6:F6");
@@ -183,11 +194,12 @@ describe("living controlled lists", () => {
     const reports = sheets[0]!;
     const validation = sheets[1]!;
     const location = "Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects";
-    expect(reports.cells.A1).toMatchObject({ v: "DEVELOPMENT LOG (REGISTER)", bold: true, size: 22 });
+    expect(reports.cells.A1).toMatchObject({ v: "DEVELOPMENT LOG (REGISTER)", bold: true, size: 22, align: "center" });
     expect(reports.cells.B2).toMatchObject({ v: "Rev: B", kind: "rev" });
     expect(reports.cells.C2?.v).toBe(location);
-    expect(reports.cells.F2?.v).toBe("Maxwell Tollefson");
-    expect(reports.cells.H2?.v).toBe("Date: 7/27/26");
+    expect(reports.cells.E2).toMatchObject({ v: "Approved By:", align: "center" });
+    expect(reports.cells.F2).toMatchObject({ v: "Maxwell Tollefson", kind: "input", align: "center" });
+    expect(reports.cells.H2).toMatchObject({ v: "Date: 7/27/26", kind: "input", align: "center" });
     expect(reports.cells.A3?.v).toContain("TRP - [Year]");
     expect(reports.cells.A5?.v).toBe("TRP-2026-001");
     expect(reports.cells.B5).toMatchObject({ v: "2026-02-12", nf: "mm-dd-yy" });
@@ -197,10 +209,14 @@ describe("living controlled lists", () => {
     expect(validation.cells.A1?.v).toBe("DEVELOPMENT LOG (REGISTER)");
     expect(validation.cells.B2?.v).toBe("Rev: B");
     expect(validation.cells.C2?.v).toBe(location);
+    expect(validation.cells.E2?.v).toBe("Approved By:");
+    expect(validation.cells.F2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
+    expect(validation.cells.H2).toMatchObject({ v: "Date: 7/27/26", kind: "input" });
+    expect(validation.colWidths[7]).toBeCloseTo(12.7109375, 5);
     expect(validation.cells.A3?.v).toContain("VAL - [Year]");
     expect(validation.cells.A5?.v).toBe("VAL-2026-001");
     expect(validation.cells.A1989?.v).toBe("VAL-2026-2000");
-    expect(validation.merges).toEqual(expect.arrayContaining(["A1:I1", "A3:I3", "H2:I2"]));
+    expect(validation.merges).toEqual(expect.arrayContaining(["A1:I1", "A3:I3", "C2:D2", "F2:G2", "H2:I2"]));
     expect(listOptions(reports, "F5")).toEqual(["Development Document", "Salt Spray", "Final Test Report"]);
     expect(listOptions(reports, "G8")).toContain("SENSEN");
     expect(listOptions(validation, "H5")).toEqual(["Active", "Cancelled"]);
@@ -208,13 +224,18 @@ describe("living controlled lists", () => {
     expect(workbookFileName("lst-dev-001")).toBe("LST-DEV-001.xlsx");
 
     const edited = applyInputPatch("lst-dev-001", sheets, [
-      { name: "Test Reports", cells: { C5: { v: "FCS Shock" }, B2: { v: "Rev: Z" }, C2: { v: "somewhere else" } } },
+      { name: "Test Reports", cells: { C5: { v: "FCS Shock" }, B2: { v: "Rev: Z" }, C2: { v: "somewhere else" }, F2: { v: "Shawn Parnell" }, H2: { v: "Date: 8/1/26" } } },
     ]);
     expect(edited.sheets[0]?.cells.C5?.v).toBe("FCS Shock");
     expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: B");
     expect(edited.sheets[0]?.cells.C2?.v).toBe(location);
+    expect(edited.sheets[0]?.cells.F2?.v).toBe("Shawn Parnell");
+    expect(edited.sheets[0]?.cells.H2?.v).toBe("Date: 8/1/26");
+    expect(edited.sheets[0]?.cells.F2?.kind).toBe("input");
     expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: B");
-    expect(edited.changes.map((change) => change.addr)).toEqual(["C5"]);
+    expect(edited.sheets[1]?.cells.F2?.v).toBe("Maxwell Tollefson");
+    expect(LISTS["lst-dev-001"].revision).toBe("B");
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["C5", "F2", "H2"]);
 
     const added = addDataRow("lst-dev-001", sheets, "Test Reports");
     expect(added?.row).toBe(472);
@@ -228,6 +249,10 @@ describe("living controlled lists", () => {
     const ws = book.getWorksheet("Test Reports");
     expect(ws?.getCell("A1").value).toBe("DEVELOPMENT LOG (REGISTER)");
     expect(ws?.getCell("C2").value).toBe(location);
+    expect(ws?.getCell("E2").value).toBe("Approved By:");
+    expect(ws?.getCell("F2").value).toBe("Maxwell Tollefson");
+    expect(ws?.getCell("H2").value).toBe("Date: 7/27/26");
+    expect(ws?.getCell("A1").alignment?.horizontal).toBe("center");
     expect(ws?.getCell("B5").value).toBeInstanceOf(Date);
     expect((ws?.getCell("B5").value as Date).toISOString().slice(0, 10)).toBe("2026-02-12");
     expect(ws?.getCell("B5").numFmt).toBe("mm-dd-yy");
@@ -251,11 +276,14 @@ describe("living controlled lists", () => {
     const rpn = sheets[3]!;
     expect(LISTS["lst-ncr-001"].revision).toBe("G");
     expect(workbookFileName("lst-ncr-001")).toBe("LST-NCR-001.xlsx");
-    expect(ncr.cells.A1?.v).toBe("NON-CONFORMANCE LOG (REGISTER)");
+    expect(ncr.cells.A1).toMatchObject({ v: "NON-CONFORMANCE LOG (REGISTER)", align: "center" });
     expect(ncr.cells.B2).toMatchObject({ v: "Rev: E", kind: "rev" });
     expect(ncr.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
-    expect(ncr.cells.E2?.v).toBe("Maxwell Tollefson");
-    expect(ncr.cells.G2).toMatchObject({ v: "2026-07-14", nf: "mm-dd-yy" });
+    expect(ncr.cells.D2).toMatchObject({ v: "Approved By:", kind: "label" });
+    expect(ncr.cells.E2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
+    expect(ncr.cells.F2?.v).toBe("Date:");
+    expect(ncr.cells.G2).toMatchObject({ v: "2026-07-14", nf: "mm-dd-yy", kind: "input" });
+    expect(ncr.merges).toEqual(expect.arrayContaining(["A1:K1", "G2:K2", "A3:K3"]));
     expect(ncr.cells.A5?.v).toBe("NCR-2026-001");
     expect(ncr.cells.A70?.v).toBe("NCR-2026-066");
     expect(ncr.cells.K5?.v).toBe("Closed");
@@ -263,24 +291,37 @@ describe("living controlled lists", () => {
     expect(toneFill(ncr, "K5", "Closed")).toBe("FFB8DCAB");
     expect(qtn.cells.B2?.v).toBe("Rev: F");
     expect(qtn.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Non_Conformance_Records");
+    expect(qtn.cells.E2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
+    expect(qtn.cells.G2).toMatchObject({ v: "2026-06-30", nf: "mm-dd-yy", kind: "input" });
+    expect(qtn.merges).toContain("G2:L2");
     expect(qtn.cells.A5).toBeUndefined();
     expect(car.cells.B2?.v).toBe("Rev: E");
+    expect(car.cells.G2).toMatchObject({ v: "2026-06-15", kind: "input" });
+    expect(car.colWidths[6]).toBeCloseTo(9.140625, 5);
+    expect(car.merges).toContain("G2:H2");
     expect(car.cells.A46?.v).toBe("CAR-2026-043");
     expect(car.cells.H5?.v).toBe("Open");
     expect(toneFill(car, "H5", "Open")).toBe("FFFF0000");
     expect(rpn.cells.B2?.v).toBe("Rev: E");
+    expect(rpn.cells.E2?.v).toBe("Maxwell Tollefson");
+    expect(rpn.cells.G2).toMatchObject({ v: "2026-06-15", kind: "input" });
+    expect(rpn.merges).toContain("G2:H2");
     expect(rpn.cells.A5?.v).toBe("WIN-RPN-001");
     expect(rpn.cells.A6?.v).toBe("WIN-RPN-004");
     expect(listOptions(ncr, "F5")).toEqual(["Use-As-Is", " Scrap", " Rework"]);
 
     const edited = applyInputPatch("lst-ncr-001", sheets, [
-      { name: "LST-NCR-001 - NCR", cells: { K5: { v: "Open" }, B2: { v: "Rev: G" }, C2: { v: "moved" } } },
+      { name: "LST-NCR-001 - NCR", cells: { K5: { v: "Open" }, B2: { v: "Rev: G" }, C2: { v: "moved" }, E2: { v: "Shawn Parnell" }, G2: { v: "2026-08-01" } } },
     ]);
     expect(edited.sheets[0]?.cells.K5?.v).toBe("Open");
     expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: E");
     expect(edited.sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    expect(edited.sheets[0]?.cells.E2?.v).toBe("Shawn Parnell");
+    expect(edited.sheets[0]?.cells.G2?.v).toBe("2026-08-01");
     expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: F");
-    expect(edited.changes.map((change) => change.addr)).toEqual(["K5"]);
+    expect(edited.sheets[1]?.cells.E2?.v).toBe("Maxwell Tollefson");
+    expect(LISTS["lst-ncr-001"].revision).toBe("G");
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["E2", "G2", "K5"]);
 
     const body = await buildListWorkbook("lst-ncr-001", sheets);
     const book = new ExcelJS.Workbook();
@@ -289,7 +330,54 @@ describe("living controlled lists", () => {
     const ws = book.getWorksheet("LST-NCR-001 - NCR");
     expect(ws?.getCell("B2").value).toBe("Rev: E");
     expect(ws?.getCell("A1").value).toBe("NON-CONFORMANCE LOG (REGISTER)");
+    expect(ws?.getCell("D2").value).toBe("Approved By:");
+    expect(ws?.getCell("E2").value).toBe("Maxwell Tollefson");
+    expect(ws?.getCell("F2").value).toBe("Date:");
+    expect(ws?.getCell("G2").value).toBeInstanceOf(Date);
+    expect((ws?.getCell("G2").value as Date).toISOString().slice(0, 10)).toBe("2026-07-14");
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:K1", "G2:K2", "A3:K3"]));
     expect(ws?.pageSetup.orientation).toBe("landscape");
     expect(JSON.stringify(ws?.conditionalFormattings ?? ws?.model?.conditionalFormattings ?? [])).toContain("Open");
+    expect(ws?.pageSetup.printTitlesRow).toBeUndefined();
+  });
+
+  it("restores a missing Approved By block without wiping an edited name or data rows", () => {
+    const sheets = freshSheets("lst-ncr-001");
+    const stripped = sheets.map((sheet) => {
+      if (sheet.name !== "LST-NCR-001 - NCR") return sheet;
+      const cells = { ...sheet.cells };
+      delete cells.D2;
+      delete cells.E2;
+      delete cells.F2;
+      delete cells.G2;
+      return { ...sheet, cells, merges: sheet.merges.filter((merge) => merge !== "G2:K2") };
+    });
+    const restored = restoreHeaderBlock("lst-ncr-001", stripped);
+    expect(restored.changed).toBe(true);
+    expect(restored.sheets[0]?.cells.D2?.v).toBe("Approved By:");
+    expect(restored.sheets[0]?.cells.E2).toMatchObject({ v: "Maxwell Tollefson", kind: "input" });
+    expect(restored.sheets[0]?.cells.F2?.v).toBe("Date:");
+    expect(restored.sheets[0]?.cells.G2).toMatchObject({ v: "2026-07-14", kind: "input" });
+    expect(restored.sheets[0]?.merges).toContain("G2:K2");
+    expect(restored.sheets[0]?.cells.A5?.v).toBe("NCR-2026-001");
+    expect(restored.sheets[0]?.cells.B2?.v).toBe("Rev: E");
+    expect(LISTS["lst-ncr-001"].revision).toBe("G");
+
+    const named = restored.sheets.map((sheet) => {
+      if (sheet.name !== "LST-NCR-001 - NCR") return sheet;
+      return { ...sheet, cells: { ...sheet.cells, E2: { ...sheet.cells.E2!, v: "Ada Lovelace" }, G2: { ...sheet.cells.G2!, v: "2026-09-01" } } };
+    });
+    const kept = restoreHeaderBlock("lst-ncr-001", named);
+    expect(kept.sheets[0]?.cells.E2?.v).toBe("Ada Lovelace");
+    expect(kept.sheets[0]?.cells.G2?.v).toBe("2026-09-01");
+    expect(kept.sheets[0]?.cells.D2?.v).toBe("Approved By:");
+    const again = restoreHeaderBlock("lst-ncr-001", kept.sheets);
+    expect(again.changed).toBe(false);
+    expect(again.sheets).toBe(kept.sheets);
+    expect(restoreHeaderBlock("lst-ncr-001", freshSheets("lst-ncr-001")).changed).toBe(false);
+    expect(restoreHeaderBlock("lst-dev-001", freshSheets("lst-dev-001")).changed).toBe(false);
+    expect(restoreHeaderBlock("lst-eqp-001", freshSheets("lst-eqp-001")).changed).toBe(false);
+    expect(restoreHeaderBlock("lst-gen-001", freshSheets("lst-gen-001")).changed).toBe(false);
+    expect(restoreHeaderBlock("lst-gen-003", freshSheets("lst-gen-003")).changed).toBe(false);
   });
 });

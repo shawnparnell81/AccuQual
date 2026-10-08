@@ -142,6 +142,7 @@ function SheetGrid({
           key={addr}
           className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
           data-addr={addr}
+          data-header={row <= 3 ? "true" : undefined}
           data-fill={fill === "FFFF0000" ? "open" : fill ? "closed" : undefined}
           data-size={cell?.size ?? undefined}
           title={cell?.comment}

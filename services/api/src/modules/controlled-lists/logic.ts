@@ -171,6 +171,109 @@ export function lockRevision(key: ListKey, sheets: StoredSheet[]): StoredSheet[]
   });
 }
 
+/** Rows 1–3 are the workbook title block (title, Doc ID / Approved By / Date, status line). */
+const HEADER_DEPTH = 3;
+
+function mergeHitsHeader(merge: string): boolean {
+  const [start, end] = merge.split(":");
+  if (!start || !end) return false;
+  return parseAddr(start).row <= HEADER_DEPTH || parseAddr(end).row <= HEADER_DEPTH;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): StoredSheet {
+  if (!seed) return sheet;
+  let changed = false;
+  const cells = { ...sheet.cells };
+  for (const addr of Object.keys(cells)) {
+    if (parseAddr(addr).row <= HEADER_DEPTH && !seed.cells[addr]) {
+      delete cells[addr];
+      changed = true;
+    }
+  }
+  for (const [addr, cell] of Object.entries(seed.cells)) {
+    if (parseAddr(addr).row > HEADER_DEPTH) continue;
+    const current = sheet.cells[addr];
+    const desired: StoredCell = cell.kind === "input" && current?.kind === "input" ? { ...cell, v: current.v } : { ...cell };
+    if (!sameJson(current, desired)) {
+      cells[addr] = desired;
+      changed = true;
+    }
+  }
+  const seedHeaderMerges = seed.merges.filter(mergeHitsHeader).slice().sort();
+  const currentHeaderMerges = sheet.merges.filter(mergeHitsHeader).slice().sort();
+  let merges = sheet.merges;
+  if (!sameJson(seedHeaderMerges, currentHeaderMerges)) {
+    merges = [...sheet.merges.filter((merge) => !mergeHitsHeader(merge)), ...seed.merges.filter(mergeHitsHeader)];
+    changed = true;
+  }
+  const rowHeights = { ...sheet.rowHeights };
+  for (const key of Object.keys(seed.rowHeights)) {
+    if (Number(key) > HEADER_DEPTH) continue;
+    if (rowHeights[key] !== seed.rowHeights[key]) {
+      rowHeights[key] = seed.rowHeights[key]!;
+      changed = true;
+    }
+  }
+  for (const key of Object.keys(rowHeights)) {
+    if (Number(key) <= HEADER_DEPTH && seed.rowHeights[key] == null) {
+      delete rowHeights[key];
+      changed = true;
+    }
+  }
+  const boxes = { ...(sheet.boxes ?? {}) };
+  for (const addr of Object.keys(boxes)) {
+    if (parseAddr(addr).row <= HEADER_DEPTH && seed.boxes?.[addr] == null) {
+      delete boxes[addr];
+      changed = true;
+    }
+  }
+  for (const [addr, box] of Object.entries(seed.boxes ?? {})) {
+    if (parseAddr(addr).row > HEADER_DEPTH) continue;
+    if (boxes[addr] !== box) {
+      boxes[addr] = box;
+      changed = true;
+    }
+  }
+  const nextBoxes = Object.keys(boxes).length > 0 ? boxes : undefined;
+  if ((sheet.boxes == null) !== (nextBoxes == null) || (nextBoxes && !sameJson(sheet.boxes, nextBoxes))) changed = true;
+  let colWidths = sheet.colWidths;
+  if (seed.colWidths.length === sheet.colWidths.length && seed.colWidths.some((width, index) => width !== sheet.colWidths[index])) {
+    colWidths = [...seed.colWidths];
+    changed = true;
+  }
+  if (!changed) return sheet;
+  return { ...sheet, cells, merges, rowHeights, boxes: nextBoxes, colWidths };
+}
+
+/**
+ * Puts rows 1–3 back to the controlled workbook: title, Doc ID, Rev, location,
+ * Approved By / Authorized By / Owner, and Date. An edited name or date is kept.
+ * Data rows and the document revision are left alone.
+ */
+export function restoreHeaderBlock(key: ListKey, sheets: StoredSheet[]): { sheets: StoredSheet[]; changed: boolean } {
+  const seeds = seedBook()[key].sheets;
+  let changed = false;
+  const next = sheets.map((sheet) => {
+    const restored = restoreSheetHeader(sheet, seeds.find((item) => item.name === sheet.name));
+    if (restored !== sheet) changed = true;
+    return restored;
+  });
+  return { sheets: changed ? next : sheets, changed };
+}
+
 function stripOmitted(sheet: StoredSheet, dataStart: number, idColumn: string): StoredSheet {
   const drop: number[] = [];
   for (let row = dataStart; row <= sheet.maxRow; row += 1) {
