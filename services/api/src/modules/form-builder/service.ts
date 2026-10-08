@@ -9,13 +9,13 @@ import { getUserAccessLevel, type AccessLevel } from "../../middleware/departmen
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { BLANK_FORMS_FOLDER } from "../document-folders/formFiling.js";
-import { folderLocationLabel } from "../document-folders/mainIsoFolders.js";
+import { folderLocationLabel, folderPathParts, joinFolderPath } from "../document-folders/mainIsoFolders.js";
 import { FORM_BUILDER_PERMISSION } from "../roles/roleAccess.js";
 import { formatSignatureStamp } from "../signatures/signaturePin.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder, type FormBuilderAccessInput, type ModuleLevel } from "./access.js";
-import { cleanBand } from "./docxBands.js";
+import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
 import { decideStructureSave, type SaveMode } from "./revision.js";
@@ -499,16 +499,53 @@ export async function importDocx(db: Db, actor: Actor, file: Buffer) {
   }
 }
 
+const FOLDER_PATH_SPAN = /<span class="fb-folder-path"[^>]*>[\s\S]*?<\/span>/gi;
+
+function escapeFolderPath(path: string): string {
+  return path.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function applyFolderPath(html: string, path: string): string {
+  if (!path) return html;
+  return html.replace(FOLDER_PATH_SPAN, escapeFolderPath(path));
+}
+
+function prependFolderNote(band: DocumentBand | null, note: string): DocumentBand | null {
+  if (!note) return band;
+  if (!band) return { differentFirstPage: false, differentOddEven: false, defaultHtml: note, firstHtml: "", evenHtml: "" };
+  return {
+    ...band,
+    defaultHtml: `${note}${band.defaultHtml}`,
+    firstHtml: band.firstHtml ? `${note}${band.firstHtml}` : band.firstHtml,
+    evenHtml: band.evenHtml ? `${note}${band.evenHtml}` : band.evenHtml,
+  };
+}
+
+function withFolderPath(band: DocumentBand | null, path: string): DocumentBand | null {
+  if (!band || !path) return band;
+  return {
+    ...band,
+    defaultHtml: applyFolderPath(band.defaultHtml, path),
+    firstHtml: applyFolderPath(band.firstHtml, path),
+    evenHtml: applyFolderPath(band.evenHtml, path),
+  };
+}
+
 export async function exportDocx(db: Db, actor: Actor, id: number) {
   await requireReader(db, actor);
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!form) throw AppError.notFound("Form");
   if (form.kind !== "document") throw AppError.badRequest("Only a Word-style document can be downloaded as .docx.");
-  const structure = form.structure as { html?: string; header?: unknown; footer?: unknown };
-  const html = typeof structure.html === "string" ? structure.html : "";
+  const structure = form.structure as { html?: string; header?: unknown; footer?: unknown; chrome?: { place?: string; kind?: string }[] };
+  const folders = await foldersOf(db);
+  const leaf = folders.find((folder) => folder.linkedPath === `${TEMPLATE_PREFIX}${form.id}`);
+  const path = leaf ? joinFolderPath(folderPathParts(folders, leaf.id)) : "";
+  const html = applyFolderPath(typeof structure.html === "string" ? structure.html : "", path);
+  const headerNote = (structure.chrome ?? []).filter((field) => field.place === "header" && field.kind === "folderPath").map(() => `<p>Folder path: ${escapeFolderPath(path)}</p>`).join("");
+  const footerNote = (structure.chrome ?? []).filter((field) => field.place === "footer" && field.kind === "folderPath").map(() => `<p>Folder path: ${escapeFolderPath(path)}</p>`).join("");
   const bytes = await docxFromHtml(html, { docId: form.formNumber, rev: form.revision }, {
-    header: cleanBand(structure.header, sanitizeDocumentHtml),
-    footer: cleanBand(structure.footer, sanitizeDocumentHtml),
+    header: withFolderPath(prependFolderNote(cleanBand(structure.header, sanitizeDocumentHtml), headerNote), path),
+    footer: withFolderPath(prependFolderNote(cleanBand(structure.footer, sanitizeDocumentHtml), footerNote), path),
   });
   return { filename: `${form.title || "document"}.docx`, bytes };
 }

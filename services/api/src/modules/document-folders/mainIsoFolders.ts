@@ -112,7 +112,13 @@ export function documentNodeKind(
 
 /** Path of a folder, or "the top level" when it has no parent. Does not follow the row being moved. */
 export function folderLocationLabel(folders: NamedFolder[], folderId: number | null): string {
-  if (folderId == null) return "the top level";
+  const names = folderPathParts(folders, folderId);
+  return names.length > 0 ? names.join(" / ") : "the top level";
+}
+
+/** Root-first folder names, including the folder itself. An empty list is the top level. */
+export function folderPathParts(folders: NamedFolder[], folderId: number | null): string[] {
+  if (folderId == null) return [];
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
   const names: string[] = [];
   let current = byId.get(folderId);
@@ -122,7 +128,20 @@ export function folderLocationLabel(folders: NamedFolder[], folderId: number | n
     names.unshift(current.name);
     current = current.parentId == null ? undefined : byId.get(current.parentId);
   }
-  return names.length > 0 ? names.join(" / ") : "the top level";
+  return names;
+}
+
+/** The same names an auditor pastes from the X: drive, with the in-app folder titles. */
+export function joinFolderPath(parts: string[]): string {
+  return parts.map((part) => part.trim()).filter(Boolean).join("\\");
+}
+
+/**
+ * Full path of an item sitting in `parentId`, including the item's own name.
+ * Walking the parent, not the row being moved, keeps a move's from-path stable.
+ */
+export function itemFolderPath(folders: NamedFolder[], parentId: number | null, name: string): string {
+  return joinFolderPath([...folderPathParts(folders, parentId), name]);
 }
 
 export function folderMoveAudit(input: {
@@ -135,12 +154,16 @@ export function folderMoveAudit(input: {
   renamedTo?: string;
 }): Record<string, unknown> {
   const rename = input.renamedTo && input.renamedTo !== input.name ? ` and renamed it to "${input.renamedTo}"` : "";
+  const fromPath = input.fromLabel;
+  const toPath = input.toLabel;
   return {
     event: "moved",
-    summary: `Moved the ${input.kind} "${input.name}" from ${input.fromLabel} → ${input.toLabel}${rename}.`,
+    summary: `Moved the ${input.kind} "${input.name}" from ${fromPath} → ${toPath}${rename}.`,
     name: input.name,
-    from: input.fromLabel,
-    to: input.toLabel,
+    from: fromPath,
+    to: toPath,
+    fromPath,
+    toPath,
     fromParentId: input.fromParentId,
     toParentId: input.toParentId,
     ...(input.renamedTo && input.renamedTo !== input.name ? { renamedTo: input.renamedTo } : {}),

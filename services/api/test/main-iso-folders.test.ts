@@ -4,6 +4,7 @@ import {
   folderLocationLabel,
   folderMoveAudit,
   folderRenameAudit,
+  itemFolderPath,
   ISO_ROOT_NAME,
   MAIN_ISO_FOLDER_NAMES,
   mainIsoChildOrder,
@@ -95,10 +96,12 @@ describe("main ISO folders", () => {
       kind: documentNodeKind({ id: 2, linkedPath: null, pdfPath: null, documentId: null }, folders),
       fromParentId: 1,
       toParentId: 4,
-      fromLabel: folderLocationLabel(folders, 1),
-      toLabel: folderLocationLabel(folders, 4),
+      fromLabel: itemFolderPath(folders, 1, "Quality"),
+      toLabel: itemFolderPath(folders, 4, "Quality"),
     });
-    expect(folderMove.summary).toBe('Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents / Quality Logs.');
+    expect(folderMove.summary).toBe('Moved the folder "Quality" from ISO Compliance Documents\\Quality → ISO Compliance Documents\\Quality Logs\\Quality.');
+    expect(folderMove.fromPath).toBe("ISO Compliance Documents\\Quality");
+    expect(folderMove.toPath).toBe("ISO Compliance Documents\\Quality Logs\\Quality");
     expect(folderMove.fromParentId).toBe(1);
     expect(folderMove.toParentId).toBe(4);
 
@@ -107,10 +110,12 @@ describe("main ISO folders", () => {
       kind: documentNodeKind({ id: 9, linkedPath: "/iso-forms/record/14", pdfPath: null, documentId: null }, []),
       fromParentId: 2,
       toParentId: 4,
-      fromLabel: "ISO Compliance Documents / Quality",
-      toLabel: "ISO Compliance Documents / Quality Logs",
+      fromLabel: itemFolderPath(folders, 2, "NCR 14"),
+      toLabel: itemFolderPath(folders, 4, "NCR 14"),
     });
-    expect(item.summary).toBe('Moved the saved item "NCR 14" from ISO Compliance Documents / Quality → ISO Compliance Documents / Quality Logs.');
+    expect(item.summary).toBe('Moved the saved item "NCR 14" from ISO Compliance Documents\\Quality\\NCR 14 → ISO Compliance Documents\\Quality Logs\\NCR 14.');
+    expect(item.fromPath).toBe("ISO Compliance Documents\\Quality\\NCR 14");
+    expect(item.toPath).toBe("ISO Compliance Documents\\Quality Logs\\NCR 14");
     expect(folderRenameAudit("Quality", "Quality Records").summary).toBe('Renamed the folder from "Quality" to "Quality Records".');
   });
 });

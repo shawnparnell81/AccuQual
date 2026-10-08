@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/SignatureStamp";
+import { isExactLocationLabel, locationAnswerInsert } from "../../lib/folderPath";
 import type { FieldFormStructure, FieldType, FormField } from "../../lib/formGrid";
 import "./formBuilder.css";
 
@@ -14,6 +16,7 @@ const TYPES: { type: FieldType; label: string }[] = [
   { type: "table", label: "Table" },
   { type: "signature", label: "Signature" },
   { type: "photo", label: "Photo" },
+  { type: "folderPath", label: "Folder path" },
 ];
 
 function newId(): string {
@@ -36,6 +39,7 @@ export function FieldsFormEditor({
   onSign?: (fieldId: string, pin: string) => Promise<unknown>;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
+  const folderPath = useItemFolderPath();
 
   function addField(type: FieldType, sectionId: string) {
     const field: FormField = {
@@ -123,7 +127,7 @@ export function FieldsFormEditor({
                     {field.required ? " *" : ""}
                   </div>
                 )}
-                <FieldControl field={field} mode={mode} value={answers?.[field.id]} onChange={(value) => onAnswer?.(field.id, value)} onSign={onSign} onOptions={(options) => patch(field.id, { options })} />
+                <FieldControl field={field} mode={mode} value={answers?.[field.id]} folderPath={folderPath} onChange={(value) => onAnswer?.(field.id, value)} onSign={onSign} onOptions={(options) => patch(field.id, { options })} />
               </div>
             ))}
         </section>
@@ -136,6 +140,7 @@ function FieldControl({
   field,
   mode,
   value,
+  folderPath,
   onChange,
   onSign,
   onOptions,
@@ -143,10 +148,14 @@ function FieldControl({
   field: FormField;
   mode: "design" | "fill";
   value: unknown;
+  folderPath: string;
   onChange: (value: unknown) => void;
   onSign?: (fieldId: string, pin: string) => Promise<unknown>;
   onOptions: (options: string[]) => void;
 }) {
+  if (field.type === "folderPath") {
+    return <span className="fb-folder-path select-text" data-testid="folder-path-field">{mode === "design" && !folderPath ? "Folder path" : folderPath}</span>;
+  }
   if (mode === "design" && field.type === "dropdown") {
     return <input aria-label="Dropdown choices" value={(field.options ?? []).join(", ")} onChange={(event) => onOptions(event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} />;
   }
@@ -232,5 +241,16 @@ function FieldControl({
       </div>
     );
   }
-  return <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} disabled={mode === "design"} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onChange={(event) => onChange(event.target.value)} />;
+  const text = typeof value === "string" || typeof value === "number" ? String(value) : "";
+  const insert = mode === "fill" && isExactLocationLabel(field.label) ? locationAnswerInsert(text, folderPath) : null;
+  return (
+    <div>
+      <input type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} disabled={mode === "design"} value={text} onChange={(event) => onChange(event.target.value)} />
+      {insert ? (
+        <button type="button" className="no-print mt-1 text-xs text-[#0A3C7B]" onClick={() => onChange(insert)}>
+          Insert current path
+        </button>
+      ) : null}
+    </div>
+  );
 }

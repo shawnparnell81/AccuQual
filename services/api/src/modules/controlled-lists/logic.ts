@@ -206,7 +206,12 @@ function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): 
   for (const [addr, cell] of Object.entries(seed.cells)) {
     if (parseAddr(addr).row > HEADER_DEPTH) continue;
     const current = sheet.cells[addr];
-    const desired: StoredCell = cell.kind === "input" && current?.kind === "input" ? { ...cell, v: current.v } : { ...cell };
+    const desired: StoredCell =
+      current?.kind === "location"
+        ? { ...cell, v: current.v, kind: "location" }
+        : cell.kind === "input" && current?.kind === "input"
+          ? { ...cell, v: current.v }
+          : { ...cell };
     if (!sameJson(current, desired)) {
       cells[addr] = desired;
       changed = true;
@@ -423,7 +428,51 @@ function shownRaw(cell: StoredCell | undefined): string {
   return String(cell.v);
 }
 
-/** Copy editable values onto the stored sheet. Labels, formulas, and Rev stay as they are. */
+const LOCATION_LINE = /^location\s*:/i;
+
+/** A header cell that already reads as the workbook's Location line. */
+export function isLocationHeaderCell(addr: string, cell: StoredCell | undefined): boolean {
+  if (!cell || parseAddr(addr).row > HEADER_DEPTH) return false;
+  if (cell.kind === "location") return true;
+  return typeof cell.v === "string" && LOCATION_LINE.test(cell.v.trim());
+}
+
+/** The Location cell text, with the in-app path after the label. */
+export function locationCellText(path: string): string {
+  return `Location: ${path.trim()}`;
+}
+
+/**
+ * Writes the current folder path into Location cells on one sheet.
+ * Called only when someone chooses Insert current path. Opening the list does not call this,
+ * so a location that is already filled stays as it is.
+ */
+export function insertLocationPath(
+  key: ListKey,
+  sheets: StoredSheet[],
+  sheetName: string,
+  path: string,
+): { sheets: StoredSheet[]; changes: CellChange[] } {
+  const value = locationCellText(path);
+  const changes: CellChange[] = [];
+  let touched = false;
+  const next = sheets.map((sheet) => {
+    if (sheet.name !== sheetName) return sheet;
+    const cells = { ...sheet.cells };
+    for (const [addr, cell] of Object.entries(cells)) {
+      if (!isLocationHeaderCell(addr, cell)) continue;
+      const before = shownRaw(cell);
+      if (before === value) continue;
+      cells[addr] = { ...cell, v: value, kind: "location" };
+      changes.push({ sheet: sheet.name, addr, old: before || "blank", next: value });
+      touched = true;
+    }
+    return touched ? { ...sheet, cells } : sheet;
+  });
+  return { sheets: changes.length > 0 ? lockRevision(key, next) : sheets, changes };
+}
+
+/** Copy editable values onto the stored sheet. Labels, formulas, Rev, and an inserted Location stay as they are. */
 export function applyInputPatch(key: ListKey, sheets: StoredSheet[], patches: Array<{ name: string; cells: Record<string, CellPatch> }>): { sheets: StoredSheet[]; changes: CellChange[] } {
   const spec = LISTS[key];
   const changes: CellChange[] = [];

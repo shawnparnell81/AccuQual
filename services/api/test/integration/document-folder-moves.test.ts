@@ -141,11 +141,15 @@ describe("ISO main folders and moving what is already filed", () => {
     expect(history.status).toBe(200);
     const move = (history.body as { action: string; performedByName?: string; changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "moved");
     expect(move?.performedByName).toContain("Shawn Parnell");
-    expect(move?.changes?.summary).toMatch(/Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents \/ Master Source Files/);
+    expect(move?.changes?.summary).toMatch(/Moved the folder "Quality" from ISO Compliance Documents\\Quality → ISO Compliance Documents\\Master Source Files\\Quality/);
+    expect((move?.changes as { fromPath?: string; toPath?: string } | undefined)?.fromPath).toBe("ISO Compliance Documents\\Quality");
+    expect((move?.changes as { fromPath?: string; toPath?: string } | undefined)?.toPath).toBe("ISO Compliance Documents\\Master Source Files\\Quality");
 
     const itemHistory = await request(app).get(`/audit-trail/DocumentFolder/${nodeId}`).set("Authorization", `Bearer ${qualityToken}`);
     const itemRow = (itemHistory.body as { changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "moved");
-    expect(itemRow?.changes?.summary).toMatch(/Moved the saved item .+ from ISO Compliance Documents \/ Quality Logs → ISO Compliance Documents \/ Equipment Records/);
+    expect(itemRow?.changes?.summary).toMatch(/Moved the saved item .+ from ISO Compliance Documents\\Quality Logs\\.+ → ISO Compliance Documents\\Equipment Records\\/);
+    expect((itemRow?.changes as { fromPath?: string; toPath?: string } | undefined)?.fromPath).toMatch(/^ISO Compliance Documents\\Quality Logs\\/);
+    expect((itemRow?.changes as { fromPath?: string; toPath?: string } | undefined)?.toPath).toMatch(/^ISO Compliance Documents\\Equipment Records\\/);
     expect(qualityUserId).toBeGreaterThan(0);
   });
 

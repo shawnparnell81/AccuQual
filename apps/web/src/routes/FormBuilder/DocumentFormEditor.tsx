@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import {
   DOC_FIELDS,
   bandHasContent,
@@ -10,11 +11,19 @@ import {
   type BandSlot,
   type DocumentBand,
 } from "../../lib/documentBands";
-import type { DocumentFormStructure } from "../../lib/formGrid";
+import type { DocumentChromeField, DocumentFormStructure } from "../../lib/formGrid";
+import { isExactLocationLabel } from "../../lib/folderPath";
 import "./formBuilder.css";
+
+const FOLDER_PATH_SPAN = /<span class="fb-folder-path"[^>]*>[\s\S]*?<\/span>/gi;
 
 function run(command: string, value?: string) {
   document.execCommand(command, false, value);
+}
+
+function showFolderPath(html: string, path: string): string {
+  if (!path) return html;
+  return html.replace(FOLDER_PATH_SPAN, path);
 }
 
 function keepBand(band: DocumentBand): DocumentBand | null {
@@ -22,7 +31,7 @@ function keepBand(band: DocumentBand): DocumentBand | null {
   return null;
 }
 
-function BandSource({ name, band }: { name: "header" | "footer"; band: DocumentBand | null | undefined }) {
+function BandSource({ name, band, folderPath }: { name: "header" | "footer"; band: DocumentBand | null | undefined; folderPath: string }) {
   if (!band || !bandHasContent(band)) return null;
   return (
     <div
@@ -31,9 +40,9 @@ function BandSource({ name, band }: { name: "header" | "footer"; band: DocumentB
       data-different-first={String(band.differentFirstPage)}
       data-different-even={String(band.differentOddEven)}
     >
-      <div data-variant="default" dangerouslySetInnerHTML={{ __html: band.defaultHtml }} />
-      <div data-variant="first" dangerouslySetInnerHTML={{ __html: band.firstHtml }} />
-      <div data-variant="even" dangerouslySetInnerHTML={{ __html: band.evenHtml }} />
+      <div data-variant="default" dangerouslySetInnerHTML={{ __html: showFolderPath(band.defaultHtml, folderPath) }} />
+      <div data-variant="first" dangerouslySetInnerHTML={{ __html: showFolderPath(band.firstHtml, folderPath) }} />
+      <div data-variant="even" dangerouslySetInnerHTML={{ __html: showFolderPath(band.evenHtml, folderPath) }} />
     </div>
   );
 }
@@ -42,6 +51,7 @@ function BandEditor({
   kind,
   band,
   editable,
+  folderPath,
   editorRef,
   onFocus,
   onBand,
@@ -49,6 +59,7 @@ function BandEditor({
   kind: "header" | "footer";
   band: DocumentBand | null | undefined;
   editable: boolean;
+  folderPath: string;
   editorRef?: MutableRefObject<HTMLDivElement | null>;
   onFocus?: () => void;
   onBand?: (next: DocumentBand) => void;
@@ -64,7 +75,7 @@ function BandEditor({
     label: current.differentOddEven ? "Odd pages" : current.differentFirstPage ? "Other pages" : "All pages",
   });
   const active: BandSlot = options.some((option) => option.id === slot) ? slot : "default";
-  const html = editable ? slotHtml(current, active) : bandHtmlForPage(current, 1);
+  const html = editable ? slotHtml(current, active) : showFolderPath(bandHtmlForPage(current, 1), folderPath);
 
   useEffect(() => {
     if (!editable) return;
@@ -145,8 +156,15 @@ export function DocumentFormEditor({
   const active = useRef<"body" | "header" | "footer">("body");
   const [html, setHtml] = useState(structure.html);
   const design = mode === "design";
+  const folderPath = useItemFolderPath();
+  const chrome = structure.chrome ?? [];
   const headerInFlow = bandHasContent(structure.header);
   const footerInFlow = bandHasContent(structure.footer);
+
+  function addFolderPath(place: "header" | "footer") {
+    const field: DocumentChromeField = { id: `path-${Math.random().toString(36).slice(2, 8)}`, place, kind: "folderPath", label: "Folder path" };
+    onChange?.({ ...structure, chrome: [...chrome, field] });
+  }
 
   useEffect(() => {
     if (!design) return;
@@ -187,6 +205,7 @@ export function DocumentFormEditor({
       kind="header"
       band={structure.header}
       editable={design}
+      folderPath={folderPath}
       editorRef={headerRef}
       onFocus={() => { active.current = "header"; }}
       onBand={updateHeader}
@@ -197,43 +216,95 @@ export function DocumentFormEditor({
       kind="footer"
       band={structure.footer}
       editable={design}
+      folderPath={folderPath}
       editorRef={footerRef}
       onFocus={() => { active.current = "footer"; }}
       onBand={updateFooter}
     />
   );
+  const headerChrome = (
+    <DocumentChrome
+      place="header"
+      fields={chrome}
+      folderPath={folderPath}
+      onRemove={design ? (id) => onChange?.({ ...structure, chrome: chrome.filter((field) => field.id !== id) }) : undefined}
+    />
+  );
+  const footerChrome = (
+    <DocumentChrome
+      place="footer"
+      fields={chrome}
+      folderPath={folderPath}
+      onRemove={design ? (id) => onChange?.({ ...structure, chrome: chrome.filter((field) => field.id !== id) }) : undefined}
+    />
+  );
 
   if (!design) {
-    const parts = structure.html.split(/(<span class="fb-inline-field"[^>]*>.*?<\/span>)/g);
+    const parts = structure.html.split(/(<span class="fb-inline-field"[^>]*>.*?<\/span>|<span class="fb-folder-path"[^>]*>.*?<\/span>)/g);
     return (
       <div data-testid="document-fill">
-        <BandSource name="header" band={structure.header} />
-        <BandSource name="footer" band={structure.footer} />
+        <BandSource name="header" band={structure.header} folderPath={folderPath} />
+        <BandSource name="footer" band={structure.footer} folderPath={folderPath} />
         <table className="fb-print-flow">
-          {headerInFlow ? <thead><tr><td>{headerEditor}</td></tr></thead> : null}
+          {headerInFlow ? (
+            <thead>
+              <tr>
+                <td>
+                  {headerChrome}
+                  {headerEditor}
+                </td>
+              </tr>
+            </thead>
+          ) : null}
           <tbody>
             <tr>
               <td>
+                {!headerInFlow ? headerChrome : null}
                 <div className="fb-doc">
                   {parts.map((part, index) => {
+                    if (/data-folder-path=/.test(part)) {
+                      return (
+                        <span key={index} className="fb-folder-path select-text">
+                          {folderPath}
+                        </span>
+                      );
+                    }
                     const match = /data-fill-field="([^"]*)"[^>]*data-label="([^"]*)"/.exec(part);
                     if (!match) return <span key={index} dangerouslySetInnerHTML={{ __html: part }} />;
                     const key = match[1] ?? "";
+                    const label = match[2] || key;
+                    const current = answers?.[key] ?? "";
                     return (
-                      <input
-                        key={index}
-                        aria-label={match[2] || key}
-                        className="fb-inline-field"
-                        value={answers?.[key] ?? ""}
-                        onChange={(event) => onAnswer?.(key, event.target.value)}
-                      />
+                      <span key={index}>
+                        <input
+                          aria-label={label}
+                          className="fb-inline-field"
+                          value={current}
+                          onChange={(event) => onAnswer?.(key, event.target.value)}
+                        />
+                        {isExactLocationLabel(label) && !current.trim() && folderPath ? (
+                          <button type="button" className="no-print ml-1 text-xs text-[#0A3C7B]" onClick={() => onAnswer?.(key, folderPath)}>
+                            Insert current path
+                          </button>
+                        ) : null}
+                      </span>
                     );
                   })}
                 </div>
+                {!footerInFlow ? footerChrome : null}
               </td>
             </tr>
           </tbody>
-          {footerInFlow ? <tfoot><tr><td>{footerEditor}</td></tr></tfoot> : null}
+          {footerInFlow ? (
+            <tfoot>
+              <tr>
+                <td>
+                  {footerEditor}
+                  {footerChrome}
+                </td>
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     );
@@ -264,6 +335,9 @@ export function DocumentFormEditor({
             {field.label}
           </button>
         ))}
+        <button type="button" className="rounded border border-border px-2 py-1" onMouseDown={(event) => event.preventDefault()} onClick={() => addFolderPath("header")}>Header folder path</button>
+        <button type="button" className="rounded border border-border px-2 py-1" onMouseDown={(event) => event.preventDefault()} onClick={() => addFolderPath("footer")}>Footer folder path</button>
+        <button type="button" className="rounded border border-border px-2 py-1" onMouseDown={(event) => event.preventDefault()} onClick={() => insert(`<span class="fb-folder-path" data-folder-path="true" contenteditable="false">Folder path</span>&nbsp;`)}>Folder path</button>
         <label className="rounded border border-border px-2 py-1">
           Image
           <input
@@ -281,11 +355,25 @@ export function DocumentFormEditor({
           />
         </label>
       </div>
-      <BandSource name="header" band={structure.header} />
-      <BandSource name="footer" band={structure.footer} />
-      {!headerInFlow ? headerEditor : null}
+      <BandSource name="header" band={structure.header} folderPath={folderPath} />
+      <BandSource name="footer" band={structure.footer} folderPath={folderPath} />
+      {!headerInFlow ? (
+        <>
+          {headerChrome}
+          {headerEditor}
+        </>
+      ) : null}
       <table className="fb-print-flow">
-        {headerInFlow ? <thead><tr><td>{headerEditor}</td></tr></thead> : null}
+        {headerInFlow ? (
+          <thead>
+            <tr>
+              <td>
+                {headerChrome}
+                {headerEditor}
+              </td>
+            </tr>
+          </thead>
+        ) : null}
         <tbody>
           <tr>
             <td>
@@ -307,9 +395,53 @@ export function DocumentFormEditor({
             </td>
           </tr>
         </tbody>
-        {footerInFlow ? <tfoot><tr><td>{footerEditor}</td></tr></tfoot> : null}
+        {footerInFlow ? (
+          <tfoot>
+            <tr>
+              <td>
+                {footerEditor}
+                {footerChrome}
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
-      {!footerInFlow ? footerEditor : null}
+      {!footerInFlow ? (
+        <>
+          {footerEditor}
+          {footerChrome}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function DocumentChrome({
+  place,
+  fields,
+  folderPath,
+  onRemove,
+}: {
+  place: "header" | "footer";
+  fields: DocumentChromeField[];
+  folderPath: string;
+  onRemove?: (id: string) => void;
+}) {
+  const rows = fields.filter((field) => field.place === place && field.kind === "folderPath");
+  if (rows.length === 0) return null;
+  return (
+    <div className={place === "header" ? "mb-2 flex flex-col gap-1" : "mt-3 flex flex-col gap-1"} data-testid={`folder-path-${place}`}>
+      {rows.map((field) => (
+        <div key={field.id} className="flex flex-wrap items-center gap-2 text-xs text-[#1a1a1a]">
+          <span>{field.label}:</span>
+          <span className="fb-folder-path select-text">{folderPath || (onRemove ? "Folder path" : "")}</span>
+          {onRemove ? (
+            <button type="button" className="no-print text-[#475467]" onClick={() => onRemove(field.id)}>
+              Remove
+            </button>
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }

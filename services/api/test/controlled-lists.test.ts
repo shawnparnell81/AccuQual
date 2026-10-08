@@ -9,6 +9,7 @@ import {
   applyInputPatch,
   changeSummary,
   freshSheets,
+  insertLocationPath,
   planListCleanup,
   removeDataRow,
   restoreHeaderBlock,
@@ -379,5 +380,33 @@ describe("living controlled lists", () => {
     expect(restoreHeaderBlock("lst-eqp-001", freshSheets("lst-eqp-001")).changed).toBe(false);
     expect(restoreHeaderBlock("lst-gen-001", freshSheets("lst-gen-001")).changed).toBe(false);
     expect(restoreHeaderBlock("lst-gen-003", freshSheets("lst-gen-003")).changed).toBe(false);
+  });
+
+  it("inserts the current folder path into a Location cell only when asked, and keeps it", () => {
+    const path = "ISO Compliance Documents\\Quality Logs\\LST-NCR-001";
+    const sheets = freshSheets("lst-ncr-001");
+    expect(sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    const ignored = applyInputPatch("lst-ncr-001", sheets, [{ name: "LST-NCR-001 - NCR", cells: { C2: { v: `Location: ${path}` } } }]);
+    expect(ignored.sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    expect(ignored.changes).toEqual([]);
+
+    const inserted = insertLocationPath("lst-ncr-001", sheets, "LST-NCR-001 - NCR", path);
+    expect(inserted.changes.map((change) => change.addr)).toEqual(["C2"]);
+    expect(inserted.sheets[0]?.cells.C2).toMatchObject({ v: `Location: ${path}`, kind: "location" });
+    expect(inserted.sheets[1]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Non_Conformance_Records");
+    const again = insertLocationPath("lst-ncr-001", inserted.sheets, "LST-NCR-001 - NCR", path);
+    expect(again.changes).toEqual([]);
+    expect(again.sheets).toBe(inserted.sheets);
+
+    const restored = restoreHeaderBlock("lst-ncr-001", inserted.sheets);
+    expect(restored.sheets[0]?.cells.C2).toMatchObject({ v: `Location: ${path}`, kind: "location" });
+    expect(restored.sheets[0]?.cells.B2?.v).toBe("Rev: E");
+    const patched = applyInputPatch("lst-ncr-001", restored.sheets, [{ name: "LST-NCR-001 - NCR", cells: { C2: { v: "somewhere else" } } }]);
+    expect(patched.sheets[0]?.cells.C2?.v).toBe(`Location: ${path}`);
+
+    const devPath = "ISO Compliance Documents\\Test Data Projects\\LST-DEV-001";
+    const dev = insertLocationPath("lst-dev-001", freshSheets("lst-dev-001"), "Test Reports", devPath);
+    expect(dev.sheets[0]?.cells.C2?.v).toBe(`Location: ${devPath}`);
+    expect(dev.sheets[1]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects");
   });
 });

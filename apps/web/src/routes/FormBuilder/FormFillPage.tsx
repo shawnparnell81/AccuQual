@@ -66,6 +66,7 @@ export function FormFillPage() {
     onSuccess: (result) => {
       toast.success(`Saved in ${result.folder}. The blank template was not changed.`);
       setSaveAs(false);
+      void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't file that copy.")),
   });

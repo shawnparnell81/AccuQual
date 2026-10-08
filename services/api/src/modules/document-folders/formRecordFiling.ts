@@ -9,7 +9,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
 import { filedRecordName, fileNamePatternFor, folderIsBlankLibrary, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
-import { folderLocationLabel, folderMoveAudit } from "./mainIsoFolders.js";
+import { folderMoveAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import {
   canEditFormNumber,
@@ -228,8 +228,8 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
               kind: "saved item",
               fromParentId: node.parentId,
               toParentId: folderId,
-              fromLabel: folderLocationLabel(placed, node.parentId),
-              toLabel: folderLocationLabel(placed, folderId),
+              fromLabel: itemFolderPath(placed, node.parentId, node.name),
+              toLabel: itemFolderPath(placed, folderId, node.name),
             }),
             formKey,
             recordId,

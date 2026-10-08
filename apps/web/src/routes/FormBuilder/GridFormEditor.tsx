@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
+import { gridLocationInsert, isExactLocationLabel } from "../../lib/folderPath";
 import { addressOf, blankCell, cellPaint, evaluatedSheet, shownCell, type FormCell, type FormSheet, type GridFormStructure } from "../../lib/formGrid";
 import "./formBuilder.css";
 
@@ -39,6 +41,7 @@ export function GridFormEditor({
   const [sheetIndex, setSheetIndex] = useState(0);
   const [selection, setSelection] = useState<Selection>({ sheet: 0, r1: 0, c1: 0, r2: 0, c2: 0 });
   const [bar, setBar] = useState("");
+  const folderPath = useItemFolderPath();
   const sheet = structure.sheets[sheetIndex] ?? structure.sheets[0];
   const calculated = useMemo(() => (sheet ? evaluatedSheet(sheet, answers, String(sheetIndex)) : {}), [sheet, answers, sheetIndex]);
   if (!sheet) return null;
@@ -149,6 +152,7 @@ export function GridFormEditor({
           <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ locked: true })}>Lock label</button>
           <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ locked: false, formula: undefined })}>Input cell</button>
           <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ conditional: true })}>Pass/Fail color</button>
+          <button type="button" className="rounded border border-border px-2 py-1" onClick={() => updateSelected({ folderPath: true, locked: true, formula: undefined, value: "" })}>Folder path</button>
           <label className="flex items-center gap-1">
             Col
             <input
@@ -220,11 +224,14 @@ export function GridFormEditor({
                 <th>{rowIndex + 1}</th>
                 {row.map((cell, colIndex) => {
                   if (!cell) return null;
-                  const text = shownCell(cell, calculated, colIndex + 1, rowIndex + 1, answers?.[`${sheetIndex}!${addressOf(colIndex + 1, rowIndex + 1)}`]);
+                  const answerKey = `${sheetIndex}!${addressOf(colIndex + 1, rowIndex + 1)}`;
+                  const answer = answers?.[answerKey];
+                  const text = cell.folderPath && !folderPath && mode === "design" ? "Folder path" : shownCell(cell, calculated, colIndex + 1, rowIndex + 1, answer, folderPath);
                   const paint = cellPaint(cell, text);
                   const selected = mode === "design" && rowIndex >= box.r1 && rowIndex <= box.r2 && colIndex >= box.c1 && colIndex <= box.c2;
-                  const answerKey = `${sheetIndex}!${addressOf(colIndex + 1, rowIndex + 1)}`;
-                  const editable = mode === "fill" && !cell.locked && !cell.formula;
+                  const editable = mode === "fill" && !cell.locked && !cell.formula && !cell.folderPath;
+                  const left = colIndex > 0 ? row[colIndex - 1] : null;
+                  const locationInsert = editable ? gridLocationInsert(cell.value, answer, folderPath, Boolean(left && !left.formula && isExactLocationLabel(left.value))) : null;
                   return (
                     <td
                       key={colIndex}
@@ -253,9 +260,16 @@ export function GridFormEditor({
                       }}
                     >
                       {editable ? (
-                        <input aria-label={answerKey} value={answers?.[answerKey] ?? cell.value} onChange={(event) => onAnswer?.(answerKey, event.target.value)} />
+                        <span className="flex min-w-0 flex-col">
+                          <input aria-label={answerKey} value={answers?.[answerKey] ?? cell.value} onChange={(event) => onAnswer?.(answerKey, event.target.value)} />
+                          {locationInsert ? (
+                            <button type="button" className="no-print px-1 text-left text-[10px] text-[#0A3C7B]" onClick={() => onAnswer?.(answerKey, locationInsert)}>
+                              Insert current path
+                            </button>
+                          ) : null}
+                        </span>
                       ) : (
-                        <span className="fb-read">{text}</span>
+                        <span className={`fb-read${cell.folderPath ? " fb-folder-path select-text" : ""}`}>{text}</span>
                       )}
                     </td>
                   );
