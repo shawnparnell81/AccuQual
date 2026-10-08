@@ -99,8 +99,7 @@
 }
 
 .controlled-list-header-band {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   align-items: stretch;
   width: 100%;
   max-width: 100%;
