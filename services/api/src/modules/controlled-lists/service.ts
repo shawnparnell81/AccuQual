@@ -29,6 +29,7 @@ import {
   isLivingListPath,
   planListCleanup,
   removeDataRow,
+  restoreHeaderBlock,
   rowSummary,
   titleMatchesDevLog,
   titleMatchesList,
@@ -78,6 +79,24 @@ function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, ke
 async function loadRow(db: Db, key: ListKey) {
   const [row] = await db.select().from(controlledLists).where(eq(controlledLists.listKey, key));
   return row ?? null;
+}
+
+async function repairStoredHeader(db: Db, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }, userId: number) {
+  const restored = restoreHeaderBlock(key, row.sheets);
+  if (!restored.changed) return row;
+  await db.update(controlledLists).set({ sheets: restored.sheets, updatedAt: new Date() }).where(eq(controlledLists.id, row.id));
+  const who = await personName(db, userId);
+  const spec = LISTS[key];
+  await recordAuditTrail(db, {
+    entityType: "ControlledList",
+    entityId: row.id,
+    action: "update",
+    performedBy: userId,
+    changes: {
+      summary: `${who} restored the top header rows on ${spec.docId} from the controlled workbook. Revision stayed ${row.revision}.`,
+    },
+  });
+  return { ...row, sheets: restored.sheets };
 }
 
 async function ensureRow(db: Db, key: ListKey) {
@@ -305,8 +324,9 @@ export async function ensureLivingControlledLists(req: Request): Promise<void> {
   if (!req.db || !req.user) return;
   for (const key of Object.keys(LISTS) as ListKey[]) {
     const row = await ensureRow(req.db, key);
-    const sheets = await absorbOutsideRows(req.db, key, row.sheets, req.user.id, row.id);
-    if (sheets !== row.sheets) row.sheets = sheets;
+    const repaired = await repairStoredHeader(req.db, key, row, req.user.id);
+    const sheets = await absorbOutsideRows(req.db, key, repaired.sheets, req.user.id, repaired.id);
+    if (sheets !== repaired.sheets) repaired.sheets = sheets;
   }
   await retireSupersededLists(req);
   await fileLivingNodes(req.db, req.user.id);

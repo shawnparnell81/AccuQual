@@ -92,6 +92,11 @@
   contain-intrinsic-size: auto 20px;
 }
 
+.controlled-list-long .controlled-list-cell[data-header="true"] {
+  content-visibility: visible;
+  contain-intrinsic-size: auto;
+}
+
 .controlled-list-print-value {
   display: none;
 }
