@@ -64,6 +64,18 @@ describe("Quality Manual retired list copies", () => {
     expect(plan.map((step) => step.id)).toEqual([12]);
   });
 
+  it("keeps a differently named item that opens the list, and a saved record that shares the list title", () => {
+    const kept = [
+      node({ id: 1, name: "ISO Compliance Documents", parentId: null }),
+      node({ id: 10, name: "Quality Manual", parentId: 1 }),
+      node({ id: 11, name: "Master Document List", parentId: 10, linkedPath: "/documents/master-list" }),
+      node({ id: 21, name: "Scope notes", parentId: 10, linkedPath: "/documents/master-list" }),
+      node({ id: 22, name: "Master Equipment List", parentId: 10, linkedPath: "/calibration/master-list" }),
+      node({ id: 23, name: "Master Equipment List", parentId: 10, linkedPath: "/calibration/88001" }),
+    ];
+    expect(planQualityManualCopyCleanup(kept)).toEqual([]);
+  });
+
   it("does not turn a folder that still holds other items into a deletion", () => {
     const withChild = [
       node({ id: 1, name: "ISO Compliance Documents", parentId: null }),

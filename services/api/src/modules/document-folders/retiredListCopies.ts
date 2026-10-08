@@ -45,17 +45,30 @@ function bareName(name: string): string {
     .toLowerCase();
 }
 
+function nameMatchesList(name: string, list: (typeof RETIRED_QUALITY_MANUAL_LISTS)[number]): boolean {
+  const bare = bareName(name);
+  if (!bare) return false;
+  const id = list.docId.toLowerCase();
+  const title = list.title.toLowerCase();
+  return bare === id || bare === title || bare.startsWith(`${id} `) || bare.startsWith(`${id}-`);
+}
+
+/** A saved record such as /calibration/88001. It is not an old copy of the list page. */
+function filedRecord(linkedPath: string | null | undefined): boolean {
+  if (!linkedPath) return false;
+  return /\/\d+(?:\/|$)/.test(listRoute(linkedPath));
+}
+
 export function retiredQualityManualList(node: Pick<QualityManualNode, "name" | "linkedPath">): (typeof RETIRED_QUALITY_MANUAL_LISTS)[number] | null {
+  if (filedRecord(node.linkedPath)) return null;
   const route = listRoute(node.linkedPath);
   const byRoute = RETIRED_QUALITY_MANUAL_LISTS.find((list) => list.route === route);
-  if (byRoute) return byRoute;
+  // The route alone is not enough. A different item can open the same page.
+  if (byRoute && nameMatchesList(node.name, byRoute)) return byRoute;
   const name = bareName(node.name);
   if (!name) return null;
   for (const list of RETIRED_QUALITY_MANUAL_LISTS) {
-    const id = list.docId.toLowerCase();
-    const title = list.title.toLowerCase();
-    if (name === id || name === title) return list;
-    if (name.startsWith(`${id} `) || name.startsWith(`${id}-`)) return list;
+    if (nameMatchesList(node.name, list)) return list;
   }
   return null;
 }
@@ -101,13 +114,21 @@ export function planQualityManualCopyCleanup(folders: QualityManualNode[]): Qual
   }
   const keepLiving = new Set<number>();
   const plan: QualityManualCleanup[] = [];
-  for (const group of livingByRoute.values()) {
-    const ranked = [...group].sort((a, b) => Number(Boolean(a.pdfPath)) - Number(Boolean(b.pdfPath)) || a.id - b.id);
+  for (const [route, group] of livingByRoute) {
+    const list = RETIRED_QUALITY_MANUAL_LISTS.find((item) => item.route === route);
+    if (!list) continue;
+    const ranked = [...group].sort(
+      (a, b) => Number(nameMatchesList(b.name, list)) - Number(nameMatchesList(a.name, list)) || Number(Boolean(a.pdfPath)) - Number(Boolean(b.pdfPath)) || a.id - b.id,
+    );
     const keeper = ranked[0];
     if (!keeper) continue;
     keepLiving.add(keeper.id);
-    if (keeper.pdfPath) plan.push({ id: keeper.id, action: "archive-attachment", name: keeper.name, archivedPath: keeper.pdfPath });
+    if (keeper.pdfPath && nameMatchesList(keeper.name, list)) {
+      plan.push({ id: keeper.id, action: "archive-attachment", name: keeper.name, archivedPath: keeper.pdfPath });
+    }
     for (const extra of ranked.slice(1)) {
+      // Folder merge can move a different item onto this page. That item stays.
+      if (!nameMatchesList(extra.name, list)) continue;
       if (childIds.has(extra.id)) {
         if (extra.pdfPath) plan.push({ id: extra.id, action: "archive-attachment", name: extra.name, archivedPath: extra.pdfPath });
         continue;
@@ -119,6 +140,8 @@ export function planQualityManualCopyCleanup(folders: QualityManualNode[]): Qual
     if (!inManual(folder) || keepLiving.has(folder.id)) continue;
     const list = retiredQualityManualList(folder);
     if (!list || listRoute(folder.linkedPath) === list.route) continue;
+    // A shortcut or a saved record that shares the list title is not an old upload.
+    if (folder.linkedPath) continue;
     if (childIds.has(folder.id)) continue;
     const emptyShell = !folder.pdfPath && folder.documentId == null;
     const oldCopy = Boolean(folder.pdfPath) || folder.documentId != null;

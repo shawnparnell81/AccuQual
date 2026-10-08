@@ -80,18 +80,25 @@ function bareName(name: string): string {
     .toLowerCase();
 }
 
-/** The controlled list this row is, whether the folder stored a title, a document number, or both. */
+function nameMatchesList(name: string, list: ControlledListRecord): boolean {
+  const bare = bareName(name);
+  if (!bare) return false;
+  const id = list.docId.toLowerCase();
+  const title = list.title.toLowerCase();
+  return bare === id || bare === title || bare.startsWith(`${id} `) || bare.startsWith(`${id}-`);
+}
+
+/**
+ * The controlled list this row is, when the folder used the list's title, document number, or both.
+ * A saved record, or a differently named item that happens to open the list page, stays itself.
+ */
 export function controlledListFor(node: Pick<FolderDetailNode, "name" | "linkedPath">): ControlledListRecord | null {
+  if (isFiledRecordPath(node.linkedPath)) return null;
   const route = listPath(node.linkedPath);
   const byRoute = CONTROLLED_LISTS.find((list) => list.route === route);
-  if (byRoute) return byRoute;
-  const name = bareName(node.name);
-  if (!name) return null;
+  if (byRoute) return nameMatchesList(node.name, byRoute) ? byRoute : null;
   for (const list of CONTROLLED_LISTS) {
-    const id = list.docId.toLowerCase();
-    const title = list.title.toLowerCase();
-    if (name === id || name === title) return list;
-    if (name.startsWith(`${id} `) || name.startsWith(`${id}-`)) return list;
+    if (nameMatchesList(node.name, list)) return list;
   }
   return null;
 }

@@ -80,6 +80,26 @@ describe("folder details", () => {
     assert.equal(items.some((item) => item.type === "folder"), false);
   });
 
+  it("keeps a saved record and a differently named link beside the list they are not", () => {
+    const rows = [
+      node({ id: 1, name: "Quality Manual", parentId: null }),
+      node({ id: 2, name: "Master Document List", parentId: 1, linkedPath: "/documents/master-list", listRevision: "B" }),
+      node({ id: 3, name: "Scope notes", parentId: 1, linkedPath: "/documents/master-list" }),
+      node({ id: 4, name: "Master Equipment List", parentId: 1, linkedPath: "/calibration/master-list", listRevision: "A" }),
+      node({ id: 5, name: "Master Equipment List", parentId: 1, linkedPath: "/calibration/88001" }),
+    ];
+    const items = folderContents(rows, 1);
+    assert.deepEqual(
+      items.map((item) => [item.type, item.label, item.href]),
+      [
+        ["controlled list", "LST-EQP-001 - Master Equipment List", "/calibration/master-list"],
+        ["controlled list", "LST-GEN-001 - Master Document List", "/documents/master-list"],
+        ["form", "Master Equipment List", "/calibration/88001"],
+        ["file", "Scope notes", "/documents/master-list"],
+      ],
+    );
+  });
+
   it("keeps a real subfolder that happens to share a list title when it has items inside", () => {
     const rows = [
       node({ id: 1, name: "Quality Manual", parentId: null }),
