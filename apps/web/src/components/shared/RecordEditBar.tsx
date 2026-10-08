@@ -53,7 +53,7 @@ export function useCanEditSurface(surface: RecordSurface | null): boolean {
 export function RecordEditBar() {
   const { surface, editing, setEditing } = useRecordEdit();
   const canEdit = useCanEditSurface(surface);
-  if (!surface || surface.kind !== "form" || !canEdit) return null;
+  if (!surface || surface.kind !== "form" || surface.edit === false || !canEdit) return null;
 
   return (
     <div className="no-print sticky top-0 z-20 mb-3 flex justify-end bg-background/90 py-1 backdrop-blur-sm">

@@ -5,7 +5,8 @@
  * cell references, and ranges) need when the layout is not hardcoded.
  */
 
-export type FormulaValue = string | number | boolean;
+/** `null` is an empty cell. It is not zero, and it is not a typed empty string. */
+export type FormulaValue = string | number | boolean | null;
 
 const DIV0 = "#DIV/0!";
 const VALUE = "#VALUE!";
@@ -319,7 +320,10 @@ function readCell(cells: CellMap, stack: string[], cache: Map<string, FormulaVal
   if (cached !== undefined) return cached;
   if (stack.includes(normalized)) return CYCLE;
   const raw = lookup(cells, normalized);
-  if (raw == null || raw === "") return "";
+  if (raw == null || raw === "") {
+    cache.set(normalized, null);
+    return null;
+  }
   if (raw.startsWith("=")) {
     stack.push(normalized);
     const value = evaluateFormula(raw.slice(1), cells, stack, cache);
@@ -368,6 +372,7 @@ function flatten(args: Argument[], cells: CellMap, stack: string[], cache: Map<s
 function numbersOf(values: FormulaValue[]): number[] | string {
   const nums: number[] = [];
   for (const value of values) {
+    if (value == null) continue;
     if (typeof value === "string" && ERRORS.has(value)) return value;
     if (typeof value === "string" && value.trim() === "") continue;
     if (typeof value === "boolean") {
@@ -387,7 +392,11 @@ function applyFunction(name: string, args: Argument[], cells: CellMap, stack: st
     const nums = numbersOf(values());
     if (typeof nums === "string") return nums;
     if (name === "COUNT") return nums.length;
-    if (nums.length === 0) return name === "SUM" ? 0 : DIV0;
+    if (nums.length === 0) {
+      if (name === "SUM") return 0;
+      if (name === "AVERAGE") return null;
+      return DIV0;
+    }
     if (name === "SUM") return nums.reduce((sum, n) => sum + n, 0);
     if (name === "AVERAGE") return nums.reduce((sum, n) => sum + n, 0) / nums.length;
     if (name === "MIN") return Math.min(...nums);
@@ -406,6 +415,7 @@ function applyFunction(name: string, args: Argument[], cells: CellMap, stack: st
   if (name === "IF") {
     const list = values();
     if (list.length < 2) return VALUE;
+    if (list[0] == null) return null;
     const yes = truthy(list[0]!);
     if (typeof yes === "string") return yes;
     return yes ? list[1]! : (list[2] ?? false);
@@ -414,13 +424,19 @@ function applyFunction(name: string, args: Argument[], cells: CellMap, stack: st
     const list = values();
     if (list.length === 0) return VALUE;
     let saw = false;
+    let sawBlank = false;
     for (const value of list) {
+      if (value == null) {
+        sawBlank = true;
+        continue;
+      }
       const flag = truthy(value);
       if (typeof flag === "string") return flag;
       saw = true;
       if (name === "AND" && !flag) return false;
       if (name === "OR" && flag) return true;
     }
+    if (sawBlank) return null;
     return saw ? name === "AND" : false;
   }
   if (name === "NOT") {
@@ -434,6 +450,7 @@ function applyFunction(name: string, args: Argument[], cells: CellMap, stack: st
 }
 
 function toNumber(value: FormulaValue | undefined): number | null {
+  if (value == null) return value === null ? 0 : null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value ? 1 : 0;
   if (typeof value === "string") {
@@ -446,6 +463,7 @@ function toNumber(value: FormulaValue | undefined): number | null {
 }
 
 function truthy(value: FormulaValue): boolean | string {
+  if (value == null) return false;
   if (typeof value === "string" && ERRORS.has(value)) return value;
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
@@ -453,6 +471,7 @@ function truthy(value: FormulaValue): boolean | string {
 }
 
 function show(value: FormulaValue): string {
+  if (value == null) return "";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   return String(value);
 }
@@ -472,6 +491,7 @@ function numOp(left: FormulaValue, right: FormulaValue, op: (a: number, b: numbe
 function compare(left: FormulaValue, op: string, right: FormulaValue): FormulaValue {
   if (typeof left === "string" && ERRORS.has(left)) return left;
   if (typeof right === "string" && ERRORS.has(right)) return right;
+  if (left == null || right == null) return null;
   const aNum = typeof left === "number" || typeof left === "boolean" ? toNumber(left) : typeof right === "number" ? toNumber(left) : null;
   const bNum = typeof right === "number" || typeof right === "boolean" ? toNumber(right) : typeof left === "number" ? toNumber(right) : null;
   let result: boolean;
@@ -499,7 +519,7 @@ export function evaluateCells(cells: Record<string, string>): Record<string, For
 }
 
 export function displayFormulaValue(value: FormulaValue | undefined): string {
-  if (value == null) return "";
+  if (value == null || value === "") return "";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return NUM;

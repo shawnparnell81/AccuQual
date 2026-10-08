@@ -19,5 +19,10 @@ describe("record surfaces", () => {
     assert.equal(recordSurface("/iso-forms/frm-ncr-001"), null);
     assert.equal(recordSurface("/documents/folders"), null);
     assert.equal(recordSurface("/risk/dashboard"), null);
+    assert.equal(recordSurface("/form-builder/1"), null);
+    assert.deepEqual(recordSurface("/form-builder/fills/1"), { kind: "form", access: "documents", edit: false });
+    assert.deepEqual(recordSurface("/form-builder/template/4"), { kind: "form", access: "documents", edit: false });
+    assert.equal(recordSurface("/ncr/9")?.edit, undefined);
+    assert.equal(recordSurface("/ncr/9")?.kind, "form");
   });
 });

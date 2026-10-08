@@ -38,6 +38,53 @@ describe("excel formulas", () => {
     assert.equal(passFailFill("Fail")?.background, "#FF0000");
   });
 
+  it("stays blank until the cells a formula reads have values", () => {
+    const blank = evaluateCells({
+      B2: "",
+      C2: "10",
+      D2: '=IF(B2>=C2, "Pass", "Fail")',
+      B3: "",
+      C3: "8",
+      D3: '=IF(B3>=C3, "Pass", "Fail")',
+      B4: "=AVERAGE(B2:B3)",
+    });
+    assert.equal(blank.D2, null);
+    assert.equal(blank.D3, null);
+    assert.equal(blank.B4, null);
+    assert.equal(displayFormulaValue(blank.D2), "");
+    assert.equal(passFailFill(displayFormulaValue(blank.D2)), null);
+    assert.equal(displayFormulaValue(blank.B4), "");
+
+    const filled = evaluateCells({
+      B2: "12",
+      C2: "10",
+      D2: '=IF(B2>=C2, "Pass", "Fail")',
+      B3: "7",
+      C3: "8",
+      D3: '=IF(B3>=C3, "Pass", "Fail")',
+      B4: "=AVERAGE(B2:B3)",
+    });
+    assert.equal(filled.D2, "Pass");
+    assert.equal(filled.D3, "Fail");
+    assert.equal(filled.B4, 9.5);
+    assert.equal(passFailFill(displayFormulaValue(filled.D2))?.background, "#4EA72E");
+    assert.equal(passFailFill(displayFormulaValue(filled.D3))?.background, "#FF0000");
+  });
+
+  it("still reports a real error when the inputs are bad", () => {
+    const values = evaluateCells({
+      A1: "1",
+      B1: "0",
+      C1: "=A1/B1",
+      D1: '=IF(1/0>1, "Pass", "Fail")',
+      E1: '="a"+1',
+    });
+    assert.equal(values.C1, "#DIV/0!");
+    assert.equal(values.D1, "#DIV/0!");
+    assert.equal(values.E1, "#VALUE!");
+    assert.equal(evaluateCells({ A1: "", B1: "=SUM(A1)" }).B1, 0);
+  });
+
   it("follows a formula that points at another formula and reports a cycle", () => {
     const values = evaluateCells({
       A1: "=B1+1",
