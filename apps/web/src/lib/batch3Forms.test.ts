@@ -57,7 +57,7 @@ test("shock grade and band follow the workbook", () => {
   cells.E16 = 60;
   cells.F16 = 60;
   cells.C18 = 25;
-  cells.E18 = 30;
+  cells.E18 = 20;
   cells.F18 = 25;
   for (const row of [24, 29, 35, 36, 37, 38]) {
     cells[`C${row}`] = 10;
@@ -69,7 +69,12 @@ test("shock grade and band follow the workbook", () => {
   assert.equal(result.C16, 60);
   assert.equal(result.G11, "Passed");
   assert.equal(result.G18, "Passed");
+  assert.equal(result.H18, "Passed");
   assert.equal(result.A3, "Passed");
+  cells.E18 = 30;
+  assert.equal(evaluateShock(cells).G18, "Failed");
+  assert.equal(overallShock(cells), "Failed");
+  cells.E18 = 20;
   cells.E11 = 9;
   assert.equal(evaluateShock(cells).G11, "Failed");
   assert.equal(overallShock(cells), "Failed");

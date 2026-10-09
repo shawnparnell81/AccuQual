@@ -198,6 +198,10 @@ function mul(a: Value | number | string, b: number): number | string {
   return arith(a, b, (x, y) => x * y);
 }
 
+function isBlank(value: Value): boolean {
+  return value === null || value === undefined || value === "";
+}
+
 function textEq(value: Value, expected: string): boolean | string {
   if (isErr(value)) return value;
   if (value === null || value === "") return expected === "";
@@ -280,10 +284,15 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
   for (let row = 13; row <= 24; row += 1) {
     const nominal = read(`B${row}`);
     const tolerance = read(`D${row}`);
+    const sample = read(`G${row}`);
     computed[`E${row}`] = sub(nominal, tolerance);
     computed[`F${row}`] = add(nominal, tolerance);
+    if (isBlank(nominal) && isBlank(tolerance) && isBlank(sample)) {
+      computed[`H${row}`] = "";
+      continue;
+    }
     const na = textEq(nominal, "NA");
-    computed[`H${row}`] = na === true ? "Pass" : typeof na === "string" ? na : band(read(`G${row}`), computed[`E${row}`]!, computed[`F${row}`]!);
+    computed[`H${row}`] = na === true ? "Pass" : typeof na === "string" ? na : band(sample, computed[`E${row}`]!, computed[`F${row}`]!);
   }
 
   const minimumFlow = textEq(read("C30"), "Y");
@@ -318,8 +327,15 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
     computed[`H${row}`] = band(read(`G${row}`), computed[`E${row}`]!, computed[`F${row}`]!);
   }
 
-  const hardware = excelEq(read("G34"), read("B34"));
-  computed.H34 = typeof hardware === "string" ? hardware : hardware ? "Pass" : "Fail";
+  const hardwareRequirement = read("B34");
+  const hardwareSample = read("G34");
+  // D34:F34 are the fixed NA labels. With no nominal in B34, Y means the hardware is included, same as the visual checks.
+  if (isBlank(hardwareRequirement) && textEq(hardwareSample, "Y") === true) {
+    computed.H34 = "Pass";
+  } else {
+    const hardware = excelEq(hardwareSample, hardwareRequirement);
+    computed.H34 = typeof hardware === "string" ? hardware : hardware ? "Pass" : "Fail";
+  }
 
   for (let row = 38; row <= 41; row += 1) {
     const yes = textEq(read(`G${row}`), "Y");
@@ -344,6 +360,7 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
   let error: string | null = null;
   for (const addr of watched) {
     const value = computed[addr];
+    if (value === null || value === undefined || value === "") continue;
     if (value === ERR_DIV || value === ERR_VALUE) error = value;
     else if (!(typeof value === "string" && value.toLowerCase() === "pass")) sawFail = true;
   }

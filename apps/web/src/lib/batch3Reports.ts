@@ -118,12 +118,13 @@ export function evaluateShock(cells: Record<string, CellValue>): Record<string, 
     if (typeof high === "string") return high;
     return value >= low && value <= high ? "Passed" : "Failed";
   };
-  const atLeast = (sample: Value, nominal: Value): string => {
+  const atMost = (sample: Value, nominal: Value): string => {
+    if (isBlank(sample) || isBlank(nominal)) return "";
     const left = num(sample);
     const right = num(nominal);
     if (typeof left === "string") return left;
     if (typeof right === "string") return right;
-    return left >= right ? "Passed" : "Failed";
+    return left <= right ? "Passed" : "Failed";
   };
   const ten = (sample: Value): string => {
     const value = num(sample);
@@ -138,8 +139,8 @@ export function evaluateShock(cells: Record<string, CellValue>): Record<string, 
     computed[`G${row}`] = band(read(cells, `E${row}`), nominal, tol(row));
     computed[`H${row}`] = band(read(cells, `F${row}`), nominal, tol(row));
   }
-  computed.G18 = atLeast(read(cells, "E18"), spec(18));
-  computed.H18 = atLeast(read(cells, "F18"), spec(18));
+  computed.G18 = atMost(read(cells, "E18"), spec(18));
+  computed.H18 = atMost(read(cells, "F18"), spec(18));
   const display = { ...cells, ...computed };
   let failed = 0;
   for (const [addr, value] of Object.entries(display)) {
