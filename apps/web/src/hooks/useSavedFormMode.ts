@@ -6,7 +6,8 @@ import { afterEditClick, afterSaveOrCancel, isFreshFormOpen, openSavedForm, save
 
 /**
  * A brand-new blank opens editable. Every later open of that record is locked
- * until Edit. Save, Cancel, and Done lock it again.
+ * until Edit. Save keeps the session editable. Done, Cancel, navigation, and
+ * reload lock it again.
  */
 export function useSavedFormMode(recordId: number | string | undefined, canEdit: boolean) {
   const location = useLocation();

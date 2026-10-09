@@ -1,4 +1,4 @@
-/** A saved form opens locked. Edit unlocks it. Save, Cancel, and Done lock it again. */
+/** A saved form opens locked. Edit unlocks it. Save stays in that session. Done and Cancel lock it again. */
 export type SavedFormMode = "locked" | "editing";
 
 export function openSavedForm(fresh = false): SavedFormMode {
@@ -13,6 +13,12 @@ export function afterEditClick(canEdit: boolean): SavedFormMode {
   return canEdit ? "editing" : "locked";
 }
 
+/** A save in the current session does not end it. */
+export function afterSave(): SavedFormMode {
+  return "editing";
+}
+
+/** Done, Cancel, leaving the record, and a reload lock the form. */
 export function afterSaveOrCancel(): SavedFormMode {
   return "locked";
 }

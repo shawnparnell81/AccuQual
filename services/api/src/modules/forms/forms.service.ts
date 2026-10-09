@@ -39,6 +39,7 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { users } from "../../drizzle/schema/users.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { formDataEdits } from "./formEditAudit.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { NCR_NUMBER, CAPA_NUMBER } from "../records/recordNumberSpecs.js";
@@ -103,6 +104,19 @@ export async function saveData(db: Db, input: SaveInput) {
     blocks,
   );
   const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, signed, !existing);
+  if (input.entityId != null) {
+    const edits = formDataEdits(existing?.data, data);
+    const entityType = FORM_AUDIT_ENTITY[input.formType];
+    if (entityType && edits.length > 0) {
+      await recordAuditTrail(db, {
+        entityType,
+        entityId: input.entityId,
+        action: "update",
+        changes: { event: "form_saved", edits },
+        performedBy: input.userId,
+      });
+    }
+  }
   if (input.entityId != null) {
     const changes = diffSignatureRequired(previous, data, blocks);
     if (changes.length > 0) {

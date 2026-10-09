@@ -19,10 +19,24 @@ export const ON_HOLD_BLOCK_MESSAGE = "This NCR is On Hold. Change the quarantine
 
 type DispositionValue = (typeof DISPOSITIONS)[number]["value"];
 
+/** Completed lines store the resolution word (reworked, scrapped). The dropdown still uses the choice the user made. */
+const DISPOSITION_ALIASES: Record<string, DispositionValue> = {
+  use_as_is: "use_as_is",
+  rework: "rework",
+  reworked: "rework",
+  scrap: "scrap",
+  scrapped: "scrap",
+  return_to_supplier: "return_to_supplier",
+  returned_to_supplier: "return_to_supplier",
+  on_hold: "on_hold",
+};
+
 function dispositionFromRows(rows: QuarantineItemRow[]): DispositionValue | null {
-  if (rows.some((row) => row.disposition === ON_HOLD_DISPOSITION)) return ON_HOLD_DISPOSITION;
-  const known = rows.find((row) => DISPOSITIONS.some((option) => option.value === row.disposition));
-  return (known?.disposition as DispositionValue | undefined) ?? null;
+  const mapped = rows
+    .map((row) => (row.disposition ? DISPOSITION_ALIASES[row.disposition] : undefined))
+    .filter((value): value is DispositionValue => value != null);
+  if (mapped.includes(ON_HOLD_DISPOSITION)) return ON_HOLD_DISPOSITION;
+  return mapped[0] ?? null;
 }
 
 /**
@@ -35,15 +49,21 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
   const [partNumber, setPartNumber] = useState("");
   const [quantity, setQuantity] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
-  const [disposition, setDisposition] = useState<DispositionValue>("use_as_is");
+  const [picked, setPicked] = useState<{ ncrId: number; value: DispositionValue } | null>(null);
   const [concession, setConcession] = useState<"" | "with" | "none">("");
-  const hydrated = useRef(false);
   const previousDisposition = useRef<DispositionValue>("use_as_is");
 
   const items = useQuery<QuarantineItemRow[]>({
     queryKey: ["ncr", ncrId, "quarantine-items"],
     queryFn: async () => (await apiClient.get<QuarantineItemRow[]>(`/ncr/${ncrId}/quarantine-items`)).data,
   });
+  const rows = items.data ?? [];
+  const serverDisposition = dispositionFromRows(rows);
+  const disposition = (picked?.ncrId === ncrId ? picked.value : null) ?? serverDisposition ?? "use_as_is";
+  const hasOpen = rows.some((row) => row.status === "quarantined");
+  const held = disposition === ON_HOLD_DISPOSITION || rows.some((row) => row.disposition === ON_HOLD_DISPOSITION);
+  const showSerial = rows.some((row) => !!row.serialNumber) || canEdit;
+  const showDisposition = rows.some((row) => !!row.dispositionLabel);
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["ncr", ncrId, "quarantine-items"] });
@@ -71,9 +91,16 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
 
   const saveDisposition = useMutation({
     mutationFn: async (next: DispositionValue) => (await apiClient.post(`/ncr/${ncrId}/disposition`, { disposition: next, release: false })).data,
-    onSuccess: () => refresh(),
+    onSuccess: (data: { items?: unknown[] }) => {
+      if (!data?.items?.length) {
+        setPicked(null);
+        toast.error("Those items are already released. Add a quarantined item before changing the disposition.");
+        return;
+      }
+      refresh();
+    },
     onError: (err) => {
-      setDisposition(previousDisposition.current);
+      setPicked({ ncrId, value: previousDisposition.current });
       toast.error(extractErrorMessage(err, "Couldn't save that disposition."));
     },
   });
@@ -93,27 +120,14 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't complete the disposition.")),
   });
 
-  const rows = items.data ?? [];
-  const held = disposition === ON_HOLD_DISPOSITION || rows.some((row) => row.disposition === ON_HOLD_DISPOSITION);
-  const showSerial = rows.some((row) => !!row.serialNumber) || canEdit;
-  const showDisposition = rows.some((row) => !!row.dispositionLabel);
-
-  useEffect(() => {
-    if (hydrated.current || items.isLoading || items.isFetching || items.isError || !items.data) return;
-    hydrated.current = true;
-    const fromServer = dispositionFromRows(items.data);
-    if (fromServer) setDisposition(fromServer);
-  }, [items.isLoading, items.isFetching, items.isError, items.data]);
-
   useEffect(() => {
     onHoldChange?.(held);
   }, [held, onHoldChange]);
 
   function chooseDisposition(next: DispositionValue) {
     if (next === disposition) return;
-    hydrated.current = true;
     previousDisposition.current = disposition;
-    setDisposition(next);
+    setPicked({ ncrId, value: next });
     if (next !== "use_as_is") setConcession("");
     saveDisposition.mutate(next);
   }
@@ -173,7 +187,7 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
         </form>
       )}
 
-      {canEdit && (
+      {canEdit && !items.isLoading && (
         <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
           <div className="min-w-[14rem]">
             <SelectField label="Disposition" value={disposition} onChange={(e) => chooseDisposition(e.target.value as DispositionValue)}>
@@ -199,7 +213,7 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
           )}
           <button
             type="button"
-            disabled={complete.isPending || saveDisposition.isPending || rows.length === 0 || held}
+            disabled={complete.isPending || saveDisposition.isPending || !hasOpen || held}
             onClick={() => {
               if (held) {
                 toast.error(ON_HOLD_BLOCK_MESSAGE);

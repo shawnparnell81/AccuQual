@@ -38,7 +38,7 @@ export const correctiveActionNcrSchema = z.object({ correctiveAction: z.string()
 export const dispositionStepNcrSchema = z.object({
   note: z.string().trim().min(1).max(4000).optional(),
 });
-/** Moves Fix → Verify. The note is kept on the audit entry; it is not a new column. */
+/** Moves Fix → Verify. The note is stored on the record and on the audit entry. */
 export const verifyNcrSchema = z.object({
   verification: z.string().trim().min(1).max(4000),
 });

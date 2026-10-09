@@ -99,6 +99,7 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const disposition = await request(app).post(`/ncr/${id}/disposition-step`).set("Authorization", `Bearer ${qualityToken}`).send({ note: "Scrap the lot" });
     expect(disposition.status).toBe(200);
     expect(disposition.body.status).toBe("disposition");
+    expect(disposition.body.processData.dispositionNote).toBe("Scrap the lot");
     expect(disposition.body.workflow.allowedTransitions).toEqual(["Fix"]);
 
     const correctiveAction = await request(app).post(`/ncr/${id}/corrective-action`).set("Authorization", `Bearer ${qualityToken}`).send({ correctiveAction: "Replaced and recalibrated fixture" });
@@ -108,11 +109,14 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const verify = await request(app).post(`/ncr/${id}/verify`).set("Authorization", `Bearer ${qualityToken}`).send({ verification: "Re-inspection of the next lot found no misalignment" });
     expect(verify.status).toBe(200);
     expect(verify.body.status).toBe("verify");
+    expect(verify.body.processData.verification).toBe("Re-inspection of the next lot found no misalignment");
 
     const closed = await request(app).post(`/ncr/${id}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(closed.status).toBe(200);
     expect(closed.body.status).toBe("closed");
     expect(closed.body.closedAt).toBeTruthy();
+    expect(closed.body.processData.verification).toBe("Re-inspection of the next lot found no misalignment");
+    expect(closed.body.processData.dispositionNote).toBe("Scrap the lot");
     expect(closed.body.workflow.currentStep).toBe("Closed");
     expect(closed.body.workflow.allowedTransitions).toEqual([]);
     expect(closed.body.workflow.history.map((entry: { step: string }) => entry.step)).toEqual([
@@ -127,6 +131,9 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const trail = await db.select().from(auditTrail).where(eq(auditTrail.entityId, id));
     const actions = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { action?: string; step?: string })?.action);
     expect(actions).toEqual(expect.arrayContaining(["containment", "root_cause", "disposition", "fix", "verify", "closed"]));
+    const verifyAudit = trail.find((t) => t.entityType === "NCR" && (t.changes as { action?: string } | null)?.action === "verify");
+    expect((verifyAudit?.changes as { verification?: string; note?: string } | null)?.verification).toBe("Re-inspection of the next lot found no misalignment");
+    expect((verifyAudit?.changes as { note?: string } | null)?.note).toBe("Re-inspection of the next lot found no misalignment");
     const steps = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { step?: string })?.step);
     expect(steps).toEqual(expect.arrayContaining(["Contain", "Disposition", "Fix", "Verify", "Closed"]));
   });
@@ -137,6 +144,39 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const res = await request(app).get(`/ncr/${id}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.body.status).toBe("disposition");
     expect(res.body.workflow.currentStep).toBe("Disposition");
+  });
+
+  it("writes an audit line for each saved form field, including the first save", async () => {
+    const id = await createNcr(qualityToken, "Nonconformance Report");
+    const payload = {
+      ncrNumber: "TEST-1008-01",
+      nonconformanceDescription: "Hole oversize on the first piece\nSecond line stays off the list",
+      ncrClassification: [{ classification: { Minor: false, Major: true, Critical: false } }],
+    };
+    const first = await request(app).post(`/forms/ncr/${id}/save`).set("Authorization", `Bearer ${qualityToken}`).send({ data: payload });
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post(`/forms/ncr/${id}/save`)
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ data: { ...payload, nonconformanceDescription: "Hole oversize after the edit" } });
+    expect(second.status).toBe(200);
+
+    const history = await request(app).get(`/workflow/history/ncr/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(history.status).toBe(200);
+    const saves = (history.body as { changes?: { event?: string; edits?: { label: string; from: string; to: string }[] } }[]).filter((row) => row.changes?.event === "form_saved");
+    const edits = saves.flatMap((row) => row.changes?.edits ?? []);
+    expect(edits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "NCR Number", from: "(blank)", to: "TEST-1008-01" }),
+      expect.objectContaining({ label: "Nonconformance Description", from: "(blank)", to: "Hole oversize on the first piece\nSecond line stays off the list" }),
+      expect.objectContaining({ label: "Nonconformance Description", from: "Hole oversize on the first piece\nSecond line stays off the list", to: "Hole oversize after the edit" }),
+    ]));
+
+    const list = await request(app).get("/ncr").set("Authorization", `Bearer ${qualityToken}`);
+    expect(list.status).toBe(200);
+    const row = (list.body as { id: number; classification?: string; whatHappened?: string }[]).find((item) => item.id === id);
+    expect(row?.classification).toBe("Major");
+    expect(row?.whatHappened).toBe("Hole oversize after the edit");
   });
 
   it("assign works from any status — it isn't a lifecycle step", async () => {
