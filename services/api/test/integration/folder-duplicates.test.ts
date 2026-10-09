@@ -11,6 +11,8 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
+import { isoQualityForms } from "../../src/drizzle/schema/isoQualityForms.js";
+import { validationReports } from "../../src/drizzle/schema/validationReport.js";
 import { controlledFormTemplates } from "../../src/drizzle/schema/controlledForms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { env } from "../../src/config/env.js";
@@ -145,13 +147,15 @@ describe("one folder in one place, and library pool moves", () => {
     const manual = childNamed(folders, iso.id, "Quality Manual")!;
     const pool = folders.find((folder) => folder.parentId === null && folder.name === "Library Pool")!;
     const logs = childNamed(folders, iso.id, "Quality Logs")!;
-    const [pooled] = await db.insert(documentFolders).values({ name: "Pool spec", parentId: pool.id, linkedPath: "/validation-reports/41", sortOrder: 0 }).returning();
-    const [saved] = await db.insert(documentFolders).values({ name: "FRM-NCR-001 saved", parentId: logs.id, linkedPath: "/iso-forms/record/41", sortOrder: 0 }).returning();
+    const [validation] = await db.insert(validationReports).values({ data: { formType: "csa", cells: {} } }).returning();
+    const [isoForm] = await db.insert(isoQualityForms).values({ formType: "ncr_report", data: {} }).returning();
+    const [pooled] = await db.insert(documentFolders).values({ name: "Pool spec", parentId: pool.id, linkedPath: `/validation-reports/${validation!.id}`, sortOrder: 0 }).returning();
+    const [saved] = await db.insert(documentFolders).values({ name: "FRM-NCR-001 saved", parentId: logs.id, linkedPath: `/iso-forms/record/${isoForm!.id}`, sortOrder: 0 }).returning();
 
     const movedPool = await request(app).patch(`/document-folders/${pooled!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ parentId: manual.id });
     expect(movedPool.status).toBe(200);
     expect(movedPool.body.parentId).toBe(manual.id);
-    expect(movedPool.body.linkedPath).toBe("/validation-reports/41");
+    expect(movedPool.body.linkedPath).toBe(`/validation-reports/${validation!.id}`);
 
     const movedForm = await request(app).patch(`/document-folders/${saved!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ parentId: manual.id });
     expect(movedForm.status).toBe(200);
@@ -174,7 +178,8 @@ describe("one folder in one place, and library pool moves", () => {
   it("takes a pool item off the shelf and keeps the file and the record", async () => {
     const folders = await tree();
     const pool = folders.find((folder) => folder.parentId === null && folder.name === "Library Pool")!;
-    const [linked] = await db.insert(documentFolders).values({ name: "Linked report", parentId: pool.id, linkedPath: "/validation-reports/88", sortOrder: 1 }).returning();
+    const [keptReport] = await db.insert(validationReports).values({ data: { formType: "fuel_pump", cells: {} } }).returning();
+    const [linked] = await db.insert(documentFolders).values({ name: "Linked report", parentId: pool.id, linkedPath: `/validation-reports/${keptReport!.id}`, sortOrder: 1 }).returning();
     const storage = path.resolve(env.STORAGE_LOCAL_PATH);
     await mkdir(storage, { recursive: true });
     const dir = await mkdtemp(path.join(storage, "pool-keep-"));
@@ -199,7 +204,7 @@ describe("one folder in one place, and library pool moves", () => {
     const linkedRow = after.find((folder) => folder.id === linked!.id);
     const uploadRow = after.find((folder) => folder.id === orphan!.id);
     expect(linkedRow?.parentId).not.toBe(pool.id);
-    expect(linkedRow?.linkedPath).toBe("/validation-reports/88");
+    expect(linkedRow?.linkedPath).toBe(`/validation-reports/${keptReport!.id}`);
     expect(linkedRow?.removedFromLibraryPool).toBe(true);
     expect(uploadRow?.parentId).not.toBe(pool.id);
     expect(uploadRow?.pdfPath).toBe(filePath);

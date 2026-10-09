@@ -1697,11 +1697,11 @@ function DocPill({
       title={doc.pdfPath ? "Has an attached file — click the file icon to view/download it" : "No file attached yet"}
     >
       {doc.linkedPath ? (
-        <Link to={doc.linkedPath} draggable={false} className={`text-primary hover:underline ${fill ? "min-w-0 flex-1 truncate" : ""}`} title="Open">
+        <Link to={doc.linkedPath} draggable={false} className={`text-primary hover:underline ${fill ? "min-w-0 flex-1 truncate" : ""}`} title={doc.name}>
           {doc.name}
         </Link>
       ) : (
-        <span className={fill ? "min-w-0 flex-1 truncate" : undefined}>{doc.name}</span>
+        <span className={fill ? "min-w-0 flex-1 truncate" : undefined} title={doc.name}>{doc.name}</span>
       )}
       {doc.documentId && (
         <Link to={`/documents/${doc.documentId}`} draggable={false} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
@@ -1811,11 +1811,11 @@ function ExplorerPathBar({
             <span key={`${crumb.id ?? "root"}-${index}`} className="inline-flex min-w-0 items-center gap-1">
               {index > 0 && <span className="text-muted-foreground">/</span>}
               {last ? (
-                <span className="truncate font-semibold" data-testid="folder-title">
+                <span className="truncate font-semibold" data-testid="folder-title" title={crumb.name}>
                   {crumb.name}
                 </span>
               ) : (
-                <button type="button" className="truncate text-primary hover:underline" onClick={() => onCrumb(crumb.id)}>
+                <button type="button" className="truncate text-primary hover:underline" title={crumb.name} onClick={() => onCrumb(crumb.id)}>
                   {crumb.name}
                 </button>
               )}

@@ -61,7 +61,7 @@ export function GlobalSearchResults({ query, onSelect }: { query: string; onSele
           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-muted-foreground hover:bg-secondary"
         >
           <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-foreground">{r.type}</span>
-          <span className="truncate">{r.label}</span>
+          <span className="truncate" title={r.label}>{r.label}</span>
         </button>
       ))}
     </div>

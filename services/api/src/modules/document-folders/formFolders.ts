@@ -20,7 +20,8 @@ import { folderIdentityKey } from "./duplicateFolders.js";
 import { rememberDeletedFormFolders, rememberFormFolderName } from "./folderTombstones.js";
 import { folderIsBlankLibrary, ISO_DOCUMENTS_FOLDER } from "./formFiling.js";
 import { folderLocationLabel } from "./mainIsoFolders.js";
-import { FILEABLE_FORM_KEYS, recordLinkedPath } from "./editableForms.js";
+import { FILEABLE_FORM_KEYS } from "./editableForms.js";
+import { canonicalOpenPath, repairSavedFormListings } from "./savedFormLinks.js";
 import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, type FormTemplateSeed } from "./formFiling.js";
 import { listFormTemplates } from "./formTemplates.js";
 
@@ -245,12 +246,6 @@ function qmsFormType(seed: FormTemplateSeed): string | null {
   return bodyString(seed, "formType");
 }
 
-/** A module home is not a saved file. `/pareto` is the one filed chart. */
-function isRecordPath(linkedPath: string): boolean {
-  if (linkedPath === "/pareto") return true;
-  return /\/\d+(?:\/|$)/.test(linkedPath);
-}
-
 function pushModuleFill(bucket: Map<string, SavedFill[]>, templates: Map<string, { title: string; formId: string }>, seeds: Map<string, FormTemplateSeed>, formKey: string, row: Stamp) {
   if (FILEABLE_FORM_KEYS.has(formKey)) return;
   const list = bucket.get(formKey);
@@ -292,6 +287,7 @@ const SHARED_GROUPS: SharedGroup[] = [
 ];
 
 async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: Map<string, SavedFill[]> }> {
+  await repairSavedFormListings(db);
   const { templates } = await listFormTemplates(db);
   const index = formFolderIndex(templates);
   const fills = new Map<string, SavedFill[]>(index.flatMap((folder) => folder.formKeys.map((key) => [key, [] as SavedFill[]])));
@@ -323,7 +319,6 @@ async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: M
     const node = nodeById.get(filing.folderNodeId);
     if (!list || !template || !seed || !node) continue;
     const savedAt = isoStamp(filing.updatedAt, node.createdAt ?? filing.createdAt);
-    const linked = node.linkedPath;
     list.push({
       recordId: filing.recordId,
       fileName:
@@ -337,7 +332,7 @@ async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: M
           number: "",
         }),
       savedAt,
-      openPath: linked && isRecordPath(linked) ? linked : recordLinkedPath(filing.formKey, filing.recordId),
+      openPath: canonicalOpenPath(filing.formKey, filing.recordId),
       documentsFolderId: node.parentId,
     });
   }

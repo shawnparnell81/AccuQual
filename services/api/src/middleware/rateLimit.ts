@@ -28,7 +28,8 @@ const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 600,
+  // One integration file walks every saved form. That is more than a person's 15-minute budget.
+  limit: env.NODE_ENV === "test" ? 100_000 : 600,
   standardHeaders: true,
   legacyHeaders: false,
   // Devices are throttled by the two dedicated limiters below instead: a

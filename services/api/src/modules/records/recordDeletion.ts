@@ -9,6 +9,7 @@ import { canDeleteAnyRecord } from "../roles/roleAccess.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { forgetRecordListings } from "../document-folders/savedFormLinks.js";
 import { liftHold, type HoldTarget } from "../inventory/inventoryHolds.service.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { formData, formVersions } from "../../drizzle/schema/forms.js";
@@ -892,6 +893,7 @@ export async function purgeExistingRecord(req: Request, kind: RecordKind, id: nu
     await removeStoredExports(req.db, kind, id, files);
     const linkedForms = await removeLinkedForms(req.db, id, [...new Set([...spec.formKeys, ...spec.attachmentTypes])]);
     await spec.cleanup(req.db, row, files, req.user.id);
+    await forgetRecordListings(req.db, kind, row, req.user.id);
     await spec.remove(req.db, id);
 
     const title = spec.title(row);

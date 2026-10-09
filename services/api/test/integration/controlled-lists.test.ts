@@ -123,14 +123,14 @@ describe("living controlled lists API", () => {
       .values({ name: "Master Equipment List.xlsx", parentId: manual!.id, documentId: oldCopy!.id, pdfPath: null })
       .returning();
     const [blankNode] = await db.insert(documentFolders).values({ name: "Scope of Laboratory Activities", parentId: blanks!.id }).returning();
-    const [filled] = await db.insert(documentFolders).values({ name: "Master Equipment List", parentId: manual!.id, linkedPath: "/calibration/88001" }).returning();
+    const [bench] = await db.insert(equipment).values({ name: `Bench ${suffix}`, serialNumber: "SN", location: "Lab", metadata: { assetId: `ASSET-${suffix}` } }).returning();
+    const [filled] = await db.insert(documentFolders).values({ name: "Master Equipment List", parentId: manual!.id, linkedPath: `/calibration/${bench!.id}` }).returning();
     await db.insert(controlledFormTemplates).values({
       formKey: `lst-blank-${suffix}`,
       formId: "LST-GEN-003",
       title: "Scope of Laboratory Activities",
       subjectRoute: "/documents/laboratory-scope",
     });
-    await db.insert(equipment).values({ name: `Bench ${suffix}`, serialNumber: "SN", location: "Lab", metadata: { assetId: `ASSET-${suffix}` } });
     const [devCopy] = await db.insert(documents).values({ title: "Development Log", status: "approved" }).returning();
     const [devUpload] = await db
       .insert(documentFolders)

@@ -22,6 +22,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { Db } from "../../lib/requestDb.js";
 import { wantsRecordType, type SearchTypeName } from "./searchFilters.js";
 import { showRecordNumber } from "../records/userRecordNumber.js";
+import { searchSavedFormFiles } from "../document-folders/savedFormLinks.js";
 
 const RESULTS_PER_TYPE = 5;
 
@@ -336,6 +337,9 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         ),
     );
     jobs.push(searchRemovedPoolFiles(db, q));
+    jobs.push(
+      searchSavedFormFiles(db, q).then((rows) => rows.map((row) => ({ type: "Document" as const, id: row.id, label: row.label, path: row.path }))),
+    );
   }
 
   if (includeModule("Training", "company", false, true, false)) {

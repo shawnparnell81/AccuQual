@@ -14,6 +14,7 @@ import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { canEditFormStructure } from "../../lib/formStructureAccess";
 import { changeRequestByFormType } from "../../lib/changeRequestKinds";
 import { ecrCellLocked, ecrStatusLabel, type EcrWorkflowView } from "../../lib/ecrWorkflow";
@@ -45,6 +46,7 @@ import { IsoFormSheet } from "./IsoFormSheet";
 import { ScorecardSheet } from "./ScorecardSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
+import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 
 interface IsoFormData {
   cells?: Record<string, CellValue>;
@@ -74,10 +76,12 @@ export function IsoFormDetailPage() {
   const recordId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
-  const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
+  const canEdit = effective?.documents === "edit";
   const { data: record, isLoading, isError } = hooks.useOne(recordId);
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
+  const beginEdit = hooks.useAction("begin-edit");
+  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
   const queryClient = useQueryClient();
   const requestKind = changeRequestByFormType(record?.formType);
   const ecrView = useQuery({
@@ -101,6 +105,10 @@ export function IsoFormDetailPage() {
   const [months, setMonths] = useState<string[]>([]);
   const [sheet, setSheet] = useState<"form" | "photos">("form");
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    setMode(openSavedForm());
+  }, [recordId]);
 
   useEffect(() => {
     if (!record || loadedFor === record.id) return;
@@ -179,8 +187,30 @@ export function IsoFormDetailPage() {
     return data;
   }
 
+  const fieldsEditable = savedFieldsEditable(mode, canEdit);
+
   async function saveRecord() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
+    setMode(afterSaveOrCancel());
+    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+  }
+
+  async function startEdit() {
+    if (!canEdit) return;
+    await beginEdit.mutateAsync({ id: recordId });
+    setMode(afterEditClick(true));
+    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+  }
+
+  function cancelEdit() {
+    if (!record) return;
+    setCells({ ...(record.data?.cells ?? {}) });
+    setPhotos(record.data?.photos ?? "");
+    setLines(record.data?.lines ?? []);
+    setCustomers(record.data?.customers ?? []);
+    setProblems(record.data?.problems ?? []);
+    setMonths(record.data?.months ?? []);
+    setMode(afterSaveOrCancel());
   }
 
   const savedRecord = record;
@@ -207,6 +237,14 @@ export function IsoFormDetailPage() {
       formKey={formKey}
       summary={summary}
       canEdit={canEdit}
+      mode={mode}
+      fieldsEditable={fieldsEditable}
+      onEdit={() => void startEdit()}
+      onCancel={cancelEdit}
+      onDone={() => {
+        if (dirty) void saveRecord();
+        else setMode(afterSaveOrCancel());
+      }}
       dirty={dirty}
       saving={updateRecord.isPending}
       onSave={saveRecord}
@@ -228,9 +266,9 @@ export function IsoFormDetailPage() {
       setMonths={setMonths}
       recordId={recordId}
       signatures={signatures}
-      onSign={formType === "audit_summary" || isBatch4(formType) || changeRequestByFormType(formType) ? signField : undefined}
+      onSign={fieldsEditable && (formType === "audit_summary" || isBatch4(formType) || changeRequestByFormType(formType)) ? signField : undefined}
       signatureRequired={record.data._signatureRequired}
-      onSignatureRequired={canEdit ? setSignatureRequired : undefined}
+      onSignatureRequired={fieldsEditable ? setSignatureRequired : undefined}
       ecrView={changeRequestByFormType(formType) ? ecrView.data : undefined}
       ecrBusy={ecrTransition.isPending}
       canEditStructure={canEditFormStructure(user)}
@@ -254,6 +292,11 @@ function IsoFormDetailBody({
   formKey,
   summary,
   canEdit,
+  mode,
+  fieldsEditable,
+  onEdit,
+  onCancel,
+  onDone,
   dirty,
   saving,
   onSave,
@@ -288,6 +331,11 @@ function IsoFormDetailBody({
   formKey: string | null;
   summary: string;
   canEdit: boolean;
+  mode: SavedFormMode;
+  fieldsEditable: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onDone: () => void;
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
@@ -363,7 +411,7 @@ function IsoFormDetailBody({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold">{recordHeading(meta.title, record.recordNumber)}</h1>
-            <RecordNumberEditor label="Record No." value={record.recordNumber} canEdit={canEdit} onSave={onSaveNumber} />
+            <RecordNumberEditor label="Record No." value={record.recordNumber} canEdit={fieldsEditable} onSave={onSaveNumber} />
             <p className="text-sm text-muted-foreground">
               {revisionLabel(documentNumber, revision)}
               {" · "}
@@ -376,11 +424,18 @@ function IsoFormDetailBody({
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} />
             <SaveStatus saving={saving} unsaved={dirty && !saving} />
-            {canEdit && (
-              <button type="button" onClick={() => void save()} disabled={saving || pending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-                {saving || pending ? "Saving…" : "Save"}
-              </button>
-            )}
+            <SavedFormLockBar
+              mode={mode}
+              canEdit={canEdit}
+              pending={saving || pending}
+              onEdit={onEdit}
+              onSave={() => void save()}
+              onCancel={onCancel}
+              onDone={() => {
+                if (dirty) void save();
+                else onDone();
+              }}
+            />
             <SaveResult result={saveNote} />
           </div>
         </div>
@@ -412,16 +467,16 @@ function IsoFormDetailBody({
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         <FormHeader />
         {formType === "cross_training" ? (
-          <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
+          <CrossTrainingSheet cells={cells} readOnly={!fieldsEditable} onChange={changeCell} documentNumber={documentNumber} />
         ) : formType === "visitor_log" ? (
-          <VisitorLogSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
+          <VisitorLogSheet cells={cells} readOnly={!fieldsEditable} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
         ) : formType === "monthly_engineering" ? (
-          <MonthlyEngineeringSheet cells={cells} readOnly={!canEdit} onChange={changeCell} revision={revision} />
+          <MonthlyEngineeringSheet cells={cells} readOnly={!fieldsEditable} onChange={changeCell} revision={revision} />
         ) : isBatch4(formType) ? (
           <Batch4Sheet
             variant={formType}
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             onChange={changeCell}
             documentNumber={documentNumber}
             revision={revision}
@@ -432,12 +487,12 @@ function IsoFormDetailBody({
             onSignatureRequired={formType === "salt_spray" ? onSignatureRequired : undefined}
           />
         ) : isBatch5(formType) ? (
-          <Batch5Sheet variant={formType} cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
+          <Batch5Sheet variant={formType} cells={cells} readOnly={!fieldsEditable} onChange={changeCell} documentNumber={documentNumber} />
         ) : isBatch6(formType) ? (
           <Batch6Sheet
             variant={formType}
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             onChange={changeCell}
             documentNumber={documentNumber}
             managerSignature={signatureText(record.data, "managerSignature")}
@@ -446,32 +501,32 @@ function IsoFormDetailBody({
             labels={requestKind ? ecrView?.labels : undefined}
             revision={requestKind ? revision : undefined}
             workflowStatus={requestKind ? ecrStatusLabel(ecrView?.workflow.status ?? "request") : undefined}
-            cellLocked={requestKind && ecrView ? (addr) => ecrCellLocked(ecrView.editing, canEdit, addr) : undefined}
-            managerLocked={requestKind ? !canEdit || (ecrView != null && ecrView.workflow.status !== "request" && ecrView.workflow.status !== "review") : undefined}
-            supplierLocked={requestKind ? !canEdit || ecrView?.workflow.status === "closed" : undefined}
+            cellLocked={requestKind && ecrView ? (addr) => ecrCellLocked(ecrView.editing, fieldsEditable, addr) : undefined}
+            managerLocked={requestKind ? !fieldsEditable || (ecrView != null && ecrView.workflow.status !== "request" && ecrView.workflow.status !== "review") : undefined}
+            supplierLocked={requestKind ? !fieldsEditable || ecrView?.workflow.status === "closed" : undefined}
             managerCertify={requestKind?.managerCertify}
             supplierCertify={requestKind?.supplierCertify}
             signatureRequired={requestKind ? (signatureRequired ?? {}) : undefined}
             onSignatureRequired={requestKind ? onSignatureRequired : undefined}
           />
         ) : formType === "first_article" ? (
-          <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
+          <FaiSheet cells={cells} lines={lines} readOnly={!fieldsEditable} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (
-          <ScorecardSheet cells={cells} customers={customers} readOnly={!canEdit} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} revision={revision} />
+          <ScorecardSheet cells={cells} customers={customers} readOnly={!fieldsEditable} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} revision={revision} />
         ) : formType === "failure_effectiveness" ? (
-          <FailureChartSheet months={months} problems={problems} readOnly={!canEdit} onMonths={setMonths} onProblems={setProblems} documentNumber={documentNumber} revision={revision} />
+          <FailureChartSheet months={months} problems={problems} readOnly={!fieldsEditable} onMonths={setMonths} onProblems={setProblems} documentNumber={documentNumber} revision={revision} />
         ) : (
           <>
             {meta.layout && (
               <div className={sheet === "photos" ? "iso-offscreen" : undefined}>
-                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} signatures={signatures} onSign={onSign} signatureRequired={signatureRequired} onSignatureRequired={onSignatureRequired} />
+                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!fieldsEditable} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} signatures={signatures} onSign={onSign} signatureRequired={signatureRequired} onSignatureRequired={onSignatureRequired} />
               </div>
             )}
             {meta.photos && (
               <div className={sheet === "form" ? "iso-offscreen" : "mt-4 flex flex-col gap-2"} data-testid="quarantine-photos">
                 <h2 className="text-lg font-semibold">Photos</h2>
                 <p className="text-sm text-muted-foreground no-print">Paste, drop, or insert pictures. They stay on this quarantine notice.</p>
-                <PictureText value={photos} onChange={setPhotos} readOnly={!canEdit} entityType="iso_quality_form" entityId={record.id} ariaLabel="Quarantine photos" rows={8} />
+                <PictureText value={photos} onChange={setPhotos} readOnly={!fieldsEditable} entityType="iso_quality_form" entityId={record.id} ariaLabel="Quarantine photos" rows={8} />
               </div>
             )}
           </>

@@ -7,7 +7,8 @@ import type { SearchResult } from "../../api/types";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
+import { rememberRecord, type RecentRecord } from "../../lib/recentRecords";
+import { useRecentRecords } from "../../hooks/useRecentRecords";
 import { paletteFilterValue, paletteQueryWithout, parsePaletteQuery } from "../../lib/paletteQuery";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
@@ -34,6 +35,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const openTab = useOpenTab();
   const user = useCurrentUser();
+  const liveRecent = useRecentRecords();
   const { folders } = useArrangedSidebar();
   const dialogRef = useDialogBehavior(open, onClose);
   const debouncedRaw = useDebouncedValue(query.trim(), 250);
@@ -48,8 +50,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActive(0);
       return;
     }
-    setRecent(readRecentRecords(user?.id));
-  }, [open, user?.id]);
+    setRecent(liveRecent);
+  }, [open, liveRecent]);
 
   const { data, isFetching } = useQuery<{ results: SearchResult[] }>({
     queryKey: ["search", debounced.text, debounced.filters],
@@ -270,7 +272,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${index === active ? "bg-secondary" : "hover:bg-secondary"}`}
             >
               {item.hint && <span className="w-16 flex-none text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{item.hint}</span>}
-              <span className="truncate">{item.label}</span>
+              <span className="truncate" title={item.label}>{item.label}</span>
             </button>
           ))}
         </div>

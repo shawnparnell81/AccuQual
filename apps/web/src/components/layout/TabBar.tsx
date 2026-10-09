@@ -18,6 +18,7 @@ import { Columns2, Pin, AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import { useTabStore } from "../../store/useTabStore";
+import { TruncatedName } from "../shared/TruncatedName";
 import { useSplitStore } from "../../store/useSplitStore";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
 
@@ -115,7 +116,7 @@ export function TabBar() {
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
             <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
             {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" title="Unsaved changes" aria-label="Unsaved changes" />}
-            <span className="min-w-0 flex-1 truncate text-left">{tab.title}</span>
+            <TruncatedName name={tab.title} className="flex-1 text-left" />
             <span
               role="button"
               tabIndex={0}

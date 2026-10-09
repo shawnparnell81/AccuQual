@@ -198,7 +198,7 @@ export function FormFoldersPage() {
                         className="inline-flex min-w-0 items-center gap-2 font-medium text-primary hover:underline"
                       >
                         <Folder size={16} className="shrink-0 text-muted-foreground" />
-                        <span className="truncate">{folder.name}</span>
+                        <span className="truncate" title={folder.name}>{folder.name}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-1.5 text-right text-muted-foreground">{savedLabel(folder.savedCount)}</td>
@@ -369,7 +369,7 @@ export function FormFolderDetailPage() {
               {fills.map((fill) => (
                 <tr key={`${fill.recordId}-${fill.fileName}`} data-testid="saved-fill" data-file-name={fill.fileName} className="border-b border-border last:border-b-0">
                   <td className="px-3 py-1.5">
-                    <Link to={fill.openPath} className="font-medium text-primary hover:underline">
+                    <Link to={fill.openPath} title={fill.fileName} className="block max-w-full truncate font-medium text-primary hover:underline">
                       {fill.fileName}
                     </Link>
                   </td>

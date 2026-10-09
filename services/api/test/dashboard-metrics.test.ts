@@ -271,6 +271,8 @@ describe("dashboard overview", () => {
     const overview = buildDashboardOverview(
       source({
         scope: { allPlants: false, siteIds: [1], sites: [plants[0]!] },
+        ncrs: [{ id: 4, siteId: 1, title: "Burr", status: "open", severity: "high", assignedTo: 7, dueDate: null, closedAt: null, createdAt: daysAgo(1), rootCause: null, isDeleted: false }],
+        documents: [{ id: 3, title: "SOP", status: "approved", ownerId: null, expirationDate: null, expirationWarningDays: 30, revisionCode: null, isDeleted: false }],
         activity: [
           { id: 1, entityType: "NCR", entityId: 4, action: "create", title: "Burr", performedBy: 7, createdAt: daysAgo(1), siteId: 1 },
           { id: 2, entityType: "NCR", entityId: 5, action: "create", title: "Other plant", performedBy: 8, createdAt: daysAgo(1), siteId: 2 },
@@ -282,6 +284,20 @@ describe("dashboard overview", () => {
     expect(overview.activity.map((row) => row.id)).toEqual([1, 4]);
     expect(overview.activity[0]).toMatchObject({ text: "Issue added: Burr", href: "/ncr/4", by: "Dana Wells" });
     expect(overview.activity[1]?.by).toBe("Unassigned");
+  });
+
+  it("does not link recent activity to a record that has been deleted", () => {
+    const overview = buildDashboardOverview(
+      source({
+        equipment: [{ id: 1, name: "Caliper", dueStatus: "current", nextDueAt: null }],
+        activity: [
+          { id: 1, entityType: "Equipment", entityId: 2, action: "delete", title: "Bench", performedBy: 7, createdAt: daysAgo(1), siteId: null },
+          { id: 2, entityType: "Equipment", entityId: 1, action: "update", title: "Caliper", performedBy: 7, createdAt: daysAgo(1), siteId: null },
+        ],
+      }),
+    );
+    expect(overview.activity[0]?.href).toBeNull();
+    expect(overview.activity[1]?.href).toBe("/calibration/1");
   });
 
   it("does not compare gages by plant", () => {

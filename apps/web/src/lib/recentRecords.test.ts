@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { readRecentRecords, rememberRecord } from "./recentRecords.js";
+import { readRecentRecords, rememberRecord, withoutDeadPaths } from "./recentRecords.js";
 
 const store = new Map<string, string>();
 
@@ -40,6 +40,16 @@ describe("recent records", () => {
     installStorage();
     localStorage.setItem("accuqual-recent-records", "{\"nope\":true}");
     assert.deepEqual(readRecentRecords(), []);
+  });
+
+  it("drops a recent row whose record is gone and keeps a path the app does not check", () => {
+    const rows = [
+      { path: "/validation-reports/4", title: "CSA", type: "Validation" },
+      { path: "/iso-forms/record/9", title: "Scorecard", type: "ISO form" },
+      { path: "/documents/folders", title: "Folders", type: "Documents" },
+    ];
+    const live = withoutDeadPaths(rows, ["/documents/folders"]);
+    assert.deepEqual(live.map((row) => row.path), ["/documents/folders"]);
   });
 
   it("keeps one person's recent list separate from another's", () => {

@@ -10,6 +10,7 @@ import { showsRequiredControl, writeSignatureRequiredAudit } from "../signatures
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
+import { beginFormEditHandler, scalarEdits } from "../forms/formEditAudit.js";
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
@@ -46,6 +47,11 @@ export const createQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   res.status(201).json(created);
 });
 
+export const beginQmsEditHandler = beginFormEditHandler("QmsForm", async (db, id) => {
+  const [row] = await db.select({ id: qmsForms.id }).from(qmsForms).where(eq(qmsForms.id, id));
+  return row;
+});
+
 export const getQmsFormHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadForm(req, Number(req.params.id));
   const rows = await req.db!.select().from(qmsFormRows).where(and(eq(qmsFormRows.formId, record.id))).orderBy(asc(qmsFormRows.sectionKey), asc(qmsFormRows.sortOrder), asc(qmsFormRows.id));
@@ -64,7 +70,11 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   const numberChange = await applyRecordNumber(req.db!, body, QMS_NUMBER, { id: record.id, current: record.formNo, row: record });
   const revision = keptRevision(record.revision, templateRevisionFor(`qms:${record.formType}`).revision);
   const [updated] = await req.db!.update(qmsForms).set({ ...body, revision, updatedAt: new Date() }).where(eq(qmsForms.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
+  const headerEdits = scalarEdits(record as unknown as Record<string, unknown>, { ...(record as unknown as Record<string, unknown>), ...body }, Object.keys(body));
+  const headerChanges = headerEdits.length
+    ? { ...changesWithNumberEdit({}, numberChange), event: "form_saved", edits: headerEdits }
+    : changesWithNumberEdit(req.body, numberChange);
+  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: headerChanges, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -122,7 +132,14 @@ export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
     });
   }
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: { subAction: "row_updated", rowId: row.id }, performedBy: req.user?.id });
+  const rowEdits = scalarEdits((row.data ?? {}) as Record<string, unknown>, data);
+  await recordAuditTrail(req.db!, {
+    entityType: "QmsForm",
+    entityId: record.id,
+    action: "update",
+    changes: rowEdits.length ? { event: "form_saved", subAction: "row_updated", rowId: row.id, edits: rowEdits } : { subAction: "row_updated", rowId: row.id },
+    performedBy: req.user?.id,
+  });
   res.json(updated);
 });
 
