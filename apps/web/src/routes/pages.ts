@@ -51,6 +51,7 @@ export const FormBuilderEditorPage = lazyNamed("/form-builder", () => import("./
 export const FormFillPage = lazyNamed("/form-builder/fills", () => import("./FormBuilder/FormFillPage"), "FormFillPage");
 export const FormTemplateOpenPage = lazyNamed("/form-builder/template", () => import("./FormBuilder/FormFillPage"), "FormTemplateOpenPage");
 export const AuditsPage = lazyNamed("/audits", () => import("./Audits/AuditsPage"), "AuditsPage");
+export const BlankFormsListPage = lazyNamed("/blank-forms", () => import("./BlankForms/BlankFormsPage"), "BlankFormsListPage");
 export const StartBlankFormPage = lazyNamed("/blank-forms/start", () => import("./BlankForms/BlankFormsPage"), "StartBlankFormPage");
 export const AuditDetailPage = lazyNamed("/audits", () => import("./Audits/AuditDetailPage"), "AuditDetailPage");
 export const DocumentsPage = lazyNamed("/documents", () => import("./Documents/DocumentsPage"), "DocumentsPage");

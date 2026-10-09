@@ -19,6 +19,8 @@ export interface FiledLocation {
   path: string;
   folderId: number;
   fileName: string | null;
+  /** Set when this copy lives in a per-form folder. Documents saves keep the folder explorer link. */
+  href?: string;
 }
 
 /** Documents page opened on one folder. Save uses this as "Open folder". */
@@ -73,7 +75,9 @@ export function contentRoot<T extends BrowseFolder>(folders: T[]): T | undefined
  */
 export function leftHandFolders<T extends BrowseFolder>(folders: T[]): T[] {
   const iso = contentRoot(folders);
-  const nested = iso ? folders.filter((folder) => folder.parentId === iso.id && folder.name !== BLANK_FORM_TEMPLATES_FOLDER) : [];
+  const nested = iso
+    ? folders.filter((folder) => folder.parentId === iso.id && folder.name !== BLANK_FORM_TEMPLATES_FOLDER && folder.name !== SAVED_FORM_FOLDERS_ROOT)
+    : [];
   const stray = folders.filter((folder) => folder.parentId == null && folder.id !== iso?.id && folder.name !== LIBRARY_POOL_NAME && !folder.removedFromLibraryPool);
   return [...nested, ...stray].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
@@ -141,6 +145,9 @@ export const BLANK_FORM_TEMPLATES_FOLDER = "Blank Form Templates";
 
 /** Fillable blanks live here, under ISO Compliance Documents. */
 export const BLANK_FORMS_TEMPLATES_FOLDER = "Blank Forms Templates";
+
+/** Copies saved into a per-form folder. Folder Explorer and the Documents half of Save as leave this tree out. */
+export const SAVED_FORM_FOLDERS_ROOT = "Saved Form Folders";
 
 /** Explorer shortcut that starts a fresh copy of one blank. */
 export const BLANK_TEMPLATE_START_PREFIX = "/blank-forms/start/";
@@ -232,6 +239,7 @@ export function explorerHiddenIds<T extends BrowseFolder>(folders: T[]): Set<num
 
   for (const folder of folders) {
     if (folder.name === BLANK_FORM_TEMPLATES_FOLDER || folder.name === SEEDED_FORMS_DRAWER) hideUnsavedBranch(folder.id);
+    if (folder.name === SAVED_FORM_FOLDERS_ROOT) hideTree(children, hidden, folder.id);
   }
   return hidden;
 }

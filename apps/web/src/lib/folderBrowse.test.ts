@@ -244,6 +244,24 @@ describe("folder browse", () => {
     assert.equal(blankFormsFolderHref(), "/documents/folders?name=Blank%20Forms%20Templates");
   });
 
+  it("hides Saved Form Folders from Folder Explorer and from the Documents half of Save as", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Quality", parentId: 1, sortOrder: 1 },
+      { id: 3, name: "Saved Form Folders", parentId: 1, sortOrder: 2 },
+      { id: 4, name: "CSA VALIDATION REPORT", parentId: 3, sortOrder: 0, linkedPath: "/form-folders/frm-val-001" },
+      { id: 5, name: "CSA_1_2026-10-01", parentId: 4, sortOrder: 0, linkedPath: "/validation-reports/9" },
+    ];
+    const visible = visibleExplorerFolders(rows).map((folder) => folder.name);
+    assert.equal(visible.includes("Quality"), true);
+    assert.equal(visible.includes("Saved Form Folders"), false);
+    assert.equal(visible.includes("CSA VALIDATION REPORT"), false);
+    assert.equal(visible.includes("CSA_1_2026-10-01"), false);
+    assert.equal(leftHandFolders(rows).some((folder) => folder.name === "Saved Form Folders"), false);
+    assert.equal(saveAsFolders(rows).some((folder) => folder.name === "Saved Form Folders" || folder.name === "CSA VALIDATION REPORT"), false);
+    assert.equal(saveAsFolders(rows).some((folder) => folder.name === "Quality"), true);
+  });
+
   it("opens a living Quality Manual list as a file", () => {
     const rows: BrowseFolder[] = [
       { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },

@@ -18,6 +18,8 @@ export interface FormTemplateCacheRow {
   subjectRoute: string;
   folderId?: number | null;
   isoPath: string[];
+  /** True when this template's folder is still under Blank Forms Templates. */
+  onBlankShelf?: boolean;
   fileNamePattern: string;
   start: FormTemplateStart | null;
 }

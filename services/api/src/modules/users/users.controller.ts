@@ -271,12 +271,20 @@ export const updateMySavedViews = asyncHandler(async (req: Request, res: Respons
 /** This person's sidebar shortcuts. Null in the database is the shared menu with nothing pinned. */
 export const getMySidebarShortcuts = asyncHandler(async (req: Request, res: Response) => {
   const [row] = await req.db!.select({ sidebarShortcuts: users.sidebarShortcuts }).from(users).where(eq(users.id, req.user!.id));
-  res.json(normalizeSidebarShortcuts(row?.sidebarShortcuts ?? emptySidebarShortcuts()));
+  const stored = row?.sidebarShortcuts ?? emptySidebarShortcuts();
+  const next = normalizeSidebarShortcuts(stored);
+  const offered = stored && typeof stored === "object" && Array.isArray(stored.offered) ? stored.offered : [];
+  if (!offered.includes("blank-forms")) {
+    await req.db!.update(users).set({ sidebarShortcuts: next }).where(eq(users.id, req.user!.id));
+  }
+  res.json(next);
 });
 
 /** Replaces this person's hidden items and pinned shortcuts. Does not change the company-wide menu arrangement. */
 export const updateMySidebarShortcuts = asyncHandler(async (req: Request, res: Response) => {
-  const next = normalizeSidebarShortcuts(req.body);
+  const [existing] = await req.db!.select({ sidebarShortcuts: users.sidebarShortcuts }).from(users).where(eq(users.id, req.user!.id));
+  const offered = existing?.sidebarShortcuts && typeof existing.sidebarShortcuts === "object" ? existing.sidebarShortcuts.offered : undefined;
+  const next = normalizeSidebarShortcuts({ ...req.body, offered });
   const [updated] = await req.db!.update(users).set({ sidebarShortcuts: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ sidebarShortcuts: users.sidebarShortcuts });
   if (!updated) throw AppError.notFound("User");
   await recordAuditTrail(req.db!, {

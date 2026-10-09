@@ -314,7 +314,7 @@ export const formFiling = asyncHandler(async (req: Request, res: Response) => {
 
 /** Files a filled copy into the chosen Documents folder, or moves it there. */
 export const fileForm = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { formKey: string; recordId: number; folderId: number; partNumber?: string };
+  const body = req.body as { formKey: string; recordId: number; folderId?: number; formFolderKey?: string; partNumber?: string };
   res.status(201).json(await fileFormRecord(req.db!, body, req.user?.id));
 });
 

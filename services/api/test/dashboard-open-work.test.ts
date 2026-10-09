@@ -143,11 +143,11 @@ describe("open quality work", () => {
       }),
     );
     expect(work.cards.find((card) => card.key === "validation")).toMatchObject({
-      value: 5,
-      foot: "2 validation · 1 FAI · 2 TRP",
+      value: 4,
+      foot: "2 validation · 2 TRP",
       href: null,
       module: null,
-      modules: ["VAL", "FAI", "TRP"],
+      modules: ["VAL", "TRP"],
     });
     expect(work.cards.find((card) => card.key === "ecr")).toMatchObject({
       value: 2,
@@ -159,7 +159,8 @@ describe("open quality work", () => {
     expect(work.records.filter((row) => row.module === "VAL").map((row) => row.href)).toEqual(["/validation-reports/3", "/validation-reports/1"]);
     expect(work.records.filter((row) => row.module === "VAL").every((row) => row.number === "")).toBe(true);
     expect(work.records.find((row) => row.href === "/validation-reports/3")).toMatchObject({ title: "Air strut validation", owner: null, status: "in_progress" });
-    expect(work.records.find((row) => row.href === "/iso-forms/record/10")).toMatchObject({ title: "PN-10", number: "" });
+    expect(work.records.find((row) => row.href === "/iso-forms/record/10")).toBeUndefined();
+    expect(work.records.some((row) => row.module === "FAI")).toBe(false);
     expect(work.records.find((row) => row.href === "/iso-forms/record/11")).toMatchObject({ status: "tested", title: "Lot 4", number: "" });
     expect(work.records.find((row) => row.href === "/iso-forms/record/14")).toMatchObject({ title: "Strut B", status: "in_progress", number: "" });
     expect(work.records.find((row) => row.href === "/iso-forms/record/16")).toMatchObject({ title: "Housing · Job 2", status: "request", number: "" });
@@ -169,7 +170,7 @@ describe("open quality work", () => {
   it("keeps a one-list ECR or change card on that single module", () => {
     const formsOnly = buildOpenWork(input({ access: { ...input().access, change: false } }));
     expect(formsOnly.cards.find((card) => card.key === "ecr")).toMatchObject({ href: "/iso-forms/frm-ecr-001", module: "ECR" });
-    expect(formsOnly.cards.find((card) => card.key === "validation")?.modules).toEqual(["VAL", "FAI", "TRP"]);
+    expect(formsOnly.cards.find((card) => card.key === "validation")?.modules).toEqual(["VAL", "TRP"]);
 
     const changesOnly = buildOpenWork(input({ access: { ...input().access, documents: false } }));
     expect(changesOnly.cards.find((card) => card.key === "validation")).toBeUndefined();

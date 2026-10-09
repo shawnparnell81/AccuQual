@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { PERMANENT_SIDEBAR_LINKS, SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
-import { blankFormsFolderHref } from "./folderBrowse.ts";
 import { EMPTY_SIDEBAR_SHORTCUTS } from "./sidebarShortcuts.ts";
 import {
-  BLANK_FORMS_PIN_KEY,
   addGroup,
   addPin,
   draftFromPrefs,
@@ -30,14 +28,15 @@ function paths(access: SidebarAccess, prefs = EMPTY_SIDEBAR_SHORTCUTS) {
 }
 
 describe("per-user sidebar layout", () => {
-  it("renders the built-in menu, without Blank Forms, until someone customizes", () => {
+  it("renders the built-in menu, including Blank Forms, until someone customizes", () => {
     const shown = resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll);
     assert.deepEqual(
       shown.map((node) => node.label),
-      ["Home", "Documents", "Quality", "Folders", "Reports", "Admin"],
+      ["Home", "Documents", "Blank Forms", "Quality", "Folders", "Reports", "Admin"],
     );
     const links = flattenSidebarLinks(shown);
-    assert.equal(links.some((link) => link.key === "blank-forms" || link.path === "/blank-forms" || link.label === "Blank Forms"), false);
+    assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
+    assert.equal(links.some((link) => link.label === "First Article" || link.path === "/fai"), false);
     assert.equal(links.some((link) => link.key === "frm-ncr-001"), true);
     assert.equal(links.some((link) => link.key === "folder-explorer"), true);
   });
@@ -83,7 +82,7 @@ describe("per-user sidebar layout", () => {
     assert.equal(links.some((link) => link.key === "8d"), true);
   });
 
-  it("skips a stale row and sends an old Blank Forms entry to Blank Forms Templates", () => {
+  it("keeps a saved Blank Forms row on the Blank Forms page and drops a stale row", () => {
     const prefs = {
       hidden: [],
       pinned: [{ key: "pin-gone", label: "Retired page", path: "/not-a-real-page" }],
@@ -91,10 +90,31 @@ describe("per-user sidebar layout", () => {
       layout: [{ key: "blank-forms" }, { key: "ghost-menu" }, { key: "home", children: [{ key: "calendar" }] }],
     };
     const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, prefs, allowAll));
-    assert.equal(links.some((link) => link.path === "/not-a-real-page" || link.key === "ghost-menu" || link.path === "/blank-forms"), false);
-    const blank = links.find((link) => link.key === BLANK_FORMS_PIN_KEY);
-    assert.equal(blank?.path, blankFormsFolderHref());
+    assert.equal(links.some((link) => link.path === "/not-a-real-page" || link.key === "ghost-menu"), false);
+    const blank = links.find((link) => link.key === "blank-forms");
+    assert.equal(blank?.path, "/blank-forms");
     assert.equal(links.some((link) => link.key === "home"), true);
+  });
+
+  it("adds Blank Forms to a saved menu that does not have it, and leaves it off after a hide", () => {
+    const added = flattenSidebarLinks(
+      resolveUserSidebar(SIDEBAR_FOLDERS, { hidden: [], pinned: [], groups: [], layout: [{ key: "home" }, { key: "quality" }] }, allowAll),
+    );
+    assert.equal(added.some((link) => link.key === "blank-forms" && link.path === "/blank-forms"), true);
+    assert.equal(resolveUserSidebar(SIDEBAR_FOLDERS, { hidden: [], pinned: [], groups: [], layout: [{ key: "home" }, { key: "quality" }] }, allowAll)[0]?.key, "home");
+
+    const hidden = flattenSidebarLinks(
+      resolveUserSidebar(
+        SIDEBAR_FOLDERS,
+        { hidden: ["blank-forms"], pinned: [], groups: [], layout: [{ key: "home" }, { key: "quality" }, { key: "blank-forms" }] },
+        allowAll,
+      ),
+    );
+    assert.equal(hidden.some((link) => link.key === "blank-forms"), false);
+    const draft = draftFromPrefs(SIDEBAR_FOLDERS, { hidden: ["blank-forms"], pinned: [], groups: [], layout: [{ key: "home" }] });
+    const rows = layoutRows(draft, SIDEBAR_FOLDERS);
+    assert.equal(rows.find((row) => row.key === "home")?.locked, true);
+    assert.equal(rows.some((row) => row.key === "blank-forms"), true);
   });
 
   it("keeps a custom section and remembers it in the browser cache", () => {
@@ -143,7 +163,8 @@ describe("per-user sidebar layout", () => {
     assert.ok(isFolder(shown[0]!));
     assert.equal(shown[0].path, "/home");
     assert.ok(shown.findIndex((node) => node.key === "my-shortcuts") > 0);
-    assert.equal(shown.some((node) => node.key === "fai"), true);
+    assert.equal(shown.some((node) => node.key === "fai"), false);
+    assert.equal(flattenSidebarLinks(shown).some((link) => link.key === "blank-forms"), true);
 
     const unread = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, { levels: null });
     assert.equal(unread[0]?.key, "home");

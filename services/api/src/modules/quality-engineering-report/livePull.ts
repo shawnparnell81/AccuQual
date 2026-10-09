@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
@@ -9,10 +9,7 @@ import { scarForms } from "../../drizzle/schema/scarForms.js";
 import { fmeaItems } from "../../drizzle/schema/risk.js";
 import { quarantineRecords } from "../../drizzle/schema/quarantine.js";
 import { documents } from "../../drizzle/schema/documents.js";
-import { csaFaiRecords } from "../../drizzle/schema/csaFai.js";
-import { fuelPumpFaiRecords } from "../../drizzle/schema/fuelPumpFai.js";
-import { faiInspectionPlans, faiRecords } from "../../drizzle/schema/faiSourceControl.js";
-import { classifyFai, faiCategory, monthBounds, type FaiCategoryRow, type Gated, type LivePull, type NcrRow } from "./model.js";
+import { monthBounds, type Gated, type LivePull, type NcrRow } from "./model.js";
 
 const ACCESS_KEYS = ["ncr", "capa", "quarantine", "fai", "documents", "risk", "scar", "warranty"] as const satisfies readonly ResourceKey[];
 
@@ -58,17 +55,6 @@ function noAccess<T>(): Gated<T> {
 
 function unavailable<T>(reason: string): Gated<T> {
   return { status: "unavailable", reason };
-}
-
-function addCategory(map: Map<string, FaiCategoryRow>, category: string, kind: "passed" | "failed" | "deviation" | "open"): number {
-  if (kind === "open") return 1;
-  const row = map.get(category) ?? { category, totalCompleted: 0, passed: 0, failed: 0, passedWithDeviation: 0 };
-  row.totalCompleted += 1;
-  if (kind === "passed") row.passed += 1;
-  else if (kind === "failed") row.failed += 1;
-  else row.passedWithDeviation += 1;
-  map.set(category, row);
-  return 0;
 }
 
 export async function pullLive(db: Db, input: {
@@ -183,57 +169,8 @@ export async function pullLive(db: Db, input: {
   };
 
   const faiGate = async (): Promise<LivePull["fai"]> => {
-    if (input.level("fai") === "none") return noAccess();
-    const map = new Map<string, FaiCategoryRow>();
-    let open = 0;
-    const siteOrNull = (column: PgColumn) => (siteIds.length > 0 ? or(isNull(column), inArray(column, siteIds)) : undefined);
-
-    if (present.has("fuel_pump_fai_records")) {
-      const rows = await db
-        .select({
-          status: fuelPumpFaiRecords.status,
-          overall: fuelPumpFaiRecords.overallResult,
-          failure: fuelPumpFaiRecords.failureDetected,
-        })
-        .from(fuelPumpFaiRecords)
-        .where(and(during(fuelPumpFaiRecords.dateOpened, start, end), siteOrNull(fuelPumpFaiRecords.siteId)));
-      for (const row of rows) open += addCategory(map, "Fuel & Lift Supports", classifyFai(row.status, row.overall, row.failure));
-    }
-    if (present.has("csa_fai_records")) {
-      const rows = await db
-        .select({ status: csaFaiRecords.status, failure: csaFaiRecords.failureDetected })
-        .from(csaFaiRecords)
-        .where(and(during(csaFaiRecords.dateOpened, start, end), siteOrNull(csaFaiRecords.siteId)));
-      for (const row of rows) open += addCategory(map, "CSAs & Shocks", classifyFai(row.status, null, row.failure));
-    }
-    if (present.has("fai_records") && present.has("fai_inspection_plans")) {
-      const rows = await db
-        .select({
-          status: faiRecords.status,
-          outcome: faiRecords.outcome,
-          partName: faiRecords.partName,
-          partNumber: faiRecords.partNumber,
-          family: faiInspectionPlans.productFamily,
-          decidedAt: faiRecords.decidedAt,
-          createdAt: faiRecords.createdAt,
-        })
-        .from(faiRecords)
-        .innerJoin(faiInspectionPlans, eq(faiInspectionPlans.id, faiRecords.planId))
-        .where(
-          or(
-            and(gte(faiRecords.decidedAt, start), lt(faiRecords.decidedAt, end)),
-            and(isNull(faiRecords.decidedAt), gte(faiRecords.createdAt, start), lt(faiRecords.createdAt, end)),
-          ),
-        );
-      for (const row of rows) {
-        const category = faiCategory(row.family ?? "", `${row.partNumber} ${row.partName ?? ""}`);
-        open += addCategory(map, category, classifyFai(row.status, row.outcome, null));
-      }
-    }
-    if (!present.has("fuel_pump_fai_records") && !present.has("csa_fai_records") && !present.has("fai_records")) {
-      return unavailable("First-article tables are not in this database.");
-    }
-    return { status: "ok", data: { rows: [...map.values()], open } };
+    // First Article records are retired. Supplier workbook totals still come from the uploaded file.
+    return { status: "ok", data: { rows: [], open: 0 } };
   };
 
   const [ncrResult, cars, rpn, quarantine, productAlertDocuments, recallDocuments, fai] = await Promise.all([

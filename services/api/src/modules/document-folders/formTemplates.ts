@@ -465,6 +465,8 @@ export interface FormTemplateView {
   subjectRoute: string;
   folderId: number | null;
   isoPath: string[];
+  /** True when this template's folder is still under Blank Forms Templates. */
+  onBlankShelf: boolean;
   fileNamePattern: string;
   start: FormStart | null;
 }
@@ -488,6 +490,17 @@ export async function listFormTemplates(db: Db, performedBy?: number): Promise<{
     return names;
   }
 
+  function onBlankShelf(folderId: number | null): boolean {
+    let current = folderId === null ? undefined : byId.get(folderId);
+    const seen = new Set<number>();
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      if (current.name === BLANK_FORMS_FOLDER) return true;
+      current = current.parentId === null ? undefined : byId.get(current.parentId);
+    }
+    return false;
+  }
+
   return {
     fileNamePattern: FILE_NAME_PATTERN,
     templates: templates
@@ -500,6 +513,7 @@ export async function listFormTemplates(db: Db, performedBy?: number): Promise<{
         subjectRoute: template.subjectRoute,
         folderId: template.folderId,
         isoPath: pathOf(template.folderId),
+        onBlankShelf: onBlankShelf(template.folderId),
         fileNamePattern: patterns.get(template.formKey) ?? FILE_NAME_PATTERN,
         start: starts.get(template.formKey) ?? null,
       }))

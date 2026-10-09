@@ -18,7 +18,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
 import { folderIdentityKey } from "./duplicateFolders.js";
 import { rememberDeletedFormFolders, rememberFormFolderName } from "./folderTombstones.js";
-import { folderIsBlankLibrary } from "./formFiling.js";
+import { folderIsBlankLibrary, ISO_DOCUMENTS_FOLDER } from "./formFiling.js";
 import { folderLocationLabel } from "./mainIsoFolders.js";
 import { FILEABLE_FORM_KEYS, recordLinkedPath } from "./editableForms.js";
 import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, type FormTemplateSeed } from "./formFiling.js";
@@ -77,6 +77,15 @@ interface Stamp {
   createdAt: Date | null;
   updatedAt: Date | null;
 }
+
+/**
+ * First Article module folders are retired.
+ * The blank First Article Inspection Report template stays in Blank Forms Templates.
+ */
+export const RETIRED_FORM_FOLDER_KEYS = new Set(["frm-fai-001", "first_article_inspection"]);
+
+/** Document-tree home for copies saved into a per-form folder. Folder Explorer does not list it. */
+export const SAVED_FORM_FOLDERS_ROOT = "Saved Form Folders";
 
 /** Newest save date first, then file name, then record id. */
 export function compareSavedFills(a: Pick<SavedFill, "savedAt" | "fileName" | "recordId">, b: Pick<SavedFill, "savedAt" | "fileName" | "recordId">): number {
@@ -192,7 +201,9 @@ function finishFormFolderGroup(members: GroupMember[], distinguish: boolean, for
  * Two blanks that carry different document numbers stay two rows.
  */
 export function formFolderIndex(templates: FolderTemplate[]): Omit<FormFolderSummary, "savedCount">[] {
-  const live = templates.filter((template) => template.start != null || FILEABLE_FORM_KEYS.has(template.formKey));
+  const live = templates.filter(
+    (template) => !RETIRED_FORM_FOLDER_KEYS.has(template.formKey) && (template.start != null || FILEABLE_FORM_KEYS.has(template.formKey)),
+  );
   const buckets = new Map<string, GroupMember[]>();
   for (const template of live) {
     const title = template.title.trim() || template.formKey;
@@ -600,4 +611,69 @@ export async function retireFormFolder(db: Db, formKey: string, destinationId: n
       destinationId,
     },
   });
+}
+
+/** Finds or creates the document folder that holds copies saved into this form's folder. */
+export async function ensureSavedFormFolder(db: Db, formKey: string, performedBy?: number, requestedKey?: string): Promise<number> {
+  const key = formKey.trim();
+  const folders = await listFormFolders(db);
+  const folder = folders.find((item) => item.formKey === key || item.formKeys.includes(key));
+  if (!folder) throw AppError.badRequest("That form does not have a folder. Pick a Documents folder.");
+  if (requestedKey) {
+    const requested = requestedKey.trim();
+    if (requested !== folder.formKey && !folder.formKeys.includes(requested)) {
+      throw AppError.badRequest("That folder is for a different form.");
+    }
+  }
+
+  const all = await db.select().from(documentFolders);
+  const iso = all.find((row) => row.parentId == null && row.name === ISO_DOCUMENTS_FOLDER);
+  if (!iso) throw AppError.notFound("ISO Compliance Documents");
+
+  let root = all.find((row) => row.parentId === iso.id && row.name === SAVED_FORM_FOLDERS_ROOT);
+  if (!root) {
+    const siblings = all.filter((row) => row.parentId === iso.id);
+    const [created] = await db.insert(documentFolders).values({ name: SAVED_FORM_FOLDERS_ROOT, parentId: iso.id, sortOrder: siblings.length }).returning();
+    if (!created) throw new AppError("Failed to file this form", 500);
+    root = created;
+    all.push(created);
+    await recordAuditTrail(db, {
+      entityType: "DocumentFolder",
+      entityId: created.id,
+      action: "create",
+      performedBy,
+      changes: {
+        event: "created",
+        summary: `Created the folder "${SAVED_FORM_FOLDERS_ROOT}" under ${ISO_DOCUMENTS_FOLDER}.`,
+        name: SAVED_FORM_FOLDERS_ROOT,
+        parentId: iso.id,
+      },
+    });
+  }
+
+  const marker = `/form-folders/${folder.formKey}`;
+  const child = all.find((row) => row.parentId === root.id && row.linkedPath === marker);
+  if (child) return child.id;
+
+  const siblings = all.filter((row) => row.parentId === root.id);
+  const [created] = await db
+    .insert(documentFolders)
+    .values({ name: folder.name, parentId: root.id, sortOrder: siblings.length, linkedPath: marker })
+    .returning();
+  if (!created) throw new AppError("Failed to file this form", 500);
+  await recordAuditTrail(db, {
+    entityType: "DocumentFolder",
+    entityId: created.id,
+    action: "create",
+    performedBy,
+    changes: {
+      event: "created",
+      summary: `Created the folder "${folder.name}" for saved copies of that form.`,
+      name: folder.name,
+      parentId: root.id,
+      formKeys: folder.formKeys,
+      linkedPath: marker,
+    },
+  });
+  return created.id;
 }

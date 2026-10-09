@@ -15,10 +15,14 @@ export interface SidebarShortcutPrefs {
   pinned: { key: string; label: string; path: string }[];
   layout: SidebarPlacementInput[] | null;
   groups: { key: string; label: string }[];
+  /** Catalog rows already offered to this saved menu. A later hide of one of these keys stays hidden. */
+  offered: string[];
 }
 
+export const BLANK_FORMS_SIDEBAR_KEY = "blank-forms";
+
 export function emptySidebarShortcuts(): SidebarShortcutPrefs {
-  return { hidden: [], pinned: [], layout: null, groups: [] };
+  return { hidden: [], pinned: [], layout: null, groups: [], offered: [] };
 }
 
 function isLockedSidebarKey(key: string): boolean {
@@ -26,9 +30,6 @@ function isLockedSidebarKey(key: string): boolean {
 }
 
 function cleanPin(pin: { key: string; label: string; path: string }): { key: string; label: string; path: string } {
-  if (pin.key === "blank-forms" || pin.path === "/blank-forms") {
-    return { key: BLANK_FORMS_PIN_KEY, label: "Blank Forms Templates", path: BLANK_FORMS_TEMPLATES_HREF };
-  }
   return pin;
 }
 
@@ -41,7 +42,7 @@ function cleanSidebarLayout(nodes: { key: string; children?: unknown }[] | null 
     const out: SidebarPlacementInput[] = [];
     for (const node of items) {
       if (count > 400 || !node || typeof node.key !== "string") continue;
-      const key = node.key === "blank-forms" ? BLANK_FORMS_PIN_KEY : node.key;
+      const key = node.key;
       if (!key || seen.has(key)) continue;
       seen.add(key);
       count += 1;
@@ -75,13 +76,29 @@ export function hoistLockedLayout(nodes: SidebarPlacementInput[] | null): Sideba
   return [...locked, ...rest];
 }
 
+function layoutHasKey(nodes: { key: string; children?: { key: string }[] }[] | null | undefined, key: string): boolean {
+  for (const node of nodes ?? []) {
+    if (node.key === key) return true;
+    if (layoutHasKey(node.children as { key: string; children?: { key: string }[] }[] | undefined, key)) return true;
+  }
+  return false;
+}
+
 function normalizeSidebarShortcuts(raw: {
   hidden?: string[];
   pinned?: { key: string; label: string; path: string }[];
   layout?: { key: string; children?: unknown }[] | null;
   groups?: { key: string; label: string }[];
+  offered?: string[];
 } | null | undefined): SidebarShortcutPrefs {
-  const hidden = [...new Set((raw?.hidden ?? []).filter((key) => typeof key === "string" && key.length > 0 && key !== "blank-forms" && !isLockedSidebarKey(key)))];
+  const alreadyOffered = (raw?.offered ?? []).includes(BLANK_FORMS_SIDEBAR_KEY);
+  const hidden = [
+    ...new Set(
+      (raw?.hidden ?? []).filter(
+        (key) => typeof key === "string" && key.length > 0 && !isLockedSidebarKey(key) && (alreadyOffered || key !== BLANK_FORMS_SIDEBAR_KEY),
+      ),
+    ),
+  ];
   const hiddenSet = new Set(hidden);
   const seen = new Set<string>();
   const pinned: SidebarShortcutPrefs["pinned"] = [];
@@ -92,7 +109,7 @@ function normalizeSidebarShortcuts(raw: {
     seen.add(next.key);
     pinned.push(next);
   }
-  const layout = hoistLockedLayout(cleanSidebarLayout(raw?.layout));
+  let layout = hoistLockedLayout(cleanSidebarLayout(raw?.layout));
   const layoutKeys = new Set<string>();
   function collect(nodes: { key: string; children?: { key: string }[] }[] | null | undefined) {
     for (const node of nodes ?? []) {
@@ -101,6 +118,10 @@ function normalizeSidebarShortcuts(raw: {
     }
   }
   collect(layout);
+  if (layout && !layoutHasKey(layout, BLANK_FORMS_SIDEBAR_KEY) && !hiddenSet.has(BLANK_FORMS_SIDEBAR_KEY)) {
+    layout = [...layout, { key: BLANK_FORMS_SIDEBAR_KEY }];
+    layoutKeys.add(BLANK_FORMS_SIDEBAR_KEY);
+  }
   if (layoutKeys.has(BLANK_FORMS_PIN_KEY) && !seen.has(BLANK_FORMS_PIN_KEY) && !hiddenSet.has(BLANK_FORMS_PIN_KEY)) {
     pinned.push({ key: BLANK_FORMS_PIN_KEY, label: "Blank Forms Templates", path: BLANK_FORMS_TEMPLATES_HREF });
   }
@@ -111,7 +132,8 @@ function normalizeSidebarShortcuts(raw: {
     groupSeen.add(group.key);
     groups.push(group);
   }
-  return { hidden, pinned, layout: layout ?? null, groups };
+  const offered = [...new Set([...(raw?.offered ?? []).filter((key) => typeof key === "string" && key.length > 0), BLANK_FORMS_SIDEBAR_KEY])];
+  return { hidden, pinned, layout: layout ?? null, groups, offered };
 }
 
 export { normalizeSidebarShortcuts };

@@ -219,50 +219,6 @@ export function buildWaitingItems(input: WaitingInput): WaitingItem[] {
     }
   }
 
-  if (access.fai) {
-    for (const row of input.faiRecords) {
-      if (row.assignedTo !== userId) continue;
-      if (row.status === "approved" || row.status === "rejected") continue;
-      items.push(item({
-        id: `fai-${row.id}`,
-        module: "FAI",
-        number: showRecordNumber(row.number),
-        description: `${row.partNumber} · ${row.supplierName}`,
-        assignedTo: nameOf(names, row.assignedTo),
-        status: row.status,
-        href: `/fai/records/${row.id}`,
-      }, now));
-    }
-    for (const row of input.pulls) {
-      if (row.assignedTo !== userId || row.completedAt != null) continue;
-      items.push(item({
-        id: `pull-${row.id}`,
-        module: "FAI",
-        number: row.partNumber,
-        description: "Yearly first-article pull",
-        assignedTo: nameOf(names, row.assignedTo),
-        status: "open",
-        href: "/fai/pull",
-      }, now));
-    }
-    for (const row of input.sources) {
-      const due = toDate(row.nextDueDate);
-      if (!due) continue;
-      const soon = due.getTime() <= now.getTime() + 30 * DAY_MS;
-      if (!soon) continue;
-      items.push(item({
-        id: `source-${row.id}`,
-        module: "FAI",
-        number: row.partNumber,
-        description: `${row.supplierName} first article ${due.getTime() < now.getTime() ? "overdue" : "due"}`,
-        assignedTo: "Unassigned",
-        status: row.status,
-        href: "/fai/sources",
-        due: row.nextDueDate,
-      }, now));
-    }
-  }
-
   if (access.calibration) {
     for (const row of input.gages) {
       if (row.dueStatus !== "overdue" && row.dueStatus !== "due_soon" && row.dueStatus !== "failed") continue;
@@ -280,6 +236,7 @@ export function buildWaitingItems(input: WaitingInput): WaitingItem[] {
   }
 
   for (const row of input.approvals) {
+    if (isRetiredFirstArticleWork(row.workflowName, row.label)) continue;
     items.push(item({
       id: `approval-${row.id}`,
       module: "Approval",
@@ -369,6 +326,12 @@ export function presentWaitingList(items: WaitingItem[], prefs: WaitingPrefs): {
     else groups.push({ key, items: [row] });
   }
   return { groups };
+}
+
+/** Home must not offer the retired First Article module, including CSA First Article Inspection approvals. */
+export function isRetiredFirstArticleWork(workflowName: string, label = ""): boolean {
+  const text = `${workflowName} ${label}`.toLowerCase();
+  return text.includes("first article") || text.includes("csa fai") || text.includes("fuel pump module fai");
 }
 
 function compareItems(a: WaitingItem, b: WaitingItem, sort: WaitingPrefs["sort"]): number {

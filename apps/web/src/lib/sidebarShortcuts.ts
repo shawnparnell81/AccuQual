@@ -9,7 +9,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { flattenSidebarLinks, isFolder, isLockedSidebarKey, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
-import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
+import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 import type { SidebarPlacement } from "./sidebarLayout";
 
 export interface PinnedShortcut {
@@ -102,8 +102,7 @@ export function applyUserShortcuts(nodes: SidebarNode[], prefs: SidebarShortcutP
   const pins: SidebarLink[] = [];
   for (const pin of prefs?.pinned ?? []) {
     if (!pin?.key || hidden.has(pin.key) || isRetiredShortcut(pin)) continue;
-    const path =
-      pin.path === LEGACY_VALIDATION_REPORTS_PATH ? faiValidationDocumentsHref() : pin.path === "/blank-forms" ? blankFormsFolderHref() : pin.path;
+    const path = pin.path === LEGACY_VALIDATION_REPORTS_PATH ? faiValidationDocumentsHref() : pin.path;
     if (seen.has(pin.key) || seen.has(path) || visiblePaths.has(path)) continue;
     seen.add(pin.key);
     seen.add(path);

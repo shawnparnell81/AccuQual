@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FAI_VALIDATION_FOLDER_NAME, saveAsFolders, type BrowseFolder } from "../../lib/folderBrowse";
+import type { FormFolderChoice } from "../../lib/saveDestination";
 
 const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 
@@ -99,25 +100,34 @@ function FolderBranch({
   );
 }
 
-/** Pick a Documents folder for this filled copy. Blank Forms Templates is not in the tree. */
+/** Pick a per-form folder or a Documents folder for this filled copy. Blank Forms Templates is not in the tree. */
 export function SaveAsFolderDialog({
   folders,
   selectedId,
   onClose,
   onSave,
   pending,
+  formFolders = [],
+  defaultFormFolderKey = "",
+  onSaveFormFolder,
 }: {
   folders: BrowseFolder[];
   selectedId: number | "";
   onClose: () => void;
   onSave: (folderId: number, partNumber?: string) => void;
   pending: boolean;
+  /** Per-form folders from the Folders page. Omitted when this copy has no blank template. */
+  formFolders?: FormFolderChoice[];
+  /** Folder that matches this form's title. Selected when the copy is not already in a Documents folder. */
+  defaultFormFolderKey?: string;
+  onSaveFormFolder?: (formFolderKey: string, partNumber?: string) => void;
 }) {
   const ref = useDialogBehavior(true, onClose);
   const destinations = useMemo(() => saveAsFolders(folders), [folders]);
   const [query, setQuery] = useState("");
   const [partNumber, setPartNumber] = useState("");
-  const [chosen, setChosen] = useState<number | "">(selectedId);
+  const [chosenFormKey, setChosenFormKey] = useState(defaultFormFolderKey);
+  const [chosen, setChosen] = useState<number | "">(defaultFormFolderKey ? "" : selectedId);
   const [openIds, setOpenIds] = useState<Set<number>>(() => {
     const open = new Set<number>();
     for (const folder of destinations) {
@@ -127,8 +137,12 @@ export function SaveAsFolderDialog({
     return open;
   });
   const needle = query.trim().toLowerCase();
+  const formChoices = formFolders
+    .filter((folder) => !needle || folder.name.toLowerCase().includes(needle))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   const roots = orderedChildren(destinations, null, null).filter((folder) => !needle || branchMatches(destinations, folder, needle));
   const chosenFolder = destinations.find((folder) => folder.id === chosen);
+  const chosenForm = formFolders.find((folder) => folder.formKey === chosenFormKey);
 
   function toggle(id: number) {
     setOpenIds((current) => {
@@ -154,7 +168,11 @@ export function SaveAsFolderDialog({
         <h2 id="save-as-title" className="text-sm font-medium">
           Save as
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Choose a Documents folder for this filled copy. The blank template stays in Blank Forms Templates.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {formFolders.length > 0
+            ? "Save into the folder for this form, or pick a Documents folder. The blank template stays in Blank Forms Templates."
+            : "Choose a Documents folder for this filled copy. The blank template stays in Blank Forms Templates."}
+        </p>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -162,7 +180,39 @@ export function SaveAsFolderDialog({
           aria-label="Find a folder"
           className="mt-3 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
         />
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-md border border-border p-2" data-testid="save-as-tree">
+        {formFolders.length > 0 && (
+          <div className="mt-3" data-testid="save-as-form-folders">
+            <p className="mb-1 text-xs font-medium text-foreground">Form folders</p>
+            <ul className="max-h-36 overflow-y-auto rounded-md border border-border p-1">
+              {formChoices.length === 0 ? (
+                <li className="px-1.5 py-1 text-sm text-muted-foreground">No form folders match.</li>
+              ) : (
+                formChoices.map((folder) => {
+                  const selected = chosenFormKey === folder.formKey;
+                  return (
+                    <li key={folder.formKey}>
+                      <button
+                        type="button"
+                        data-testid="save-as-form-folder"
+                        data-form-key={folder.formKey}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setChosenFormKey(folder.formKey);
+                          setChosen("");
+                        }}
+                        className={`w-full truncate rounded px-1.5 py-1 text-left text-sm ${selected ? "bg-primary/15 font-medium text-foreground" : "text-foreground hover:bg-muted"}`}
+                      >
+                        {folder.name}
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        )}
+        <p className="mb-1 mt-3 text-xs font-medium text-foreground">Documents</p>
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border p-2" data-testid="save-as-tree">
           {roots.length === 0 ? (
             <p className="text-sm text-muted-foreground">No folders match.</p>
           ) : (
@@ -177,13 +227,16 @@ export function SaveAsFolderDialog({
                   openIds={openIds}
                   onToggle={toggle}
                   selectedId={chosen}
-                  onSelect={setChosen}
+                  onSelect={(id) => {
+                    setChosen(id);
+                    setChosenFormKey("");
+                  }}
                 />
               ))}
             </ul>
           )}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{chosenFolder ? `Selected: ${chosenFolder.name}` : "Select a folder."}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{chosenForm ? `Selected: ${chosenForm.name}` : chosenFolder ? `Selected: ${chosenFolder.name}` : "Select a folder."}</p>
         <label className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
           Part number
           <input
@@ -201,10 +254,15 @@ export function SaveAsFolderDialog({
           </button>
           <button
             type="button"
-            disabled={pending || chosen === ""}
+            disabled={pending || (chosen === "" && chosenFormKey === "")}
             onClick={() => {
+              const part = partNumber.trim() || undefined;
+              if (chosenFormKey && onSaveFormFolder) {
+                onSaveFormFolder(chosenFormKey, part);
+                return;
+              }
               if (chosen === "") return;
-              onSave(chosen, partNumber.trim() || undefined);
+              onSave(chosen, part);
             }}
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
           >

@@ -30,6 +30,6 @@ describe("default quality entry paths", () => {
         { label: "8D", path: "/8d" },
       ],
     );
-    assert.equal(flattenSidebarLinks().some((item) => item.key === "blank-forms" || item.path === BLANK_FORMS_PATH), false);
+    assert.equal(flattenSidebarLinks().some((item) => item.key === "blank-forms" && item.path === BLANK_FORMS_PATH), true);
   });
 });
