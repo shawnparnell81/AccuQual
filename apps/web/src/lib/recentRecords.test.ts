@@ -45,7 +45,7 @@ describe("recent records", () => {
   it("drops a recent row whose record is gone and keeps a path the app does not check", () => {
     const rows = [
       { path: "/validation-reports/4", title: "CSA", type: "Validation" },
-      { path: "/iso-forms/record/9", title: "First article", type: "ISO form" },
+      { path: "/iso-forms/record/9", title: "Scorecard", type: "ISO form" },
       { path: "/documents/folders", title: "Folders", type: "Documents" },
     ];
     const live = withoutDeadPaths(rows, ["/documents/folders"]);

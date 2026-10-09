@@ -10,6 +10,7 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { FORM_TEMPLATES } from "../../src/modules/document-folders/formFiling.js";
 import { FILEABLE_FORM_KEYS } from "../../src/modules/document-folders/editableForms.js";
+import { formFolderIndex, RETIRED_FORM_FOLDER_KEYS } from "../../src/modules/document-folders/formFolders.js";
 
 const app = createApp();
 const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -97,7 +98,12 @@ describe("every saved form opens locked, keeps an audit, and leaves no ghost aft
     "creates, lists, opens, edits, audits, and deletes each registered form",
     async () => {
       const opened: string[] = [];
-      const forms = FORM_TEMPLATES.filter((seed) => seed.start != null);
+      // The folder index is the live registry. A retired form is left out here, not by naming it in this test.
+      const activeKeys = new Set(formFolderIndex(FORM_TEMPLATES).flatMap((folder) => folder.formKeys));
+      const forms = FORM_TEMPLATES.filter((seed) => seed.start != null && activeKeys.has(seed.formKey));
+      const retired = FORM_TEMPLATES.filter((seed) => seed.start != null && RETIRED_FORM_FOLDER_KEYS.has(seed.formKey));
+      expect(retired.length).toBeGreaterThan(0);
+      expect(retired.every((seed) => !activeKeys.has(seed.formKey))).toBe(true);
       expect(forms.length).toBeGreaterThan(40);
 
       for (const seed of forms) {
