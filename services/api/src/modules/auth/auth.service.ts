@@ -30,6 +30,7 @@ import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 import { SIGN_IN_ENTITY_TYPE, signInAuditChanges, type SignInClient } from "./signInAudit.js";
+import { recordLoginEvent } from "./loginEvents.js";
 
 // Sign-in runs before a request transaction exists, so — unlike every other
 // module — this service intentionally uses the plain `db` singleton.
@@ -122,29 +123,40 @@ export async function login(input: { email: string; password: string; rememberMe
     .leftJoin(roles, eq(users.roleId, roles.id))
     .leftJoin(company, sql`true`)
     .where(sql`lower(${users.email}) = lower(${input.email})`);
-  if (!row) throw AppError.unauthorized("Invalid credentials");
+  if (!row) {
+    await recordLoginEvent({ email: input.email, eventType: "sign_in_failed", success: false, reason: "Unknown account", method: "password", client: input.client });
+    throw AppError.unauthorized("Invalid credentials");
+  }
 
   const user = row.users;
   const roleName = row.roles?.name ?? null;
-  if (!user.isActive) throw AppError.forbidden("Account is deactivated");
+  if (!user.isActive) {
+    await recordLoginEvent({ companyId: row.company?.id ?? null, userId: user.id, email: user.email, userName: user.name, eventType: "sign_in_failed", success: false, reason: "Account disabled", method: "password", client: input.client });
+    throw AppError.forbidden("Account is deactivated");
+  }
 
   // A locked account is refused BEFORE the password is even compared, so
   // guessing during the lock learns nothing and cannot extend it.
   if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
     const minutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000));
+    await recordLoginEvent({ companyId: row.company?.id ?? null, userId: user.id, email: user.email, userName: user.name, eventType: "sign_in_failed", success: false, reason: "Account locked", method: "password", client: input.client });
     throw new AppError(`Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}, or reset your password.`, 429);
   }
 
   const valid = await bcrypt.compare(input.password, user.passwordHash);
   if (!valid) {
     await recordFailedLogin(user);
+    await recordLoginEvent({ companyId: row.company?.id ?? null, userId: user.id, email: user.email, userName: user.name, eventType: "sign_in_failed", success: false, reason: "Wrong password", method: "password", client: input.client });
     throw AppError.unauthorized("Invalid credentials");
   }
 
   // When the company has made single sign-on mandatory, passwords no longer work — except for admins, who keep a break-glass way in if the identity provider is down or misconfigured.
   if (roleName !== "admin" && roleName !== "owner") {
     const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections);
-    if (sso?.enabled && sso.enforce) throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
+    if (sso?.enabled && sso.enforce) {
+      await recordLoginEvent({ companyId: row.company?.id ?? null, userId: user.id, email: user.email, userName: user.name, eventType: "sign_in_failed", success: false, reason: "Single sign-on required", method: "password", client: input.client });
+      throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
+    }
   }
 
   // The password alone is not enough when the account has a second factor, or
@@ -174,13 +186,26 @@ async function completeLogin(
   roleName: string | null,
   co: LoginCompanyRow,
   mfaGraceEndsAt: Date | null = null,
-  audit?: { method: "password" | "mfa" | "trusted_device"; client?: SignInClient },
+  audit?: { method: "password" | "mfa" | "trusted_device" | "sso"; client?: SignInClient },
 ) {
   // Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
-  if (audit) await recordSignInEvent(user.id, "login", audit.method, audit.client);
+  if (audit) {
+    await recordSignInEvent(user.id, "login", audit.method, audit.client);
+    await recordLoginEvent({
+      companyId: co?.id ?? null,
+      userId: user.id,
+      email: user.email,
+      userName: user.name,
+      eventType: "signed_in",
+      success: true,
+      reason: signInReason(audit.method),
+      method: audit.method,
+      client: audit.client,
+    });
+  }
 
   const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, sessionEndFrom(co?.profile));
   return {
@@ -213,6 +238,7 @@ export async function verifyMfaLogin(mfaToken: string, code: string, _rememberMe
   const kind = await checkSecondFactor(userId, code);
   if (!kind) {
     await recordFailedLogin(ctx.user);
+    await recordLoginEvent({ companyId: ctx.company?.id ?? null, userId: ctx.user.id, email: ctx.user.email, userName: ctx.user.name, eventType: "sign_in_failed", success: false, reason: "Wrong authenticator code", method: "mfa", client });
     throw AppError.unauthorized("That code didn't work. Try the newest code from your authenticator app, or a recovery code.");
   }
   if (kind === "recovery") {
@@ -237,7 +263,10 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
   try {
     recoveryCodes = await confirmEnrollment(userId, code);
   } catch (err) {
-    if (err instanceof AppError && err.statusCode === 400 && /didn't match/.test(err.message)) await recordFailedLogin(ctx.user);
+    if (err instanceof AppError && err.statusCode === 400 && /didn't match/.test(err.message)) {
+      await recordFailedLogin(ctx.user);
+      await recordLoginEvent({ companyId: ctx.company?.id ?? null, userId: ctx.user.id, email: ctx.user.email, userName: ctx.user.name, eventType: "sign_in_failed", success: false, reason: "Wrong authenticator code", method: "mfa", client });
+    }
     throw err;
   }
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
@@ -293,7 +322,7 @@ async function recordFailedLogin(user: { id: number; email: string; firstFailedL
   await sendEmail({ to: user.email, subject: notice.subject, body: notice.body }).catch((err) => logger.error("Failed to send the account-locked email", { userId: user.id, err }));
 }
 
-export async function refresh(refreshToken: string) {
+export async function refresh(refreshToken: string, client?: SignInClient) {
   let payload;
   try {
     payload = verifyRefreshToken(refreshToken);
@@ -361,6 +390,20 @@ export async function refresh(refreshToken: string) {
   }
 
   const tokens = await issueTokens(full, sessionExpiresAt);
+  // A token minted before session ids existed starts a new session length here.
+  // A token that already has an id is the same session rotating its access token, and is not logged.
+  if (!payload.jti) {
+    await recordLoginEvent({
+      userId: full.id,
+      email: full.email,
+      userName: full.name,
+      eventType: "signed_in",
+      success: true,
+      reason: "New session",
+      method: "session_refresh",
+      client,
+    });
+  }
   if (payload.jti) {
     // Keep the first replacement. A grace-window sibling must not overwrite
     // the chain, or a later replay could no longer tell which token came next.
@@ -433,6 +476,17 @@ export async function logout(userId: number, client?: SignInClient) {
     .where(eq(users.id, userId));
   await revokeAllRefreshTokens(userId);
   await recordSignInEvent(userId, "logout", "session", client);
+  const [person] = await db.select({ email: users.email, name: users.name }).from(users).where(eq(users.id, userId));
+  await recordLoginEvent({
+    userId,
+    email: person?.email ?? null,
+    userName: person?.name ?? null,
+    eventType: "signed_out",
+    success: true,
+    reason: "Signed out",
+    method: "session",
+    client,
+  });
 }
 
 async function recordSignInEvent(userId: number, action: "login" | "logout", method: string, client?: SignInClient) {
@@ -452,7 +506,7 @@ async function recordSignInEvent(userId: number, action: "login" | "logout", met
  * cookie is not touched, so a later sign-in on this browser can still skip
  * the authenticator code.
  */
-export async function endBrowserSession(refreshToken: string | undefined): Promise<void> {
+export async function endBrowserSession(refreshToken: string | undefined, client?: SignInClient): Promise<void> {
   if (!refreshToken) return;
   let payload;
   try {
@@ -461,10 +515,24 @@ export async function endBrowserSession(refreshToken: string | undefined): Promi
     return;
   }
   if (!payload.jti) return;
-  await db
+  const userId = Number(payload.sub);
+  const [revoked] = await db
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
-    .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.revokedAt)));
+    .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.revokedAt)))
+    .returning({ id: refreshTokens.id });
+  if (!revoked || !Number.isInteger(userId)) return;
+  const [person] = await db.select({ email: users.email, name: users.name }).from(users).where(eq(users.id, userId));
+  await recordLoginEvent({
+    userId,
+    email: person?.email ?? null,
+    userName: person?.name ?? null,
+    eventType: "signed_out",
+    success: true,
+    reason: "Signed out",
+    method: "browser",
+    client,
+  });
 }
 
 async function currentTokenVersion(userId: number): Promise<number> {
@@ -715,10 +783,25 @@ export async function newRecoveryCodes(userId: number, password: string, code: s
 }
 
 /** Finishes a sign-in the identity provider already vouched for: the provider did the authenticating (including any MFA it enforces), so the local password/lockout/MFA steps do not apply. */
-export async function startSessionForSsoUser(userId: number) {
+export async function startSessionForSsoUser(userId: number, client?: SignInClient) {
   const [row] = await db.select().from(users).leftJoin(roles, eq(users.roleId, roles.id)).leftJoin(company, sql`true`).where(eq(users.id, userId));
   if (!row || !row.users.isActive) throw AppError.forbidden("Account is deactivated");
-  return completeLogin(row.users, row.roles?.name ?? null, row.company);
+  return completeLogin(row.users, row.roles?.name ?? null, row.company, null, { method: "sso", client });
+}
+
+function signInReason(method: string): string {
+  switch (method) {
+    case "password":
+      return "Password";
+    case "mfa":
+      return "Authenticator";
+    case "trusted_device":
+      return "Trusted browser";
+    case "sso":
+      return "Single sign-on";
+    default:
+      return "Signed in";
+  }
 }
 
 /**

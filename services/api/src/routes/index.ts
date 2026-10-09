@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authRouter } from "../modules/auth/auth.routes.js";
+import { loginHistoryRouter } from "../modules/auth/loginHistory.routes.js";
 import { workflowRunsRouter } from "../modules/workflow/workflow.runs.js";
 import { dataExportRouter } from "../modules/data-export/dataExport.routes.js";
 import { managementReviewRouter, contextRouter } from "../modules/versioning/versioning.routes.js";
@@ -89,6 +90,7 @@ export const apiRouter = Router();
 apiRouter.use("/auth/sso", ssoPublicRouter);
 apiRouter.use("/contact", contactRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/login-history", loginHistoryRouter);
 apiRouter.use("/sso", ssoAdminRouter);
 apiRouter.use("/data-export", dataExportRouter);
 apiRouter.use("/users", usersRouter);

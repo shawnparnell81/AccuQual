@@ -11,6 +11,8 @@ import { ssoConnections, ssoDomains } from "../../drizzle/schema/sso.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret } from "../company/crypto.js";
 import { setRefreshCookie } from "../auth/auth.controller.js";
+import { signInClientFromRequest } from "../auth/signInClient.js";
+import { recordLoginEvent } from "../auth/loginEvents.js";
 import { VERIFY_RECORD_PREFIX, lookupTxt } from "./dnsVerify.js";
 import { SSO_COOKIE, beginAuthorization, issuerAllowed, loadProviderConfig, readFlowState, signFlowState, ssoRedirectUri } from "./oidc.js";
 import { SSO_FORBIDDEN_ROLES, SsoDenied, auditDenied, findConnection, handleCallback, isFreeMailDomain } from "./sso.service.js";
@@ -183,22 +185,51 @@ export const ssoStart = asyncHandler(async (_req: Request, res: Response) => {
 export const ssoCallback = asyncHandler(async (req: Request, res: Response) => {
   const flow = readFlowState(req.cookies?.[SSO_COOKIE]);
   res.clearCookie(SSO_COOKIE, { path: "/" });
-  if (!flow) return res.redirect(loginUrl({ sso_error: "session_expired" }));
+  if (!flow) {
+    await recordLoginEvent({ eventType: "sign_in_failed", success: false, reason: "Single sign-on session expired", method: "sso", client: signInClientFromRequest(req) });
+    return res.redirect(loginUrl({ sso_error: "session_expired" }));
+  }
 
   // The provider redirects here as a plain GET; openid-client wants the full callback URL as the browser reached it.
   const callbackUrl = new URL(ssoRedirectUri());
   for (const [k, v] of Object.entries(req.query)) if (typeof v === "string") callbackUrl.searchParams.set(k, v);
 
+  const client = signInClientFromRequest(req);
   try {
-    const { session } = await handleCallback(callbackUrl, flow);
+    const { session } = await handleCallback(callbackUrl, flow, client);
     setRefreshCookie(res, session.refreshToken);
     // The SPA's own startup refresh turns that cookie into a session.
     res.redirect(`${env.FRONTEND_URL.replace(/\/$/, "")}/`);
   } catch (err) {
     if (err instanceof SsoDenied) {
       await auditDenied(err);
+      const email = typeof err.detail?.email === "string" ? err.detail.email : null;
+      await recordLoginEvent({ email, eventType: "sign_in_failed", success: false, reason: ssoFailureReason(err.reason), method: "sso", client });
       return res.redirect(loginUrl({ sso_error: err.reason }));
     }
     throw err;
   }
 });
+
+function ssoFailureReason(reason: string): string {
+  switch (reason) {
+    case "account_disabled":
+      return "Account disabled";
+    case "no_account":
+      return "Unknown account";
+    case "email_not_verified":
+      return "Email not verified";
+    case "domain_not_allowed":
+      return "Email domain not allowed";
+    case "no_email":
+      return "No email from the identity provider";
+    case "provider_error":
+      return "Identity provider error";
+    case "session_expired":
+      return "Single sign-on session expired";
+    case "not_configured":
+      return "Single sign-on is not configured";
+    default:
+      return "Sign-in failed";
+  }
+}

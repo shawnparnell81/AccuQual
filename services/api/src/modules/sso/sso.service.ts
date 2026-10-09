@@ -9,6 +9,7 @@ import { ssoConnections, ssoDomains, userIdentities, type SsoConnection } from "
 import { logger } from "../../utils/logger.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { startSessionForSsoUser } from "../auth/auth.service.js";
+import type { SignInClient } from "../auth/signInAudit.js";
 import { completeAuthorization, type SsoFlowState } from "./oidc.js";
 
 /** Roles SSO may never hand out on its own: whoever controls (or spoofs) the provider must not be able to mint an owner or an admin. */
@@ -55,7 +56,7 @@ export async function findConnection(): Promise<SsoConnection | null> {
  * provider subject, else by email, else created if auto-provisioning is on.
  * Auto-provisioned users never get an owner or admin role. Domain verification still runs first.
  */
-export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Promise<{ session: Awaited<ReturnType<typeof startSessionForSsoUser>>; provisioned: boolean }> {
+export async function handleCallback(callbackUrl: URL, flow: SsoFlowState, client?: SignInClient): Promise<{ session: Awaited<ReturnType<typeof startSessionForSsoUser>>; provisioned: boolean }> {
   const [conn] = await db.select().from(ssoConnections).where(eq(ssoConnections.id, flow.cid));
   if (!conn || !conn.enabled) throw new SsoDenied("not_configured");
 
@@ -107,7 +108,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
   if (!target || !target.isActive) throw new SsoDenied("account_disabled", { email });
 
   await audit(userId, { action: "sso_login", provider: conn.displayName });
-  return { session: await startSessionForSsoUser(userId), provisioned };
+  return { session: await startSessionForSsoUser(userId, client), provisioned };
 }
 
 /** Records a refused SSO attempt against the company's audit trail (there is no user to attribute it to, so it hangs off the company). */

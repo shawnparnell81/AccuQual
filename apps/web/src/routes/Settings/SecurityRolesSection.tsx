@@ -524,7 +524,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false });
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false, canViewLoginHistory: false });
   const [replacing, setReplacing] = useState<AppRole | null>(null);
   const [replacementId, setReplacementId] = useState("");
 
@@ -590,6 +590,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                       canRenameFolders: (r.permissions ?? []).includes("folders.rename"),
                       canDeleteFolders: (r.permissions ?? []).includes("folders.delete"),
                       canDeletePlants: (r.permissions ?? []).includes("plants.delete"),
+                      canViewLoginHistory: (r.permissions ?? []).includes("login_history"),
                     });
                   }}
                   className="text-primary hover:underline"
@@ -661,6 +662,8 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             else permissions.delete("folders.delete");
             if (editForm.canDeletePlants) permissions.add("plants.delete");
             else permissions.delete("plants.delete");
+            if (editForm.canViewLoginHistory) permissions.add("login_history");
+            else permissions.delete("login_history");
             updateRole.mutate(
               {
                 id: editing.id,
@@ -708,6 +711,11 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             Can delete plants
           </label>
           <p className="text-xs text-muted-foreground">Removes a plant from every list. Records keep the plant name. This follows the permission on the role, not the role's name.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canViewLoginHistory} onChange={(e) => setEditForm({ ...editForm, canViewLoginHistory: e.target.checked })} />
+            Can view login history
+          </label>
+          <p className="text-xs text-muted-foreground">Who signed in, when, from where, and on what device. An administrator assigns this on the role. Owner and Administrator start with it.</p>
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
           </button>

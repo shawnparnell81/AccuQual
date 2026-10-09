@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, LOGIN_HISTORY_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -48,6 +48,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   if (granted.has(FORM_BUILDER_PERMISSION)) effective.form_builder = "edit";
   effective["folders.delete"] = granted.has(FOLDERS_DELETE_PERMISSION) ? "edit" : "none";
   effective["folders.rename"] = granted.has(FOLDERS_RENAME_PERMISSION) ? "edit" : "none";
+  effective.login_history = granted.has(LOGIN_HISTORY_PERMISSION) ? "read" : "none";
   res.json({ ...effective, admin_console: adminConsole });
 });
 
