@@ -45,6 +45,8 @@ interface CrudOptions {
   recordNumber?: RecordNumberSpec;
   /** When set, a new row is filed into that blank's default form folder. */
   blankCreatePath?: string;
+  /** Adds list-only fields after the rows are loaded. The response stays an array. */
+  enrichList?: (rows: Record<string, unknown>[], req: Request) => Promise<Record<string, unknown>[]>;
 }
 
 /**
@@ -151,7 +153,8 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       const [countRow] = await req.db.select({ count: sql<number>`count(*)::int` }).from(table).where(where);
       res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
     }
-    res.json(rows);
+    const presented = options.enrichList ? await options.enrichList(rows as Record<string, unknown>[], req) : rows;
+    res.json(presented);
   });
 
   const getOne = asyncHandler(async (req: Request, res: Response) => {
