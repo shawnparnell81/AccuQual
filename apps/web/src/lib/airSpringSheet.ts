@@ -22,7 +22,7 @@ function headers(row: number): AirCell[] {
 
 export function buildAirSpringRows(): AirCell[][] {
   const rows: AirCell[][] = [];
-  rows[1] = [label(1, 8, "A1", "AIR STRUT VALIDATION DOCUMENT", "title")];
+  rows[1] = [label(1, 8, "A1", "AIR SPRING VALIDATION DOCUMENT", "title")];
   rows[2] = [label(1, 1, "A2", "Doc ID:"), label(2, 2, "B2", "Rev: A"), label(4, 2, "D2", "Effective Date: 09/30/2026"), label(6, 1, "F2", "Approved By:"), input(7, 2, "G2")];
   rows[3] = across("A3", "Purpose: To validate incoming First Article or production of Air Springs against the approved DMA engineering drawing", "note");
   rows[4] = [cell(1, 8, "A4", "spacer")];

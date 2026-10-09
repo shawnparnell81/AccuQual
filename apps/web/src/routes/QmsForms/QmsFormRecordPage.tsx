@@ -17,7 +17,7 @@ import type { SignatureChoice } from "../../components/forms/signatureRequired";
 import { BrandMark } from "../../components/brand/DmaLogo";
 import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
+import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -42,12 +42,24 @@ export function QmsFormRecordPage() {
 
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.qms_forms === "edit";
-  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
+  const formLock = useSavedFormMode(formId, Boolean(canEdit));
   const [editEpoch, setEditEpoch] = useState(0);
-  const fieldsEditable = savedFieldsEditable(mode, canEdit);
+  const [armed, setArmed] = useState(false);
+  const fieldsEditable = formLock.fieldsEditable && armed;
   useEffect(() => {
-    setMode(openSavedForm());
-  }, [formId]);
+    if (!formLock.openedFresh || !canEdit) {
+      setArmed(true);
+      return;
+    }
+    let cancelled = false;
+    setArmed(false);
+    void apiClient.post(`/qms-forms/${formId}/begin-edit`).finally(() => {
+      if (!cancelled) setArmed(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [formId, canEdit, formLock.openedFresh]);
 
   const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);
 
@@ -87,7 +99,15 @@ export function QmsFormRecordPage() {
   async function startEdit() {
     if (!canEdit) return;
     await apiClient.post(`/qms-forms/${formId}/begin-edit`);
-    setMode(afterEditClick(true));
+    formLock.unlock();
+    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
+  }
+
+  async function cancelEdit() {
+    await apiClient.post(`/qms-forms/${formId}/cancel-edit`);
+    formLock.lock();
+    setEditEpoch((epoch) => epoch + 1);
+    await queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] });
     await queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
   }
 
@@ -103,18 +123,14 @@ export function QmsFormRecordPage() {
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <SavedFormLockBar
-            mode={mode}
+            mode={formLock.mode}
             canEdit={canEdit}
             onEdit={() => void startEdit()}
-            onSave={() => setMode(afterSaveOrCancel())}
-            onCancel={() => {
-              setMode(afterSaveOrCancel());
-              setEditEpoch((epoch) => epoch + 1);
-              void queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] });
-            }}
-            onDone={() => setMode(afterSaveOrCancel())}
+            onSave={() => formLock.lock()}
+            onCancel={() => void cancelEdit()}
+            onDone={() => formLock.lock()}
           />
-          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} number={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} />
+          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} number={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} allowed={canEdit} assignedOnly />
         </div>
       </div>
 

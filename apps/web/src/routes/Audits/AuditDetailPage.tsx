@@ -20,6 +20,8 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -51,7 +53,9 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
   const updateAudit = auditHooks.useUpdate();
-  const canEdit = useCanEditWorkflow("audit");
+  const permitted = useCanEditWorkflow("audit");
+  const formLock = useModuleFormLock(auditId, permitted, `/audits/${auditId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
   useSetAssistantContext("audit", auditId, audit ? recordHeading("Audit", audit.recordNumber) : "Audit");
   const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started.", invalidateKeys: historyKey });
   const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed.", invalidateKeys: historyKey });
@@ -103,7 +107,8 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} number={audit.recordNumber} ownerIds={[audit.auditorId]} navigateTo="/audits" />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} number={audit.recordNumber} ownerIds={[audit.auditorId]} navigateTo="/audits" allowed={permitted} assignedOnly />
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Plan`} label="Audit Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Checklist`} label="Audit Checklist" />
           <OpenFormButton formType="lpa" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Layered Process Audit`} label="Layered Process Audit" />
@@ -170,7 +175,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             navKey="audit"
             action={startAction}
             onClick={() => startAction.mutate({ id: auditId })}
-            visible={audit.status === "scheduled"}
+            visible={canEdit && audit.status === "scheduled"}
             variant="primary"
           />
           <WorkflowActionButton
@@ -178,7 +183,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             navKey="audit"
             action={completeAction}
             onClick={() => completeAction.mutate({ id: auditId })}
-            visible={audit.status === "in_progress"}
+            visible={canEdit && audit.status === "in_progress"}
           />
         </div>
       </div>
@@ -248,7 +253,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           </div>
         )}
 
-        <form
+        {canEdit && <form
           className="grid gap-3 md:grid-cols-3"
           onSubmit={async (e) => {
             e.preventDefault();
@@ -288,7 +293,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <button type="submit" className="col-span-full w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
             Add item
           </button>
-        </form>
+        </form>}
       </div>
 
       <AttachmentsPanel entityType="audit" entityId={auditId} />

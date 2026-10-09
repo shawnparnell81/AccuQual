@@ -5,6 +5,7 @@ import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createScarFormSchema, updateScarFormSchema, signScarFormSchema } from "./scarForms.validation.js";
 import { listScarFormsHandler, createScarFormHandler, getScarFormHandler, updateScarFormHandler, signScarFormHandler, deleteScarFormHandler } from "./scarForms.controller.js";
+import { beginScarEdit } from "../forms/moduleBeginEdit.js";
 
 export const scarFormsRouter = Router();
 // Security-audit finding (medium): this comment used to justify staying
@@ -22,4 +23,5 @@ scarFormsRouter.post("/", validate(createScarFormSchema), createScarFormHandler)
 scarFormsRouter.get("/:id", getScarFormHandler);
 scarFormsRouter.patch("/:id", validate(updateScarFormSchema), updateScarFormHandler);
 scarFormsRouter.post("/:id/sign", validate(signScarFormSchema), signScarFormHandler);
+scarFormsRouter.post("/:id/begin-edit", beginScarEdit);
 scarFormsRouter.delete("/:id", deleteScarFormHandler);

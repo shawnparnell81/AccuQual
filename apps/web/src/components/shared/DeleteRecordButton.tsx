@@ -22,11 +22,13 @@ interface DeleteRecordButtonProps {
   className?: string;
   /** Show the control for a master-list maintainer who is not the record owner. */
   allowed?: boolean;
+  /** When set, only `allowed` shows the button. Role names are not consulted. */
+  assignedOnly?: boolean;
   /** Button text. Defaults to Delete. */
   label?: string;
 }
 
-export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds = [], navigateTo, className, allowed = false, label = "Delete" }: DeleteRecordButtonProps) {
+export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds = [], navigateTo, className, allowed = false, assignedOnly = false, label = "Delete" }: DeleteRecordButtonProps) {
   const user = useCurrentUser();
   const confirm = useConfirm();
   const toast = useToast();
@@ -41,7 +43,9 @@ export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds
     },
   });
 
-  if (!allowed && !canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
+  if (assignedOnly) {
+    if (!allowed) return null;
+  } else if (!allowed && !canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
 
   const recordName = recordDeleteLabel(kind, title, number);
 

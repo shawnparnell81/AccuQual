@@ -41,7 +41,7 @@ export function BlankFormsListPage() {
     setStartError(null);
     try {
       const created = await apiClient.post<{ id: number }>(form.start.createPath, form.start.body);
-      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)));
+      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)), { state: { freshForm: true } });
     } catch {
       setStartError(`Couldn't start ${form.title}.`);
       setPendingKey(null);
@@ -114,7 +114,7 @@ export function StartBlankFormPage() {
     const start = form.start;
     void apiClient.post<{ id: number }>(start.createPath, start.body).then(
       (created) => {
-        navigate(start.openPath.replaceAll("{id}", String(created.data.id)), { replace: true });
+        navigate(start.openPath.replaceAll("{id}", String(created.data.id)), { replace: true, state: { freshForm: true } });
       },
       () => setError(`Couldn't start ${form.title}.`),
     );

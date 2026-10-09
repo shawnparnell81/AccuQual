@@ -8,7 +8,10 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { gageUsageBlockReason } from "../../lib/gageUsage";
 import { GenericCreateForm, type FieldSpec } from "../../components/forms/GenericCreateForm";
 import { Modal } from "../../components/modals/Modal";
-import { EquipmentStatusBadge, EquipmentStatusModal, LinkedDocumentsPanel, ScheduleCalibrationModal, useMayEditEquipment, type EquipmentState } from "../../components/calibration/EquipmentPanels";
+import { EquipmentStatusBadge, EquipmentStatusModal, LinkedDocumentsPanel, ScheduleCalibrationModal, type EquipmentState } from "../../components/calibration/EquipmentPanels";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { useToast } from "../../components/shared/ToastProvider";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -98,7 +101,10 @@ export function EquipmentDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const { mayEdit } = useMayEditEquipment();
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.calibration === "edit";
+  const formLock = useModuleFormLock(equipmentId, permitted, `/equipment/${equipmentId}/begin-edit`);
+  const mayEdit = formLock.fieldsEditable;
   const queryClient = useQueryClient();
   const cancelSchedule = useMutation({
     mutationFn: async (calibrationId: number) => apiClient.delete(`/equipment/calibration/${calibrationId}`),
@@ -180,10 +186,23 @@ export function EquipmentDetailPage() {
               </button>
             </>
           )}
-          <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Edit
-          </button>
-          <DeleteRecordButton resource="equipment" id={equipmentId} kind="Equipment" title={equipment.name} navigateTo="/calibration" />
+          <ModuleFormLock
+            mode={formLock.mode}
+            canEdit={permitted}
+            onEdit={() => {
+              void formLock.onEdit().then(() => setEditOpen(true));
+            }}
+            onLock={() => {
+              formLock.lock();
+              setEditOpen(false);
+            }}
+          />
+          {mayEdit && (
+            <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Edit details
+            </button>
+          )}
+          <DeleteRecordButton resource="equipment" id={equipmentId} kind="Equipment" title={equipment.name} navigateTo="/calibration" allowed={permitted} assignedOnly />
         </div>
       </div>
 

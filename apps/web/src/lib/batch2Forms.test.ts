@@ -11,7 +11,7 @@ test("air spring keeps the source title and the air-spring purpose", () => {
     .flat()
     .map((item) => item?.text ?? "")
     .join("\n");
-  assert.match(text, /AIR STRUT VALIDATION DOCUMENT/);
+  assert.match(text, /AIR SPRING VALIDATION DOCUMENT/);
   assert.match(text, /Air Springs/);
   assert.equal(/FRM-VAL-/.test(text), false);
   assert.match(text, /5\.0 ELECTRONICS & HARDWARE/);

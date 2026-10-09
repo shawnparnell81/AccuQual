@@ -8,6 +8,7 @@ import { requirePermission } from "../../middleware/requirePermission.js";
 import { validate } from "../../middleware/validate.js";
 import * as service from "./quarantine.service.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { beginQuarantineEdit } from "../forms/moduleBeginEdit.js";
 import { createQuarantineSchema, updateQuarantineSchema, releaseSchema, destroySchema, relocateSchema } from "./quarantine.validation.js";
 
 const idParam = (req: Request) => {
@@ -82,6 +83,7 @@ quarantineRouter.get(
   }),
 );
 
+quarantineRouter.post("/:id/begin-edit", manage, beginQuarantineEdit);
 quarantineRouter.delete("/:id", deleteRecordHandler("quarantine"));
 quarantineRouter.patch(
   "/:id",

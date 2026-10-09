@@ -18,9 +18,9 @@ describe("form folders", () => {
     expect(folders.some((folder) => folder.name === "Blank Form Templates" || folder.title === "Blank Form Templates")).toBe(false);
   });
 
-  it("keeps two forms that share a title as two folders", () => {
-    const struts = folders.filter((folder) => folder.title === "AIR STRUT VALIDATION DOCUMENT").map((folder) => folder.name);
-    expect(struts.sort()).toEqual(["AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)", "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)"]);
+  it("keeps air strut and air spring as their own folders", () => {
+    expect(folders.find((folder) => folder.formKeys.includes("frm-val-010"))?.name).toBe("AIR STRUT VALIDATION DOCUMENT");
+    expect(folders.find((folder) => folder.formKeys.includes("frm-val-011"))?.name).toBe("AIR SPRING VALIDATION DOCUMENT");
   });
 
   it("groups the live duplicate pairs and keeps different form numbers apart", () => {
@@ -38,10 +38,8 @@ describe("form folders", () => {
     expect(folders.find((folder) => folder.name === "Engineering Change Request")?.formKeys.sort()).toEqual(["ecr", "frm-ecr-001"]);
     expect(folders.find((folder) => folder.name === "CSA VALIDATION REPORT")?.formKeys).toEqual(["frm-val-001"]);
 
-    expect(names.filter((name) => name.startsWith("AIR STRUT VALIDATION DOCUMENT")).sort()).toEqual([
-      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)",
-      "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)",
-    ]);
+    expect(names.filter((name) => name === "AIR STRUT VALIDATION DOCUMENT")).toEqual(["AIR STRUT VALIDATION DOCUMENT"]);
+    expect(names.filter((name) => name === "AIR SPRING VALIDATION DOCUMENT")).toEqual(["AIR SPRING VALIDATION DOCUMENT"]);
     expect(names.filter((name) => name.startsWith("ASTM E542 Gravimetric Volume Calculator")).sort()).toEqual([
       "ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)",
       "ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)",

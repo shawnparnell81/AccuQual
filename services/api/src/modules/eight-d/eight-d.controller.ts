@@ -17,6 +17,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(eightD, {
   entityName: "8D Report",
   idColumn: "id",
+  blankCreatePath: "/8d",
   recordNumber: EIGHT_D_NUMBER,
   prepareCreate: (body) => ({
     ...body,

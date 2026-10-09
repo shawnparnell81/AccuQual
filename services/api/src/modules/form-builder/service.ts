@@ -17,6 +17,7 @@ import { formatSignatureStamp } from "../signatures/signaturePin.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder, type FormBuilderAccessInput, type ModuleLevel } from "./access.js";
+import { scalarEdits } from "../forms/formEditAudit.js";
 import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
@@ -451,12 +452,17 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
     .set(patch)
     .where(eq(builtFormFills.id, id))
     .returning();
-  if (numberChange) {
+  const edits = [
+    ...(numberChange ? [numberChange.numberEdit] : []),
+    ...scalarEdits({ title: current.title }, { title: String(patch.title ?? current.title) }, ["title"]),
+    ...scalarEdits(previousAnswers, (kept.answers ?? {}) as Record<string, unknown>),
+  ];
+  if (edits.length > 0) {
     await recordAuditTrail(db, {
       entityType: "BuiltFormFill",
       entityId: id,
       action: "update",
-      changes: changesWithNumberEdit({}, numberChange),
+      changes: changesWithNumberEdit({ event: "form_saved", edits }, numberChange),
       performedBy: actor.id,
     });
   }
@@ -467,6 +473,46 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
     }
   }
   return updated;
+}
+
+export async function beginBuiltFillEdit(db: Db, actor: Actor, id: number) {
+  const documents = await getUserAccessLevel(db, actor, "documents");
+  const access = await formBuilderAccess(db, actor);
+  if (documents !== "edit" && !canEditFormBuilder(access)) {
+    throw AppError.forbidden("You don't have permission to edit this form.");
+  }
+  const [row] = await db.select({ id: builtFormFills.id }).from(builtFormFills).where(eq(builtFormFills.id, id));
+  if (!row) throw AppError.notFound("Filled form");
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: { event: "edit_started" },
+    performedBy: actor.id,
+  });
+  return { editing: true };
+}
+
+export async function deleteBuiltFill(db: Db, actor: Actor, id: number) {
+  const documents = await getUserAccessLevel(db, actor, "documents");
+  const access = await formBuilderAccess(db, actor);
+  if (documents !== "edit" && !canEditFormBuilder(access)) {
+    throw AppError.forbidden("You don't have permission to delete this record.");
+  }
+  const [row] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
+  if (!row) throw AppError.notFound("Filled form");
+  await db.delete(builtFormFills).where(eq(builtFormFills.id, id));
+  const [still] = await db.select({ id: builtFormFills.id }).from(builtFormFills).where(eq(builtFormFills.id, id));
+  if (still) return;
+  const path = `${FILL_PREFIX}${id}`;
+  await db.delete(documentFolders).where(eq(documentFolders.linkedPath, path));
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "delete",
+    changes: { summary: `Deleted filled form "${row.title}"`, title: row.title, recordNumber: row.recordNumber },
+    performedBy: actor.id,
+  });
 }
 
 export async function fileBuiltFill(db: Db, actor: Actor, id: number, folderId: number) {

@@ -10,7 +10,9 @@ import { showsRequiredControl, writeSignatureRequiredAudit } from "../signatures
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
-import { beginFormEditHandler, scalarEdits } from "../forms/formEditAudit.js";
+import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
+import { scalarEdits, type FormEdit } from "../forms/formEditAudit.js";
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
@@ -44,12 +46,146 @@ export const createQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   await applyRecordNumber(req.db!, body, QMS_NUMBER);
   const [created] = await req.db!.insert(qmsForms).values({ ...body, revision, createdBy: req.user?.id } as typeof qmsForms.$inferInsert).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await fileBlankCopy(req.db!, "/qms-forms", created as Record<string, unknown>, req.user?.id);
   res.status(201).json(created);
 });
 
-export const beginQmsEditHandler = beginFormEditHandler("QmsForm", async (db, id) => {
-  const [row] = await db.select({ id: qmsForms.id }).from(qmsForms).where(eq(qmsForms.id, id));
-  return row;
+interface QmsRowSnapshot {
+  id: number;
+  sectionKey: string;
+  data: Record<string, string>;
+  sortOrder: number;
+}
+
+interface QmsEditSnapshot {
+  formNo: string | null;
+  revision: string | null;
+  effectiveDate: string | null;
+  preparedBy: string | null;
+  approvedBy: string | null;
+  status: string;
+  additionalComments: string | null;
+  rows: QmsRowSnapshot[];
+}
+
+function asSnapshot(value: unknown): QmsEditSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Partial<QmsEditSnapshot>;
+  if (!Array.isArray(row.rows) || typeof row.status !== "string") return null;
+  return row as QmsEditSnapshot;
+}
+
+function dateIso(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  return value;
+}
+
+export const beginQmsEditHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Record is required");
+  const record = await loadForm(req, id);
+  const rows = await req.db!.select().from(qmsFormRows).where(eq(qmsFormRows.formId, record.id)).orderBy(asc(qmsFormRows.sectionKey), asc(qmsFormRows.sortOrder), asc(qmsFormRows.id));
+  const snapshot: QmsEditSnapshot = {
+    formNo: record.formNo,
+    revision: record.revision,
+    effectiveDate: dateIso(record.effectiveDate),
+    preparedBy: record.preparedBy,
+    approvedBy: record.approvedBy,
+    status: record.status,
+    additionalComments: record.additionalComments,
+    rows: rows.map((row) => ({ id: row.id, sectionKey: row.sectionKey, data: { ...(row.data ?? {}) }, sortOrder: row.sortOrder })),
+  };
+  await recordAuditTrail(req.db!, {
+    entityType: "QmsForm",
+    entityId: record.id,
+    action: "update",
+    changes: { event: "edit_started", snapshot },
+    performedBy: req.user?.id,
+  });
+  res.json({ editing: true });
+});
+
+export const cancelQmsEditHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Record is required");
+  const record = await loadForm(req, id);
+  const history = await req.db!
+    .select()
+    .from(auditTrail)
+    .where(and(eq(auditTrail.entityType, "QmsForm"), eq(auditTrail.entityId, record.id)))
+    .orderBy(desc(auditTrail.createdAt), desc(auditTrail.id));
+  const started = history.find((entry) => entry.changes?.event === "edit_started");
+  const snapshot = asSnapshot(started?.changes?.snapshot);
+  if (!snapshot) {
+    res.json(record);
+    return;
+  }
+  const currentRows = await req.db!.select().from(qmsFormRows).where(eq(qmsFormRows.formId, record.id));
+  const snapIds = new Set(snapshot.rows.map((row) => row.id));
+  const edits: FormEdit[] = scalarEdits(
+    {
+      formNo: record.formNo,
+      revision: record.revision,
+      effectiveDate: dateIso(record.effectiveDate),
+      preparedBy: record.preparedBy,
+      approvedBy: record.approvedBy,
+      status: record.status,
+      additionalComments: record.additionalComments,
+    },
+    {
+      formNo: snapshot.formNo,
+      revision: snapshot.revision,
+      effectiveDate: snapshot.effectiveDate,
+      preparedBy: snapshot.preparedBy,
+      approvedBy: snapshot.approvedBy,
+      status: snapshot.status,
+      additionalComments: snapshot.additionalComments,
+    },
+    ["formNo", "revision", "effectiveDate", "preparedBy", "approvedBy", "status", "additionalComments"],
+  );
+  for (const row of currentRows) {
+    if (snapIds.has(row.id)) continue;
+    edits.push({ label: row.sectionKey, from: "added during edit", to: "(removed)" });
+    await req.db!.delete(qmsFormRows).where(eq(qmsFormRows.id, row.id));
+  }
+  for (const snap of snapshot.rows) {
+    const existing = currentRows.find((row) => row.id === snap.id);
+    if (!existing) {
+      edits.push({ label: snap.sectionKey, from: "(removed)", to: "restored" });
+      await req.db!.insert(qmsFormRows).values({ formId: record.id, sectionKey: snap.sectionKey, data: snap.data, sortOrder: snap.sortOrder });
+      continue;
+    }
+    for (const edit of scalarEdits(existing.data ?? {}, snap.data ?? {})) {
+      edits.push({ ...edit, label: `${snap.sectionKey} ${edit.label}` });
+    }
+    await req.db!
+      .update(qmsFormRows)
+      .set({ sectionKey: snap.sectionKey, data: snap.data, sortOrder: snap.sortOrder, updatedAt: new Date() })
+      .where(eq(qmsFormRows.id, existing.id));
+  }
+  const [updated] = await req.db!
+    .update(qmsForms)
+    .set({
+      formNo: snapshot.formNo,
+      revision: snapshot.revision,
+      effectiveDate: snapshot.effectiveDate ? new Date(snapshot.effectiveDate) : null,
+      preparedBy: snapshot.preparedBy,
+      approvedBy: snapshot.approvedBy,
+      status: snapshot.status,
+      additionalComments: snapshot.additionalComments,
+      updatedAt: new Date(),
+    })
+    .where(eq(qmsForms.id, record.id))
+    .returning();
+  await recordAuditTrail(req.db!, {
+    entityType: "QmsForm",
+    entityId: record.id,
+    action: "update",
+    changes: { event: "edit_reverted", edits },
+    performedBy: req.user?.id,
+  });
+  res.json(updated);
 });
 
 export const getQmsFormHandler = asyncHandler(async (req: Request, res: Response) => {

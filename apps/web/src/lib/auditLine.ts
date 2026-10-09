@@ -69,6 +69,7 @@ const KEEP_WITH_FIELDS = new Set([
   "row_removed",
   "form_saved",
   "edit_started",
+  "edit_reverted",
   "escalate_to_ncr",
   "fmea_item_added",
   "obsolete",
@@ -197,6 +198,7 @@ function auditWhat(action: string, changes?: Record<string, unknown> | null): st
   if (code && /file_downloaded|download/.test(code)) return "Downloaded file";
   if (code === "form_saved") return "Saved";
   if (code === "edit_started") return "Opened for editing";
+  if (code === "edit_reverted") return "Reverted the edit";
   if (isAttachment(action, record, code)) return "Attached file";
   if (action === "create") return "Created";
   if (action === "status_change") return "Status changed";
@@ -310,6 +312,8 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       return "Saved the form.";
     case "edit_started":
       return "Opened the form for editing.";
+    case "edit_reverted":
+      return "Reverted the edit.";
     default:
       return `${fieldLabel(code)}.`;
   }

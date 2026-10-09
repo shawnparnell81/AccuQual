@@ -10,6 +10,7 @@ import {
   createQmsFormHandler,
   getQmsFormHandler,
   beginQmsEditHandler,
+  cancelQmsEditHandler,
   updateQmsFormHandler,
   deleteQmsFormHandler,
   createQmsFormRowHandler,
@@ -38,6 +39,7 @@ qmsFormsRouter.get("/", listQmsFormsHandler);
 qmsFormsRouter.post("/", validate(createQmsFormSchema), createQmsFormHandler);
 qmsFormsRouter.get("/:id", getQmsFormHandler);
 qmsFormsRouter.post("/:id/begin-edit", beginQmsEditHandler);
+qmsFormsRouter.post("/:id/cancel-edit", cancelQmsEditHandler);
 qmsFormsRouter.patch("/:id", validate(updateQmsFormSchema), updateQmsFormHandler);
 qmsFormsRouter.delete("/:id", deleteQmsFormHandler);
 

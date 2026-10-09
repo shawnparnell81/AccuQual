@@ -490,10 +490,36 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
   }
 }
 
-/** Remove the folder file for one saved copy. Safe to call when that copy was never filed. */
+/** Record-delete kinds that have a saved-form listing. Unlisted kinds are left alone. */
+const DELETION_LISTING: Record<string, RecordKind> = {
+  ncr: "ncr",
+  complaint: "ncr",
+  capa: "capa",
+  eight_d: "eight_d",
+  validation_report: "validation",
+  iso_quality_form: "iso",
+  qms: "qms",
+  dcr: "dcr",
+  risk: "risk",
+  audit: "audit",
+  equipment: "equipment",
+  training: "training",
+  change: "change",
+};
+
+/**
+ * Remove the folder file for one saved copy after that record is gone.
+ * If the record is still there, this does nothing. It never sweeps other records
+ * and it does not run the listing-time cleanup.
+ */
 export async function forgetRecordListings(db: Db, kind: string, row: Record<string, unknown>, performedBy?: number): Promise<void> {
   const id = Number(row.id);
   if (!Number.isInteger(id) || id < 1) return;
+  const listed = DELETION_LISTING[kind];
+  if (listed) {
+    const alive = await idsOf(db, listed, [id]);
+    if (alive.has(id)) return;
+  }
   const paths = new Set<string>();
   const formKeys: string[] = [];
   if (kind === "validation_report") {
@@ -521,7 +547,11 @@ export async function forgetRecordListings(db: Db, kind: string, row: Record<str
   else if (kind === "change") paths.add(`/change/${id}`);
 
   const filings = await db.select().from(formFilings).where(eq(formFilings.recordId, id));
-  const matching = filings.filter((filing) => formKeys.includes(filing.formKey) || paths.has(canonicalOpenPath(filing.formKey, filing.recordId)));
+  const matching = filings.filter((filing) => {
+    if (formKeys.includes(filing.formKey)) return true;
+    if (paths.has(canonicalOpenPath(filing.formKey, filing.recordId))) return true;
+    return listed != null && kindForFormKey(filing.formKey) === listed;
+  });
   const nodeIds = new Set<number>();
   for (const filing of matching) {
     if (filing.folderNodeId != null) nodeIds.add(filing.folderNodeId);

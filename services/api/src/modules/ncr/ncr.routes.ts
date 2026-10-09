@@ -19,6 +19,7 @@ import {
   completeNcrDispositionSchema,
 } from "./ncr.validation.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { beginNcrEdit } from "../forms/moduleBeginEdit.js";
 import {
   baseHandlers,
   listHandler,
@@ -53,6 +54,7 @@ ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), rejectLockedNcr, rejectC
 ncrRouter.get("/:id/repeats", repeatsHandler);
 ncrRouter.get("/:id", baseHandlers.getOne);
 ncrRouter.patch("/:id", validate(updateNcrSchema), rejectLockedNcr, rejectCloseWhileQuarantineOnHold, baseHandlers.update);
+ncrRouter.post("/:id/begin-edit", beginNcrEdit);
 ncrRouter.delete("/:id", rejectLockedNcr, deleteRecordHandler("ncr"));
 
 ncrRouter.post("/:id/assign", rejectLockedNcr, validate(assignNcrSchema), assignHandler);

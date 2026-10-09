@@ -46,7 +46,8 @@ import { IsoFormSheet } from "./IsoFormSheet";
 import { ScorecardSheet } from "./ScorecardSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
-import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
+import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
+import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 
 interface IsoFormData {
   cells?: Record<string, CellValue>;
@@ -81,7 +82,8 @@ export function IsoFormDetailPage() {
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
   const beginEdit = hooks.useAction("begin-edit");
-  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
+  const formLock = useSavedFormMode(recordId, Boolean(canEdit));
+  const mode = formLock.mode;
   const queryClient = useQueryClient();
   const requestKind = changeRequestByFormType(record?.formType);
   const ecrView = useQuery({
@@ -105,10 +107,6 @@ export function IsoFormDetailPage() {
   const [months, setMonths] = useState<string[]>([]);
   const [sheet, setSheet] = useState<"form" | "photos">("form");
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
-
-  useEffect(() => {
-    setMode(openSavedForm());
-  }, [recordId]);
 
   useEffect(() => {
     if (!record || loadedFor === record.id) return;
@@ -191,14 +189,14 @@ export function IsoFormDetailPage() {
 
   async function saveRecord() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
-    setMode(afterSaveOrCancel());
+    formLock.lock();
     await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
   }
 
   async function startEdit() {
     if (!canEdit) return;
     await beginEdit.mutateAsync({ id: recordId });
-    setMode(afterEditClick(true));
+    formLock.unlock();
     await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
   }
 
@@ -210,7 +208,7 @@ export function IsoFormDetailPage() {
     setCustomers(record.data?.customers ?? []);
     setProblems(record.data?.problems ?? []);
     setMonths(record.data?.months ?? []);
-    setMode(afterSaveOrCancel());
+    formLock.lock();
   }
 
   const savedRecord = record;
@@ -243,7 +241,7 @@ export function IsoFormDetailPage() {
       onCancel={cancelEdit}
       onDone={() => {
         if (dirty) void saveRecord();
-        else setMode(afterSaveOrCancel());
+        else formLock.lock();
       }}
       dirty={dirty}
       saving={updateRecord.isPending}
@@ -422,7 +420,7 @@ function IsoFormDetailBody({
             {formKey && <RecordFolderField formKey={formKey} recordId={recordId} prepare={onSave} />}
           </div>
           <div className="flex items-center gap-2">
-            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} />
+            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} allowed={canEdit} assignedOnly />
             <SaveStatus saving={saving} unsaved={dirty && !saving} />
             <SavedFormLockBar
               mode={mode}

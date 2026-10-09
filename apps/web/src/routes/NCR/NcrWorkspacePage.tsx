@@ -28,6 +28,8 @@ import { RecordFrame } from "../../components/records/RecordFrame";
 import { NcrStepDocuments } from "../../components/records/NcrStepDocuments";
 import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { rememberRecord } from "../../lib/recentRecords";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
@@ -64,7 +66,9 @@ export function NcrWorkspacePage() {
   const { id } = useParams();
   const ncrId = Number(id);
   const toast = useToast();
-  const canEdit = useCanEditWorkflow("ncr");
+  const permitted = useCanEditWorkflow("ncr");
+  const formLock = useModuleFormLock(ncrId, permitted, `/ncr/${ncrId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
   const { label, people } = usePersonDirectory();
   const [showHistory, setShowHistory] = useState(false);
   const [quarantineOnHold, setQuarantineOnHold] = useState(false);
@@ -179,10 +183,11 @@ export function NcrWorkspacePage() {
         }
         blocked={closed ? "Nobody" : owner === "Unassigned" ? "Nobody is assigned" : owner}
         next={ncrNextAction(ncr.status, hasFix)}
-        accessNote={canEdit ? null : READ_ONLY_REASON}
+        accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" allowed={permitted} assignedOnly />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
             {canEdit && (
               <button

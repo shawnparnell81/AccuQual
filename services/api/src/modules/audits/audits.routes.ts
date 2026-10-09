@@ -7,6 +7,7 @@ import { validate } from "../../middleware/validate.js";
 import { createAuditSchema, updateAuditSchema, addAuditItemSchema, reorderAuditItemsSchema } from "./audits.validation.js";
 import { baseHandlers, addItemHandler, listItemsHandler, reorderItemsHandler, startHandler, completeHandler } from "./audits.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { beginAuditEdit } from "../forms/moduleBeginEdit.js";
 
 export const auditsRouter = Router();
 // Turns on PERMISSION_MATRIX.audit (quality: edit) — previously unenforced.
@@ -16,6 +17,7 @@ auditsRouter.get("/", baseHandlers.list);
 auditsRouter.post("/", validate(createAuditSchema), baseHandlers.create);
 auditsRouter.get("/:id", baseHandlers.getOne);
 auditsRouter.patch("/:id", validate(updateAuditSchema), baseHandlers.update);
+auditsRouter.post("/:id/begin-edit", beginAuditEdit);
 auditsRouter.delete("/:id", deleteRecordHandler("audit"));
 auditsRouter.get("/:id/item", listItemsHandler);
 auditsRouter.post("/:id/item", validate(addAuditItemSchema), addItemHandler);

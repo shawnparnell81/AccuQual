@@ -33,7 +33,8 @@ import { withChoice, type SignatureChoice } from "../../components/forms/signatu
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
-import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
+import { savedFieldsEditable } from "../../lib/savedFormLock";
+import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 
 interface ValidationReport {
   id: number;
@@ -76,7 +77,8 @@ export function ValidationReportDetailPage() {
   const updateReport = hooks.useUpdate();
   const signReport = hooks.useAction("sign");
   const beginEdit = hooks.useAction("begin-edit");
-  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
+  const formLock = useSavedFormMode(reportId, Boolean(canEdit));
+  const mode = formLock.mode;
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
@@ -93,10 +95,6 @@ export function ValidationReportDetailPage() {
     const formTitle = VALIDATION_FORMS[formTypeOf(report.data)].title;
     rememberRecord({ path: `/validation-reports/${report.id}`, title: recordHeading(formTitle, report.recordNumber), type: "Validation" }, user?.id);
   }, [report, user?.id]);
-
-  useEffect(() => {
-    setMode(openSavedForm());
-  }, [reportId]);
 
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
@@ -140,7 +138,7 @@ export function ValidationReportDetailPage() {
     try {
       const filed = await fileChosenFolder(queryClient, formKey, reportId);
       setSaveNote(filed ?? "unfiled");
-      setMode(afterSaveOrCancel());
+      formLock.lock();
     } catch {
       setSaveNote("file-error");
     } finally {
@@ -152,7 +150,7 @@ export function ValidationReportDetailPage() {
     if (!canEdit) return;
     try {
       await beginEdit.mutateAsync({ id: reportId });
-      setMode(afterEditClick(true));
+      formLock.unlock();
       await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
     } catch {
       setSaveNote("error");
@@ -161,7 +159,7 @@ export function ValidationReportDetailPage() {
 
   function cancelEdit() {
     setCells(loadCells(formType, savedReport.data));
-    setMode(afterSaveOrCancel());
+    formLock.lock();
   }
 
   return (
@@ -199,6 +197,8 @@ export function ValidationReportDetailPage() {
               title={cells.B6 == null ? null : String(cells.B6)}
               number={report.recordNumber}
               navigateTo={validationReportsCrumb().to}
+              allowed={canEdit}
+              assignedOnly
             />
             <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: passed || failed ? "#111" : undefined }} data-testid="validation-overall">
               {result}
@@ -213,7 +213,7 @@ export function ValidationReportDetailPage() {
               onCancel={cancelEdit}
               onDone={() => {
                 if (dirty) void saveRecord();
-                else setMode(afterSaveOrCancel());
+                else formLock.lock();
               }}
             />
             <SaveResult result={saveNote} />

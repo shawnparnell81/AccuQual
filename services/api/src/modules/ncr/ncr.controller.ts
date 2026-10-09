@@ -20,6 +20,7 @@ import { showRecordNumber } from "../records/userRecordNumber.js";
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
   idColumn: "id",
+  blankCreatePath: "/ncr",
   softDelete: true,
   siteScoped: true,
   recordNumber: NCR_NUMBER,

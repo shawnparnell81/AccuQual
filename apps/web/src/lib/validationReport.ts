@@ -45,7 +45,7 @@ export const VALIDATION_FORMS: Record<ValidationFormType, { formKey: string; tit
   csa: { formKey: "frm-val-001", title: "CSA VALIDATION REPORT", pass: "#4EA72E", revision: "C" },
   fuel_pump: { formKey: "frm-val-007", title: "FUEL PUMP VALIDATION DOCUMENT", pass: "#00B050", revision: "C" },
   air_strut: { formKey: "frm-val-010", title: "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT", pass: "#0EBB5F", revision: "A" },
-  air_spring: { formKey: "frm-val-011", title: "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT", pass: "#0EBB5F", revision: "A" },
+  air_spring: { formKey: "frm-val-011", title: "FRM-VAL-011 AIR SPRING VALIDATION DOCUMENT", pass: "#0EBB5F", revision: "A" },
   fuel_injector: { formKey: "frm-val-008", title: "FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
   brake_wear: { formKey: "frm-val-009", title: "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
   shock: { formKey: "frm-val-002", title: "FRM-VAL-002 SHOCK VALIDATION REPORT", pass: "#4EA72E", revision: "B" },

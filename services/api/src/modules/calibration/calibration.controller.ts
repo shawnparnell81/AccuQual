@@ -16,7 +16,7 @@ import * as service from "./calibration.service.js";
 import { PDF_ONLY_ERROR, sniffPdf } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
-export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
+export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id", blankCreatePath: "/equipment" });
 
 /**
  * Full-System Audit finding H2 — equipment's own baseHandlers.remove was

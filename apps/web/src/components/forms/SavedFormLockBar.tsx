@@ -40,3 +40,18 @@ export function SavedFormLockBar({
     </>
   );
 }
+
+/** Edit / Save / Cancel / Done for a module record. Save, Cancel, and Done all lock it. */
+export function ModuleFormLock({
+  mode,
+  canEdit,
+  onEdit,
+  onLock,
+}: {
+  mode: SavedFormMode;
+  canEdit: boolean;
+  onEdit: () => void;
+  onLock: () => void;
+}) {
+  return <SavedFormLockBar mode={mode} canEdit={canEdit} onEdit={onEdit} onSave={onLock} onCancel={onLock} onDone={onLock} />;
+}
