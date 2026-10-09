@@ -278,8 +278,8 @@ describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
 
       expect((await request(app).patch("/company/security").set(bearer(workerToken)).send({ mfaPolicy: "all" })).status).toBe(403);
       expect((await request(app).patch("/company/security").set(bearer(adminToken)).send({ mfaPolicy: "bogus" })).status).toBe(400);
-      expect((await request(app).patch("/company/security").set(bearer(adminToken)).send({ mfaPolicy: "all" })).body).toEqual({ mfaPolicy: "all" });
-      expect((await request(app).get("/company/security").set(bearer(workerToken))).body).toEqual({ mfaPolicy: "all" });
+      expect((await request(app).patch("/company/security").set(bearer(adminToken)).send({ mfaPolicy: "all" })).body).toEqual({ mfaPolicy: "all", sessionLengthHours: 12 });
+      expect((await request(app).get("/company/security").set(bearer(workerToken))).body).toEqual({ mfaPolicy: "all", sessionLengthHours: 12 });
       await db.update(company).set({ mfaPolicy: "admins" });
     });
   });

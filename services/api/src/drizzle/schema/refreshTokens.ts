@@ -23,10 +23,9 @@ export const refreshTokens = pgTable("refresh_tokens", {
   userId: integer("user_id").references(() => users.id).notNull(),
   jti: text("jti").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
-  // Last request that used this sign-in. POST /auth/refresh refuses the
-  // token when this is older than the idle window. A new row starts at
-  // now so an open tab's refresh does not look idle. Existing rows are
-  // backfilled to now by the migration so a deploy does not sign everyone out.
+  // Last request that used this sign-in. It does not end the sign-in.
+  // The session ends at expiresAt, which is the company session length
+  // measured from sign-in. A new row starts at now.
   lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
   // Set by the conditional update that claims this token for rotation.
   // A second presentation inside a short window is an overlapping renewal

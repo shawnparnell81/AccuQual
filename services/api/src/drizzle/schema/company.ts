@@ -200,6 +200,13 @@ export const company = pgTable("company", {
     contactEmail?: string;
     contactPhone?: string;
     /**
+     * How many hours a sign-in lasts, for every role, measured from sign-in.
+     * Unset means 12. Idle time does not shorten it. Admin changes it from
+     * Company Settings. No new column: this jsonb already exists, so a deploy
+     * before any migration still reads the default.
+     */
+    sessionLengthHours?: number;
+    /**
      * Change-request masters (labels and revision). Written only by the
      * change-request structure endpoints. Company Settings spreads this
      * object, so a profile save keeps them. No separate table. Engineering

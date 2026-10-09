@@ -7,6 +7,7 @@ import type { SignInClient } from "./signInAudit.js";
 import { changeSignaturePin, setSignaturePin } from "../signatures/signaturePin.service.js";
 import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 import { encryptRefreshCookie, REFRESH_COOKIE_NAME, refreshCookieFrom } from "./refreshCookie.js";
+import { withSharedRefresh } from "./refreshFlight.js";
 
 export { REFRESH_COOKIE_NAME };
 
@@ -54,7 +55,7 @@ function sessionCookieOptions() {
  * out. A reload, a new tab, and a typed address in the same browser still
  * send it, and the server accepts it. A browser set to continue where you
  * left off may put the cookie back; that restored cookie stays valid until
- * the 12-hour sign-in limit or 30 minutes with no activity. The value is
+ * the company session length (12 hours unless an admin changed it). The value is
  * encrypted; the refresh token is not stored in the cookie as clear text.
  */
 export function setRefreshCookie(res: Response, refreshToken: string) {
@@ -207,10 +208,11 @@ export const endBrowserSessionHandler = asyncHandler(async (req: Request, res: R
 });
 
 export const refreshHandler = asyncHandler(async (req: Request, res: Response) => {
-  const token = refreshCookieFrom(req);
-  if (!token) throw AppError.unauthorized("Missing refresh token");
-
-  const result = await authService.refresh(token);
+  const result = await withSharedRefresh(req, async () => {
+    const token = refreshCookieFrom(req);
+    if (!token) throw AppError.unauthorized("Missing refresh token");
+    return authService.refresh(token);
+  });
   setRefreshCookie(res, result.refreshToken);
   res.json(withoutRefreshToken(result));
 });

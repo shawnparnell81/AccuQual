@@ -22,12 +22,12 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(1),
   JWT_REFRESH_SECRET: z.string().min(1),
   JWT_ACCESS_TTL: z.string().default("15m"),
-  // No longer the length of a sign-in. The server still ends a session 12 hours after sign-in (SESSION_MAX_MS in jwt.ts). The browser cookie ends sooner, when the browser closes. Kept so existing environment files still load.
+  // No longer the length of a sign-in. The company session length (default 12 hours, Admin → Company Settings) is. The browser cookie ends sooner, when the browser closes. Kept so existing environment files still load.
   JWT_REFRESH_TTL: z.string().default("7d"),
   // No longer used. Kept so existing environment files still load.
   REMEMBER_ME_TTL: z.string().default("30d"),
 
-  // POST /auth/refresh refuses a session with no activity for this many minutes. Activity does not extend the 12-hour cap (SESSION_MAX_MS in jwt.ts).
+  // No longer signs anyone out. Kept so existing environment files still load. Idle time does not end a sign-in; the company session length does.
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).default(30),
   // This many wrong passwords inside LOGIN_FAILURE_WINDOW_MINUTES lock the account for LOGIN_LOCKOUT_MINUTES.
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
