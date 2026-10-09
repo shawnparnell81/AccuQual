@@ -46,7 +46,11 @@ export function AdminCompanySettingsPage() {
     }
   }, [profile]);
 
-  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["company/security"], queryFn: async () => (await apiClient.get("/company/security")).data });
+  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all"; sessionLengthHours: number }>({ queryKey: ["company/security"], queryFn: async () => (await apiClient.get("/company/security")).data });
+  const [sessionHours, setSessionHours] = useState("12");
+  useEffect(() => {
+    if (security?.sessionLengthHours) setSessionHours(String(security.sessionLengthHours));
+  }, [security]);
   const saveSecurity = useMutation({
     mutationFn: async (mfaPolicy: string) => (await apiClient.patch("/company/security", { mfaPolicy })).data,
     onSuccess: () => {
@@ -54,6 +58,14 @@ export function AdminCompanySettingsPage() {
       toast.success("Sign-in security policy saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the policy.")),
+  });
+  const saveSessionLength = useMutation({
+    mutationFn: async (sessionLengthHours: number) => (await apiClient.patch("/company/security", { sessionLengthHours })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company/security"] });
+      toast.success("Session length saved.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the session length.")),
   });
 
   const save = useMutation({
@@ -113,6 +125,31 @@ export function AdminCompanySettingsPage() {
             <p className="text-xs text-muted-foreground">
               People newly covered have 7 days to set it up before they're asked at sign-in. An admin can reset a user's two-step sign-in from Users &amp; Roles if they lose their phone.
             </p>
+            <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+              <h3 className="text-sm font-medium text-foreground">Session length</h3>
+              <SelectField label="How long everyone stays signed in" value={sessionHours} onChange={(e) => setSessionHours(e.target.value)} disabled={saveSessionLength.isPending}>
+                {Array.from({ length: 24 }, (_, index) => {
+                  const hours = index + 1;
+                  return (
+                    <option key={hours} value={String(hours)}>
+                      {hours} {hours === 1 ? "hour" : "hours"}
+                      {hours === 12 ? " (default)" : ""}
+                    </option>
+                  );
+                })}
+              </SelectField>
+              <p className="text-xs text-muted-foreground">
+                This applies to every role. A person stays signed in for this long after they sign in, whether they are using the app or not. Signing out ends it sooner. New sign-ins use the length saved here. A sign-in that is already open keeps the time it has left, unless that is longer than this.
+              </p>
+              <button
+                type="button"
+                disabled={saveSessionLength.isPending}
+                onClick={() => saveSessionLength.mutate(Number(sessionHours))}
+                className="w-fit rounded-md bg-button px-4 py-2 text-sm font-medium text-button-foreground disabled:opacity-60"
+              >
+                {saveSessionLength.isPending ? "Saving…" : "Save session length"}
+              </button>
+            </div>
           </div>
         </AdminOnlyGuard>
       )}

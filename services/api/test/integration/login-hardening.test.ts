@@ -2,7 +2,7 @@ import { ensureTestCompany } from "../helpers/company.js";
 // Real-DB integration test (see company-isolation.test.ts's header comment).
 // Login hardening: lockout after repeated wrong passwords (audited, cleared by
 // a good login / reset / admin unlock), the password policy, the fixed
-// 12-hour sign-in, and session revocation when a user is disabled or has their
+// company session length (12 hours unless an admin changed it), and session revocation when a user is disabled or has their
 // role changed — including that an already-issued access token stops working at once.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
@@ -160,32 +160,31 @@ describe("Login hardening (real DB + real HTTP path)", () => {
   });
 
   describe("sessions", () => {
-    it("ends a session that has been idle for more than 30 minutes", async () => {
-      const u = await makeUser("idle");
-      const agent = request.agent(app);
-      const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
-      expect(res.status).toBe(200);
-      await db.update(refreshTokens).set({ lastActivityAt: new Date(Date.now() - 31 * 60_000) }).where(eq(refreshTokens.userId, u.id));
-      const refreshed = await agent.post("/auth/refresh").set(CSRF);
-      expect(refreshed.status).toBe(401);
-      expect(refreshed.body.message).toMatch(/inactivity|30 minutes/);
-    });
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
 
-    it("keeps a session that was used in the last 30 minutes even if sign-in was hours ago", async () => {
-      const u = await makeUser("recent");
+    it("refreshes a session at 11 hours 59 minutes even when it has been idle the whole time", async () => {
+      const u = await makeUser("eleven-fifty-nine");
       const agent = request.agent(app);
       const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
       expect(res.status).toBe(200);
-      await db.update(refreshTokens).set({ createdAt: new Date(Date.now() - 3 * 60 * 60_000), lastActivityAt: new Date(Date.now() - 5 * 60_000) }).where(eq(refreshTokens.userId, u.id));
+      const signedInAt = new Date(Date.now() - (TWELVE_HOURS - 60_000));
+      await db
+        .update(refreshTokens)
+        .set({ createdAt: signedInAt, expiresAt: new Date(signedInAt.getTime() + TWELVE_HOURS), lastActivityAt: signedInAt })
+        .where(eq(refreshTokens.userId, u.id));
       expect((await agent.post("/auth/refresh").set(CSRF)).status).toBe(200);
     });
 
-    it("ends a session once 12 hours have passed since sign-in", async () => {
-      const u = await makeUser("expired12h");
+    it("rejects a session at 12 hours 1 minute even when it was just used", async () => {
+      const u = await makeUser("twelve-oh-one");
       const agent = request.agent(app);
       const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
       expect(res.status).toBe(200);
-      await db.update(refreshTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(refreshTokens.userId, u.id));
+      const signedInAt = new Date(Date.now() - (TWELVE_HOURS + 60_000));
+      await db
+        .update(refreshTokens)
+        .set({ createdAt: signedInAt, expiresAt: new Date(signedInAt.getTime() + TWELVE_HOURS), lastActivityAt: new Date() })
+        .where(eq(refreshTokens.userId, u.id));
       const refreshed = await agent.post("/auth/refresh").set(CSRF);
       expect(refreshed.status).toBe(401);
       expect(refreshed.body.message).toMatch(/12 hours/);
@@ -237,6 +236,37 @@ describe("Login hardening (real DB + real HTTP path)", () => {
       const token = (await login(u.email, GOOD)).body.accessToken as string;
       expect((await request(app).delete(`/users/${u.id}`).set(auth())).status).toBe(200);
       expect((await request(app).get("/auth/me").set({ Authorization: `Bearer ${token}` })).status).toBe(401);
+    });
+
+    it("records a company session-length change and applies that length to the next sign-in for every role", async () => {
+      const [before] = await db.select({ profile: company.profile }).from(company);
+      try {
+        expect((await request(app).patch("/company/security").set(auth()).send({ sessionLengthHours: 0 })).status).toBe(400);
+        expect((await request(app).patch("/company/security").set(auth()).send({ sessionLengthHours: 30 })).status).toBe(400);
+        const saved = await request(app).patch("/company/security").set(auth()).send({ sessionLengthHours: 8 });
+        expect(saved.status).toBe(200);
+        expect(saved.body).toMatchObject({ sessionLengthHours: 8 });
+
+        const entries = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "Company"));
+        const change = entries.find((entry) => {
+          const changes = entry.changes as { setting?: string; to?: number } | null;
+          return changes?.setting === "sessionLengthHours" && changes.to === 8;
+        });
+        expect(change?.changes).toMatchObject({ setting: "sessionLengthHours", from: 12, to: 8 });
+        expect(change?.performedBy).toBe(adminId);
+
+        const operator = await makeUser("session-operator");
+        const otherRole = await makeUser("session-role", { roleId: roleIds[0] });
+        for (const person of [operator, otherRole]) {
+          expect((await login(person.email, GOOD)).status).toBe(200);
+          const [row] = await db.select().from(refreshTokens).where(eq(refreshTokens.userId, person.id));
+          const remaining = row!.expiresAt.getTime() - Date.now();
+          expect(remaining).toBeGreaterThan(8 * 60 * 60 * 1000 - 5_000);
+          expect(remaining).toBeLessThanOrEqual(8 * 60 * 60 * 1000);
+        }
+      } finally {
+        await db.update(company).set({ profile: before?.profile ?? {} });
+      }
     });
   });
 });

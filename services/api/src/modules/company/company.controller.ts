@@ -11,6 +11,7 @@ import { encryptSecret, decryptSecret, maskSecret } from "./crypto.js";
 import { validateApiKey } from "../ai/llm-gateway.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
+import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
 
 /**
  * Self-service settings for the company
@@ -289,24 +290,40 @@ export const getAssistantNameHandler = asyncHandler(async (req: Request, res: Re
   res.json({ assistantName: co.aiConfig?.assistantName ?? null });
 });
 
-/** Who in this organization must use multi-factor authentication. Readable by any signed-in user (the UI explains the policy); only an admin changes it. */
+/** Who must use multi-factor authentication, and how long a sign-in lasts. Readable by any signed-in user; only an admin changes it. The length is the whole company, not a role. */
 export const getSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  res.json({ mfaPolicy: co.mfaPolicy });
+  res.json({ mfaPolicy: co.mfaPolicy, sessionLengthHours: sessionLengthHoursFromProfile(co.profile) });
 });
 
 export const updateSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
-  await req.db!.update(company).set({ mfaPolicy });
-  await recordAuditTrail(req.db!, {
-    entityType: "Company",
-    entityId: 1,
-    action: "update",
-    changes: { setting: "mfaPolicy", from: co.mfaPolicy, to: mfaPolicy },
-    performedBy: req.user?.id,
-  });
-  res.json({ mfaPolicy });
+  const { mfaPolicy, sessionLengthHours } = req.body as { mfaPolicy?: "optional" | "admins" | "all"; sessionLengthHours?: number };
+  const previousHours = sessionLengthHoursFromProfile(co.profile);
+  const patch: { mfaPolicy?: "optional" | "admins" | "all"; profile?: typeof co.profile } = {};
+  if (mfaPolicy !== undefined) patch.mfaPolicy = mfaPolicy;
+  if (sessionLengthHours !== undefined) patch.profile = { ...co.profile, sessionLengthHours };
+
+  if (Object.keys(patch).length > 0) await req.db!.update(company).set(patch);
+  if (mfaPolicy !== undefined) {
+    await recordAuditTrail(req.db!, {
+      entityType: "Company",
+      entityId: 1,
+      action: "update",
+      changes: { setting: "mfaPolicy", from: co.mfaPolicy, to: mfaPolicy },
+      performedBy: req.user?.id,
+    });
+  }
+  if (sessionLengthHours !== undefined && sessionLengthHours !== previousHours) {
+    await recordAuditTrail(req.db!, {
+      entityType: "Company",
+      entityId: 1,
+      action: "update",
+      changes: { setting: "sessionLengthHours", from: previousHours, to: sessionLengthHours },
+      performedBy: req.user?.id,
+    });
+  }
+  res.json({ mfaPolicy: mfaPolicy ?? co.mfaPolicy, sessionLengthHours: sessionLengthHours ?? previousHours });
 });
 
 /** First-run onboarding checklist — open to any signed-in user (the dashboard shows it), same as branding/profile above. Reads back a sane default for a co created before this shipped and never backfilled, rather than null. */

@@ -13,7 +13,8 @@ import { ssoConnections } from "../../drizzle/schema/sso.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken, SESSION_MAX_MS } from "../../utils/jwt.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
+import { sessionLengthHoursFromProfile, sessionLengthMs } from "./sessionLength.js";
 import { issueTrustedDevice, revokeAllTrustedDevices, useTrustedDevice } from "./trustedDevice.service.js";
 
 /**
@@ -28,7 +29,6 @@ import { sendEmail } from "../notifications/notification.service.js";
 import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
-import { sessionIsIdle } from "./sessionActivity.js";
 import { SIGN_IN_ENTITY_TYPE, signInAuditChanges, type SignInClient } from "./signInAudit.js";
 
 // Sign-in runs before a request transaction exists, so — unlike every other
@@ -52,6 +52,7 @@ async function userWithRole(userId: number) {
       mustChangePassword: users.mustChangePassword,
       pinHash: users.pinHash,
       companyMfaPolicy: company.mfaPolicy,
+      companyProfile: company.profile,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
@@ -67,19 +68,24 @@ async function userWithRole(userId: number) {
  * being replayed after it was already rotated — see refreshTokens.ts's
  * own comment.
  */
-function freshSessionEnd(): Date {
-  return new Date(Date.now() + SESSION_MAX_MS);
+function sessionEndFrom(profile: { sessionLengthHours?: unknown } | null | undefined): Date {
+  return new Date(Date.now() + sessionLengthMs(sessionLengthHoursFromProfile(profile)));
 }
 
 /**
  * The replacement token ends at the same instant as the one it replaces.
- * A row dated further out than 12 hours (an older remember-me or 7-day
- * token) is pulled in to 12 hours from now, once, and later refreshes copy
- * that earlier end.
+ * A row dated further out than the company session length (an older
+ * remember-me or 7-day token) is pulled in to that length from now, once,
+ * and later refreshes copy that earlier end. Activity does not move it.
  */
-function continuingSessionEnd(stored: Date): Date {
-  const cap = Date.now() + SESSION_MAX_MS;
+function continuingSessionEnd(stored: Date, profile: { sessionLengthHours?: unknown } | null | undefined): Date {
+  const cap = Date.now() + sessionLengthMs(sessionLengthHoursFromProfile(profile));
   return stored.getTime() > cap ? new Date(cap) : stored;
+}
+
+function sessionExpiredMessage(profile: { sessionLengthHours?: unknown } | null | undefined): string {
+  const hours = sessionLengthHoursFromProfile(profile);
+  return `Your sign-in expired after ${hours} ${hours === 1 ? "hour" : "hours"}. Please sign in again.`;
 }
 
 async function issueTokens(user: {
@@ -162,7 +168,7 @@ export async function login(input: { email: string; password: string; rememberMe
 type LoginUserRow = typeof users.$inferSelect;
 type LoginCompanyRow = typeof company.$inferSelect | null;
 
-/** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues a session that ends 12 hours from now. */
+/** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues a session that ends at the company session length from now. */
 async function completeLogin(
   user: LoginUserRow,
   roleName: string | null,
@@ -176,7 +182,7 @@ async function completeLogin(
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
   if (audit) await recordSignInEvent(user.id, "login", audit.method, audit.client);
 
-  const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, freshSessionEnd());
+  const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, sessionEndFrom(co?.profile));
   return {
     user: sanitize({ ...user, roleName }),
     company: co ? { id: co.id, name: co.name, branding: co.branding } : null,
@@ -310,9 +316,10 @@ export async function refresh(refreshToken: string) {
   }
 
   // The sign-in ends at the expiresAt stored when it began. Refresh copies
-  // that instant; it does not start a new 12 hours. A token with no jti
-  // (minted before rotation tracking) is capped once at 12 hours from now.
-  let sessionExpiresAt = freshSessionEnd();
+  // that instant; it does not start a new session length. Sitting idle does
+  // not end it sooner. A token with no jti (minted before rotation tracking)
+  // is capped once at the company session length from now.
+  let sessionExpiresAt = sessionEndFrom(full.companyProfile);
 
   // Security-audit finding (medium): reuse detection. `jti` is only absent
   // on a token minted before this feature existed (graceful degrade — an
@@ -329,14 +336,10 @@ export async function refresh(refreshToken: string) {
       throw AppError.unauthorized("Refresh token has been revoked");
     }
     if (tokenRow.expiresAt.getTime() - Date.now() < 1000) {
-      await revokeRefreshTokenRows(full.id);
-      throw AppError.unauthorized("Your sign-in expired after 12 hours. Please sign in again.");
-    }
-    if (sessionIsIdle(tokenRow.lastActivityAt)) {
       await db.update(refreshTokens).set({ revokedAt: new Date() }).where(and(eq(refreshTokens.id, tokenRow.id), isNull(refreshTokens.revokedAt)));
-      throw AppError.unauthorized(`Your session timed out after ${env.SESSION_IDLE_TIMEOUT_MINUTES} minutes of inactivity. Please sign in again.`);
+      throw AppError.unauthorized(sessionExpiredMessage(full.companyProfile));
     }
-    sessionExpiresAt = continuingSessionEnd(tokenRow.expiresAt);
+    sessionExpiresAt = continuingSessionEnd(tokenRow.expiresAt, full.companyProfile);
 
     const [claimed] = await db
       .update(refreshTokens)
@@ -546,10 +549,10 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
 
 /**
  * The signed-in user picks a new password. Other sessions end immediately.
- * This browser stays signed in for the time already left on its 12-hour
- * sign-in — the window is not restarted. Every trusted device is forgotten.
+ * This browser stays signed in for the time already left on its session —
+ * the window is not restarted. Every trusted device is forgotten.
  * The refresh cookie has to prove this browser's current sign-in. A missing
- * or unusable cookie does not get a new 12-hour session.
+ * or unusable cookie does not get a new session.
  */
 export async function changePassword(userId: number, currentPassword: string, newPassword: string, currentRefreshToken: string | undefined) {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
@@ -579,7 +582,8 @@ export async function changePassword(userId: number, currentPassword: string, ne
   if (!sessionRow || sessionRow.revokedAt || sessionRow.userId !== userId || sessionRow.expiresAt.getTime() <= Date.now() + 1000) {
     throw AppError.unauthorized("Your sign-in expired. Please sign in again.");
   }
-  const sessionExpiresAt = continuingSessionEnd(sessionRow.expiresAt);
+  const [sessionCompany] = await db.select({ profile: company.profile }).from(company);
+  const sessionExpiresAt = continuingSessionEnd(sessionRow.expiresAt, sessionCompany?.profile);
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const nextTokenVersion = user.tokenVersion + 1;
@@ -639,6 +643,7 @@ function sanitize<T extends { passwordHash?: string; pinHash?: string | null }>(
     firstFailedLoginAt: _firstFailed,
     lockedUntil: _lockedUntil,
     companyMfaPolicy: _policy,
+    companyProfile: _companyProfile,
     ...rest
   } = user as T & Record<string, unknown>;
   return { ...rest, pinSet: typeof pinHash === "string" && pinHash.length > 0 };

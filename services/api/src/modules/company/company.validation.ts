@@ -62,9 +62,13 @@ export const updateCompanyProfileSchema = z.object({
   contactPhone: z.string().max(50).optional().or(z.literal("")),
 });
 
-export const updateCompanySecuritySchema = z.object({
-  mfaPolicy: z.enum(["optional", "admins", "all"]),
-});
+export const updateCompanySecuritySchema = z
+  .object({
+    mfaPolicy: z.enum(["optional", "admins", "all"]).optional(),
+    // Whole hours. The same length applies to every role. 12 is the default when this is omitted on the company.
+    sessionLengthHours: z.coerce.number().int().min(1).max(24).optional(),
+  })
+  .refine((value) => value.mfaPolicy !== undefined || value.sessionLengthHours !== undefined, { message: "Nothing to update" });
 
 /** First-run onboarding checklist — merge-patch, so either field alone is a valid body (see updateOnboardingHandler). */
 export const updateOnboardingSchema = z.object({

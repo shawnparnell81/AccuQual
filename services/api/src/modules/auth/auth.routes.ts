@@ -2,7 +2,7 @@ import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
-import { authRateLimiter, refreshRateLimiter } from "../../middleware/rateLimit.js";
+import { authRateLimiter, coordinateRefreshRateLimit } from "../../middleware/rateLimit.js";
 import { loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, setSignaturePinSchema, changeSignaturePinSchema, mfaVerifySchema, mfaEnrollStartSchema, mfaEnrollConfirmSchema, mfaEnableSchema, mfaReverifySchema } from "./auth.validation.js";
 import { loginHandler, refreshHandler, endBrowserSessionHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, changePasswordHandler, setSignaturePinHandler, changeSignaturePinHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler, listTrustedDevicesHandler, revokeTrustedDeviceHandler, revokeAllTrustedDevicesHandler } from "./auth.controller.js";
 
@@ -16,7 +16,10 @@ authRouter.post("/login", authRateLimiter, validate(loginSchema), loginHandler);
 // to also forge, making it the real CSRF exposure in this app.
 // Its own limiter, counted per person — not the sign-in limiter, which is
 // tight on purpose and used to be shared with every renewal from one address.
-authRouter.post("/refresh", refreshRateLimiter, requireCsrfHeader, refreshHandler);
+// The coordinator lets one in-flight renewal serve every parallel caller, so
+// a burst spends a single slot. The anti-CSRF check runs first so a rejected
+// request never holds that slot.
+authRouter.post("/refresh", requireCsrfHeader, coordinateRefreshRateLimit, refreshHandler);
 // Drops this browser's refresh cookie only. Sign-out from the app calls it.
 // A reload, a new tab, or a typed address does not. It does not require an
 // access token and it does not clear the trusted-browser cookie.

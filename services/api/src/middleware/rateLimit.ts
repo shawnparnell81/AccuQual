@@ -1,9 +1,10 @@
 import net from "node:net";
-import type { Request } from "express";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import { env } from "../config/env.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
 import { openRefreshCookie } from "../modules/auth/refreshCookie.js";
+import { registerRefreshFlight } from "../modules/auth/refreshFlight.js";
 
 function normalizeIp(ip: string): string {
   const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
@@ -26,6 +27,15 @@ export function visitorIp(req: Request): string {
 
 const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
+/**
+ * Session renewal is not part of the per-address API budget. A busy page
+ * (or a whole office behind one address) used to spend that budget, and the
+ * next silent renewal came back 429. Renewal has its own per-person limiter.
+ */
+export function skipApiRateLimit(req: Request): boolean {
+  return req.path.startsWith(DEVICE_INGEST_PATH) || req.path === "/auth/refresh";
+}
+
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   // One integration file walks every saved form. That is more than a person's 15-minute budget.
@@ -35,7 +45,7 @@ export const apiRateLimiter = rateLimit({
   // Devices are throttled by the two dedicated limiters below instead: a
   // whole plant's sensors usually share one public IP, so the per-IP budget
   // meant for people would cut them off almost immediately.
-  skip: (req) => req.path.startsWith(DEVICE_INGEST_PATH),
+  skip: (req) => skipApiRateLimit(req),
 });
 
 export const authRateLimiter = rateLimit({
@@ -95,6 +105,21 @@ export function createRefreshRateLimiter(options?: { limit?: number; windowMs?: 
 }
 
 export const refreshRateLimiter = createRefreshRateLimiter();
+
+/**
+ * Counts one renewal per burst. A follower that joins a renewal already in
+ * flight does not spend a slot, so several tabs or a pile of parallel 401s
+ * cannot 429 themselves.
+ */
+export function createRefreshCoordinator(limiter: RequestHandler = refreshRateLimiter): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const role = registerRefreshFlight(req, res, refreshRateLimitKey(req));
+    if (role === "follower") return next();
+    return limiter(req, res, next);
+  };
+}
+
+export const coordinateRefreshRateLimit = createRefreshCoordinator();
 
 /** Per device (the id half of X-Device-Key): 120 readings/minute, i.e. one every 500 ms. */
 export const deviceIngestRateLimiter = rateLimit({

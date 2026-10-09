@@ -4,7 +4,8 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env.js";
-import { createRefreshRateLimiter, refreshRateLimitKey, REFRESH_RATE_LIMIT_MAX } from "../src/middleware/rateLimit.js";
+import { createRefreshCoordinator, createRefreshRateLimiter, refreshRateLimitKey, REFRESH_RATE_LIMIT_MAX, skipApiRateLimit } from "../src/middleware/rateLimit.js";
+import { withSharedRefresh } from "../src/modules/auth/refreshFlight.js";
 import { signRefreshToken } from "../src/utils/jwt.js";
 
 function cookieFor(sub: string, jti: string) {
@@ -59,6 +60,44 @@ describe("refresh rate limit", () => {
 
     const someoneElse = await request(app).post("/auth/refresh").set("Cookie", cookieFor("99", "jti-c"));
     expect(someoneElse.status).toBe(200);
+  });
+
+  it("does not spend the general API budget on session renewal", () => {
+    expect(skipApiRateLimit({ path: "/auth/refresh" } as express.Request)).toBe(true);
+    expect(skipApiRateLimit({ path: "/auth/login" } as express.Request)).toBe(false);
+    expect(skipApiRateLimit({ path: "/ncr" } as express.Request)).toBe(false);
+  });
+
+  it("concurrent refreshes produce a single refresh call and do not 429 the burst", async () => {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const app = express();
+    app.use(cookieParser());
+    app.post("/auth/refresh", createRefreshCoordinator(createRefreshRateLimiter({ limit: 1, windowMs: 60_000 })), async (req, res) => {
+      const body = await withSharedRefresh(req, async () => {
+        calls += 1;
+        await gate;
+        return { ok: true };
+      });
+      res.json(body);
+    });
+
+    const cookie = cookieFor("42", "burst");
+    const burst = Promise.all(Array.from({ length: 8 }, () => request(app).post("/auth/refresh").set("Cookie", cookie)));
+    for (let i = 0; i < 50 && calls < 1; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(calls).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls).toBe(1);
+    release();
+    const results = await burst;
+    for (const res of results) expect(res.status).toBe(200);
+    expect(calls).toBe(1);
+
+    const next = await request(app).post("/auth/refresh").set("Cookie", cookie);
+    expect(next.status).toBe(429);
   });
 
   it("shares one address bucket for cookies that do not verify, and does not spend a real user's budget", async () => {

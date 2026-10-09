@@ -242,18 +242,22 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     return (JSON.parse(Buffer.from(payload, "base64url").toString()) as { jti: string }).jti;
   }
 
-  it("overlapping renewals of the same cookie all succeed and leave the session usable", async () => {
+  it("concurrent refreshes produce a single refresh call and leave the session usable", async () => {
     const loginRes = await request(app).post("/auth/login").send({ email, password: PASSWORD });
     const firstRt = rtCookieFrom(loginRes);
+    const before = await db.select({ id: refreshTokens.id }).from(refreshTokens).where(eq(refreshTokens.userId, userId));
 
-    const burst = await Promise.all([
-      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
-      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
-      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
-    ]);
+    const burst = await Promise.all(
+      Array.from({ length: 8 }, () => request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt)),
+    );
     for (const res of burst) expect(res.status).toBe(200);
+    const jtis = burst.map((res) => jtiFromCookie(rtCookieFrom(res)));
+    expect(new Set(jtis).size).toBe(1);
 
-    // One of the cookies issued by that burst must still renew — the overlap
+    const after = await db.select({ id: refreshTokens.id }).from(refreshTokens).where(eq(refreshTokens.userId, userId));
+    expect(after.length - before.length).toBe(1);
+
+    // The cookie issued by that single renewal must still renew — the overlap
     // must not have revoked the whole session.
     const again = await request(app).post("/auth/refresh").set(CSRF).set("Cookie", rtCookieFrom(burst[0]!));
     expect(again.status).toBe(200);
