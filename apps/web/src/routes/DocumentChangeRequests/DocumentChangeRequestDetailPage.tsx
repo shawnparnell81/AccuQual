@@ -4,6 +4,10 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { DocumentChangeRequestForm } from "./DocumentChangeRequestForm";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { SavedFormFields } from "../../components/forms/SavedFormFields";
 import type { DocumentChangeRequest } from "../../api/types";
 
 const dcrHooks = createResourceHooks<DocumentChangeRequest>("document-change-requests");
@@ -13,6 +17,9 @@ export function DocumentChangeRequestDetailPage() {
   const dcrId = Number(id);
   const navigate = useNavigate();
   const { data: dcr, isLoading, isError } = dcrHooks.useOne(dcrId);
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.documents === "edit";
+  const formLock = useModuleFormLock(dcrId, permitted, `/document-change-requests/${dcrId}/begin-edit`);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this doc change. Refresh the page and try again.</p>;
   if (isLoading || !dcr) return <p className="text-sm text-muted-foreground">Loading this doc change…</p>;
@@ -24,11 +31,14 @@ export function DocumentChangeRequestDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber} number={dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber} number={dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" allowed={permitted} assignedOnly />
         </div>
       </div>
 
-      <DocumentChangeRequestForm dcr={dcr} />
+      <SavedFormFields locked={!formLock.fieldsEditable}>
+        <DocumentChangeRequestForm dcr={dcr} />
+      </SavedFormFields>
 
       <div className="flex flex-col gap-4 print:hidden">
         <AttachmentsPanel entityType="document_change_requests" entityId={dcrId} />

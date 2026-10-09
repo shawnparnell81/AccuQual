@@ -13,6 +13,8 @@ import {
   openFillHandler,
   publishHandler,
   revisionsHandler,
+  beginFillEditHandler,
+  deleteFillHandler,
   saveFillHandler,
   saveHandler,
   signFillHandler,
@@ -26,6 +28,8 @@ formBuilderRouter.post("/", createHandler);
 formBuilderRouter.post("/import-docx", importDocxHandler);
 formBuilderRouter.get("/fills/:fillId", getFillHandler);
 formBuilderRouter.patch("/fills/:fillId", saveFillHandler);
+formBuilderRouter.post("/fills/:fillId/begin-edit", beginFillEditHandler);
+formBuilderRouter.delete("/fills/:fillId", deleteFillHandler);
 formBuilderRouter.post("/fills/:fillId/file", fileFillHandler);
 formBuilderRouter.post("/fills/:fillId/sign", signFillHandler);
 formBuilderRouter.get("/:id/docx", exportDocxHandler);

@@ -59,6 +59,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   "ISO form": "documents",
   "Validation Report": "documents",
   BuiltForm: "form_builder",
+  BuiltFormFill: "documents",
   "PPAP package": "ppap",
   PurchaseOrder: "erp",
   PurchaseRequisition: "purchase_requisitions",
@@ -246,6 +247,12 @@ export async function assertCanReadEntityHistory(
   if (entityType === "User" && entityId === user.id) return;
   if (ACCOUNT_ENTITY_TYPES.has(entityType)) {
     throw AppError.forbidden("Sign-in and account history is limited to an Owner or Administrator.");
+  }
+  if (entityType === "BuiltFormFill") {
+    const documents = await getUserAccessLevel(db, user, "documents");
+    const builder = await getUserAccessLevel(db, user, "form_builder");
+    if (documents === "none" && builder === "none") throw AppError.forbidden("No access to 'BuiltFormFill' history for your department");
+    return;
   }
   const resource = ENTITY_TYPE_TO_RESOURCE[entityType];
   if (!resource) throw AppError.badRequest(`Unknown record type "${entityType}"`);

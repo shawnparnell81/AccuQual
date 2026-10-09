@@ -195,7 +195,7 @@ describe("master document list", () => {
     });
 
     expect(rows.filter((row) => row.documentId === "FRM-VAL-009").map((row) => row.title)).toEqual(["BRAKE WEAR SENSOR VALIDATION DOCUMENT"]);
-    expect(rows.filter((row) => row.documentId === "FRM-VAL-011").map((row) => row.title)).toEqual(["AIR STRUT VALIDATION DOCUMENT"]);
+    expect(rows.filter((row) => row.documentId === "FRM-VAL-011").map((row) => row.title)).toEqual(["AIR SPRING VALIDATION DOCUMENT"]);
     expect(rows.find((row) => row.title === "AIR COMPRESSOR VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-003" });
     expect(rows.find((row) => row.title === "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-004" });
     expect(rows.find((row) => row.title === "GAS LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-005" });

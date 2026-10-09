@@ -6,7 +6,9 @@ import { trainingCourses, trainingAssignments, type TrainingAssignment } from ".
 import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { scalarEdits } from "../forms/formEditAudit.js";
 import * as service from "./training.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
@@ -25,6 +27,7 @@ export const listCourses = asyncHandler(async (req: Request, res: Response) => {
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {
   const [created] = await req.db!.insert(trainingCourses).values({ ...req.body, }).returning();
   await recordAuditTrail(req.db!, { entityType: "TrainingCourse", entityId: created!.id, action: "create", changes: { title: created!.title }, performedBy: req.user?.id });
+  await fileBlankCopy(req.db!, "/training", created as Record<string, unknown>, req.user?.id);
   res.status(201).json(created);
 });
 
@@ -38,10 +41,20 @@ export const getCourse = asyncHandler(async (req: Request, res: Response) => {
 /** Title, description, the linked document, who the course is required of, how long it stays valid, and what an evaluation checks. */
 export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  const [current] = await req.db!.select().from(trainingCourses).where(and(eq(trainingCourses.id, id)));
+  if (!current) throw AppError.notFound("Training course");
   const patch: Record<string, unknown> = { ...(req.body as Record<string, unknown>), updatedAt: new Date() };
   const [updated] = await req.db!.update(trainingCourses).set(patch).where(and(eq(trainingCourses.id, id))).returning();
   if (!updated) throw AppError.notFound("Training course");
-  await recordAuditTrail(req.db!, { entityType: "TrainingCourse", entityId: id, action: "update", changes: req.body as Record<string, unknown>, performedBy: req.user?.id });
+  const body = req.body as Record<string, unknown>;
+  const fieldEdits = scalarEdits(current as unknown as Record<string, unknown>, { ...(current as unknown as Record<string, unknown>), ...body }, Object.keys(body));
+  await recordAuditTrail(req.db!, {
+    entityType: "TrainingCourse",
+    entityId: id,
+    action: "update",
+    changes: fieldEdits.length > 0 ? { ...body, event: "form_saved", edits: fieldEdits } : body,
+    performedBy: req.user?.id,
+  });
   res.json(updated);
 });
 

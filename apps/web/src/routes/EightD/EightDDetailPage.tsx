@@ -11,6 +11,8 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
@@ -116,7 +118,9 @@ const capaHooks = createResourceHooks<Capa>("capa");
 export function EightDDetailPage() {
   const { id } = useParams();
   const reportId = Number(id);
-  const canEdit = useCanEditWorkflow("8d");
+  const permitted = useCanEditWorkflow("8d");
+  const formLock = useModuleFormLock(reportId, permitted, `/8d/${reportId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
   const { data: report, isLoading, isError } = eightDHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const completeStep = useMutation({
@@ -216,7 +220,8 @@ export function EightDDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} number={report.recordNumber} navigateTo="/8d" />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} number={report.recordNumber} navigateTo="/8d" allowed={permitted} assignedOnly />
             {linkedNcr && canEdit && (
               <AiStructuredSuggestion<EightDSuggestion>
                 endpoint="/ai/8d"
@@ -275,7 +280,7 @@ export function EightDDetailPage() {
             )}
           </div>
         </div>
-        {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
+        {!permitted && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
         {!report.ncrId && (
           <p className="text-sm text-muted-foreground">This report isn't tied to an NCR. Link it from the NCR so the 8D, the CAPA, and the check stay one story.</p>
         )}

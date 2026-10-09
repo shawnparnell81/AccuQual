@@ -7,7 +7,9 @@ import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { RISK_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
+import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { scalarEdits } from "../forms/formEditAudit.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
@@ -118,6 +120,7 @@ export const createRiskHandler = asyncHandler(async (req: Request, res: Response
     .values({ ...body, riskScore, riskLevel, createdBy: req.user?.id } as typeof riskAssessments.$inferInsert)
     .returning();
   await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await fileBlankCopy(req.db!, "/risk", created as Record<string, unknown>, req.user?.id);
   res.status(201).json(created);
 });
 
@@ -160,11 +163,15 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
     : scoringChanged
       ? { subAction: "severity_probability_change", fieldsChanged: Object.keys(body), oldSeverity: record.severity, oldProbability: record.probability, newSeverity: updated!.severity, newProbability: updated!.probability, newRiskScore: riskScore, newRiskLevel: riskLevel }
       : { fieldsChanged: Object.keys(body), ...body };
+  const fieldEdits = scalarEdits(record as unknown as Record<string, unknown>, { ...(record as unknown as Record<string, unknown>), ...body }, Object.keys(body));
   await recordAuditTrail(req.db!, {
     entityType: "RiskAssessment",
     entityId: record.id,
     action: "update",
-    changes: changesWithNumberEdit(baseChanges, numberChange),
+    changes: {
+      ...changesWithNumberEdit(baseChanges, numberChange),
+      ...(fieldEdits.length > 0 ? { event: "form_saved", edits: fieldEdits } : {}),
+    },
     performedBy: req.user?.id,
   });
   res.json(updated);

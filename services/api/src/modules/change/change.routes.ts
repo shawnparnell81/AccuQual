@@ -6,6 +6,7 @@ import { validate } from "../../middleware/validate.js";
 import { createChangeSchema, updateChangeSchema } from "./change.validation.js";
 import { baseHandlers, approveHandler } from "./change.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { beginChangeEdit } from "../forms/moduleBeginEdit.js";
 
 export const changeRouter = Router();
 // Was completely ungated before this — Full-System Audit finding C1.
@@ -17,5 +18,6 @@ changeRouter.get("/", baseHandlers.list);
 changeRouter.post("/", validate(createChangeSchema), baseHandlers.create);
 changeRouter.get("/:id", baseHandlers.getOne);
 changeRouter.patch("/:id", validate(updateChangeSchema), baseHandlers.update);
+changeRouter.post("/:id/begin-edit", beginChangeEdit);
 changeRouter.delete("/:id", deleteRecordHandler("change"));
 changeRouter.post("/:id/approve", approveHandler);

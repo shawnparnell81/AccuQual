@@ -22,7 +22,7 @@ export function QmsFormsLibraryPage() {
     setStartError(null);
     try {
       const created = await apiClient.post<{ id: number }>(form.start.createPath, form.start.body);
-      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)));
+      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)), { state: { freshForm: true } });
     } catch {
       setStartError(`Couldn't start ${form.title}.`);
       setPendingKey(null);

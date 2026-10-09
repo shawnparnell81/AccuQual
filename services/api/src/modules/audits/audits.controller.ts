@@ -11,7 +11,7 @@ import { syncDiRecordToForm } from "../quality/quality.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 
-export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true, recordNumber: AUDIT_NUMBER });
+export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true, recordNumber: AUDIT_NUMBER, blankCreatePath: "/audits" });
 
 /** A logged finding is a real nonconformance once it's rated past a mere observation. */
 const NONCONFORMANCE_SEVERITIES = ["minor", "major", "critical"];

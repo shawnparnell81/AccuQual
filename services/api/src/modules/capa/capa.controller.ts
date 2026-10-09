@@ -12,7 +12,7 @@ import { capaMatchesNcr, openRepeatCapa } from "../quality-automation/qualityAut
 import { missingRequiredLabels, requiredMoveError } from "../workflow/requiredFields.js";
 import { CAPA_NUMBER } from "../records/recordNumberSpecs.js";
 
-export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true, recordNumber: CAPA_NUMBER });
+export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true, recordNumber: CAPA_NUMBER, blankCreatePath: "/capa" });
 
 /**
  * GET /capa — supplier, owner, status, limit, and offset use the shared list.

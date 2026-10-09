@@ -8,7 +8,7 @@ import { CHANGE_NUMBER } from "../records/recordNumberSpecs.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
-export const baseHandlers = crudFactory(changeRequests, { entityName: "Change request", idColumn: "id", recordNumber: CHANGE_NUMBER });
+export const baseHandlers = crudFactory(changeRequests, { entityName: "Change request", idColumn: "id", recordNumber: CHANGE_NUMBER, blankCreatePath: "/change" });
 
 // Previously had no audit trail entry and published no event — the one
 // hand-rolled action on this module, unlike create/update above (which get

@@ -3,7 +3,7 @@ import { ensureTestCompany } from "../helpers/company.js";
 // Covers the Risk Management module rebuild: full CRUD (the previous
 // risk.routes.ts only had GET/POST/GET-by-id/fmea), the open -> mitigation
 // -> monitoring -> closed workflow with department gating, mitigation
-// actions, admin-only delete, computed riskScore/riskLevel, and that every
+// actions, delete by the assigned risk grant, computed riskScore/riskLevel, and that every
 // action now writes a real audit_trail row (there were none before).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -32,7 +32,6 @@ let qualityToken: string;
 let engineeringToken: string;
 let productionToken: string;
 let customerServiceToken: string;
-let adminToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
   const [user] = await db.insert(users).values({ email: `risk-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
@@ -54,7 +53,6 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
     engineeringToken = await makeUser("engineering");
     productionToken = await makeUser("production");
     customerServiceToken = await makeUser("customer_service"); // not in risk's PERMISSION_MATRIX at all
-    adminToken = await makeUser(null, "admin");
   });
 
   afterAll(async () => {
@@ -169,13 +167,13 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
     expect((row?.changes as { pipeline?: string })?.pipeline).toBe("risk_analysis");
   });
 
-  it("production cannot delete — admin only", async () => {
-    const res = await request(app).delete(`/risk/${riskId}`).set("Authorization", `Bearer ${productionToken}`);
+  it("a department without the risk grant cannot delete", async () => {
+    const res = await request(app).delete(`/risk/${riskId}`).set("Authorization", `Bearer ${customerServiceToken}`);
     expect(res.status).toBe(403);
   });
 
-  it("admin can delete, and it's logged before the row disappears", async () => {
-    const res = await request(app).delete(`/risk/${riskId}`).set("Authorization", `Bearer ${adminToken}`);
+  it("a department with the risk grant can delete, and it's logged before the row disappears", async () => {
+    const res = await request(app).delete(`/risk/${riskId}`).set("Authorization", `Bearer ${productionToken}`);
     expect(res.status).toBe(204);
 
     const [gone] = await db.select().from(riskAssessments).where(eq(riskAssessments.id, riskId));

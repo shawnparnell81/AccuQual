@@ -17,7 +17,10 @@ import type { CourseFull } from "../../api/training";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
-import { useTrainingAccess } from "../../api/training";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { RecordGlance } from "../../components/records/RecordStatus";
 import { TRAINING_MANAGE_REASON, duePhrase, isPastDue } from "../../lib/opsLanguage";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
@@ -38,7 +41,10 @@ export function TrainingDetailPage() {
   const { data: course, isLoading, isError } = trainingHooks.useOne(courseId);
   useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
   const updateCourse = trainingHooks.useUpdate();
-  const { mayManage } = useTrainingAccess();
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.training === "edit";
+  const formLock = useModuleFormLock(courseId, permitted, `/training/${courseId}/begin-edit`);
+  const mayManage = formLock.fieldsEditable;
   const [assignOpen, setAssignOpen] = useState(false);
   const [completingId, setCompletingId] = useState<number | null>(null);
 
@@ -88,10 +94,11 @@ export function TrainingDetailPage() {
         dueLate={isPastDue(soonest, !course.active)}
         blocked={overdue.length > 0 ? `${overdue.length} late` : assignments.length === 0 ? "Nobody is assigned" : "People still finishing"}
         next={next}
-        accessNote={mayManage ? null : TRAINING_MANAGE_REASON}
+        accessNote={permitted ? null : TRAINING_MANAGE_REASON}
         actions={
           <>
-            <DeleteRecordButton resource="training" id={course.id} kind="Training course" title={course.title} navigateTo="/training" />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <DeleteRecordButton resource="training" id={course.id} kind="Training course" title={course.title} navigateTo="/training" allowed={permitted} assignedOnly />
             {mayManage ? (
               <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
                 Assign people
@@ -143,6 +150,7 @@ export function TrainingDetailPage() {
           label=""
           value={course.description ?? ""}
           placeholder="No description provided."
+          readOnly={!mayManage}
           onChange={(e) => updateCourse.mutate({ id: courseId, description: e.target.value })}
         />
       </div>
@@ -210,15 +218,18 @@ export function TrainingDetailPage() {
                   <Paperclip size={14} className="flex-none text-muted-foreground" aria-hidden />
                 )}
                 <OpenFormButton formType="training" entityId={a.id} title={`Training Record — ${a.userName ?? a.userEmail}`} label="Open Record" />
-                <button onClick={() => setCompletingId(a.id)} className="flex-none rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
-                  Quick Complete
-                </button>
+                {mayManage && (
+                  <button onClick={() => setCompletingId(a.id)} className="flex-none rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+                    Quick Complete
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
       </div>
 
+      <WorkflowHistoryPanel moduleName="training_courses" recordId={courseId} />
       <AttachmentsPanel entityType="training" entityId={courseId} />
 
       <TrainingAssignmentModal courseId={courseId} isOpen={assignOpen} onClose={() => setAssignOpen(false)} />

@@ -6,7 +6,7 @@ import { scheduleAfterCommit, type Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { canDeleteAnyRecord } from "../roles/roleAccess.js";
-import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
+import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { forgetRecordListings } from "../document-folders/savedFormLinks.js";
@@ -63,8 +63,6 @@ import { customers } from "../../drizzle/schema/customers.js";
 import { salesQuotes } from "../../drizzle/schema/sales.js";
 import { assertNotOnLegalHold, holdTypesFor } from "../pdf-exports/legalHold.js";
 
-const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
-
 export type RecordKind =
   | "ncr"
   | "capa"
@@ -117,6 +115,8 @@ export function deletionSummary(label: string, recordNumber: string | number, ti
   if (shown) return `Deleted ${label} ${shown}`;
   return `Deleted ${label}`;
 }
+
+const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
 
 export function userMayDeleteRecord(roleName: string | null | undefined, userId: number | undefined, owners: number[]): boolean {
   if (canDeleteAnyRecord(roleName)) return true;
@@ -416,7 +416,7 @@ function validationLabel(row: Row): string {
   if (kind === "csa") return "CSA VALIDATION REPORT";
   if (kind === "fuel_pump") return "FUEL PUMP VALIDATION DOCUMENT";
   if (kind === "air_strut") return "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT";
-  if (kind === "air_spring") return "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT";
+  if (kind === "air_spring") return "FRM-VAL-011 AIR SPRING VALIDATION DOCUMENT";
   if (kind === "fuel_injector") return "FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT";
   if (kind === "brake_wear") return "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT";
   if (kind === "shock") return "FRM-VAL-002 SHOCK VALIDATION REPORT";
@@ -853,6 +853,54 @@ function isoFormLabel(row: Row): string {
   return ISO_FORM_LABELS[String(row.formType ?? "")] ?? "ISO form";
 }
 
+/** Saved forms. Delete follows the Admin-assigned grant for that module. */
+const ASSIGNED_DELETE = new Set<RecordKind>([
+  "ncr",
+  "capa",
+  "eight_d",
+  "validation_report",
+  "iso_quality_form",
+  "qms",
+  "dcr",
+  "risk",
+  "audit",
+  "equipment",
+  "training",
+  "change",
+  "quarantine",
+  "scar",
+  "complaint",
+]);
+
+const DELETE_RESOURCE: Record<RecordKind, ResourceKey> = {
+  ncr: "ncr",
+  capa: "capa",
+  eight_d: "eight_d",
+  validation_report: "documents",
+  document: "documents",
+  audit: "audit",
+  quarantine: "quarantine",
+  supplier: "suppliers",
+  risk: "risk",
+  complaint: "complaints",
+  change: "change",
+  ppap: "ppap",
+  training: "training",
+  work_order: "work_orders",
+  rma: "rma",
+  warranty: "warranty",
+  crar: "crar",
+  rma_log: "rma_log",
+  quality: "di",
+  scar: "scar",
+  qms: "qms_forms",
+  quality_inspection: "quality_inspection",
+  dcr: "documents",
+  feasibility: "feasibility",
+  equipment: "calibration",
+  iso_quality_form: "documents",
+};
+
 export async function deleteRecord(req: Request, kind: RecordKind): Promise<void> {
   if (!req.db || !req.user) throw AppError.unauthorized("Not signed in");
   const id = Number(req.params.id);
@@ -862,13 +910,13 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
   if (!row) throw AppError.notFound(spec.label);
   await assertNotOnLegalHold(req.db, kind, id);
 
-  const assignedEdit =
-    kind === "document"
+  const assignedEdit = ASSIGNED_DELETE.has(kind)
+    ? (await getUserAccessLevel(req.db, req.user, DELETE_RESOURCE[kind])) === "edit"
+    : kind === "document"
       ? (await getUserAccessLevel(req.db, req.user, "documents")) === "edit"
-      : kind === "equipment"
-        ? (await getUserAccessLevel(req.db, req.user, "calibration")) === "edit"
-        : false;
-  if (!assignedEdit && !userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row))) {
+      : false;
+  const allowed = ASSIGNED_DELETE.has(kind) ? assignedEdit : assignedEdit || userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row));
+  if (!allowed) {
     throw AppError.forbidden("You don't have permission to delete this record.");
   }
   if (spec.siteScoped) {
@@ -893,8 +941,8 @@ export async function purgeExistingRecord(req: Request, kind: RecordKind, id: nu
     await removeStoredExports(req.db, kind, id, files);
     const linkedForms = await removeLinkedForms(req.db, id, [...new Set([...spec.formKeys, ...spec.attachmentTypes])]);
     await spec.cleanup(req.db, row, files, req.user.id);
-    await forgetRecordListings(req.db, kind, row, req.user.id);
     await spec.remove(req.db, id);
+    await forgetRecordListings(req.db, kind, row, req.user.id);
 
     const title = spec.title(row);
     const recordNumber = recordNumberOf(row, spec.numberFields);

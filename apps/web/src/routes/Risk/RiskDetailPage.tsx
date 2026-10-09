@@ -5,6 +5,8 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { RecordNumberEditor, RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
@@ -40,7 +42,9 @@ const SOURCE_LINK: Record<string, (id: number) => string> = {
 export function RiskDetailPage() {
   const { id } = useParams();
   const riskId = Number(id);
-  const canEdit = useCanEditWorkflow("risk");
+  const permitted = useCanEditWorkflow("risk");
+  const formLock = useModuleFormLock(riskId, permitted, `/risk/${riskId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
 
   const queryClient = useQueryClient();
   const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
@@ -82,15 +86,26 @@ export function RiskDetailPage() {
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Risk Analysis
           </button>
+          <ModuleFormLock
+            mode={formLock.mode}
+            canEdit={permitted}
+            onEdit={() => {
+              void formLock.onEdit().then(() => setEditOpen(true));
+            }}
+            onLock={() => {
+              formLock.lock();
+              setEditOpen(false);
+            }}
+          />
           {canEdit && (
             <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Edit
+              Edit details
             </button>
           )}
-          <WorkflowActionButton label="Start Mitigation" navKey="risk" action={startMitigation} onClick={() => startMitigation.mutate({ id: riskId })} visible={risk.status === "open"} />
-          <WorkflowActionButton label="Start Monitoring" navKey="risk" action={startMonitoring} onClick={() => startMonitoring.mutate({ id: riskId })} visible={risk.status === "mitigation"} />
-          <WorkflowActionButton label="Close" navKey="risk" action={closeRisk} onClick={() => closeRisk.mutate({ id: riskId })} visible={risk.status === "monitoring"} variant="primary" />
-          <DeleteRecordButton resource="risk" id={riskId} kind="Risk" title={risk.title} number={risk.recordNumber} ownerIds={[risk.createdBy, risk.ownerId]} navigateTo="/risk" />
+          <WorkflowActionButton label="Start Mitigation" navKey="risk" action={startMitigation} onClick={() => startMitigation.mutate({ id: riskId })} visible={canEdit && risk.status === "open"} />
+          <WorkflowActionButton label="Start Monitoring" navKey="risk" action={startMonitoring} onClick={() => startMonitoring.mutate({ id: riskId })} visible={canEdit && risk.status === "mitigation"} />
+          <WorkflowActionButton label="Close" navKey="risk" action={closeRisk} onClick={() => closeRisk.mutate({ id: riskId })} visible={canEdit && risk.status === "monitoring"} variant="primary" />
+          <DeleteRecordButton resource="risk" id={riskId} kind="Risk" title={risk.title} number={risk.recordNumber} ownerIds={[risk.createdBy, risk.ownerId]} navigateTo="/risk" allowed={permitted} assignedOnly />
         </div>
       </div>
 

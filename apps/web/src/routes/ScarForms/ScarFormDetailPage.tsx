@@ -16,6 +16,10 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import type { ScarForm, Supplier } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { BrandMark } from "../../components/brand/DmaLogo";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { SavedFormFields } from "../../components/forms/SavedFormFields";
 
 const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
@@ -27,6 +31,9 @@ export function ScarFormDetailPage() {
   const toast = useToast();
   const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const { data: scar, isLoading, isError } = scarHooks.useOne(scarId);
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.scar === "edit";
+  const formLock = useModuleFormLock(scarId, permitted, `/scar-forms/${scarId}/begin-edit`);
   const queryClient = useQueryClient();
   // a real supplier link (supplierId), added alongside the
   // pre-existing free-text supplierName field so a SCAR can actually
@@ -57,13 +64,15 @@ export function ScarFormDetailPage() {
         </button>
         <div className="flex gap-2">
           <label className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm">
-            <input type="checkbox" checked={scar.status === "closed"} onChange={(e) => patch.mutate({ status: e.target.checked ? "closed" : "open" })} />
+            <input type="checkbox" checked={scar.status === "closed"} disabled={!formLock.fieldsEditable} onChange={(e) => patch.mutate({ status: e.target.checked ? "closed" : "open" })} />
             Closed
           </label>
-          <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.partNumberDescription} number={scar.scarNumber} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.partNumberDescription} number={scar.scarNumber} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" allowed={permitted} assignedOnly />
         </div>
       </div>
 
+      <SavedFormFields locked={!formLock.fieldsEditable}>
       <div className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
         <div className="aq-doc-head flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
           <div className="flex items-center gap-3">
@@ -181,6 +190,7 @@ export function ScarFormDetailPage() {
           </div>
         </Section>
       </div>
+      </SavedFormFields>
 
       <div className="flex flex-col gap-4 print:hidden">
         <AttachmentsPanel entityType="scar_forms" entityId={scarId} />

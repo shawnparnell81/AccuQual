@@ -25,6 +25,7 @@ import {
   updateReviewHandler,
   deleteReviewHandler,
 } from "./documentChangeRequests.controller.js";
+import { beginDcrEdit } from "../forms/moduleBeginEdit.js";
 
 export const documentChangeRequestsRouter = Router();
 // Deliberately not gated with requireDepartmentAccess — same convention as
@@ -37,6 +38,7 @@ documentChangeRequestsRouter.post("/", validate(createDocumentChangeRequestSchem
 documentChangeRequestsRouter.get("/:id", getDcrHandler);
 documentChangeRequestsRouter.patch("/:id", validate(updateDocumentChangeRequestSchema), updateDcrHandler);
 documentChangeRequestsRouter.post("/:id/sign", validate(signDocumentChangeRequestSchema), signDcrHandler);
+documentChangeRequestsRouter.post("/:id/begin-edit", beginDcrEdit);
 documentChangeRequestsRouter.delete("/:id", deleteDcrHandler);
 
 documentChangeRequestsRouter.post("/:id/items", validate(createChangeItemSchema), createChangeItemHandler);

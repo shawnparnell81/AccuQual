@@ -9,7 +9,7 @@ const TITLES: Record<string, { title: string; revision: string }> = {
   csa: { title: "CSA VALIDATION REPORT", revision: "C" },
   fuel_pump: { title: "FUEL PUMP VALIDATION DOCUMENT", revision: "C" },
   air_strut: { title: "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT", revision: "A" },
-  air_spring: { title: "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT", revision: "A" },
+  air_spring: { title: "FRM-VAL-011 AIR SPRING VALIDATION DOCUMENT", revision: "A" },
   fuel_injector: { title: "FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT", revision: "B" },
   brake_wear: { title: "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", revision: "A" },
   shock: { title: "FRM-VAL-002 SHOCK VALIDATION REPORT", revision: "B" },

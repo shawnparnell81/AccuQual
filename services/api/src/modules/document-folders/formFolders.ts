@@ -294,6 +294,24 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));
   const seeds = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed]));
 
+  const pinRows = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const pins = new Map<string, string>();
+  const pinNamespace = (formKey: string): string | null => {
+    for (const group of SHARED_GROUPS) {
+      if (group.keys.includes(formKey)) return group.source;
+    }
+    if (formKey === "risk" || formKey === "training-record") return formKey;
+    return null;
+  };
+  for (const pin of pinRows) {
+    const namespace = pinNamespace(pin.formKey);
+    if (!namespace) continue;
+    const mapKey = `${namespace}:${pin.recordId}`;
+    const current = pins.get(mapKey);
+    // Listing can also file the shared table under its generic key. The specific form wins.
+    if (!current || current === namespace) pins.set(mapKey, pin.formKey);
+  }
+
   const filings = await filterLiveFilings(db, await db.select().from(formFilings).where(isNotNull(formFilings.folderNodeId)));
   const nodeIds = [...new Set(filings.map((row) => row.folderNodeId).filter((id): id is number => id != null))];
   const nodes =
@@ -415,8 +433,10 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
       })
       .filter((item): item is { formKey: string; match: string } => item != null);
     for (const row of rows) {
-      const formKey = formKeyForSharedTitle(matches, row.label ?? "", group.fallback);
+      const pinned = pins.get(`${group.source}:${row.id}`);
+      const formKey = pinned && group.keys.includes(pinned) ? pinned : formKeyForSharedTitle(matches, row.label ?? "", group.fallback);
       if (!formKey) continue;
+      if (pinned && pinned !== formKey) continue;
       pushModuleFill(fills, templateByKey, seeds, formKey, row);
     }
   }
@@ -430,6 +450,11 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
     const match = seed ? bodyString(seed, "title") : null;
     if (!match) continue;
     for (const row of rowsFor.get(formKey) ?? []) {
+      const pinned = pins.get(`${formKey}:${row.id}`);
+      if (pinned) {
+        if (pinned === formKey) pushModuleFill(fills, templateByKey, seeds, formKey, row);
+        continue;
+      }
       if ((row.label ?? "") !== match) continue;
       pushModuleFill(fills, templateByKey, seeds, formKey, row);
     }

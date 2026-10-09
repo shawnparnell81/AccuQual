@@ -8,6 +8,9 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { ON_HOLD_BLOCK_MESSAGE, ON_HOLD_DISPOSITION } from "../NCR/NcrQuarantineSection";
 
 const STATUS_LABEL: Record<QuarantineStatus, string> = { quarantined: "On hold", released: "Released", destroyed: "Removed from stock" };
@@ -28,6 +31,9 @@ export function QuarantineDetailPage() {
   const holdId = Number(id);
   const { data: r, isLoading, isError } = useQuarantine(holdId);
   const { mayManage, mayRelease } = useQuarantineAccess();
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.quarantine === "edit";
+  const formLock = useModuleFormLock(holdId, permitted, `/quarantine/${holdId}/begin-edit`);
   const [resolve, setResolve] = useState<"release" | "destroy" | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
 
@@ -50,8 +56,11 @@ export function QuarantineDetailPage() {
             {open && <span>· on hold {r.ageDays} {r.ageDays === 1 ? "day" : "days"}</span>}
           </div>
         </div>
-        <DeleteRecordButton resource="quarantine" id={r.id} kind="Quarantine" title={r.itemLabel} ownerIds={[r.createdBy]} navigateTo="/quarantine" />
-        {open && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <DeleteRecordButton resource="quarantine" id={r.id} kind="Quarantine" title={r.itemLabel} ownerIds={[r.createdBy]} navigateTo="/quarantine" allowed={permitted} assignedOnly />
+        </div>
+        {open && formLock.fieldsEditable && (
           <div className="flex flex-wrap gap-2">
             {mayManage && (
               <button onClick={() => setMoveOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">

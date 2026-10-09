@@ -70,7 +70,7 @@ describe("new blank forms", () => {
     const spring = FORM_TEMPLATES.find((form) => form.formKey === "frm-val-011");
     const summary = FORM_TEMPLATES.find((form) => form.formKey === "frm-gen-002");
     expect(air).toMatchObject({ formId: "FRM-VAL-010", title: "AIR STRUT VALIDATION DOCUMENT", subjectRoute: "/folders/validation-reports" });
-    expect(spring).toMatchObject({ formId: "FRM-VAL-011", title: "AIR STRUT VALIDATION DOCUMENT" });
+    expect(spring).toMatchObject({ formId: "FRM-VAL-011", title: "AIR SPRING VALIDATION DOCUMENT" });
     expect(air?.start?.body).toEqual({ data: { formType: "air_strut", cells: {} } });
     expect(summary).toMatchObject({ formId: "TMP-GEN-001", title: "INTERNAL AUDIT SUMMARY REPORT", subjectRoute: "/iso-forms/frm-gen-002" });
     expect(summary?.start?.body).toEqual({ formType: "audit_summary", data: { cells: { D5: "Shawn Parnell" } } });

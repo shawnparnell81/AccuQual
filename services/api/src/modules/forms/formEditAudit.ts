@@ -121,6 +121,14 @@ export function withFormEdits(changes: Record<string, unknown>, previousData: un
   return next;
 }
 
+/** Add field lines (old -> new) for the scalar keys in a patch. Nested form data stays on withFormEdits. */
+export function withScalarEdits(existing: Record<string, unknown>, patch: Record<string, unknown>, changes: Record<string, unknown>): Record<string, unknown> {
+  const edits = scalarEdits(existing, { ...existing, ...patch }, Object.keys(patch));
+  if (edits.length === 0) return changes;
+  const prior = Array.isArray(changes.edits) ? (changes.edits as FormEdit[]) : [];
+  return { ...changes, event: typeof changes.event === "string" ? changes.event : "form_saved", edits: [...prior, ...edits] };
+}
+
 /**
  * A saved file node should open its own record.
  * A folder that still has children keeps its own link. A node shared by several filings does too.

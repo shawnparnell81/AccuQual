@@ -14,6 +14,8 @@ import {
   listRevisions,
   openBuiltFill,
   publishBuiltForm,
+  beginBuiltFillEdit,
+  deleteBuiltFill,
   saveBuiltFill,
   saveBuiltForm,
   signBuiltFill,
@@ -78,6 +80,15 @@ export const getFillHandler = asyncHandler(async (req: Request, res: Response) =
 export const saveFillHandler = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { title?: string; answers?: Record<string, unknown>; recordNumber?: unknown };
   res.json(await saveBuiltFill(req.db!, actor(req), idOf(req.params.fillId), body));
+});
+
+export const beginFillEditHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await beginBuiltFillEdit(req.db!, actor(req), idOf(req.params.fillId)));
+});
+
+export const deleteFillHandler = asyncHandler(async (req: Request, res: Response) => {
+  await deleteBuiltFill(req.db!, actor(req), idOf(req.params.fillId));
+  res.status(204).send();
 });
 
 export const fileFillHandler = asyncHandler(async (req: Request, res: Response) => {

@@ -19,6 +19,8 @@ import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 
@@ -36,7 +38,9 @@ export function CapaDetailPage() {
   const { id } = useParams();
   const capaId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
-  const canEdit = useCanEditWorkflow("capa");
+  const permitted = useCanEditWorkflow("capa");
+  const formLock = useModuleFormLock(capaId, permitted, `/capa/${capaId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
   const { label, people } = usePersonDirectory();
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, capa ? recordHeading("CAPA", capa.recordNumber) : "CAPA");
@@ -115,10 +119,11 @@ export function CapaDetailPage() {
         }
         blocked={closed ? "Nobody" : owner === "Unassigned" ? "Nobody is assigned" : owner}
         next={capaNextAction(capa.status)}
-        accessNote={canEdit ? null : READ_ONLY_REASON}
+        accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
               label="Start the work"

@@ -19,6 +19,7 @@ import {
   updateMitigationHandler,
 } from "./risk.controller.js";
 import { riskAiAnalysisHandler } from "./risk.ai.js";
+import { beginRiskEdit } from "../forms/moduleBeginEdit.js";
 
 export const riskRouter = Router();
 // quality/engineering/production/purchasing/material_management get "edit"
@@ -33,6 +34,7 @@ riskRouter.get("/", listRisksHandler);
 riskRouter.post("/", validate(createRiskSchema), createRiskHandler);
 riskRouter.get("/:id", getRiskHandler);
 riskRouter.put("/:id", validate(updateRiskSchema), updateRiskHandler);
+riskRouter.post("/:id/begin-edit", beginRiskEdit);
 riskRouter.delete("/:id", deleteRiskHandler);
 
 riskRouter.post("/:id/start-mitigation", startMitigationHandler);

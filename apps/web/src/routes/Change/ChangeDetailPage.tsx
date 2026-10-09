@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { rememberRecord } from "../../lib/recentRecords";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -33,7 +36,9 @@ export function ChangeDetailPage() {
   const { data: change, isLoading, isError } = changeHooks.useOne(changeId);
   const updateChange = changeHooks.useUpdate();
   const approveAction = changeHooks.useAction("approve");
-  const canEdit = useCanEditWorkflow("change");
+  const permitted = useCanEditWorkflow("change");
+  const formLock = useModuleFormLock(changeId, permitted, `/change/${changeId}/begin-edit`);
+  const canEdit = formLock.fieldsEditable;
   const user = useCurrentUser();
   useEffect(() => {
     if (!change) return;
@@ -53,7 +58,8 @@ export function ChangeDetailPage() {
           <StatusBadge value={change.status} />
         </div>
         <div className="flex gap-2">
-          <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} number={change.recordNumber} ownerIds={[change.requestedBy]} navigateTo="/change" />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} number={change.recordNumber} ownerIds={[change.requestedBy]} navigateTo="/change" allowed={permitted} assignedOnly />
           <OpenFormButton formType="pcn" entityId={change.id} title={`${recordHeading("Change", change.recordNumber)} Form`} label="PCN Document" />
           {canEdit && change.status !== "approved" && (
             <button onClick={() => approveAction.mutate({ id: changeId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -76,6 +82,7 @@ export function ChangeDetailPage() {
           <p className="text-sm text-muted-foreground">{change.impactAssessment || "Not yet documented."}</p>
         </div>
       </div>
+      <WorkflowHistoryPanel moduleName="change" recordId={changeId} />
     </RecordFrame>
   );
 }

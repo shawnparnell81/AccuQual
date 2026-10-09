@@ -21,6 +21,7 @@ import {
   uploadCertificateHandler,
   downloadCertificateHandler,
 } from "./calibration.controller.js";
+import { beginEquipmentEdit } from "../forms/moduleBeginEdit.js";
 
 export const calibrationRouter = Router();
 // Turns on PERMISSION_MATRIX.calibration (quality: edit) — previously
@@ -49,6 +50,7 @@ calibrationRouter.get("/:id", view, getEquipmentHandler);
 // or deleted. removeEquipmentHandler deletes through the shared record
 // delete path, which refuses the delete when calibration history exists.
 calibrationRouter.patch("/:id", manage, validate(updateEquipmentSchema), baseHandlers.update);
+calibrationRouter.post("/:id/begin-edit", manage, beginEquipmentEdit);
 calibrationRouter.delete("/:id", removeEquipmentHandler);
 // Status moves (active / inactive / out of service) always carry a reason; returning equipment a failed calibration took out of
 // service without a passing calibration is an override and is checked inside (equipment.override).

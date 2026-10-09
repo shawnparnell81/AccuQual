@@ -10,6 +10,12 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { BrowseFolder } from "../../lib/folderBrowse";
 import { bandHasContent } from "../../lib/documentBands";
 import { blankDocument, blankFields, blankGrid, type BuiltStructure, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useModuleFormLock } from "../../hooks/useSavedFormMode";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
+import { SavedFormFields } from "../../components/forms/SavedFormFields";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { DocumentFormEditor } from "./DocumentFormEditor";
 import { FieldsFormEditor } from "./FieldsFormEditor";
 import { FormMasthead, Paper } from "./FormChrome";
@@ -44,6 +50,9 @@ export function FormFillPage() {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [saveAs, setSaveAs] = useState(false);
   const [ready, setReady] = useState(false);
+  const { effective } = useEffectivePermissions();
+  const permitted = effective?.documents === "edit" || effective?.form_builder === "edit";
+  const formLock = useModuleFormLock(id, permitted, `/form-builder/fills/${id}/begin-edit`);
 
   useEffect(() => {
     if (!fill.data || ready) return;
@@ -57,12 +66,6 @@ export function FormFillPage() {
       void queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
     },
   });
-
-  useEffect(() => {
-    if (!ready) return;
-    const timer = window.setTimeout(() => save.mutate(), 800);
-    return () => window.clearTimeout(timer);
-  }, [answers, ready]);
 
   const file = useMutation({
     mutationFn: async (folderId: number) => (await apiClient.post<{ folder: string }>(`/form-builder/fills/${id}/file`, { folderId })).data,
@@ -89,15 +92,35 @@ export function FormFillPage() {
           <RecordNumberEditor
             label="Record No."
             value={fill.data.recordNumber}
-            canEdit
+            canEdit={formLock.fieldsEditable}
             onSave={async (next) => {
               await apiClient.patch(`/form-builder/fills/${id}`, { recordNumber: next.trim() || null });
               await queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
             }}
           />
         </div>
-        <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SavedFormLockBar
+            mode={formLock.mode}
+            canEdit={permitted}
+            pending={save.isPending}
+            onEdit={() => void formLock.onEdit()}
+            onSave={() => {
+              void save.mutateAsync().then(() => formLock.lock());
+            }}
+            onCancel={() => {
+              setAnswers(fill.data.answers ?? {});
+              formLock.lock();
+            }}
+            onDone={() => {
+              void save.mutateAsync().then(() => formLock.lock());
+            }}
+          />
+          <DeleteRecordButton resource="form-builder/fills" id={id} kind="Filled form" title={fill.data.title} number={fill.data.recordNumber} navigateTo="/documents/folders" allowed={permitted} assignedOnly />
+          <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
+        </div>
       </div>
+      <SavedFormFields locked={!formLock.fieldsEditable}>
       <Paper
         wide={structure.kind === "grid"}
         docId={structure.kind === "document" ? fill.data.templateFormNumber : undefined}
@@ -135,6 +158,8 @@ export function FormFillPage() {
           />
         )}
       </Paper>
+      </SavedFormFields>
+      <WorkflowHistoryPanel moduleName="form_fills" recordId={id} />
       <p className="no-print text-xs text-muted-foreground">
         <Link to="/documents/folders" className="text-primary hover:underline">Folder Explorer</Link> keeps the blank. Save as picks the folder for this copy.
       </p>
@@ -164,7 +189,7 @@ export function FormTemplateOpenPage() {
     setError(null);
     try {
       const res = await apiClient.post<{ id: number }>(`/form-builder/${formId}/fills`, { recordNumber: recordNumber.trim() || null });
-      navigate(`/form-builder/fills/${res.data.id}`, { replace: true });
+      navigate(`/form-builder/fills/${res.data.id}`, { replace: true, state: { freshForm: true } });
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't open a copy of that form."));
       setPending(false);

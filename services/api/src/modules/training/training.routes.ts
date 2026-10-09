@@ -36,6 +36,7 @@ import {
   listEmployeesHandler,
 } from "./training.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { beginTrainingCourseEdit } from "../forms/moduleBeginEdit.js";
 
 const idParam = (req: Request, name = "id") => {
   const id = Number(req.params[name]);
@@ -175,6 +176,7 @@ trainingRouter.post("/", manageCourses, validate(createCourseSchema), createCour
 trainingRouter.post("/course", manageCourses, validate(createCourseSchema), createCourse); // the specification's URL for the same thing
 trainingRouter.get("/:id", view, getCourse);
 trainingRouter.patch("/:id", manageCourses, validate(updateCourseSchema), updateCourse);
+trainingRouter.post("/:id/begin-edit", manageCourses, beginTrainingCourseEdit);
 trainingRouter.delete("/:id", deleteRecordHandler("training"));
 trainingRouter.get("/:id/assignments", view, listAssignmentsForCourse);
 trainingRouter.post("/:id/assign", manageSessions, validate(assignSchema), assignHandler);

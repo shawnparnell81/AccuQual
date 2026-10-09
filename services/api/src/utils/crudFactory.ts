@@ -5,7 +5,8 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
-import { withFormEdits } from "../modules/forms/formEditAudit.js";
+import { fileBlankCopy } from "../modules/document-folders/defaultFormFiling.js";
+import { withFormEdits, withScalarEdits } from "../modules/forms/formEditAudit.js";
 import { applyRecordNumber, showRecordNumber, type RecordNumberSpec } from "../modules/records/userRecordNumber.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
 import type { Db } from "../lib/requestDb.js";
@@ -42,6 +43,8 @@ interface CrudOptions {
   siteScoped?: boolean;
   /** Optional user-typed number. Blank is allowed. Duplicates are rejected inside this record type. */
   recordNumber?: RecordNumberSpec;
+  /** When set, a new row is filed into that blank's default form folder. */
+  blankCreatePath?: string;
 }
 
 /**
@@ -191,6 +194,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       content: JSON.stringify(req.body),
     });
     if (options.afterCreate) await options.afterCreate(created as Record<string, unknown>, req);
+    if (options.blankCreatePath) await fileBlankCopy(req.db!, options.blankCreatePath, created as Record<string, unknown>, req.user?.id);
     res.status(201).json(created);
   });
 
@@ -203,9 +207,9 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       ? and(eq(idCol as never, id), sitePredicate)
       : eq(idCol as never, id);
     let patch = stripClientOwnedFields(req.body);
-    const rows = options.mergeUpdate || options.recordNumber ? await db.select().from(table).where(where) : [];
+    const rows = await db.select().from(table).where(where);
     const existing = rows[0] as Record<string, unknown> | undefined;
-    if ((options.mergeUpdate || options.recordNumber) && !existing) throw AppError.notFound(options.entityName);
+    if (!existing) throw AppError.notFound(options.entityName);
     if (options.mergeUpdate && existing) patch = options.mergeUpdate(existing, patch, req);
     const numberChange = options.recordNumber && existing
       ? await applyRecordNumber(req.db!, patch, options.recordNumber, {
@@ -223,7 +227,8 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     const rawChanges: Record<string, unknown> = numberChange
       ? { ...(req.body as Record<string, unknown>), ...numberChange, recordNumber: showRecordNumber(patch[options.recordNumber!.field]) }
       : { ...(req.body as Record<string, unknown>) };
-    const changes = existing && patch.data && typeof patch.data === "object" ? withFormEdits(rawChanges, existing.data, patch.data) : rawChanges;
+    const withCells = existing && patch.data && typeof patch.data === "object" ? withFormEdits(rawChanges, existing.data, patch.data) : rawChanges;
+    const changes = withScalarEdits(existing, patch, withCells);
     await recordAuditTrail(req.db!, {
       entityType: options.entityName,
       entityId: id,

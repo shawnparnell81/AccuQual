@@ -31,6 +31,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(isoQualityForms, {
   entityName: "ISO form",
   idColumn: "id",
+  blankCreatePath: "/iso-quality-forms",
   recordNumber: ISO_NUMBER,
   prepareCreate: (body) => {
     const formType = String(body.formType ?? "");

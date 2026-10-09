@@ -108,8 +108,8 @@ describe("form folder groups and department folder edit", () => {
     expect(named("First Article Inspection Report")).toHaveLength(0);
     expect(named("CSA VALIDATION REPORT")).toHaveLength(1);
     expect(rows.some((row) => row.name.includes("first_article_inspection") || row.name.includes("frm-fai-001"))).toBe(false);
-    expect(named("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)")).toHaveLength(1);
-    expect(named("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)")).toHaveLength(1);
+    expect(named("AIR STRUT VALIDATION DOCUMENT")).toHaveLength(1);
+    expect(named("AIR SPRING VALIDATION DOCUMENT")).toHaveLength(1);
     expect(named("ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)")).toHaveLength(1);
     expect(named("ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)")).toHaveLength(1);
 

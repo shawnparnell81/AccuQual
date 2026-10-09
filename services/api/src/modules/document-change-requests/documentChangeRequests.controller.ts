@@ -3,7 +3,9 @@ import { and, eq, desc } from "drizzle-orm";
 import { documentChangeRequests, documentChangeItems, documentChangeReviews } from "../../drizzle/schema/documentChangeRequests.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { scalarEdits } from "../forms/formEditAudit.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
@@ -31,6 +33,7 @@ export const createDcrHandler = asyncHandler(async (req: Request, res: Response)
   await applyRecordNumber(req.db!, body, DCR_NUMBER);
   const [created] = await req.db!.insert(documentChangeRequests).values({ ...body, revision, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await fileBlankCopy(req.db!, "/document-change-requests", created as Record<string, unknown>, req.user?.id);
   res.status(201).json(created);
 });
 
@@ -61,7 +64,15 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
   });
   const revision = keptRevision(record.revision, templateRevisionFor("dcr").revision);
   const [updated] = await req.db!.update(documentChangeRequests).set({ ...body, revision, updatedAt: new Date() }).where(eq(documentChangeRequests.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
+  const fieldEdits = scalarEdits(record as unknown as Record<string, unknown>, { ...(record as unknown as Record<string, unknown>), ...body }, Object.keys(body));
+  const saved = changesWithNumberEdit(req.body, numberChange);
+  await recordAuditTrail(req.db!, {
+    entityType: "DocumentChangeRequest",
+    entityId: record.id,
+    action: "update",
+    changes: fieldEdits.length > 0 ? { ...saved, event: "form_saved", edits: fieldEdits } : saved,
+    performedBy: req.user?.id,
+  });
   res.json(updated);
 });
 

@@ -23,6 +23,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(validationReports, {
   entityName: "Validation Report",
   idColumn: "id",
+  blankCreatePath: "/validation-reports",
   recordNumber: VALIDATION_NUMBER,
   prepareCreate: (body) => {
     const incoming = asRecord(body.data);
