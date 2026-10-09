@@ -135,17 +135,6 @@ export const SUPPLIERS: NavLeaf = {
   notes: "Linked to Purchasing + Material Mgmt + Production (read)",
 };
 
-export const FAI: NavLeaf = {
-  key: "fai",
-  label: "First Article",
-  path: "/fai",
-  icon: ClipboardList,
-  access: { quality: "edit", engineering: "edit" },
-  kpi: false,
-  priority: 1,
-  notes: "Inspection plans, numbered first articles, and part-supplier approval. Does not receive material or block inventory.",
-};
-
 export const COMPLAINTS: NavLeaf = {
   key: "complaints",
   label: "Complaints",
@@ -364,7 +353,6 @@ export const NAV_STRUCTURE: NavGroup[] = [
     department: "quality",
     items: [
       { key: "ncr", label: "NCR", path: "/ncr", icon: AlertTriangle, access: { quality: "edit" }, kpi: true, priority: 1, notes: "Core QMS module" },
-      FAI,
       { key: "capa", label: "CAPA", path: "/capa", icon: ClipboardCheck, access: { quality: "edit" }, kpi: true, priority: 1, notes: "Auto-linked to NCR" },
       { key: "8d", label: "8D", path: "/8d", icon: FileSearch, access: { quality: "edit" }, kpi: true, priority: 1, notes: "Auto-linked to CAPA" },
       { key: "di", label: "DI", path: "/quality", icon: FileSearch2, access: { quality: "edit" }, kpi: true, priority: 1, notes: "Discrepancy Investigation — auto-linked to CAPA" },
@@ -388,7 +376,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "engineering",
-    items: [FAI, PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
+    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "production",

@@ -1,7 +1,7 @@
 import { ensureTestCompany } from "../helpers/company.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
@@ -13,6 +13,7 @@ import { isoQualityForms } from "../../src/drizzle/schema/isoQualityForms.js";
 import { qmsForms } from "../../src/drizzle/schema/qmsForms.js";
 import { documentChangeRequests } from "../../src/drizzle/schema/documentChangeRequests.js";
 import { changeRequests } from "../../src/drizzle/schema/change.js";
+import { validationReports } from "../../src/drizzle/schema/validationReport.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { MAIN_ISO_FOLDER_NAMES } from "../../src/modules/document-folders/mainIsoFolders.js";
@@ -104,27 +105,24 @@ describe("form folder groups and department folder edit", () => {
     expect(named("DOCUMENT CHANGE REQUEST")).toHaveLength(0);
     expect(named("Engineering Change Request")).toHaveLength(1);
     expect(named("ENGINEERING CHANGE REQUEST (ECR)")).toHaveLength(0);
-    expect(named("First Article Inspection Report")).toHaveLength(1);
+    expect(named("First Article Inspection Report")).toHaveLength(0);
+    expect(named("CSA VALIDATION REPORT")).toHaveLength(1);
     expect(rows.some((row) => row.name.includes("first_article_inspection") || row.name.includes("frm-fai-001"))).toBe(false);
     expect(named("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)")).toHaveLength(1);
     expect(named("AIR STRUT VALIDATION DOCUMENT (FRM-VAL-011)")).toHaveLength(1);
     expect(named("ASTM E542 Gravimetric Volume Calculator (FRM-TST-001)")).toHaveLength(1);
     expect(named("ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)")).toHaveLength(1);
 
-    const fai = named("First Article Inspection Report")[0]!;
     const dcr = named("Document Change Request")[0]!;
     const ecr = named("Engineering Change Request")[0]!;
-    expect(fai.formKeys.sort()).toEqual(["first_article_inspection", "frm-fai-001"]);
+    expect(named("CSA VALIDATION REPORT")[0]?.formKeys).toEqual(["frm-val-001"]);
     expect(dcr.formKeys.sort()).toEqual(["dcr", "frm-doc-001"]);
     expect(ecr.formKeys.sort()).toEqual(["ecr", "frm-ecr-001"]);
-    expect(fai.savedCount).toBe(2);
     expect(dcr.savedCount).toBe(2);
     expect(ecr.savedCount).toBe(2);
 
     const detail = await request(app).get("/document-folders/form-folders/frm-fai-001").set("Authorization", `Bearer ${qualityToken}`);
-    expect(detail.status).toBe(200);
-    expect(detail.body.name).toBe("First Article Inspection Report");
-    expect(detail.body.fills).toHaveLength(2);
+    expect(detail.status).toBe(404);
 
     const deniedRename = await request(app).patch("/document-folders/form-folders/dcr").set("Authorization", `Bearer ${managerToken}`).send({ name: "Change paperwork" });
     expect(deniedRename.status).toBe(403);
@@ -147,6 +145,72 @@ describe("form folder groups and department folder edit", () => {
     expect(
       (history.body as { changes?: { event?: string; summary?: string }; performedBy?: number }[]).some(
         (row) => row.changes?.event === "renamed" && row.changes.summary === 'Renamed the folder from "Document Change Request" to "Change paperwork".' && row.performedBy != null,
+      ),
+    ).toBe(true);
+  });
+
+  it("saves a filled form into the folder named for that form, newest first, and still accepts a Documents folder", async () => {
+    const [older] = await db.insert(validationReports).values({ data: { formType: "csa", cells: {} } }).returning();
+    const [newer] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Lot A" } } }).returning();
+    const missing = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-val-001", recordId: older!.id });
+    expect(missing.status).toBe(400);
+
+    const first = await request(app)
+      .post("/document-folders/form-filings")
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ formKey: "frm-val-001", recordId: older!.id, formFolderKey: "frm-val-001" });
+    expect(first.status).toBe(201);
+    expect(first.body.parentPath).toContain("Saved Form Folders");
+    expect(first.body.parentPath).toContain("CSA VALIDATION REPORT");
+    await db.update(formFilings).set({ updatedAt: new Date("2020-01-01T00:00:00.000Z") }).where(and(eq(formFilings.formKey, "frm-val-001"), eq(formFilings.recordId, older!.id)));
+
+    const second = await request(app)
+      .post("/document-folders/form-filings")
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ formKey: "frm-val-001", recordId: newer!.id, formFolderKey: "frm-val-001" });
+    expect(second.status).toBe(201);
+
+    const detail = await request(app).get("/document-folders/form-folders/frm-val-001").set("Authorization", `Bearer ${qualityToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.name).toBe("CSA VALIDATION REPORT");
+    const fills = detail.body.fills as { recordId: number; fileName: string; savedAt: string }[];
+    expect(fills.map((row) => row.recordId).slice(0, 2)).toEqual([newer!.id, older!.id]);
+    expect(fills[0]!.savedAt >= fills[1]!.savedAt).toBe(true);
+
+    const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const folders = tree.body as FolderRow[];
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
+    const documents = folders.find((folder) => folder.parentId === iso.id && folder.name === "Quality");
+    expect(documents).toBeTruthy();
+    const [third] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Docs" } } }).returning();
+    const moved = await request(app)
+      .post("/document-folders/form-filings")
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ formKey: "frm-val-001", recordId: third!.id, folderId: documents!.id });
+    expect(moved.status).toBe(201);
+    expect(moved.body.parentPath).toContain("Quality");
+    expect(moved.body.parentPath).not.toContain("Saved Form Folders");
+
+    const after = await request(app).get("/document-folders/form-folders/frm-val-001").set("Authorization", `Bearer ${qualityToken}`);
+    expect((after.body.fills as { recordId: number }[])[0]?.recordId).toBe(third!.id);
+
+    const created = await request(app).get(`/audit-trail/DocumentFolder/${first.body.folderNodeId}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(created.status).toBe(200);
+    expect(
+      (created.body as { action?: string; changes?: { event?: string; formKey?: string }; performedBy?: number }[]).some(
+        (row) => row.action === "create" && row.changes?.event === "filed" && row.changes.formKey === "frm-val-001" && row.performedBy != null,
+      ),
+    ).toBe(true);
+
+    const relocated = await request(app)
+      .post("/document-folders/form-filings")
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ formKey: "frm-val-001", recordId: older!.id, folderId: documents!.id });
+    expect(relocated.status).toBe(201);
+    const moveLog = await request(app).get(`/audit-trail/DocumentFolder/${first.body.folderNodeId}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(
+      (moveLog.body as { action?: string; changes?: { event?: string }; performedBy?: number }[]).some(
+        (row) => row.action === "update" && row.performedBy != null,
       ),
     ).toBe(true);
   });

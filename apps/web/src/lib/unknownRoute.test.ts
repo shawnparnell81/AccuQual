@@ -29,13 +29,17 @@ describe("unknown routes stay inside the app shell", () => {
     assert.match(html, /Sidebar/);
   });
 
-  it("sends the old Blank Forms address to Blank Forms Templates", () => {
+  it("opens Blank Forms in the app and keeps the start route", () => {
     const routes = workspaceRouteElements();
     const blank = routes.find((route) => route.props.path === "/blank-forms");
-    assert.equal(blank?.props.element?.props?.to, blankFormsFolderHref());
-    assert.equal(blank?.props.element?.props?.replace, true);
+    assert.equal(blank?.props.element?.props?.to, undefined);
     assert.equal(routes.some((route) => route.props.path === "/blank-forms/start/:formKey"), true);
+    assert.equal(routes.some((route) => route.props.path === "/fai" || route.props.path === "/fai/csa"), false);
     assert.equal(blankFormsFolderHref(), "/documents/folders?name=Blank%20Forms%20Templates");
+    assert.throws(() => markup("/blank-forms"), /suspend/i);
+    const retired = markup("/fai");
+    assert.match(retired, /This page isn(?:'|&#x27;)t in AccuQual/);
+    assert.match(markup("/fai/csa"), /This page isn(?:'|&#x27;)t in AccuQual/);
   });
 
   it("does not treat Folders or a real redirect as a missing page", () => {

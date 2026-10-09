@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -7,7 +7,6 @@ import { documents } from "../../drizzle/schema/documents.js";
 import { trainingAssignments, trainingCourses } from "../../drizzle/schema/training.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { users } from "../../drizzle/schema/users.js";
-import { faiRecords, faiAnnualPulls, faiSourceApprovals } from "../../drizzle/schema/faiSourceControl.js";
 import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { summarize } from "../calibration/calibration.service.js";
@@ -46,30 +45,6 @@ export async function loadWaitingOnMe(
         .from(capa)
         .where(and(ne(capa.status, "closed"), inArray(capa.siteId, siteIds)))
         .limit(CAP * 2)
-    : [];
-
-  const records = access.fai
-    ? await db
-        .select({ id: faiRecords.id, number: faiRecords.number, partNumber: faiRecords.partNumber, status: faiRecords.status, assignedTo: faiRecords.assignedTo, supplierName: faiRecords.supplierName })
-        .from(faiRecords)
-        .where(and(eq(faiRecords.assignedTo, user.id), ne(faiRecords.status, "approved"), ne(faiRecords.status, "rejected")))
-        .limit(CAP)
-    : [];
-
-  const pulls = access.fai
-    ? await db
-        .select({ id: faiAnnualPulls.id, partNumber: faiAnnualPulls.partNumber, assignedTo: faiAnnualPulls.assignedTo, completedAt: faiAnnualPulls.completedAt })
-        .from(faiAnnualPulls)
-        .where(and(eq(faiAnnualPulls.assignedTo, user.id), isNull(faiAnnualPulls.completedAt)))
-        .limit(CAP)
-    : [];
-
-  const sources = access.fai
-    ? await db
-        .select({ id: faiSourceApprovals.id, partNumber: faiSourceApprovals.partNumber, supplierName: faiSourceApprovals.supplierName, status: faiSourceApprovals.status, nextDueDate: faiSourceApprovals.nextDueDate })
-        .from(faiSourceApprovals)
-        .orderBy(desc(faiSourceApprovals.updatedAt))
-        .limit(200)
     : [];
 
   let gages: { id: number; name: string; serialNumber: string | null; dueStatus: string; nextDueAt: Date | null }[] = [];
@@ -138,8 +113,6 @@ export async function loadWaitingOnMe(
     user.id,
     ...ncrs.map((row) => row.assignedTo ?? 0),
     ...capas.map((row) => row.ownerId ?? 0),
-    ...records.map((row) => row.assignedTo ?? 0),
-    ...pulls.map((row) => row.assignedTo ?? 0),
     ...auditRows.map((row) => row.auditorId ?? 0),
   ];
   const unique = [...new Set(nameIds.filter((id) => id > 0))];
@@ -154,9 +127,9 @@ export async function loadWaitingOnMe(
     siteIds,
     ncrs,
     capas,
-    faiRecords: records,
-    pulls,
-    sources,
+    faiRecords: [],
+    pulls: [],
+    sources: [],
     gages,
     approvals,
     documents: [...documentMap.values()],

@@ -1,7 +1,6 @@
 import { Route, Navigate } from "react-router-dom";
 import { NotFoundPage } from "./NotFoundPage";
 import { homeKind } from "../lib/opsLanguage";
-import { blankFormsFolderHref } from "../lib/folderBrowse";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
 import {
@@ -28,6 +27,7 @@ import {
   AiInsightsPage,
   AuditDetailPage,
   AuditsPage,
+  BlankFormsListPage,
   StartBlankFormPage,
   CalendarPage,
   CapaDetailPage,
@@ -84,15 +84,6 @@ import {
   QmsFormRecordPage,
   QmsFormTypePage,
   QmsFormsLibraryPage,
-  CsaFaiListPage,
-  CsaFaiRecordPage,
-  FuelPumpFaiListPage,
-  FuelPumpFaiRecordPage,
-  FaiPlanPage,
-  FaiPullPage,
-  FaiQueuePage,
-  FaiRecordPage,
-  FaiSourcesPage,
   QualityInspectionReportDetailPage,
   QualityInspectionReportsPage,
   QuarantineDetailPage,
@@ -134,7 +125,7 @@ export function workspaceRouteElements() {
   return [
     <Route key="/" path="/" element={<HomeRoute />} />,
     <Route key="/home" path="/home" element={<HomePage />} />,
-    <Route key="/blank-forms" path="/blank-forms" element={<Navigate to={blankFormsFolderHref()} replace />} />,
+    <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsListPage />} />,
     <Route key="/blank-forms/start" path="/blank-forms/start/:formKey" element={<StartBlankFormPage />} />,
     <Route key="/form-folders" path="/form-folders" element={<FormFoldersPage />} />,
     <Route key="/form-folders/:formKey" path="/form-folders/:formKey" element={<FormFolderDetailPage />} />,
@@ -190,16 +181,6 @@ export function workspaceRouteElements() {
     <Route key="/qms-forms/:formType/:id" path="/qms-forms/:formType/:id" element={<QmsFormRecordPage />} />,
     <Route key="/scar-forms" path="/scar-forms" element={<ScarFormsPage />} />,
     <Route key="/scar-forms/:id" path="/scar-forms/:id" element={<ScarFormDetailPage />} />,
-    <Route key="/fai/csa" path="/fai/csa" element={<CsaFaiListPage />} />,
-    <Route key="/fai/csa/:id" path="/fai/csa/:id" element={<CsaFaiRecordPage />} />,
-    <Route key="/fai/fuel-pump" path="/fai/fuel-pump" element={<FuelPumpFaiListPage />} />,
-    <Route key="/fai/fuel-pump/:id" path="/fai/fuel-pump/:id" element={<FuelPumpFaiRecordPage />} />,
-    <Route key="/fai" path="/fai" element={<FaiQueuePage />} />,
-    <Route key="/fai/plans/new" path="/fai/plans/new" element={<FaiPlanPage />} />,
-    <Route key="/fai/plans/:id" path="/fai/plans/:id" element={<FaiPlanPage />} />,
-    <Route key="/fai/records/:id" path="/fai/records/:id" element={<FaiRecordPage />} />,
-    <Route key="/fai/sources" path="/fai/sources" element={<FaiSourcesPage />} />,
-    <Route key="/fai/pull" path="/fai/pull" element={<FaiPullPage />} />,
     <Route key="/quality-inspection-reports" path="/quality-inspection-reports" element={<QualityInspectionReportsPage />} />,
     <Route key="/quality-inspection-reports/:id" path="/quality-inspection-reports/:id" element={<QualityInspectionReportDetailPage />} />,
     <Route key="/ppap" path="/ppap" element={<PpapListPage />} />,

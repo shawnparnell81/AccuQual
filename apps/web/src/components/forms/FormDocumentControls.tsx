@@ -6,7 +6,8 @@ import { FORM_TEMPLATES_QUERY_KEY, useFormTemplates } from "../../api/formTempla
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { EDITABLE_FORM_KEYS, FILEABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
-import { documentsFolderHref, filingLocation, type BrowseFolder, type FiledLocation } from "../../lib/folderBrowse";
+import { documentsFolderHref, filingLocation, SAVED_FORM_FOLDERS_ROOT, type BrowseFolder, type FiledLocation } from "../../lib/folderBrowse";
+import { defaultSaveDestination, type FormFolderChoice } from "../../lib/saveDestination";
 import { SaveAsFolderDialog } from "./SaveAsFolderDialog";
 
 export type { FiledLocation };
@@ -41,8 +42,17 @@ export function rememberFolderChoice(queryClient: QueryClient, formKey: string, 
   queryClient.setQueryData(folderChoiceKey(formKey, recordId), folderId);
 }
 
-function locationOf(view: FormFilingView): FiledLocation | null {
-  return filingLocation(view.parentId, view.parentPath, view.fileName);
+const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
+
+function locationOf(view: FormFilingView, formKey: string): FiledLocation | null {
+  const location = filingLocation(view.parentId, view.parentPath, view.fileName);
+  if (!location || !view.parentPath.includes(SAVED_FORM_FOLDERS_ROOT)) return location;
+  const visible = view.parentPath.filter((name) => name !== SAVED_FORM_FOLDERS_ROOT && name !== ISO_DOCUMENTS_FOLDER);
+  return {
+    ...location,
+    path: visible.join(" / ") || location.path,
+    href: `/form-folders/${encodeURIComponent(formKey)}`,
+  };
 }
 
 /**
@@ -56,14 +66,33 @@ export async function fileChosenFolder(queryClient: QueryClient, formKey: string
     current = (await apiClient.get<FormFilingView>("/document-folders/form-filings", { params: { formKey, recordId } })).data;
     queryClient.setQueryData(["form-filing", formKey, recordId], current);
   }
-  const folderId = typeof stored === "number" ? stored : stored === "" ? null : (current?.parentId ?? current?.suggestedFolderId ?? null);
-  if (folderId == null) return null;
-  if (current?.parentId === folderId) return locationOf(current);
-  const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data;
-  queryClient.setQueryData(["form-filing", formKey, recordId], saved);
-  await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
-  await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
-  return locationOf(saved);
+  if (stored === "") return null;
+  if (typeof stored === "number") {
+    if (current?.parentId === stored) return locationOf(current, formKey);
+    const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId: stored })).data;
+    queryClient.setQueryData(["form-filing", formKey, recordId], saved);
+    await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
+    await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+    await queryClient.invalidateQueries({ queryKey: ["form-folders"] });
+    return locationOf(saved, formKey);
+  }
+  if (current?.parentId != null) return locationOf(current, formKey);
+  try {
+    const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, formFolderKey: formKey })).data;
+    queryClient.setQueryData(["form-filing", formKey, recordId], saved);
+    await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
+    await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+    await queryClient.invalidateQueries({ queryKey: ["form-folders"] });
+    return locationOf(saved, formKey);
+  } catch {
+    const folderId = current?.suggestedFolderId ?? null;
+    if (folderId == null) return null;
+    const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data;
+    queryClient.setQueryData(["form-filing", formKey, recordId], saved);
+    await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
+    await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+    return locationOf(saved, formKey);
+  }
 }
 
 /** The line under Save: the folder path opens that folder in Documents. */
@@ -81,7 +110,7 @@ export function SaveResult({ result }: { result: SaveResultState }) {
       </span>
     );
   }
-  const href = documentsFolderHref(result.folderId);
+  const href = result.href ?? documentsFolderHref(result.folderId);
   return (
     <span className="text-xs text-muted-foreground" data-testid="save-location">
       Saved in{" "}
@@ -188,30 +217,42 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
     queryFn: async () => (await apiClient.get<FolderRow[]>("/document-folders")).data,
     enabled: FILEABLE_FORM_KEYS.has(formKey),
   });
+  const formFolders = useQuery({
+    queryKey: ["form-folders"],
+    queryFn: async () => (await apiClient.get<FormFolderChoice[]>("/document-folders/form-folders")).data,
+    enabled: FILEABLE_FORM_KEYS.has(formKey),
+  });
   const [selected, setSelected] = useState<number | "">("");
   const [synced, setSynced] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const signature = `${filing.data?.parentId ?? ""}:${filing.data?.suggestedFolderId ?? ""}`;
+  const signature = `${filing.data?.parentId ?? ""}:${(filing.data?.parentPath ?? []).join("/")}`;
 
   useEffect(() => {
     if (!filing.data || synced === signature) return;
-    const next = filing.data.parentId ?? filing.data.suggestedFolderId ?? "";
+    const inDocuments = filing.data.parentId != null && !filing.data.parentPath.includes(SAVED_FORM_FOLDERS_ROOT);
+    const next = inDocuments ? filing.data.parentId! : "";
     setSelected(next === "" ? "" : next);
-    rememberFolderChoice(queryClient, formKey, recordId, next === "" ? "" : next);
+    if (typeof next === "number") rememberFolderChoice(queryClient, formKey, recordId, next);
     setSynced(signature);
   }, [filing.data, formKey, queryClient, recordId, signature, synced]);
 
   const file = useMutation({
-    mutationFn: async ({ folderId, partNumber }: { folderId: number; partNumber?: string }) =>
-      (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId, partNumber })).data,
-    onSuccess: async (_saved, { folderId }) => {
+    mutationFn: async (body: { folderId?: number; formFolderKey?: string; partNumber?: string }) =>
+      (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, ...body })).data,
+    onSuccess: async (saved) => {
       setMessage(null);
       setPickerOpen(false);
-      rememberFolderChoice(queryClient, formKey, recordId, folderId);
-      setSelected(folderId);
+      const parent = saved.parentId;
+      if (parent != null && !saved.parentPath.includes(SAVED_FORM_FOLDERS_ROOT)) {
+        rememberFolderChoice(queryClient, formKey, recordId, parent);
+        setSelected(parent);
+      } else {
+        setSelected("");
+      }
       await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
       await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+      await queryClient.invalidateQueries({ queryKey: ["form-folders"] });
     },
     onError: () => setMessage("Couldn't file this record."),
   });
@@ -220,6 +261,22 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
 
   const filed = (filing.data?.parentPath.length ?? 0) > 0;
   const tree = (folders.data ?? []).map((folder) => ({ ...folder, sortOrder: folder.sortOrder ?? 0 }));
+  const destination = defaultSaveDestination({
+    formKey,
+    folders: formFolders.data ?? [],
+    filedParentId: filing.data?.parentId ?? null,
+    filedParentPath: filing.data?.parentPath ?? [],
+  });
+  const filedInFormFolder = (filing.data?.parentPath ?? []).includes(SAVED_FORM_FOLDERS_ROOT);
+  const filedHref =
+    filed && filing.data?.parentId != null
+      ? filedInFormFolder
+        ? `/form-folders/${encodeURIComponent(formKey)}`
+        : documentsFolderHref(filing.data.parentId)
+      : "";
+  const filedLabel = filedInFormFolder
+    ? (filing.data?.parentPath ?? []).filter((name) => name !== SAVED_FORM_FOLDERS_ROOT && name !== "ISO Compliance Documents").join(" / ")
+    : (filing.data?.parentPath ?? []).join(" / ");
 
   return (
     <div className="no-print flex flex-col gap-1" data-testid="folder-destination">
@@ -232,8 +289,8 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
         ) : (
           <span className="text-sm text-foreground">
             {filed && filing.data?.parentId != null ? (
-              <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
-                {filing.data.parentPath.join(" / ")}
+              <Link to={filedHref} className="text-primary hover:underline">
+                {filedLabel}
               </Link>
             ) : (
               "Not filed yet"
@@ -243,8 +300,11 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
       </div>
       {pickerOpen && canEdit && (
         <SaveAsFolderDialog
+          key={`${destination?.kind === "form" ? destination.formKey : ""}:${destination?.kind === "documents" ? destination.folderId : ""}`}
           folders={tree}
-          selectedId={selected}
+          formFolders={formFolders.data ?? []}
+          defaultFormFolderKey={destination?.kind === "form" ? destination.formKey : ""}
+          selectedId={destination?.kind === "documents" ? destination.folderId : selected}
           pending={file.isPending}
           onClose={() => setPickerOpen(false)}
           onSave={(folderId, partNumber) => {
@@ -258,20 +318,31 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
               }
             })();
           }}
+          onSaveFormFolder={(formFolderKey, partNumber) => {
+            setMessage(null);
+            void (async () => {
+              try {
+                if (prepare) await prepare();
+                file.mutate({ formFolderKey, partNumber });
+              } catch {
+                setMessage("Couldn't file this record.");
+              }
+            })();
+          }}
         />
       )}
-      {filing.data && filing.data.suggestedPath.length > 0 && (
-        <p className="text-xs text-muted-foreground">Suggested: {filing.data.suggestedPath.join(" / ")}</p>
+      {destination?.kind === "form" && (
+        <p className="text-xs text-muted-foreground">Saves in {destination.name} unless you pick a Documents folder.</p>
       )}
       {filed && filing.data?.parentId != null && (
         <p className="text-xs text-muted-foreground">
           Filed in{" "}
-          <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
-            {filing.data.parentPath.join(" / ")}
+          <Link to={filedHref} className="text-primary hover:underline">
+            {filedLabel}
           </Link>
           {filing.data.fileName ? ` · ${filing.data.fileName}` : ""}
           {" · "}
-          <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
+          <Link to={filedHref} className="text-primary hover:underline">
             Open folder
           </Link>
         </p>

@@ -140,9 +140,9 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
 };
 
 /**
- * Five doors, plus Admin for people who already pass the admin check.
+ * Home, Documents, Blank Forms, Quality, Folders, Reports, plus Admin for people who already pass the admin check.
  * The Folders door and Documents → Folders both open /form-folders.
- * That page lists saved fills. Blank templates live in Folder Explorer under Blank Forms Templates, not on this menu.
+ * Blank Forms lists the same templates as Folder Explorer → Blank Forms Templates.
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {
@@ -153,6 +153,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     children: [{ key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays }],
   },
   DOCUMENT_CONTROL_FOLDER,
+  { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: FileText },
   {
     key: "quality",
     label: "Quality",
@@ -214,7 +215,6 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
         ],
       },
       { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
-      { key: "fai", label: "First Article", path: "/fai", icon: ClipboardList },
       { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
       { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
       { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },

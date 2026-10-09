@@ -8,6 +8,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
 import { filedRecordName, fileNamePatternFor, folderIsBlankLibrary, FORM_TEMPLATES } from "./formFiling.js";
+import { ensureSavedFormFolder } from "./formFolders.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { folderMoveAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
@@ -180,10 +181,15 @@ export async function getFormFiling(db: Db, formKey: string, recordId: number): 
   return presentFiling(db, formKey, recordId, await loadFolders(db));
 }
 
-export async function fileFormRecord(db: Db, input: { formKey: string; recordId: number; folderId: number; partNumber?: string }, performedBy: number | undefined): Promise<FormFilingView> {
+export async function fileFormRecord(
+  db: Db,
+  input: { formKey: string; recordId: number; folderId?: number; formFolderKey?: string; partNumber?: string },
+  performedBy: number | undefined,
+): Promise<FormFilingView> {
   const { formKey, recordId } = input;
-  let folderId = input.folderId;
   if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
+  let folderId = input.formFolderKey ? await ensureSavedFormFolder(db, formKey, performedBy, input.formFolderKey) : input.folderId;
+  if (folderId == null) throw AppError.badRequest("Choose a folder");
   await ensureFormTemplates(db, performedBy);
   const createdOn = await assertRecord(db, formKey, recordId);
   const partNumber = input.partNumber?.trim().replace(/\s+/g, " ") ?? "";

@@ -799,6 +799,13 @@
       "when": 1793833200000,
       "tag": "0113_user_record_numbers",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1793919600000,
+      "tag": "0114_retire_first_article",
+      "breakpoints": true
     }
   ]
 }

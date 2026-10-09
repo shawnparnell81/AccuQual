@@ -1,6 +1,4 @@
 import type { WorkflowDefinition } from "./workflow-engine.js";
-import { CSA_FAI_DEFINITION, CSA_FAI_METADATA } from "../csa-fai/csaFai.workflow.js";
-import { FPM_FAI_DEFINITION, FPM_FAI_METADATA } from "../fuel-pump-fai/fuelPumpFai.workflow.js";
 import { NCR_PROCESS_NAME, ncrProcessDefinition } from "./ncrProcess.workflow.js";
 
 export interface WorkflowTemplate {
@@ -211,21 +209,5 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         { from: "s8", to: "end", branch: "approved" },
       ],
     },
-  },
-  {
-    key: "csa_fai",
-    name: "CSA First Article Inspection",
-    module: "fai",
-    description: "Complete Strut Assembly first article inspection. Aftermarket automotive parts. The controlled version stays a draft until it is published.",
-    definition: CSA_FAI_DEFINITION,
-    metadata: CSA_FAI_METADATA,
-  },
-  {
-    key: "fpm_fai",
-    name: "Fuel Pump Module FAI",
-    module: "fai",
-    description: "Fuel Pump Module first article inspection. Aftermarket automotive parts. The controlled version stays a draft until it is published.",
-    definition: FPM_FAI_DEFINITION,
-    metadata: FPM_FAI_METADATA,
   },
 ];

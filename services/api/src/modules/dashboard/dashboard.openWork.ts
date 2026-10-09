@@ -4,8 +4,8 @@
  * A module they cannot read is left out. Counts stay at zero when the table
  * exists and is empty. Nothing here invents a module or a status.
  *
- * "Open" uses the status each table already stores. Validation, first-article,
- * and TRP sheets have no status column. A sheet with a real approving
+ * "Open" uses the status each table already stores. Validation and TRP
+ * sheets have no status column. A sheet with a real approving
  * signature is finished once that signature is present. A sheet with no
  * signature block stays listed, because the form has no close step.
  */
@@ -389,7 +389,7 @@ function buildRecords(input: OpenWorkInput): Built {
   }
 
   if (access.documents) {
-    modules.push({ key: "VAL", label: "VAL" }, { key: "FAI", label: "FAI" }, { key: "TRP", label: "TRP" }, { key: "ECR", label: "ECR" });
+    modules.push({ key: "VAL", label: "VAL" }, { key: "TRP", label: "TRP" }, { key: "ECR", label: "ECR" });
     for (const row of input.validation) {
       if (!validationOpen(row.data)) continue;
       const kind = validationKind(row.data);
@@ -407,22 +407,6 @@ function buildRecords(input: OpenWorkInput): Built {
       }, now, plantName);
     }
     for (const row of input.forms) {
-      if (row.formType === "first_article") {
-        const title = cell(row.data, "F3") || cell(row.data, "D4") || "First article inspection";
-        pushRecord(records, {
-          id: `fai-${row.id}`,
-          module: "FAI",
-          href: `/iso-forms/record/${row.id}`,
-          number: showRecordNumber(row.recordNumber),
-          title,
-          status: "in_progress",
-          plantId: null,
-          owner: null,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-        }, now, plantName);
-        continue;
-      }
       if (row.formType === "salt_spray" || row.formType === "prototype_strut") {
         const approved = row.formType === "salt_spray" ? field(row.data, "approvedSignature") : field(row.data, "engineeringSignoffSignature");
         if (approved) continue;
@@ -584,16 +568,15 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
 
   if (access.documents) {
     const validation = count(built.records, "VAL");
-    const fai = count(built.records, "FAI");
     const trp = count(built.records, "TRP");
     cards.push({
       key: "validation",
       label: "Open validation",
-      value: validation + fai + trp,
-      foot: companyNote(input.allPlants, `${validation} validation · ${fai} FAI · ${trp} TRP`),
+      value: validation + trp,
+      foot: companyNote(input.allPlants, `${validation} validation · ${trp} TRP`),
       href: null,
       module: null,
-      modules: ["VAL", "FAI", "TRP"],
+      modules: ["VAL", "TRP"],
     });
     const ecrs = count(built.records, "ECR");
     const changes = access.change ? count(built.records, "Change") : 0;

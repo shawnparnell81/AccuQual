@@ -38,7 +38,7 @@ const ACTIVITY_SCAN = 200;
 
 const READ_KEYS = ["ncr", "capa", "documents", "training", "audit", "calibration", "change", "ppap", "scar", "risk", "work_orders"] as const satisfies readonly ResourceKey[];
 
-const OPEN_FORM_TYPES = ["first_article", "salt_spray", "prototype_strut", "engineering_change"] as const;
+const OPEN_FORM_TYPES = ["salt_spray", "prototype_strut", "engineering_change"] as const;
 
 const SITE_SCOPED_ACTIVITY = new Set(["NCR", "CAPA", "Audit"]);
 

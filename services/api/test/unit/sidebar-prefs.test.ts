@@ -31,6 +31,31 @@ describe("sidebar shortcut normalization", () => {
     const next = normalizeSidebarShortcuts({ hidden: ["home"], pinned: [], layout: null, groups: [] });
     expect(next.layout).toBeNull();
     expect(next.hidden).toEqual([]);
-    expect(emptySidebarShortcuts()).toEqual({ hidden: [], pinned: [], layout: null, groups: [] });
+    expect(next.offered).toEqual(["blank-forms"]);
+    expect(emptySidebarShortcuts()).toEqual({ hidden: [], pinned: [], layout: null, groups: [], offered: [] });
+  });
+
+  it("appends Blank Forms to a saved menu the first time, and keeps a later hide", () => {
+    const first = normalizeSidebarShortcuts({
+      hidden: ["blank-forms"],
+      pinned: [],
+      layout: [{ key: "home" }, { key: "quality" }],
+      groups: [],
+    });
+    expect(first.hidden).not.toContain("blank-forms");
+    expect(first.layout?.some((node) => node.key === "blank-forms")).toBe(true);
+    expect(first.layout?.[0]?.key).toBe("home");
+    expect(first.offered).toContain("blank-forms");
+
+    const hidden = normalizeSidebarShortcuts({
+      hidden: ["blank-forms"],
+      pinned: [],
+      layout: [{ key: "home" }, { key: "quality" }],
+      groups: [],
+      offered: ["blank-forms"],
+    });
+    expect(hidden.hidden).toContain("blank-forms");
+    expect(hidden.layout?.some((node) => node.key === "blank-forms")).toBe(false);
+    expect(hidden.layout?.[0]?.key).toBe("home");
   });
 });
