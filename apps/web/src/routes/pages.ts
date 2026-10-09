@@ -130,6 +130,7 @@ export const AdminCompanyAiConfigPage = lazyNamed("/admin/company-ai", () => imp
 export const AdminAiUsagePage = lazyNamed("/admin/ai-usage", () => import("./Admin/AdminAiUsagePage"), "AdminAiUsagePage");
 export const AdminDigitalTwinSetupPage = lazyNamed("/admin/digital-twin", () => import("./Admin/AdminDigitalTwinSetupPage"), "AdminDigitalTwinSetupPage");
 export const RolesPermissionsPage = lazyNamed("/admin/roles-permissions", () => import("./Admin/RolesPermissionsPage"), "RolesPermissionsPage");
+export const LoginHistoryPage = lazyNamed("/admin/login-history", () => import("./Admin/LoginHistoryPage"), "LoginHistoryPage");
 export const AdminConsoleLayout = lazyNamed("/admin", () => import("./Admin/AdminConsoleLayout"), "AdminConsoleLayout");
 export const AdminConsoleHomePage = lazyNamed("/admin", () => import("./Admin/AdminConsoleHomePage"), "AdminConsoleHomePage");
 export const AdminUsersRolesPage = lazyNamed("/admin/users", () => import("./Admin/AdminUsersRolesPage"), "AdminUsersRolesPage");

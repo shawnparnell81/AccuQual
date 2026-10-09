@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-09",
+    date: "2026-10-09",
+    items: [
+      "Admin → Login History lists who signed in, when, from where, and on what device. An administrator turns this on for a role. Owner and Administrator start with it. Times on the page use your time zone. The CSV download uses UTC.",
+    ],
+  },
+  {
     version: "2026-09-30",
     date: "2026-09-30",
     items: [

@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { ADMIN_CONSOLE_SECTIONS } from "./AdminConsoleLayout";
+import { useAdminConsoleSections } from "./AdminConsoleLayout";
 
 export function AdminConsoleHomePage() {
+  const sections = useAdminConsoleSections();
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -9,7 +10,7 @@ export function AdminConsoleHomePage() {
         <p className="text-sm text-muted-foreground">Configure this organization without a code change or deploy.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ADMIN_CONSOLE_SECTIONS.map((section) => (
+        {sections.map((section) => (
           <Link
             key={section.key}
             to={section.externalPath ?? `/admin/${section.path}`}

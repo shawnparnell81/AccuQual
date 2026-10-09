@@ -18,8 +18,8 @@ async function wipeDatabase(): Promise<void> {
     await client.query("DELETE FROM roles WHERE name NOT IN ('owner', 'admin', 'president', 'vice_president', 'director', 'quality_manager', 'lead', 'operator', 'staff', 'read_only', 'auditor', 'supplier', 'customer')");
     await client.query(`
       INSERT INTO roles (name, description, hierarchy_level, is_protected, permissions) VALUES
-        ('owner', 'Owner — full access to everything', 10, true, '["import_data", "restore_archived_documents", "plants.delete"]'::jsonb),
-        ('admin', 'Administrator — full access', 15, true, '["import_data", "restore_archived_documents", "plants.delete"]'::jsonb),
+        ('owner', 'Owner — full access to everything', 10, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history"]'::jsonb),
+        ('admin', 'Administrator — full access', 15, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history"]'::jsonb),
         ('president', 'President — can view the quality system and approve work', 20, true, '[]'::jsonb),
         ('vice_president', 'Vice President — can view the quality system and approve work', 30, true, '[]'::jsonb),
         ('director', 'Director — can view the quality system and approve work', 40, true, '[]'::jsonb),

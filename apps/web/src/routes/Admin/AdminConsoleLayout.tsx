@@ -2,8 +2,9 @@ import { Suspense, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 import { readAdminNavCollapsed, writeAdminNavCollapsed } from "../../lib/adminNavCollapsed";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 interface ConsoleSection {
   key: string;
@@ -14,6 +15,8 @@ interface ConsoleSection {
   /** A full page that already exists outside this console (Workflow Builder, Reporting Hub) — its own RBAC/layout needs the full page, not this sidebar competing for width, so this just navigates there instead of nesting it. */
   externalPath?: string;
   description: string;
+  /** Shown only when GET /permissions/effective grants this role permission. */
+  permission?: string;
 }
 
 const SECTIONS: ConsoleSection[] = [
@@ -21,6 +24,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "import", label: "Import data", icon: Upload, path: "import", description: "Load suppliers, parts, inspections, and other records from a spreadsheet" },
   { key: "plants", label: "Plants", icon: Factory, path: "plants", description: "Add plants and choose who works at each one" },
   { key: "permissions", label: "Permissions", icon: ShieldCheck, path: "roles-permissions", description: "Department access, custom roles, and user-role assignments" },
+  { key: "login_history", label: "Login History", icon: History, path: "login-history", description: "Who signed in, when, from where, and on what device", permission: "login_history" },
   { key: "workflows", label: "Workflows", icon: Workflow, externalPath: "/workflow", description: "Edit workflow states, transitions, conditions, and actions" },
   { key: "ai", label: "AI Settings", icon: Bot, path: "ai-settings", description: "LLM provider, model, safety mode, and usage" },
   { key: "supplier", label: "Supplier Settings", icon: Truck, path: "supplier-settings", description: "Supplier quality risk score weighting" },
@@ -39,6 +43,17 @@ const SECTIONS: ConsoleSection[] = [
 
 export { SECTIONS as ADMIN_CONSOLE_SECTIONS };
 
+/** Sections this person may open. Login History follows the role permission, which an administrator assigns. */
+export function useAdminConsoleSections(): ConsoleSection[] {
+  const { effective, isLoading } = useEffectivePermissions();
+  return SECTIONS.filter((section) => {
+    if (!section.permission) return true;
+    if (isLoading || !effective) return false;
+    const level = effective[section.permission];
+    return level === "read" || level === "edit";
+  });
+}
+
 /**
  * Company admin navigation. Not the old /platform operator page.
  * Sections keep their own access checks (settings.routes.ts). A gate on this layout would block departments that can already write.
@@ -53,6 +68,7 @@ function readCollapsed(): boolean {
 
 export function AdminConsoleLayout() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const sections = useAdminConsoleSections();
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -82,7 +98,7 @@ export function AdminConsoleLayout() {
         </button>
         <nav id="admin-console-nav" aria-label="Admin console" hidden={collapsed} className="flex flex-row flex-wrap gap-1 lg:flex-col lg:flex-nowrap">
           <div className="mb-1 hidden px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 lg:block">Admin Console</div>
-          {SECTIONS.map((section) =>
+          {sections.map((section) =>
             section.externalPath ? (
               <Link
                 key={section.key}

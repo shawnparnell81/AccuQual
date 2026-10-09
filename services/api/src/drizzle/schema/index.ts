@@ -63,6 +63,7 @@ export * from "./erpSyncErrors.js";
 export * from "./auditRowChanges.js";
 export * from "./mfaRecoveryCodes.js";
 export * from "./trustedDevices.js";
+export * from "./loginEvents.js";
 export * from "./sso.js";
 export * from "./versioning.js";
 export * from "./qualityAutomation.js";

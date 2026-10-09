@@ -96,6 +96,7 @@ import {
   RiskPage,
   RmaDetailPage,
   RolesPermissionsPage,
+  LoginHistoryPage,
   ScarFormDetailPage,
   ScarFormsPage,
   SettingsPage,
@@ -246,6 +247,7 @@ export function workspaceRouteElements() {
       <Route path="import" element={<AdminImportPage />} />
       <Route path="plants" element={<AdminPlantsPage />} />
       <Route path="roles-permissions" element={<RolesPermissionsPage />} />
+      <Route path="login-history" element={<LoginHistoryPage />} />
       <Route path="ai-settings" element={<AdminAiSettingsPage />} />
       <Route path="supplier-settings" element={<AdminSupplierSettingsPage />} />
       <Route path="quality-settings" element={<AdminQualitySettingsPage />} />

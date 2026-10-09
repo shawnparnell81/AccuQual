@@ -6,6 +6,8 @@ export const SIGN_IN_ENTITY_TYPE = "SignIn";
 export interface SignInClient {
   ip?: string | null;
   userAgent?: string | null;
+  /** Browser platform version hint. Used to tell Windows 11 from Windows 10. Not stored on its own. */
+  platformVersion?: string | null;
 }
 
 /** SHA-256 hex. Empty values are omitted so the row never stores a blank or the raw address. */

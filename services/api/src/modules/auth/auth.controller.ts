@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import * as authService from "./auth.service.js";
-import type { SignInClient } from "./signInAudit.js";
+import { signInClientFromRequest } from "./signInClient.js";
 import { changeSignaturePin, setSignaturePin } from "../signatures/signaturePin.service.js";
 import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 import { encryptRefreshCookie, REFRESH_COOKIE_NAME, refreshCookieFrom } from "./refreshCookie.js";
@@ -136,8 +136,8 @@ function sendSession(res: Response, result: Awaited<ReturnType<typeof authServic
   res.json(withoutRefreshToken(session as FinishedSession & Record<string, unknown>));
 }
 
-function signInClient(req: Request): SignInClient {
-  return { ip: req.ip, userAgent: req.get("user-agent") };
+function signInClient(req: Request) {
+  return signInClientFromRequest(req);
 }
 
 export const loginHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -202,7 +202,7 @@ export const revokeAllTrustedDevicesHandler = asyncHandler(async (req: Request, 
 
 /** Clears the restored sign-in cookies and revokes that refresh token. Does not clear the trusted-browser cookie. */
 export const endBrowserSessionHandler = asyncHandler(async (req: Request, res: Response) => {
-  await authService.endBrowserSession(refreshCookieFrom(req));
+  await authService.endBrowserSession(refreshCookieFrom(req), signInClient(req));
   clearRefreshCookie(res);
   res.status(204).send();
 });
@@ -211,7 +211,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
   const result = await withSharedRefresh(req, async () => {
     const token = refreshCookieFrom(req);
     if (!token) throw AppError.unauthorized("Missing refresh token");
-    return authService.refresh(token);
+    return authService.refresh(token, signInClient(req));
   });
   setRefreshCookie(res, result.refreshToken);
   res.json(withoutRefreshToken(result));
