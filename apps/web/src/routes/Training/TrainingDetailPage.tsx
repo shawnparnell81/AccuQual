@@ -39,7 +39,7 @@ export function TrainingDetailPage() {
   const { id } = useParams();
   const courseId = Number(id);
   const { data: course, isLoading, isError } = trainingHooks.useOne(courseId);
-  useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
+  useSetAssistantContext("training", courseId, course ? course.title : "Training course");
   const updateCourse = trainingHooks.useUpdate();
   const { effective } = useEffectivePermissions();
   const permitted = effective?.training === "edit";
@@ -97,7 +97,7 @@ export function TrainingDetailPage() {
         accessNote={permitted ? null : TRAINING_MANAGE_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
             <DeleteRecordButton resource="training" id={course.id} kind="Training course" title={course.title} navigateTo="/training" allowed={permitted} assignedOnly />
             {mayManage ? (
               <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">

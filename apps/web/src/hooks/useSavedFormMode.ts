@@ -52,15 +52,21 @@ export function useSavedFormMode(recordId: number | string | undefined, canEdit:
   };
 }
 
-/** Unlock writes the edit-started history line, then the fields open. */
+/** Unlock writes the edit-started history line, then the fields open. A second click while that is running does nothing. */
 export function useModuleFormLock(recordId: number, canEdit: boolean, beginPath: string) {
   const session = useSavedFormMode(recordId, canEdit);
   const queryClient = useQueryClient();
+  const openingRef = useRef(false);
   async function onEdit() {
-    if (!canEdit) return;
-    await apiClient.post(beginPath);
-    session.unlock();
-    void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
+    if (!canEdit || openingRef.current || session.mode === "editing") return;
+    openingRef.current = true;
+    try {
+      await apiClient.post(beginPath);
+      session.unlock();
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
+    } finally {
+      openingRef.current = false;
+    }
   }
   return { ...session, onEdit };
 }

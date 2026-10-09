@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import type { RiskAssessment } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { riskLevelFromScore } from "../../components/shared/riskConstants";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
@@ -126,7 +127,7 @@ export function RiskDashboardPage() {
             {highCritical.map((r) => (
               <li key={r.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
                 <button onClick={() => navigate(`/risk/${r.id}`)} className="text-left hover:text-primary">
-                  #{r.id} — {r.title}
+                  {recordHeading("Risk", r.recordNumber)} — {r.title}
                 </button>
                 <div className="flex items-center gap-2">
                   {r.riskLevel && <StatusBadge value={r.riskLevel} />}

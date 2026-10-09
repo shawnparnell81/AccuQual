@@ -378,6 +378,7 @@ function buildFigure(part: Extract<PicturePart, { kind: "picture" }>, readOnly: 
 export function PictureBoundText({
   saved,
   onSave,
+  onPendingChange,
   entityType,
   entityId,
   className,
@@ -388,6 +389,8 @@ export function PictureBoundText({
 }: {
   saved: string;
   onSave: (value: string) => void;
+  /** The current text when it differs from the saved value, or null once it matches again. */
+  onPendingChange?: (value: string | null) => void;
   entityType: string;
   entityId: number;
   className?: string;
@@ -423,10 +426,12 @@ export function PictureBoundText({
       onChange={(next) => {
         valueRef.current = next;
         setValue(next);
+        onPendingChange?.(next === savedRef.current ? null : next);
         if (next !== savedRef.current && next.includes("[[aq-picture")) onSave(next);
       }}
       onBlur={() => {
         if (valueRef.current !== savedRef.current) onSave(valueRef.current);
+        else onPendingChange?.(null);
       }}
     />
   );

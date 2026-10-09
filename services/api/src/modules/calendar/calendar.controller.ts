@@ -9,6 +9,7 @@ import { trainingAssignments, trainingCourses } from "../../drizzle/schema/train
 import { documents } from "../../drizzle/schema/documents.js";
 import { crarClaims } from "../../drizzle/schema/crar.js";
 import { expirationStatus } from "../documents/documents.controller.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 
 export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document" | "crar";
 
@@ -59,7 +60,7 @@ export async function getItemsForUser(db: Db, userId: number, siteId?: number | 
         ),
       ),
     db
-      .select({ id: capa.id, status: capa.status, dueDate: capa.dueDate, closedAt: capa.closedAt, ownerId: capa.ownerId, verifiedBy: capa.verifiedBy })
+      .select({ id: capa.id, recordNumber: capa.recordNumber, status: capa.status, dueDate: capa.dueDate, closedAt: capa.closedAt, ownerId: capa.ownerId, verifiedBy: capa.verifiedBy })
       .from(capa)
       .where(
         and(
@@ -135,7 +136,7 @@ export async function getItemsForUser(db: Db, userId: number, siteId?: number | 
       const overdue = !isTerminal && row.dueDate != null && row.dueDate < new Date();
       return {
         id: `capa-${row.id}`,
-        title: `CAPA #${row.id}`,
+        title: showRecordNumber(row.recordNumber) ? `CAPA ${showRecordNumber(row.recordNumber)}` : "CAPA",
         module: "capa",
         dueDate: row.dueDate ? row.dueDate.toISOString() : null,
         status: overdue ? "overdue" : row.status,

@@ -160,6 +160,42 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     formId = 0; // already cleaned up — skip afterAll's own cleanup for this id
   });
 
+  it("keeps all three cells when their patches arrive together", async () => {
+    const created = await request(app).post("/qms-forms").set("Authorization", `Bearer ${productionToken}`).send({ formType: "deviation_waiver_request" });
+    expect(created.status).toBe(201);
+    const id = created.body.id as number;
+    const added = await request(app).post(`/qms-forms/${id}/rows`).set("Authorization", `Bearer ${productionToken}`).send({ sectionKey: "request" });
+    expect(added.status).toBe(201);
+    const addedRowId = added.body.id as number;
+
+    const results = await Promise.all(
+      [
+        { requestNo: "REQ-1008" },
+        { reason: "TEST-1008 reason" },
+        { duration: "30 days" },
+      ].map((data) => request(app).patch(`/qms-forms/${id}/rows/${addedRowId}`).set("Authorization", `Bearer ${productionToken}`).send({ data })),
+    );
+    expect(results.map((result) => result.status)).toEqual([200, 200, 200]);
+
+    const detail = await request(app).get(`/qms-forms/${id}`).set("Authorization", `Bearer ${productionToken}`);
+    expect(detail.status).toBe(200);
+    const stored = (detail.body.rows as { id: number; data: Record<string, string> }[]).find((row) => row.id === addedRowId)?.data;
+    expect(stored?.requestNo).toBe("REQ-1008");
+    expect(stored?.reason).toBe("TEST-1008 reason");
+    expect(stored?.duration).toBe("30 days");
+
+    const history = await request(app).get(`/workflow/history/qms_forms/${id}`).set("Authorization", `Bearer ${productionToken}`);
+    expect(history.status).toBe(200);
+    const text = JSON.stringify(history.body);
+    expect(text).toContain("Row 1 Request No.");
+    expect(text).toContain("Row 1 Reason");
+    expect(text).toContain("Row 1 Duration");
+    expect(text).not.toContain("Rev changed from");
+
+    await db.delete(qmsFormRows).where(eq(qmsFormRows.formId, id));
+    await db.delete(qmsForms).where(eq(qmsForms.id, id));
+  });
+
   it("the new qms_forms gate is a real, enforceable one — explicitly revoking a department's access is honored", async () => {
     const customerServiceToken = await makeUser("customer_service");
     // Sanity check first: the default grant really does work before we revoke it.

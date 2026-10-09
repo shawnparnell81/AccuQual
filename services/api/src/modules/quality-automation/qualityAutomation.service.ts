@@ -166,7 +166,7 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
     const ownerId = row.assignedTo;
     const touched = row.updatedAt ?? row.createdAt ?? now;
     const step = ncrStepLabel(canonicalNcrStep(row.status));
-    const itemBase = { label: `NCR #${row.id}`, href: href(`/ncr/${row.id}`) };
+    const itemBase = { label: showRecordNumber(row.recordNumber) ? `NCR ${showRecordNumber(row.recordNumber)}` : "NCR", href: href(`/ncr/${row.id}`) };
     if (row.dueDate) {
       const kind = classifyDue(row.dueDate, now, settings, timeZone);
       if (kind) {
@@ -194,7 +194,7 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
   const capaRows = await db.select().from(capa).where(inArray(capa.status, [...OPEN_CAPA]));
   for (const row of capaRows) {
     const touched = row.updatedAt ?? row.createdAt ?? now;
-    const itemBase = { label: `CAPA #${row.id}`, href: href(`/capa/${row.id}`) };
+    const itemBase = { label: showRecordNumber(row.recordNumber) ? `CAPA ${showRecordNumber(row.recordNumber)}` : "CAPA", href: href(`/capa/${row.id}`) };
     if (row.dueDate) {
       const kind = classifyDue(row.dueDate, now, settings, timeZone);
       if (kind) {
@@ -228,7 +228,7 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
     const ownerId = row.ncrId != null ? ncrOwner.get(row.ncrId) ?? null : null;
     const touched = row.updatedAt ?? row.createdAt ?? now;
     const due = eightDDueDate(data);
-    const itemBase = { label: `8D #${row.id}`, href: href(`/8d/${row.id}`) };
+    const itemBase = { label: showRecordNumber(row.recordNumber) ? `8D ${showRecordNumber(row.recordNumber)}` : "8D", href: href(`/8d/${row.id}`) };
     if (due) {
       const kind = classifyDue(due, now, settings, timeZone);
       if (kind) {
@@ -412,6 +412,7 @@ export async function repeatReport(db: Db, ncrId: number, allowedSiteIds?: numbe
     openCapaId: loaded.openCapaId,
     matches: loaded.cluster.map((row) => ({
       id: row.id,
+      recordNumber: showRecordNumber(row.recordNumber),
       title: row.title,
       part: row.part,
       supplierId: row.supplierId,

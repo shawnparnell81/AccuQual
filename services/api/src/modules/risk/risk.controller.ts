@@ -7,7 +7,7 @@ import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { RISK_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
-import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { scalarEdits } from "../forms/formEditAudit.js";
 import { deleteRecord } from "../records/recordDeletion.js";
@@ -174,6 +174,7 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
     },
     performedBy: req.user?.id,
   });
+  if (updated) await fileOnFirstSave(req.db!, "/risk", record, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 

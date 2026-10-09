@@ -35,7 +35,8 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 interface EightDWorkbookProps {
-  eightDNo: number;
+  recordId: number;
+  eightDNo: string;
   blank: Blank8DValues;
   sheets: WorksheetValues;
   readOnly?: boolean;
@@ -95,10 +96,10 @@ function Cell({
   );
 }
 
-export function EightDWorkbook({ eightDNo, blank, sheets, readOnly, onBlankChange, onSheetChange }: EightDWorkbookProps) {
+export function EightDWorkbook({ recordId, eightDNo, blank, sheets, readOnly, onBlankChange, onSheetChange }: EightDWorkbookProps) {
   const [tab, setTab] = useState<TabId>("report");
   const computed = useMemo(
-    () => computeWorksheets(sheets, { eightDNo: String(eightDNo), problemStatement: blank.problemStatement }),
+    () => computeWorksheets(sheets, { eightDNo, problemStatement: blank.problemStatement }),
     [blank.problemStatement, eightDNo, sheets]
   );
 
@@ -115,7 +116,7 @@ export function EightDWorkbook({ eightDNo, blank, sheets, readOnly, onBlankChang
       </div>
 
       <div className={tab === "report" ? "e8-panel first active" : "e8-panel first"} role="tabpanel">
-        <Blank8DSheet eightDNo={eightDNo} values={blank} readOnly={readOnly} onChange={onBlankChange} />
+        <Blank8DSheet recordId={recordId} eightDNo={eightDNo} values={blank} readOnly={readOnly} onChange={onBlankChange} />
       </div>
 
       <div className={tab === "d2" ? "e8-panel active" : "e8-panel"} role="tabpanel">

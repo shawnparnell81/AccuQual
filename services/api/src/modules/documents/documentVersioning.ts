@@ -16,6 +16,7 @@ import { capa } from "../../drizzle/schema/capa.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { AppError } from "../../utils/appError.js";
+import { showRecordNumber } from "../records/userRecordNumber.js";
 import { isInObsoleteArchive } from "./obsoleteArchive.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -72,6 +73,19 @@ export function detectFileType(buf: Buffer, originalName: string): DetectedType 
 
 const cleanName = (name: string) => [...path.basename(name)].filter((c) => c.charCodeAt(0) > 31 && c.charCodeAt(0) !== 127).join("").slice(0, 150) || "file";
 
+function linkedRecordLabel(kind: string, recordNumber: string | null | undefined, detail?: string | null): string {
+  const number = showRecordNumber(recordNumber);
+  const head = number ? `${kind} ${number}` : kind;
+  return detail ? `${head}: ${detail}` : head;
+}
+
+function capaLinkLabel(recordNumber: string | null, ncrId: number | null, ncrNumber: string | null): string {
+  const head = linkedRecordLabel("CAPA", recordNumber);
+  if (ncrId == null) return head;
+  const linked = showRecordNumber(ncrNumber);
+  return linked ? `${head} (NCR ${linked})` : `${head} (NCR)`;
+}
+
 // ---- Link targets --------------------------------------------------------------------------------------------------------------------------------
 
 /** Names for a set of record ids of one kind, restricted to this organization. Ids that don't exist here are simply absent. */
@@ -89,10 +103,14 @@ export async function resolveTargets(db: Db, type: LinkType, ids: number[]): Pro
       for (const r of await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(and(inArray(suppliers.id, ids)))) out.set(r.id, r.name);
       break;
     case "ncr":
-      for (const r of await db.select({ id: ncr.id, title: ncr.title }).from(ncr).where(and(eq(ncr.isDeleted, false), inArray(ncr.id, ids)))) out.set(r.id, `NCR #${r.id}: ${r.title}`);
+      for (const r of await db.select({ id: ncr.id, title: ncr.title, recordNumber: ncr.recordNumber }).from(ncr).where(and(eq(ncr.isDeleted, false), inArray(ncr.id, ids)))) out.set(r.id, linkedRecordLabel("NCR", r.recordNumber, r.title));
       break;
     case "capa":
-      for (const r of await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(inArray(capa.id, ids)))) out.set(r.id, r.ncrId ? `CAPA #${r.id} (NCR #${r.ncrId})` : `CAPA #${r.id}`);
+      for (const r of await db
+        .select({ id: capa.id, recordNumber: capa.recordNumber, ncrId: capa.ncrId, ncrNumber: ncr.recordNumber })
+        .from(capa)
+        .leftJoin(ncr, eq(capa.ncrId, ncr.id))
+        .where(inArray(capa.id, ids))) out.set(r.id, capaLinkLabel(r.recordNumber, r.ncrId, r.ncrNumber));
       break;
     case "audit":
       for (const r of await db.select({ id: audits.id, name: audits.name }).from(audits).where(and(inArray(audits.id, ids)))) out.set(r.id, r.name);
@@ -116,11 +134,17 @@ export async function searchTargets(db: Db, type: LinkType, q: string, limit = 1
     case "supplier":
       return (await db.select({ id: suppliers.id, l: suppliers.name }).from(suppliers).where(and(ilike(suppliers.name, like))).orderBy(suppliers.name).limit(n)).map((r) => ({ id: r.id, label: r.l }));
     case "ncr":
-      return (await db.select({ id: ncr.id, l: ncr.title }).from(ncr).where(and(eq(ncr.isDeleted, false), ilike(ncr.title, like))).orderBy(desc(ncr.id)).limit(n)).map((r) => ({ id: r.id, label: `NCR #${r.id}: ${r.l}` }));
+      return (await db.select({ id: ncr.id, l: ncr.title, recordNumber: ncr.recordNumber }).from(ncr).where(and(eq(ncr.isDeleted, false), or(ilike(ncr.title, like), ilike(ncr.recordNumber, like)))).orderBy(desc(ncr.id)).limit(n)).map((r) => ({ id: r.id, label: linkedRecordLabel("NCR", r.recordNumber, r.l) }));
     case "capa": {
       const idMatch = /^#?(\d+)$/.exec(q.trim());
-      const rows = await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(idMatch ? eq(capa.id, Number(idMatch[1])) : sql`true`)).orderBy(desc(capa.id)).limit(n);
-      return rows.map((r) => ({ id: r.id, label: r.ncrId ? `CAPA #${r.id} (NCR #${r.ncrId})` : `CAPA #${r.id}` }));
+      const rows = await db
+        .select({ id: capa.id, recordNumber: capa.recordNumber, ncrId: capa.ncrId, ncrNumber: ncr.recordNumber })
+        .from(capa)
+        .leftJoin(ncr, eq(capa.ncrId, ncr.id))
+        .where(and(idMatch ? or(eq(capa.id, Number(idMatch[1])), ilike(capa.recordNumber, like)) : or(ilike(capa.recordNumber, like), sql`true`)))
+        .orderBy(desc(capa.id))
+        .limit(n);
+      return rows.map((r) => ({ id: r.id, label: capaLinkLabel(r.recordNumber, r.ncrId, r.ncrNumber) }));
     }
     case "audit":
       return (await db.select({ id: audits.id, l: audits.name }).from(audits).where(and(ilike(audits.name, like))).orderBy(desc(audits.id)).limit(n)).map((r) => ({ id: r.id, label: r.l }));

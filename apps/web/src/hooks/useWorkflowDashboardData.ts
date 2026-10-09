@@ -118,7 +118,7 @@ export function useWorkflowDashboardData() {
       .filter((a) => isTrainingOverdue(a.dueAt, a.status))
       .map((a) => ({
         module: "training" as const,
-        label: a.courseTitle ?? courseTitleById.get(a.courseId) ?? `Course #${a.courseId}`,
+        label: a.courseTitle ?? courseTitleById.get(a.courseId) ?? "Course",
         detail: `Due ${new Date(a.dueAt!).toLocaleDateString()} — ${a.userName ?? a.userEmail ?? `User #${a.userId}`}`,
         link: `/training/${a.courseId}`,
         daysOverdue: daysSince(a.dueAt!),

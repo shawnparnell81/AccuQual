@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { Capa } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { recordHeading } from "../../lib/userRecordNumber";
 
 /** Same derived-visibility approach as SupplierNCRList — see supplierPortal.controller.ts's supplierCapaListHandler. */
 export function SupplierCAPAList({ supplierId }: { supplierId?: number }) {
@@ -26,13 +27,13 @@ export function SupplierCAPAList({ supplierId }: { supplierId?: number }) {
           canOpenCapa ? (
             <li key={c.id}>
               <Link to={`/capa/${c.id}`} className="flex items-center justify-between rounded-md border border-border p-2 text-sm hover:bg-muted">
-                <span>CAPA #{c.id} — {c.rootCause ?? "No root cause recorded"}</span>
+                <span>{recordHeading("CAPA", c.recordNumber)} — {c.rootCause ?? "No root cause recorded"}</span>
                 <StatusBadge value={c.status} />
               </Link>
             </li>
           ) : (
             <li key={c.id} className="flex items-center justify-between rounded-md border border-border p-2 text-sm">
-              <span>CAPA #{c.id} — {c.rootCause ?? "No root cause recorded"}</span>
+              <span>{recordHeading("CAPA", c.recordNumber)} — {c.rootCause ?? "No root cause recorded"}</span>
               <StatusBadge value={c.status} />
             </li>
           )

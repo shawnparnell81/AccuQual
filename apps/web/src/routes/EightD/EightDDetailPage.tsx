@@ -9,7 +9,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import type { Ncr, Capa } from "../../api/types";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
-import { recordHeading } from "../../lib/userRecordNumber";
+import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
@@ -220,7 +220,7 @@ export function EightDDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
             <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} number={report.recordNumber} navigateTo="/8d" allowed={permitted} assignedOnly />
             {linkedNcr && canEdit && (
               <AiStructuredSuggestion<EightDSuggestion>
@@ -309,7 +309,8 @@ export function EightDDetailPage() {
 
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         <EightDWorkbook
-          eightDNo={report.id}
+          recordId={report.id}
+          eightDNo={showRecordNumber(report.recordNumber)}
           blank={values.blank}
           sheets={values.sheets}
           readOnly={!canEdit}

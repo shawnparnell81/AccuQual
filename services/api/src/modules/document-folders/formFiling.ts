@@ -362,8 +362,18 @@ export function fileNamePatternFor(seed: { fileNamePattern?: string }): string {
   return seed.fileNamePattern ?? FILE_NAME_PATTERN;
 }
 
-export function filedRecordName(formId: string, recordNumber: number | string, date: string, pattern = FILE_NAME_PATTERN): string {
+/** A typed record number. A database id passed as a number is not one. */
+export function typedFileToken(recordNumber: number | string | null | undefined): string {
+  if (typeof recordNumber !== "string") return "";
+  return recordNumber.trim();
+}
+
+/** `{formId}_{date}` when nobody typed a number. A typed number stays in the name. */
+export function filedRecordName(formId: string, recordNumber: number | string | null | undefined, date: string, pattern = FILE_NAME_PATTERN): string {
   const id = formId.trim();
-  const used = id ? pattern : pattern.replace(/\{formId\}_?/g, "");
-  return used.replaceAll("{formId}", id).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
+  const token = typedFileToken(recordNumber);
+  let used = pattern;
+  if (!id) used = used.replace(/\{formId\}_?/g, "");
+  if (!token) used = used.replace(/\{recordNumber\}_?|_\{recordNumber\}/g, "");
+  return used.replaceAll("{formId}", id).replaceAll("{recordNumber}", token).replaceAll("{date}", date).replace(/_+/g, "_").replace(/^_|_$/g, "");
 }

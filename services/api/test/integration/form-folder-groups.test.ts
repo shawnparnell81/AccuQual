@@ -82,9 +82,10 @@ describe("form folder groups and department folder edit", () => {
     expect(departmentNames.has("Quality Manual")).toBe(true);
 
     const [shelf] = await db.insert(documentFolders).values({ name: `Filed copies ${suffix}`, parentId: iso!.id, sortOrder: 80 }).returning();
-    const [faiForm] = await db.insert(isoQualityForms).values({ formType: "first_article", data: {} }).returning();
-    const [dcrForm] = await db.insert(isoQualityForms).values({ formType: "document_change", data: {} }).returning();
-    const [ecrForm] = await db.insert(isoQualityForms).values({ formType: "engineering_change", data: {} }).returning();
+    const savedAt = new Date();
+    const [faiForm] = await db.insert(isoQualityForms).values({ formType: "first_article", data: {}, updatedAt: savedAt }).returning();
+    const [dcrForm] = await db.insert(isoQualityForms).values({ formType: "document_change", data: {}, updatedAt: savedAt }).returning();
+    const [ecrForm] = await db.insert(isoQualityForms).values({ formType: "engineering_change", data: {}, updatedAt: savedAt }).returning();
     const [faiNode] = await db.insert(documentFolders).values({ name: "FAI from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${faiForm!.id}` }).returning();
     const [dcrNode] = await db.insert(documentFolders).values({ name: "DCR from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${dcrForm!.id}` }).returning();
     const [ecrNode] = await db.insert(documentFolders).values({ name: "ECR from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${ecrForm!.id}` }).returning();
@@ -93,9 +94,9 @@ describe("form folder groups and department folder edit", () => {
       { formKey: "frm-doc-001", recordId: dcrForm!.id, folderNodeId: dcrNode!.id },
       { formKey: "frm-ecr-001", recordId: ecrForm!.id, folderNodeId: ecrNode!.id },
     ]);
-    await db.insert(qmsForms).values({ formType: "first_article_inspection", formNo: "FAI-1" });
-    await db.insert(documentChangeRequests).values({ documentProcessName: "Work instruction" });
-    await db.insert(changeRequests).values({ title: "Engineering Change Request" });
+    await db.insert(qmsForms).values({ formType: "first_article_inspection", formNo: "FAI-1", updatedAt: savedAt });
+    await db.insert(documentChangeRequests).values({ documentProcessName: "Work instruction", updatedAt: savedAt });
+    await db.insert(changeRequests).values({ title: "Engineering Change Request", updatedAt: savedAt });
 
     const listed = await request(app).get("/document-folders/form-folders").set("Authorization", `Bearer ${qualityToken}`);
     expect(listed.status).toBe(200);
@@ -150,8 +151,8 @@ describe("form folder groups and department folder edit", () => {
   });
 
   it("saves a filled form into the folder named for that form, newest first, and still accepts a Documents folder", async () => {
-    const [older] = await db.insert(validationReports).values({ data: { formType: "csa", cells: {} } }).returning();
-    const [newer] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Lot A" } } }).returning();
+    const [older] = await db.insert(validationReports).values({ data: { formType: "csa", cells: {} }, updatedAt: new Date("2020-01-02T00:00:00.000Z") }).returning();
+    const [newer] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Lot A" } }, updatedAt: new Date() }).returning();
     const missing = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-val-001", recordId: older!.id });
     expect(missing.status).toBe(400);
 
@@ -182,7 +183,7 @@ describe("form folder groups and department folder edit", () => {
     const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
     const documents = folders.find((folder) => folder.parentId === iso.id && folder.name === "Quality");
     expect(documents).toBeTruthy();
-    const [third] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Docs" } } }).returning();
+    const [third] = await db.insert(validationReports).values({ data: { formType: "csa", cells: { B6: "Docs" } }, updatedAt: new Date() }).returning();
     const moved = await request(app)
       .post("/document-folders/form-filings")
       .set("Authorization", `Bearer ${qualityToken}`)
