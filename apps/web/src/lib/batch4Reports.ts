@@ -60,8 +60,20 @@ function num(value: Value): Num {
   if (typeof value === "boolean") return value ? 1 : 0;
   const text = String(value).trim();
   if (text === ERR_DIV || text === ERR_VALUE || text === ERR_NUM) return text;
-  if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
+  // "50%", "1,000", and "12 mm" are typed values. The sheet formulas use the number.
+  const body = text.replace(/,/g, "").replace(/%$/, "").trim();
+  if (/^-?\d+(\.\d+)?$/.test(body)) return Number(body);
+  const leading = body.match(/^(-?\d+(?:\.\d+)?)(?:\s+[A-Za-zµ°].*)?$/);
+  if (leading?.[1]) return Number(leading[1]);
   return ERR_VALUE;
+}
+
+function present(value: Value): boolean {
+  return value != null && value !== "";
+}
+
+function ready(values: Value[]): boolean {
+  return values.every(present);
 }
 
 function bin(left: Num, right: Num, op: (x: number, y: number) => number): Num {
@@ -88,9 +100,9 @@ function sqrt(value: Num): Num {
   return fin(Math.sqrt(value));
 }
 
-function excelAverage(values: Value[]): Num {
-  const numbers = values.filter((value) => value !== null && value !== "" && typeof value !== "boolean");
-  if (numbers.length === 0) return ERR_DIV;
+function excelAverage(values: Value[]): Num | "" {
+  const numbers = values.filter((value) => present(value) && typeof value !== "boolean");
+  if (numbers.length === 0) return "";
   const parsed = numbers.map((value) => num(value));
   if (parsed.some((value) => typeof value === "string")) return ERR_VALUE;
   const list = parsed as number[];
@@ -211,93 +223,119 @@ function put(computed: Record<string, CellValue>, addr: string, value: Num | str
 
 export function evaluateWater(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
-  const engine = waterEngine({
-    mass: read(cells, "B4"),
-    temp: read(cells, "B5"),
-    pressure: read(cells, "B6"),
-    humidity: read(cells, "B7"),
-    ms: read(cells, "B8"),
-    im: read(cells, "B9"),
-    rhoS: read(cells, "B10"),
-    gamma: read(cells, "B11"),
-    b13: read(cells, "B13"),
-  });
-  put(computed, "B14", engine.es);
-  put(computed, "B15", engine.air);
-  put(computed, "B16", engine.water);
-  put(computed, "B17", engine.satCorr);
-  put(computed, "B18", engine.saturated);
-  put(computed, "B19", engine.balance);
-  put(computed, "B20", engine.z);
-  put(computed, "B23", engine.actual);
-  put(computed, "B24", engine.v20);
+  const mass = read(cells, "B4");
+  const temp = read(cells, "B5");
+  const pressure = read(cells, "B6");
+  const humidity = read(cells, "B7");
+  const ms = read(cells, "B8");
+  const im = read(cells, "B9");
+  const rhoS = read(cells, "B10");
+  const gamma = read(cells, "B11");
+  const engine = waterEngine({ mass, temp, pressure, humidity, ms, im, rhoS, gamma, b13: read(cells, "B13") });
+  if (ready([temp])) {
+    put(computed, "B14", engine.es);
+    put(computed, "B16", engine.water);
+    put(computed, "B17", engine.satCorr);
+  }
+  if (ready([temp, pressure, humidity])) {
+    put(computed, "B15", engine.air);
+    put(computed, "B18", engine.saturated);
+  }
+  if (ready([ms, im])) put(computed, "B19", engine.balance);
+  if (ready([temp, pressure, humidity, rhoS])) put(computed, "B20", engine.z);
+  if (ready([mass, temp, pressure, humidity, ms, im])) put(computed, "B23", engine.actual);
+  if (ready([mass, temp, pressure, humidity, ms, im, gamma])) put(computed, "B24", engine.v20);
   for (const line of [1, 2, 3]) {
-    const mass = bin(num(read(cells, `${line}B3`)), num(read(cells, `${line}B2`)), (left, right) => left - right);
-    put(computed, `${line}B5`, mass);
+    const empty = read(cells, `${line}B2`);
+    const filled = read(cells, `${line}B3`);
+    const lineTemp = read(cells, `${line}B6`);
+    const linePressure = read(cells, `${line}B7`);
+    const lineHumidity = read(cells, `${line}B8`);
+    const lineMs = read(cells, `${line}B9`);
+    const lineIm = read(cells, `${line}B10`);
+    const nominal = read(cells, `${line}B4`);
+    if (ready([empty, filled])) {
+      put(computed, `${line}B5`, bin(num(filled), num(empty), (left, right) => left - right));
+    }
+    if (!ready([empty, filled, lineTemp, linePressure, lineHumidity, lineMs, lineIm])) continue;
     const fill = waterEngine({
-      mass,
-      temp: read(cells, `${line}B6`),
-      pressure: read(cells, `${line}B7`),
-      humidity: read(cells, `${line}B8`),
-      ms: read(cells, `${line}B9`),
-      im: read(cells, `${line}B10`),
+      mass: bin(num(filled), num(empty), (left, right) => left - right),
+      temp: lineTemp,
+      pressure: linePressure,
+      humidity: lineHumidity,
+      ms: lineMs,
+      im: lineIm,
       rhoS: 8,
       gamma: 0.00001,
       b13: 0,
     });
     put(computed, `${line}B12`, fill.actual);
     put(computed, `${line}B13`, fill.v20);
-    put(computed, `${line}B14`, waterPass(fill.actual, read(cells, `${line}B4`)));
+    put(computed, `${line}B14`, present(nominal) ? waterPass(fill.actual, nominal) : "");
   }
   return computed;
 }
 
 export function evaluateHeptane(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
-  const engine = heptaneEngine({
-    mass: read(cells, "B4"),
-    temp: read(cells, "B5"),
-    pressure: read(cells, "B6"),
-    humidity: read(cells, "B7"),
-    ms: read(cells, "B8"),
-    im: read(cells, "B9"),
-    rhoS: read(cells, "B10"),
-    gamma: read(cells, "B11"),
-    b13: null,
-  });
-  put(computed, "B14", engine.es);
-  put(computed, "B15", engine.air);
-  put(computed, "B16", engine.density);
-  put(computed, "B17", engine.satCorr);
-  put(computed, "B18", engine.saturated);
-  put(computed, "B19", engine.balance);
-  put(computed, "B20", engine.z);
-  put(computed, "B23", engine.actual);
-  put(computed, "B24", engine.v20);
+  const mass = read(cells, "B4");
+  const temp = read(cells, "B5");
+  const pressure = read(cells, "B6");
+  const humidity = read(cells, "B7");
+  const ms = read(cells, "B8");
+  const im = read(cells, "B9");
+  const rhoS = read(cells, "B10");
+  const gamma = read(cells, "B11");
+  const engine = heptaneEngine({ mass, temp, pressure, humidity, ms, im, rhoS, gamma, b13: null });
+  if (ready([temp])) {
+    put(computed, "B14", engine.es);
+    put(computed, "B16", engine.density);
+    put(computed, "B17", engine.satCorr);
+  }
+  if (ready([temp, pressure, humidity])) {
+    put(computed, "B15", engine.air);
+    put(computed, "B18", engine.saturated);
+  }
+  if (ready([ms, im])) put(computed, "B19", engine.balance);
+  if (ready([temp, pressure, humidity, rhoS])) put(computed, "B20", engine.z);
+  if (ready([mass, temp, pressure, humidity, ms, im, rhoS])) put(computed, "B23", engine.actual);
+  if (ready([mass, temp, pressure, humidity, ms, im, rhoS, gamma])) put(computed, "B24", engine.v20);
   for (const line of [1, 2, 3]) {
-    const mass = bin(num(read(cells, `${line}B3`)), num(read(cells, `${line}B2`)), (left, right) => left - right);
-    put(computed, `${line}B5`, mass);
+    const first = read(cells, `${line}B3`);
+    const second = read(cells, `${line}B2`);
+    const lineTemp = read(cells, `${line}B6`);
+    const linePressure = read(cells, `${line}B7`);
+    const lineHumidity = read(cells, `${line}B8`);
+    const lineMs = read(cells, `${line}B9`);
+    const lineIm = read(cells, `${line}B10`);
+    const nominal = read(cells, `${line}B4`);
+    if (ready([first, second])) {
+      put(computed, `${line}B5`, bin(num(first), num(second), (left, right) => left - right));
+    }
+    if (!ready([first, second, lineTemp, linePressure, lineHumidity, lineMs, lineIm])) continue;
     const fill = heptaneEngine({
-      mass,
-      temp: read(cells, `${line}B6`),
-      pressure: read(cells, `${line}B7`),
-      humidity: read(cells, `${line}B8`),
-      ms: read(cells, `${line}B9`),
-      im: read(cells, `${line}B10`),
+      mass: bin(num(first), num(second), (left, right) => left - right),
+      temp: lineTemp,
+      pressure: linePressure,
+      humidity: lineHumidity,
+      ms: lineMs,
+      im: lineIm,
       rhoS: 8,
       gamma: 0.00001,
       b13: null,
     });
     put(computed, `${line}B12`, fill.actual);
     put(computed, `${line}B13`, fill.v20);
-    put(computed, `${line}B14`, heptanePass(fill.v20, read(cells, `${line}B4`)));
+    put(computed, `${line}B14`, present(nominal) ? heptanePass(fill.v20, nominal) : "");
   }
   return computed;
 }
 
 function targetNewtons(weight: Value, distribution: Value, ratio: Value, pounds: boolean): Num {
-  const scaled = bin(bin(bin(num(weight), num(distribution), (left, right) => left * right), 2, (left, right) => left / right), num(ratio), (left, right) => left / right);
-  return pounds ? bin(bin(scaled, 4.45, (left, right) => left * right), 100, (left, right) => left / right) : div(scaled, 100);
+  const product = bin(num(weight), num(distribution), (left, right) => left * right);
+  const half = div(product, 2);
+  const scaled = div(half, num(ratio));
+  return pounds ? div(bin(scaled, 4.45, (left, right) => left * right), 100) : div(scaled, 100);
 }
 
 function naturalFrequency(rate: Value, load: Num, ratio: Value): Num {
@@ -312,8 +350,11 @@ function wahlStress(outside: Value, wire: Value, load: Num): Num {
   const forceMax = bin(load, 3.25 / 2, (left, right) => left * right);
   const index = div(mean, num(wire));
   if (typeof index === "string") return index;
-  const wahl = (4 * index - 1) / (4 * index - 4) + 0.615 / index;
-  const numer = bin(bin(bin(8, mean, (left, right) => left * right), forceMax, (left, right) => left * right), Number.isFinite(wahl) ? wahl : ERR_VALUE, (left, right) => left * right);
+  const wahlDenom = 4 * index - 4;
+  if (index === 0 || wahlDenom === 0) return ERR_DIV;
+  const wahl = (4 * index - 1) / wahlDenom + 0.615 / index;
+  if (!Number.isFinite(wahl)) return ERR_DIV;
+  const numer = bin(bin(bin(8, mean, (left, right) => left * right), forceMax, (left, right) => left * right), wahl, (left, right) => left * right);
   const denom = bin(Math.PI, bin(num(wire), 3, (left, right) => left ** right), (left, right) => left * right);
   return div(numer, denom);
 }
@@ -331,48 +372,83 @@ function percentDamped(comp: Value, reb: Value, ratio: Value, rate: Value, load:
 
 export function evaluateCsaDev(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
-  const load = targetNewtons(read(cells, "B8"), read(cells, "D8"), read(cells, "B9"), true);
-  put(computed, "B30", load);
-  put(computed, "B31", naturalFrequency(read(cells, "B33"), load, read(cells, "B9")));
-  put(computed, "B32", wahlStress(read(cells, "B27"), read(cells, "B24"), load));
-  put(computed, "B39", div(bin(num(read(cells, "B22")), num(read(cells, "B34")), (left, right) => left - right), num(read(cells, "B38"))));
-  put(computed, "B41", div(num(read(cells, "B40")), num(read(cells, "B38"))));
-  put(computed, "B47", percentDamped(read(cells, "F45"), read(cells, "F46"), read(cells, "B9"), read(cells, "B33"), load));
+  const weight = read(cells, "B8");
+  const distribution = read(cells, "D8");
+  const ratio = read(cells, "B9");
+  const rate = read(cells, "B33");
+  const outside = read(cells, "B27");
+  const wire = read(cells, "B24");
+  const unloaded = read(cells, "B22");
+  const ride = read(cells, "B34");
+  const stroke = read(cells, "B38");
+  const bump = read(cells, "B40");
+  const comp = read(cells, "F45");
+  const reb = read(cells, "F46");
+  const loadInputs = [weight, distribution, ratio];
+  const load = ready(loadInputs) ? targetNewtons(weight, distribution, ratio, true) : "";
+  if (load !== "") put(computed, "B30", load);
+  if (ready([...loadInputs, rate])) put(computed, "B31", naturalFrequency(rate, load as Num, ratio));
+  if (ready([...loadInputs, outside, wire])) put(computed, "B32", wahlStress(outside, wire, load as Num));
+  if (ready([unloaded, ride, stroke])) put(computed, "B39", div(bin(num(unloaded), num(ride), (left, right) => left - right), num(stroke)));
+  if (ready([bump, stroke])) put(computed, "B41", div(num(bump), num(stroke)));
+  if (ready([...loadInputs, rate, comp, reb])) put(computed, "B47", percentDamped(comp, reb, ratio, rate, load as Num));
   return computed;
 }
 
 export function evaluateCoilDev(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
-  const load = targetNewtons(read(cells, "B8"), read(cells, "D8"), read(cells, "B9"), true);
-  put(computed, "B29", load);
-  put(computed, "B30", naturalFrequency(read(cells, "B26"), load, read(cells, "B9")));
-  put(computed, "B31", wahlStress(read(cells, "B20"), read(cells, "B19"), load));
+  const weight = read(cells, "B8");
+  const distribution = read(cells, "D8");
+  const ratio = read(cells, "B9");
+  const rate = read(cells, "B26");
+  const outside = read(cells, "B20");
+  const wire = read(cells, "B19");
+  const loadInputs = [weight, distribution, ratio];
+  const load = ready(loadInputs) ? targetNewtons(weight, distribution, ratio, true) : "";
+  if (load !== "") put(computed, "B29", load);
+  if (ready([...loadInputs, rate])) put(computed, "B30", naturalFrequency(rate, load as Num, ratio));
+  if (ready([...loadInputs, outside, wire])) put(computed, "B31", wahlStress(outside, wire, load as Num));
   return computed;
 }
 
 export function evaluateFuelDev(cells: Record<string, CellValue>): Record<string, CellValue> {
-  return {
-    C26: bin(bin(num(read(cells, "B26")), 6.29, (left, right) => left * right), 3.6, (left, right) => left * right),
-    C28: bin(bin(num(read(cells, "B28")), 6.29, (left, right) => left * right), 3.6, (left, right) => left * right),
-  };
+  const computed: Record<string, CellValue> = {};
+  const primary = read(cells, "B26");
+  const secondary = read(cells, "B28");
+  if (present(primary)) put(computed, "C26", bin(bin(num(primary), 6.29, (left, right) => left * right), 3.6, (left, right) => left * right));
+  if (present(secondary)) put(computed, "C28", bin(bin(num(secondary), 6.29, (left, right) => left * right), 3.6, (left, right) => left * right));
+  return computed;
 }
 
 export function evaluateGasDev(cells: Record<string, CellValue>): Record<string, CellValue> {
-  return {
-    B35: excelAverage([read(cells, "B31"), read(cells, "B34")]),
-    B36: excelAverage([read(cells, "B33"), read(cells, "B32")]),
-  };
+  const computed: Record<string, CellValue> = {};
+  const fa = excelAverage([read(cells, "B31"), read(cells, "B34")]);
+  const fb = excelAverage([read(cells, "B33"), read(cells, "B32")]);
+  if (fa !== "") put(computed, "B35", fa);
+  if (fb !== "") put(computed, "B36", fb);
+  return computed;
 }
 
 export function evaluateAirSpringDev(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
-  const load = targetNewtons(read(cells, "B8"), read(cells, "D8"), read(cells, "B9"), false);
+  const weight = read(cells, "B8");
+  const distribution = read(cells, "D8");
+  const ratio = read(cells, "B9");
+  const at20 = read(cells, "B23");
+  const at40 = read(cells, "B24");
+  const rate20 = read(cells, "C23");
+  const rate40 = read(cells, "C24");
+  const loadInputs = [weight, distribution, ratio];
+  if (!ready(loadInputs)) return computed;
+  const load = targetNewtons(weight, distribution, ratio, false);
   put(computed, "B25", load);
-  const rise = div(bin(num(read(cells, "B24")), num(read(cells, "B23")), (left, right) => left - right), 20);
-  put(computed, "B26", bin(div(bin(load, num(read(cells, "B23")), (left, right) => left - right), rise), 20, (left, right) => left + right));
-  const rateRise = div(bin(num(read(cells, "C24")), num(read(cells, "C23")), (left, right) => left - right), 20);
-  const psi = computed.B26;
-  put(computed, "B27", bin(bin(bin(num(psi ?? null), 20, (left, right) => left - right), rateRise, (left, right) => left * right), num(read(cells, "C23")), (left, right) => left + right));
+  if (!ready([at20, at40])) return computed;
+  const rise = div(bin(num(at40), num(at20), (left, right) => left - right), 20);
+  const psi = bin(div(bin(load, num(at20), (left, right) => left - right), rise), 20, (left, right) => left + right);
+  put(computed, "B26", psi);
+  if (!ready([rate20, rate40])) return computed;
+  const rateRise = div(bin(num(rate40), num(rate20), (left, right) => left - right), 20);
+  put(computed, "B27", bin(bin(bin(num(psi), 20, (left, right) => left - right), rateRise, (left, right) => left * right), num(rate20), (left, right) => left + right));
   return computed;
 }
 

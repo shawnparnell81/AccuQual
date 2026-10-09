@@ -50,7 +50,8 @@ test("fuel pump development converts hertz to liters per hour", () => {
 
 test("gas lift development averages the static forces", () => {
   const cells = blankBatch4("dev_gas_lift");
-  assert.equal(evaluateGasDev(cells).B35, "#DIV/0!");
+  assert.equal(evaluateGasDev(cells).B35, undefined);
+  assert.equal(evaluateGasDev(cells).B36, undefined);
   cells.B31 = 10;
   cells.B34 = 20;
   cells.B32 = 8;
@@ -80,6 +81,7 @@ test("water and n-heptane calculators are separate", () => {
   water.B4 = 100;
   water.B5 = 20;
   water.B6 = 760;
+  water.B7 = 0;
   water.B8 = 100;
   water.B9 = 100;
   const waterResult = evaluateWater(water);
@@ -101,6 +103,7 @@ test("water and n-heptane calculators are separate", () => {
   line["1B3"] = 100;
   line["1B6"] = 20;
   line["1B7"] = 760;
+  line["1B8"] = 0;
   line["1B9"] = 100;
   line["1B10"] = 100;
   const first = evaluateWater(line);

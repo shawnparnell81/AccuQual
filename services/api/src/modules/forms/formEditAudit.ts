@@ -65,7 +65,68 @@ function diffCells(before: unknown, after: unknown): FormEdit[] {
   return scalarEdits(left, right);
 }
 
-function diffList(label: string, before: unknown, after: unknown): FormEdit[] {
+function blankish(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.every(blankish);
+  return false;
+}
+
+function monthHeading(names: unknown[] | undefined, index: number): string {
+  const name = names?.[index];
+  if (typeof name === "string" && name.trim()) return name.trim();
+  return `Month ${index + 1}`;
+}
+
+function rowTitle(label: string, index: number, from: Record<string, unknown>, to: Record<string, unknown>): string {
+  if (label === "Problem") return `${label} ${index + 1}`;
+  const named = to.name ?? to.characteristic ?? from.name ?? from.characteristic;
+  if (typeof named === "string" && named.trim()) return named.trim();
+  return `${label} ${index + 1}`;
+}
+
+function diffScalarList(title: string, key: string, before: unknown, after: unknown, monthNames?: unknown[]): FormEdit[] {
+  const left = Array.isArray(before) ? before : [];
+  const right = Array.isArray(after) ? after : [];
+  const edits: FormEdit[] = [];
+  const count = Math.max(left.length, right.length);
+  for (let index = 0; index < count; index += 1) {
+    if (blankish(left[index]) && blankish(right[index])) continue;
+    if (same(left[index], right[index])) continue;
+    if ((left[index] && typeof left[index] === "object") || (right[index] && typeof right[index] === "object")) continue;
+    const from = showAuditValue(left[index]);
+    const to = showAuditValue(right[index]);
+    if (from === "(blank)" && to === "(blank)") continue;
+    const name = key === "months" ? monthHeading(monthNames, index) : `${cellLabel(key)} ${index + 1}`;
+    edits.push({ label: `${title} ${name}`, from, to });
+  }
+  return edits;
+}
+
+function diffRow(label: string, index: number, from: Record<string, unknown>, to: Record<string, unknown>, monthNames?: unknown[]): FormEdit[] {
+  const edits: FormEdit[] = [];
+  const title = rowTitle(label, index, from, to);
+  for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
+    if (key.startsWith("_") || key === "result" || key === "band") continue;
+    const before = from[key];
+    const after = to[key];
+    if (blankish(before) && blankish(after)) continue;
+    if (same(before, after)) continue;
+    if (Array.isArray(before) || Array.isArray(after)) {
+      edits.push(...diffScalarList(title, key, before, after, monthNames));
+      continue;
+    }
+    if ((before && typeof before === "object") || (after && typeof after === "object")) continue;
+    const fromShown = showAuditValue(before);
+    const toShown = showAuditValue(after);
+    if (fromShown === "(blank)" && toShown === "(blank)") continue;
+    const field = label === "Problem" && key === "problem" ? title : `${title} ${cellLabel(key)}`;
+    edits.push({ label: field, from: fromShown, to: toShown });
+  }
+  return edits;
+}
+
+function diffList(label: string, before: unknown, after: unknown, monthNames?: unknown[]): FormEdit[] {
   const left = Array.isArray(before) ? before : [];
   const right = Array.isArray(after) ? after : [];
   const edits: FormEdit[] = [];
@@ -73,24 +134,17 @@ function diffList(label: string, before: unknown, after: unknown): FormEdit[] {
   for (let index = 0; index < count; index += 1) {
     const from = left[index];
     const to = right[index];
-    if (same(from, to)) continue;
-    const fromRecord = asRecord(from);
-    const toRecord = asRecord(to);
+    const fromRecord = asRecord(from) ?? (from == null ? {} : null);
+    const toRecord = asRecord(to) ?? (to == null ? {} : null);
     if (fromRecord && toRecord) {
-      const rowLabel = typeof toRecord.characteristic === "string" && toRecord.characteristic.trim()
-        ? toRecord.characteristic.trim()
-        : typeof toRecord.name === "string" && toRecord.name.trim()
-          ? toRecord.name.trim()
-          : `${label} ${index + 1}`;
-      for (const key of new Set([...Object.keys(fromRecord), ...Object.keys(toRecord)])) {
-        if (key.startsWith("_") || key === "result") continue;
-        if (same(fromRecord[key], toRecord[key])) continue;
-        if ((fromRecord[key] && typeof fromRecord[key] === "object") || (toRecord[key] && typeof toRecord[key] === "object")) continue;
-        edits.push({ label: `${rowLabel} ${cellLabel(key)}`, from: showAuditValue(fromRecord[key]), to: showAuditValue(toRecord[key]) });
-      }
+      edits.push(...diffRow(label, index, fromRecord, toRecord, monthNames));
       continue;
     }
-    edits.push({ label: `${label} ${index + 1}`, from: showAuditValue(from), to: showAuditValue(to) });
+    if (blankish(from) && blankish(to)) continue;
+    const fromShown = showAuditValue(from);
+    const toShown = showAuditValue(to);
+    if (fromShown === "(blank)" && toShown === "(blank)") continue;
+    edits.push({ label: `${label} ${index + 1}`, from: fromShown, to: toShown });
   }
   return edits;
 }
@@ -100,9 +154,10 @@ export function formDataEdits(previousData: unknown, nextData: unknown): FormEdi
   const prev = asRecord(previousData) ?? {};
   const next = asRecord(nextData) ?? {};
   const edits = diffCells(prev.cells, next.cells);
+  const monthNames = Array.isArray(next.months) ? next.months : Array.isArray(prev.months) ? prev.months : undefined;
   edits.push(...diffList("Line", prev.lines, next.lines));
   edits.push(...diffList("Customer", prev.customers, next.customers));
-  edits.push(...diffList("Problem", prev.problems, next.problems));
+  edits.push(...diffList("Problem", prev.problems, next.problems, monthNames));
   if (!same(prev.months, next.months)) {
     edits.push({ label: "Months", from: showAuditValue(prev.months), to: showAuditValue(next.months) });
   }

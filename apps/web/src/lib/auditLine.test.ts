@@ -318,3 +318,56 @@ test("a folder move names who moved it and the path it left and joined", () => {
   assert.equal(line.description, 'Moved the folder "Quality" from ISO Compliance Documents\\Quality → ISO Compliance Documents\\Quality Logs\\Quality.');
   assert.doesNotMatch(line.description, /fromParentId|toParentId/);
 });
+
+test("a scorecard fill lists the cells and never a template change", () => {
+  const line = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: { event: "form_saved" },
+    fieldChanges: [
+      {
+        tableName: "iso_quality_forms",
+        op: "UPDATE",
+        changes: {
+          data: {
+            from: { customers: [], _formTemplate: { version: 1, revision: "A", structureHash: "" } },
+            to: {
+              customers: [{ name: "Acme", ppmMonth: "3", group: "", band: "customer" }],
+              _formTemplate: { version: 1, revision: "B", structureHash: "changed" },
+            },
+          },
+        },
+      },
+    ],
+  });
+  assert.match(line.description, /Acme/);
+  assert.match(line.description, /3/);
+  assert.doesNotMatch(line.description, /template/i);
+  assert.doesNotMatch(line.description, /Customers changed/);
+});
+
+test("a problem description records the old and new text", () => {
+  const line = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: {
+      event: "form_saved",
+      edits: [{ label: "Problem 1", from: "(blank)", to: "TEST-1008-43 EDIT2" }],
+    },
+    fieldChanges: [
+      {
+        tableName: "iso_quality_forms",
+        op: "UPDATE",
+        changes: {
+          data: {
+            from: { problems: [] },
+            to: { problems: [{ problem: "TEST-1008-43 EDIT2" }], _formTemplate: { version: 1, revision: "A" } },
+          },
+        },
+      },
+    ],
+  });
+  assert.match(line.description, /Problem 1 changed from \(blank\) to TEST-1008-43 EDIT2/);
+  assert.doesNotMatch(line.description, /from \(blank\) to \(blank\)/);
+  assert.doesNotMatch(line.description, /template/i);
+});

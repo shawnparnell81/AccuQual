@@ -15,6 +15,8 @@ describe("record surfaces", () => {
 
   it("treats filled forms as forms and leaves indexes alone", () => {
     assert.equal(recordSurface("/iso-forms/record/12")?.kind, "form");
+    assert.equal(recordSurface("/iso-forms/record/12")?.edit, false);
+    assert.equal(recordSurface("/validation-reports/4")?.edit, false);
     assert.equal(recordSurface("/qms-forms/incoming_inspection_record/4")?.kind, "form");
     assert.equal(recordSurface("/ncr/9")?.kind, "form");
     assert.equal(recordSurface("/blank-forms"), null);

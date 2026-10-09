@@ -39,6 +39,7 @@ const NOISE = new Set([
   "validationdetails",
   "statuscode",
   "source",
+  "formtemplate",
 ]);
 
 const SECRET = /password|passwd|secret|token|api.?key|credential|hash|jwt/i;
@@ -47,6 +48,7 @@ const BLOB_KEY = /data|answers|payload|definition|formdata|sections|content|meta
 const IDENTITY = new Set(["title", "name", "description", "status", "severity", "number", "recordnumber", "partnumber", "filename", "finding"]);
 
 const KEEP_WITH_FIELDS = new Set([
+  "form_saved",
   "published",
   "submitted_for_review",
   "review_approved",
@@ -361,8 +363,94 @@ function diffRecord(valueFrom: unknown, valueTo: unknown): string[] {
   return bits;
 }
 
+function isoBlank(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.every(isoBlank);
+  return false;
+}
+
+function isoShown(value: unknown): string {
+  if (Array.isArray(value)) {
+    const parts = value.map((item) => isoShown(item)).filter((item) => item !== "(blank)");
+    return parts.length > 0 ? parts.join(", ") : "(blank)";
+  }
+  if (isoBlank(value)) return "(blank)";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string") return value.trim();
+  return "(blank)";
+}
+
+function isoSame(left: unknown, right: unknown): boolean {
+  if (isoBlank(left) && isoBlank(right)) return true;
+  try {
+    return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  } catch {
+    return false;
+  }
+}
+
+function describeIsoRows(label: string, before: unknown, after: unknown, monthNames?: unknown[]): string[] {
+  const left = Array.isArray(before) ? before : [];
+  const right = Array.isArray(after) ? after : [];
+  const lines: string[] = [];
+  const count = Math.max(left.length, right.length);
+  for (let index = 0; index < count; index += 1) {
+    const from = asRecord(left[index]) ?? {};
+    const to = asRecord(right[index]) ?? {};
+    if (!asRecord(left[index]) && !asRecord(right[index])) continue;
+    const title = label === "Problem" ? `${label} ${index + 1}` : typeof (to.name ?? to.characteristic ?? from.name ?? from.characteristic) === "string" && String(to.name ?? to.characteristic ?? from.name ?? from.characteristic).trim() ? String(to.name ?? to.characteristic ?? from.name ?? from.characteristic).trim() : `${label} ${index + 1}`;
+    for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
+      if (key.startsWith("_") || key === "result" || key === "band" || skipKey(key)) continue;
+      const previous = from[key];
+      const next = to[key];
+      if (isoSame(previous, next)) continue;
+      if (Array.isArray(previous) || Array.isArray(next)) {
+        const prevList = Array.isArray(previous) ? previous : [];
+        const nextList = Array.isArray(next) ? next : [];
+        const slots = Math.max(prevList.length, nextList.length);
+        for (let slot = 0; slot < slots; slot += 1) {
+          if (isoSame(prevList[slot], nextList[slot])) continue;
+          if ((prevList[slot] && typeof prevList[slot] === "object") || (nextList[slot] && typeof nextList[slot] === "object")) continue;
+          const heading = key === "months" && typeof monthNames?.[slot] === "string" && String(monthNames[slot]).trim() ? String(monthNames[slot]).trim() : key === "months" ? `Month ${slot + 1}` : `${fieldLabel(key)} ${slot + 1}`;
+          lines.push(`${title} ${heading} changed from ${isoShown(prevList[slot])} to ${isoShown(nextList[slot])}.`);
+        }
+        continue;
+      }
+      if ((previous && typeof previous === "object") || (next && typeof next === "object")) continue;
+      const field = label === "Problem" && key === "problem" ? title : `${title} ${fieldLabel(key)}`;
+      lines.push(`${field} changed from ${isoShown(previous)} to ${isoShown(next)}.`);
+    }
+  }
+  return lines;
+}
+
+function describeIsoData(before: unknown, after: unknown): string[] {
+  const left = asRecord(before) ?? {};
+  const right = asRecord(after) ?? {};
+  const lines: string[] = [];
+  const leftCells = asRecord(left.cells) ?? {};
+  const rightCells = asRecord(right.cells) ?? {};
+  for (const key of new Set([...Object.keys(leftCells), ...Object.keys(rightCells)])) {
+    if (isoSame(leftCells[key], rightCells[key])) continue;
+    if ((leftCells[key] && typeof leftCells[key] === "object") || (rightCells[key] && typeof rightCells[key] === "object")) continue;
+    lines.push(`Cell ${key} changed from ${isoShown(leftCells[key])} to ${isoShown(rightCells[key])}.`);
+  }
+  const monthNames = Array.isArray(right.months) ? right.months : Array.isArray(left.months) ? left.months : undefined;
+  lines.push(...describeIsoRows("Customer", left.customers, right.customers));
+  lines.push(...describeIsoRows("Problem", left.problems, right.problems, monthNames));
+  lines.push(...describeIsoRows("Line", left.lines, right.lines));
+  if (!isoSame(left.months, right.months)) lines.push(`Months changed from ${isoShown(left.months)} to ${isoShown(right.months)}.`);
+  return lines;
+}
+
 function fieldSentence(key: string, pair: { from?: unknown; to?: unknown }): string | null {
   if (skipKey(key)) return null;
+  if (normKey(key) === "data") {
+    const lines = describeIsoData(pair.from, pair.to);
+    return lines.length > 0 ? lines.join(" ") : null;
+  }
   if (normKey(key).endsWith("id") && numericId(pair.from) && (pair.to === undefined || numericId(pair.to))) return null;
   if (normKey(key).endsWith("id") && pair.from === undefined && numericId(pair.to)) return null;
   const label = fieldLabel(key);
@@ -383,13 +471,15 @@ function fieldSentence(key: string, pair: { from?: unknown; to?: unknown }): str
   return null;
 }
 
-function fieldSentences(fieldChanges: AuditFieldChange[]): string[] {
+function fieldSentences(fieldChanges: AuditFieldChange[], omit: string[] = []): string[] {
   const lines: string[] = [];
+  const skipped = new Set(omit);
   let formData = false;
   for (const group of fieldChanges) {
     const entries = Object.entries(group.changes);
     const usable = group.op === "INSERT" || group.op === "DELETE" ? entries.filter(([key]) => IDENTITY.has(normKey(key))) : entries;
     for (const [key, pair] of usable) {
+      if (skipped.has(normKey(key))) continue;
       const line = fieldSentence(key, pair);
       if (!line) continue;
       if (line === "Form data changed.") {
@@ -541,13 +631,14 @@ function auditDescription(action: string, changes: Record<string, unknown> | nul
     return numberLine && !summary.includes(numberLine) ? `${numberLine} ${summary}` : summary;
   }
 
-  const fields = fieldSentences(fieldChanges ?? []);
+  const editLines = editSentences(record);
+  const fields = fieldSentences(fieldChanges ?? [], editLines.length > 0 ? ["data"] : []);
   const code = specificCode(record);
   const lead = eventDetail(record, code);
   const parts: string[] = [];
   if (lead && (fields.length === 0 || (code && KEEP_WITH_FIELDS.has(code)))) parts.push(lead);
   parts.push(...(fields.length > 0 ? capFields(fields) : valueSentences(record, code)));
-  parts.push(...editSentences(record));
+  parts.push(...editLines);
   const decision = decisionSentence(action, record);
   if (decision) parts.push(decision);
   parts.push(...blockedSentences(action, record));

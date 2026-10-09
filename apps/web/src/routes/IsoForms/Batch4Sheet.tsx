@@ -1431,12 +1431,6 @@ function GasBody(props: SheetProps & { calc: Record<string, CellValue> }) {
       <Calc label="Fa Force (N):" value={props.calc.B35} span={2} />
       <Calc label="Fb Force (N):" value={props.calc.B36} span={2} />
       <tr>
-        <td>Force Diagram:</td>
-        <td className="note" colSpan={3}>
-          The Graphs sheet has an empty scatter chart and no plotted points.
-        </td>
-      </tr>
-      <tr>
         <td className="section" colSpan={4}>
           5.0 ENGINEERING NOTES
         </td>

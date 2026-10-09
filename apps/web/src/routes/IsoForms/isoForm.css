@@ -80,9 +80,30 @@
 }
 
 .iso td.area,
-.iso td.sig {
+.iso td.sig,
+.iso.failure-chart td.problem,
+.iso.failure-chart td.month,
+.iso.failure-chart th.month {
   height: auto;
   vertical-align: top;
+}
+
+.iso.failure-chart {
+  min-width: 1480px;
+}
+
+.iso.failure-chart td.month,
+.iso.failure-chart th.month {
+  min-width: 4.5rem;
+}
+
+.iso.failure-chart td.problem {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.iso.failure-chart td.problem textarea.iso-in {
+  min-height: 32px;
 }
 
 .iso input.iso-in,
