@@ -37,7 +37,7 @@ test("an empty sheet matches the workbook cache", () => {
   for (let row = 13; row <= 24; row += 1) {
     assert.equal(result[`E${row}`], 0);
     assert.equal(result[`F${row}`], 0);
-    assert.equal(result[`H${row}`], "Pass");
+    assert.equal(result[`H${row}`], "");
   }
   assert.equal(result.D30, "0");
   assert.equal(result.E30, 0);
@@ -134,6 +134,31 @@ test("packaging tolerance is 10 percent of nominal", () => {
   assert.equal(result.H46, "Pass");
   cells.G46 = 111;
   assert.equal(evaluate(cells).H46, "Fail");
+});
+
+test("live fuel pump copy: hardware Y passes, and empty dimension rows stay blank", () => {
+  const cells = passingExample();
+  cells.B23 = "";
+  cells.D23 = "";
+  cells.G23 = "";
+  cells.B24 = "";
+  cells.D24 = "";
+  cells.G24 = "";
+  cells.B34 = "";
+  cells.G34 = "Y";
+  const result = evaluate(cells);
+  assert.equal(result.H23, "");
+  assert.equal(result.H24, "");
+  assert.equal(result.H34, "Pass");
+  assert.equal(result.H38, "Pass");
+  assert.equal(result.B51, "Pass");
+  assert.equal(result.J2, "Pass");
+  assert.equal(overallResult(cells), "Pass");
+
+  cells.G34 = "N";
+  const missed = evaluate(cells);
+  assert.equal(missed.H34, "Fail");
+  assert.equal(missed.B51, "Fail");
 });
 
 test("the array formula passes only when every watched result is Pass", () => {

@@ -88,13 +88,11 @@ const ERR_VALUE = "#VALUE!";
 const PERCENT = new Set(["B17", "C17", "D17", "E17", "F17"]);
 
 type Value = CellValue | null;
-type Cmp = "=" | ">=" | "<=";
-
-/** Formula text as stored in the workbook, including shared-formula shifts. */
+/** Formula text as stored in the workbook, including shared-formula shifts. ≤ rows compare with <=. */
 export const FORMULA_TEXT: Record<string, string> = {
   A1: 'IF(COUNTIF(F:G, "Failed") > 0, "Failed", "Passed")',
-  F12: 'IF(D12=10, "Passed", "Failed")',
-  G12: 'IF(E12=10, "Passed", "Failed")',
+  F12: 'IF(D12=B12, "Passed", "Failed")',
+  G12: 'IF(E12=B12, "Passed", "Failed")',
   F13: 'IF(AND(D13>=B13-C13, D13<=B13+C13), "Passed", "Failed")',
   G13: 'IF(AND(E13>=B13-C13, E13<=B13+C13), "Passed", "Failed")',
   B14: "B13-B15",
@@ -105,8 +103,8 @@ export const FORMULA_TEXT: Record<string, string> = {
   B17: "B16/B15",
   D17: "D16/D15",
   E17: "E16/E15",
-  F18: 'IF(D18>=B18, "Passed", "Failed")',
-  G18: 'IF(E18>=B18, "Passed", "Failed")',
+  F18: 'IF(D18<=B18, "Passed", "Failed")',
+  G18: 'IF(E18<=B18, "Passed", "Failed")',
   F22: 'IF(AND(D22>=B22-C22, D22<=B22+C22), "Passed", "Failed")',
   F25: 'IF(AND(D25>=B25-C25, D25<=B25+C25), "Passed", "Failed")',
   F30: 'IF(AND(D30>=B30-C30, D30<=B30+C30), "Passed", "Failed")',
@@ -114,10 +112,10 @@ export const FORMULA_TEXT: Record<string, string> = {
   F37: 'IF(AND(D37>=B37-C37, D37<=B37+C37), "Passed", "Failed")',
   F39: 'IF(AND(D39>=B39-C39, D39<=B39+C39), "Passed", "Failed")',
   F40: 'IF(AND(D40>=B40-C40, D40<=B40+C40), "Passed", "Failed")',
-  F41: 'IF(D41>=B41, "Passed", "Failed")',
-  G41: 'IF(E41>=B41, "Passed", "Failed")',
-  F45: 'IF(D45>=B45, "Passed", "Failed")',
-  G45: 'IF(E45>=B45, "Passed", "Failed")',
+  F41: 'IF(D41<=B41, "Passed", "Failed")',
+  G41: 'IF(E41<=B41, "Passed", "Failed")',
+  F45: 'IF(D45<=B45, "Passed", "Failed")',
+  G45: 'IF(E45<=B45, "Passed", "Failed")',
   F46: 'IF(AND(D46>=B46-C46, D46<=B46+C46), "Passed", "Failed")',
   G46: 'IF(AND(E46>=B46-C46, E46<=B46+C46), "Passed", "Failed")',
 };
@@ -249,7 +247,9 @@ export function cellsFromData(data: unknown): Record<string, CellValue> {
 export function parseInput(raw: string): CellValue {
   const trimmed = raw.trim();
   if (trimmed === "") return "";
-  if (trimmed === "≤" || trimmed === "=" || trimmed === "<=") return trimmed;
+  if (trimmed === "<=") return "≤";
+  if (trimmed === ">=") return "≥";
+  if (trimmed === "≤" || trimmed === "≥" || trimmed === "=") return trimmed;
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
   return raw;
 }
@@ -284,58 +284,83 @@ function arith(a: Value, b: Value, op: (x: number, y: number) => number | string
   return op(x, y);
 }
 
-function sub(a: Value, b: Value): number | string {
-  return arith(a, b, (x, y) => x - y);
-}
-
-function add(a: Value, b: Value): number | string {
-  return arith(a, b, (x, y) => x + y);
-}
-
 function div(a: Value, b: Value): number | string {
   return arith(a, b, (x, y) => (y === 0 ? ERR_DIV : x / y));
 }
 
-function cmp(a: Value, op: Cmp, b: Value | number | string): boolean | string {
-  if (isErr(a)) return a;
-  if (typeof b === "string" && isErr(b)) return b;
-  const right: Value = typeof b === "number" ? b : b;
-  const x = asNum(a);
-  const y = asNum(right);
+function isBlank(v: Value): boolean {
+  return v === null || v === undefined || v === "";
+}
+
+/** A measurement. Blank stays blank. It is not zero. */
+function filledNumber(v: Value): number | string | null {
+  if (isBlank(v)) return null;
+  if (isErr(v)) return v;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : ERR_VALUE;
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (t === "") return null;
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  return null;
+}
+
+/** Min length is max minus stroke. Either blank input leaves the cell blank. */
+function subtractFilled(a: Value, b: Value): number | string {
+  const x = filledNumber(a);
+  const y = filledNumber(b);
+  if (x === null || y === null) return "";
   if (typeof x === "string") return x;
   if (typeof y === "string") return y;
-  if (x === null || y === null) {
-    if (op === "=") return String(a ?? "") === String(right ?? "");
-    return ERR_VALUE;
-  }
-  if (op === "=") return x === y;
-  if (op === ">=") return x >= y;
-  return x <= y;
+  return x - y;
 }
 
-function and(a: boolean | string, b: boolean | string): boolean | string {
-  if (typeof a === "string") return a;
-  if (typeof b === "string") return b;
-  return a && b;
+type LimitKind = "le" | "ge" | "eq" | "num" | "blank" | "bad";
+
+function limitKind(raw: Value): LimitKind {
+  if (isBlank(raw)) return "blank";
+  if (typeof raw === "number") return Number.isFinite(raw) ? "num" : "bad";
+  if (typeof raw !== "string") return "bad";
+  const t = raw.trim();
+  if (t === "≤" || t === "<=" || t === "<") return "le";
+  if (t === "≥" || t === ">=" || t === ">") return "ge";
+  if (t === "=") return "eq";
+  if (/^(?:±|\+\/-)\s*\d+(\.\d+)?$/.test(t)) return "num";
+  if (/^-?\d+(\.\d+)?$/.test(t)) return "num";
+  return "bad";
 }
 
-function passFail(ok: boolean | string): string {
-  if (typeof ok === "string") return ok;
-  return ok ? "Passed" : "Failed";
+function toleranceSpan(raw: Value): number | string | null {
+  if (typeof raw === "number") return Number.isFinite(raw) ? Math.abs(raw) : ERR_VALUE;
+  if (typeof raw !== "string") return ERR_VALUE;
+  const t = raw.trim().replace(/^(?:±|\+\/-)\s*/, "");
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Math.abs(Number(t));
+  return ERR_VALUE;
 }
 
-function band(sample: Value, nominal: Value, tol: Value): string {
-  const low = sub(nominal, tol);
-  const high = add(nominal, tol);
-  return passFail(and(cmp(sample, ">=", low), cmp(sample, "<=", high)));
-}
-
-function atLeast(sample: Value, nominal: Value): string {
-  return passFail(cmp(sample, ">=", nominal));
-}
-
-function equalsTen(sample: Value): string {
-  return passFail(cmp(sample, "=", 10));
+/**
+ * Pass/Fail from the tolerance cell.
+ * ≤ is a maximum, ≥ is a minimum, = matches the nominal, and a number is ±.
+ * A blank sample or a blank tolerance stays blank. It is not a failure.
+ */
+function judge(sample: Value, nominal: Value, tol: Value): string {
+  if (isBlank(sample) || isErr(sample)) return isErr(sample) ? sample : "";
+  const kind = limitKind(tol);
+  if (kind === "blank") return "";
+  const actual = filledNumber(sample);
+  if (actual === null) return ERR_VALUE;
+  if (typeof actual === "string") return actual;
+  const limit = filledNumber(nominal);
+  if (limit === null) return "";
+  if (typeof limit === "string") return limit;
+  if (kind === "le") return actual <= limit ? "Passed" : "Failed";
+  if (kind === "ge") return actual >= limit ? "Passed" : "Failed";
+  if (kind === "eq") return actual === limit ? "Passed" : "Failed";
+  if (kind === "bad") return ERR_VALUE;
+  const span = toleranceSpan(tol);
+  if (span === null) return "";
+  if (typeof span === "string") return span;
+  return actual >= limit - span && actual <= limit + span ? "Passed" : "Failed";
 }
 
 export function evaluate(cells: Record<string, CellValue>): Record<string, CellValue> {
@@ -347,33 +372,38 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
     return v;
   };
 
-  computed.B14 = sub(read("B13"), read("B15"));
-  computed.D14 = sub(read("D13"), read("D15"));
-  computed.F12 = equalsTen(read("D12"));
-  computed.G12 = equalsTen(read("E12"));
-  computed.F13 = band(read("D13"), read("B13"), read("C13"));
-  computed.G13 = band(read("E13"), read("B13"), read("C13"));
-  computed.F14 = band(read("D14"), read("B14"), read("C14"));
-  computed.F15 = band(read("D15"), read("B15"), read("C15"));
-  computed.F16 = band(read("D16"), read("B16"), read("C16"));
+  computed.B14 = subtractFilled(read("B13"), read("B15"));
+  computed.D14 = subtractFilled(read("D13"), read("D15"));
   computed.B17 = div(read("B16"), read("B15"));
   computed.D17 = div(read("D16"), read("D15"));
   computed.E17 = div(read("E16"), read("E15"));
-  computed.F18 = atLeast(read("D18"), read("B18"));
-  computed.G18 = atLeast(read("E18"), read("B18"));
-  computed.F22 = band(read("D22"), read("B22"), read("C22"));
-  computed.F25 = band(read("D25"), read("B25"), read("C25"));
-  computed.F30 = band(read("D30"), read("B30"), read("C30"));
-  computed.F36 = band(read("D36"), read("B36"), read("C36"));
-  computed.F37 = band(read("D37"), read("B37"), read("C37"));
-  computed.F39 = band(read("D39"), read("B39"), read("C39"));
-  computed.F40 = band(read("D40"), read("B40"), read("C40"));
-  computed.F41 = atLeast(read("D41"), read("B41"));
-  computed.G41 = atLeast(read("E41"), read("B41"));
-  computed.F45 = atLeast(read("D45"), read("B45"));
-  computed.G45 = atLeast(read("E45"), read("B45"));
-  computed.F46 = band(read("D46"), read("B46"), read("C46"));
-  computed.G46 = band(read("E46"), read("B46"), read("C46"));
+  const scored: Array<[string, string, string, string]> = [
+    ["F12", "D12", "B12", "C12"],
+    ["G12", "E12", "B12", "C12"],
+    ["F13", "D13", "B13", "C13"],
+    ["G13", "E13", "B13", "C13"],
+    ["F14", "D14", "B14", "C14"],
+    ["F15", "D15", "B15", "C15"],
+    ["F16", "D16", "B16", "C16"],
+    ["F18", "D18", "B18", "C18"],
+    ["G18", "E18", "B18", "C18"],
+    ["F22", "D22", "B22", "C22"],
+    ["F25", "D25", "B25", "C25"],
+    ["F30", "D30", "B30", "C30"],
+    ["F36", "D36", "B36", "C36"],
+    ["F37", "D37", "B37", "C37"],
+    ["F39", "D39", "B39", "C39"],
+    ["F40", "D40", "B40", "C40"],
+    ["F41", "D41", "B41", "C41"],
+    ["G41", "E41", "B41", "C41"],
+    ["F45", "D45", "B45", "C45"],
+    ["G45", "E45", "B45", "C45"],
+    ["F46", "D46", "B46", "C46"],
+    ["G46", "E46", "B46", "C46"],
+  ];
+  for (const [result, sample, nominal, tol] of scored) {
+    computed[result] = judge(read(sample), read(nominal), read(tol));
+  }
 
   let failed = 0;
   const seen = new Set<string>();
@@ -466,8 +496,8 @@ export function passingExample(): Record<string, CellValue> {
   cells.B16 = 70;
   cells.D16 = 70;
   cells.E16 = 68;
-  cells.D18 = 30;
-  cells.E18 = 28;
+  cells.D18 = 18;
+  cells.E18 = 22;
   cells.B22 = 12.5;
   cells.D22 = 12.5;
   cells.B25 = 800;
@@ -484,10 +514,10 @@ export function passingExample(): Record<string, CellValue> {
   cells.D39 = 8;
   cells.B40 = 30;
   cells.D40 = 30;
-  cells.D41 = 90;
-  cells.E41 = 85;
-  cells.D45 = 30;
-  cells.E45 = 26;
+  cells.D41 = 60;
+  cells.E41 = 70;
+  cells.D45 = 20;
+  cells.E45 = 22;
   cells.B46 = 40;
   cells.D46 = 40;
   cells.E46 = 39;
@@ -502,7 +532,7 @@ export function passingExample(): Record<string, CellValue> {
 export function mixedExample(): Record<string, CellValue> {
   const cells = passingExample();
   cells.D12 = 8;
-  cells.E18 = 10;
+  cells.E18 = 40;
   cells.D49 = true;
   cells.B49 = false;
   return cells;
