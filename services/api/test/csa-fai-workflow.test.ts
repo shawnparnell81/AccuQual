@@ -8,7 +8,6 @@ import {
   CSA_CONTROLLED_VERSION_STATUS,
   CSA_CRITERIA,
   CSA_NODE,
-  CSA_WORKFLOW_NAME,
   addBusinessDays,
   assertCanRelease,
   businessDaysAfter,
@@ -62,9 +61,8 @@ describe("CSA first article workflow", () => {
     const report = validateWorkflow({ nodes: CSA_FAI_DEFINITION.nodes, edges: CSA_FAI_DEFINITION.edges, metadata: CSA_FAI_METADATA });
     expect(report.errors).toEqual([]);
     expect(report.valid).toBe(true);
-    const template = WORKFLOW_TEMPLATES.find((item) => item.key === "csa_fai");
-    expect(template?.name).toBe(CSA_WORKFLOW_NAME);
-    expect(template?.metadata?.allowLoops).toBe(true);
+    expect(WORKFLOW_TEMPLATES.find((item) => item.key === "csa_fai")).toBeUndefined();
+    expect(WORKFLOW_TEMPLATES.some((item) => /first article/i.test(item.name) || item.key === "fpm_fai")).toBe(false);
     expect(userMatchesAssignees(["quality_engineer"], [{ label: "Quality Engineer", roleName: "quality_engineer" }])).toBe(true);
   });
 

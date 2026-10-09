@@ -66,7 +66,7 @@ export function WaitingOnMe() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold tracking-wide">WAITING ON ME</h2>
-          <p className="text-sm text-muted-foreground">Open work assigned to you, plus due first articles and gages you can already see.</p>
+          <p className="text-sm text-muted-foreground">Open work assigned to you, plus gages you can already see.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
           <select className="rounded-md border border-border bg-background px-2 py-1" value={shown?.sort ?? "due"} onChange={(event) => update({ sort: event.target.value })}>

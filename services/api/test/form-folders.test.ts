@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { FILEABLE_FORM_KEYS } from "../src/modules/document-folders/editableForms.js";
-import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
-import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
+import { FORM_TEMPLATES, keptOutOfBlankFormsTemplates } from "../src/modules/document-folders/formFiling.js";
+import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, RETIRED_FORM_FOLDER_KEYS, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
 
 describe("form folders", () => {
   const folders = formFolderIndex(FORM_TEMPLATES);
 
   it("uses a folder name for every form that can be filled or saved", () => {
     const keys = new Set(folders.flatMap((folder) => folder.formKeys));
-    for (const key of FILEABLE_FORM_KEYS) expect(keys.has(key)).toBe(true);
+    for (const key of FILEABLE_FORM_KEYS) expect(keys.has(key)).toBe(!RETIRED_FORM_FOLDER_KEYS.has(key));
     expect(keys.has("incoming_inspection_record")).toBe(true);
     expect(keys.has("ncr")).toBe(true);
     expect(keys.has("capa")).toBe(true);
@@ -28,14 +28,15 @@ describe("form folders", () => {
     const once = (name: string) => expect(names.filter((item) => item === name)).toEqual([name]);
     once("Document Change Request");
     once("Engineering Change Request");
-    once("First Article Inspection Report");
+    once("CSA VALIDATION REPORT");
     expect(names).not.toContain("DOCUMENT CHANGE REQUEST");
     expect(names).not.toContain("ENGINEERING CHANGE REQUEST (ECR)");
+    expect(names).not.toContain("First Article Inspection Report");
     expect(names.some((name) => name.includes("first_article_inspection") || name.includes("frm-fai-001"))).toBe(false);
 
     expect(folders.find((folder) => folder.name === "Document Change Request")?.formKeys.sort()).toEqual(["dcr", "frm-doc-001"]);
     expect(folders.find((folder) => folder.name === "Engineering Change Request")?.formKeys.sort()).toEqual(["ecr", "frm-ecr-001"]);
-    expect(folders.find((folder) => folder.name === "First Article Inspection Report")?.formKeys.sort()).toEqual(["first_article_inspection", "frm-fai-001"]);
+    expect(folders.find((folder) => folder.name === "CSA VALIDATION REPORT")?.formKeys).toEqual(["frm-val-001"]);
 
     expect(names.filter((name) => name.startsWith("AIR STRUT VALIDATION DOCUMENT")).sort()).toEqual([
       "AIR STRUT VALIDATION DOCUMENT (FRM-VAL-010)",
@@ -79,8 +80,19 @@ describe("form folders", () => {
       "ASTM E542 Gravimetric Volume Calculator (FRM-TST-002)",
       "Document Change Request",
       "Engineering Change Request",
-      "First Article Inspection Report",
     ]);
+  });
+
+  it("maps every blank template onto a folder and leaves retired First Article folders out", () => {
+    const keys = new Set(folders.flatMap((folder) => folder.formKeys));
+    for (const seed of FORM_TEMPLATES) {
+      if (seed.start == null || keptOutOfBlankFormsTemplates(seed)) continue;
+      expect(keys.has(seed.formKey)).toBe(!RETIRED_FORM_FOLDER_KEYS.has(seed.formKey));
+    }
+    expect(keys.has("frm-fai-001")).toBe(false);
+    expect(keys.has("first_article_inspection")).toBe(false);
+    expect(keys.has("frm-val-001")).toBe(true);
+    expect(keys.has("frm-val-007")).toBe(true);
   });
 
   it("orders saved copies by save date, then file name", () => {

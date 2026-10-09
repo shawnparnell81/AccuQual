@@ -9,7 +9,6 @@ import {
   FPM_CRITERIA,
   FPM_NODE,
   FPM_NUMBER_PREFIX,
-  FPM_WORKFLOW_NAME,
   addBusinessDays,
   addCalendarDays,
   assertCanRelease,
@@ -81,9 +80,7 @@ describe("Fuel Pump Module FAI workflow", () => {
     const report = validateWorkflow({ nodes: FPM_FAI_DEFINITION.nodes, edges: FPM_FAI_DEFINITION.edges, metadata: FPM_FAI_METADATA });
     expect(report.errors).toEqual([]);
     expect(report.valid).toBe(true);
-    const template = WORKFLOW_TEMPLATES.find((item) => item.key === "fpm_fai");
-    expect(template?.name).toBe(FPM_WORKFLOW_NAME);
-    expect(template?.metadata?.allowLoops).toBe(true);
+    expect(WORKFLOW_TEMPLATES.find((item) => item.key === "fpm_fai")).toBeUndefined();
     expect(userMatchesAssignees(["quality_engineer"], [{ label: "Quality Engineer", roleName: "quality_engineer" }])).toBe(true);
     const documentReview = FPM_FAI_DEFINITION.nodes.find((node) => node.id === FPM_NODE.documentReview);
     expect(documentReview?.config.assignees).toEqual([{ label: "Quality Engineer", roleName: "quality_engineer" }]);

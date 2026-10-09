@@ -17,22 +17,24 @@ const QUALITY_LABELS = [
   "Suppliers",
   "NCR & CAPA",
   "Quarantined items",
-  "First Article",
 ];
 
 describe("sidebar hierarchy", () => {
   it("keeps five doors, with Documents above Quality, and drops the Validation tab", () => {
     const labels = SIDEBAR_FOLDERS.map((folder) => folder.label);
-    assert.deepEqual(labels, ["Home", "Documents", "Quality", "Folders", "Reports", "Admin"]);
+    assert.deepEqual(labels, ["Home", "Documents", "Blank Forms", "Quality", "Folders", "Reports", "Admin"]);
     const control = labels.indexOf("Documents");
+    const blanks = labels.indexOf("Blank Forms");
     const quality = labels.indexOf("Quality");
-    assert.ok(control >= 0 && quality === control + 1);
+    assert.ok(control >= 0 && blanks === control + 1 && quality === blanks + 1);
     assert.equal(labels.includes("Validation"), false);
     assert.equal(labels.includes("Validation Reports"), false);
     assert.equal(labels.filter((label) => label === "Reports").length, 1);
 
     const links = flattenSidebarLinks();
     assert.equal(links.some((link) => link.path === "/folders/validation-reports" || link.label === "Validation Reports"), false);
+    assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms"), true);
+    assert.equal(links.some((link) => link.label === "First Article" || link.path === "/fai" || link.path === "/fai/csa"), false);
     assert.equal(links.filter((link) => link.key === "document-control").length, 1);
     assert.equal(links.filter((link) => link.label === "Reports").length, 1);
     assert.equal(links.filter((link) => link.key === "quality").length, 0);
@@ -65,7 +67,8 @@ describe("sidebar hierarchy", () => {
     for (const isAdmin of [false, true]) {
       const visible = visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: isAdmin });
       const labels = visible.map((folder) => ("label" in folder ? folder.label : ""));
-      assert.equal(labels.indexOf("Quality"), labels.indexOf("Documents") + 1);
+      assert.equal(labels.indexOf("Blank Forms"), labels.indexOf("Documents") + 1);
+      assert.equal(labels.indexOf("Quality"), labels.indexOf("Blank Forms") + 1);
       assert.equal(labels.includes("Admin"), isAdmin);
       assert.equal(flattenSidebarLinks(visible).some((link) => link.label === "Validation Reports"), false);
       const quality = visible.find((folder) => isFolder(folder) && folder.key === "quality");

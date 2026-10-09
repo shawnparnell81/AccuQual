@@ -100,12 +100,8 @@ function ensureGroupsPlaced(layout: SidebarPlacement[], groups: SidebarGroupPref
 
 export function normalizePin(pin: PinnedShortcut): PinnedShortcut | null {
   if (!pin?.key || isRetiredShortcut(pin)) return null;
-  const legacyBlank = pin.key === "blank-forms" || pin.path === "/blank-forms";
-  const path = legacyBlank ? blankFormsFolderHref() : acceptSidebarPath(pin.path);
+  const path = acceptSidebarPath(pin.path);
   if (!path) return null;
-  if (legacyBlank) {
-    return { key: BLANK_FORMS_PIN_KEY, label: "Blank Forms Templates", path };
-  }
   return { ...pin, path };
 }
 
@@ -113,7 +109,7 @@ function rewriteBlankPlacements(nodes: SidebarPlacement[]): SidebarPlacement[] {
   const seen = new Set<string>();
   const out: SidebarPlacement[] = [];
   for (const node of nodes) {
-    const key = node.key === "blank-forms" ? BLANK_FORMS_PIN_KEY : node.key;
+    const key = node.key;
     if (!key || seen.has(key)) continue;
     seen.add(key);
     const children = node.children ? rewriteBlankPlacements(node.children) : undefined;

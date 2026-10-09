@@ -1,4 +1,4 @@
-import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
+import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 import { FRM_NCR_PATH } from "./qualityEntry";
 import { ENGINEERING_PLANNER_URL, isExternalHref, isFolder, type SidebarNode } from "../components/layout/sidebarStructure";
 
@@ -52,7 +52,7 @@ const KEY_RESOURCE: Record<string, SidebarResource> = {
   capa: "capa",
   "8d": "eight_d",
   quarantine: "quarantine",
-  fai: "fai",
+  "blank-forms": "documents",
   ppap: "ppap",
   "risk-dashboard": "risk",
   "process-change": "change",
@@ -71,6 +71,7 @@ const KEY_RESOURCE: Record<string, SidebarResource> = {
 const PATH_RESOURCES: [string, SidebarResource][] = [
   ["/quality-inspection-reports", "quality_inspection"],
   ["/document-change-requests", "open"],
+  ["/blank-forms", "documents"],
   ["/documents", "documents"],
   ["/form-folders", "documents"],
   ["/folders", "documents"],
@@ -101,7 +102,6 @@ const PATH_RESOURCES: [string, SidebarResource][] = [
   ["/capa", "capa"],
   ["/risk", "risk"],
   ["/ppap", "ppap"],
-  ["/fai", "fai"],
   ["/ncr", "ncr"],
   ["/8d", "eight_d"],
   ["/ai", "open"],
@@ -127,6 +127,7 @@ const ROUTE_PATTERNS = [
   /^\/validation-reports\/\d+$/,
   /^\/iso-forms\/record\/\d+$/,
   /^\/iso-forms\/[A-Za-z0-9-]+$/,
+  /^\/blank-forms$/,
   /^\/blank-forms\/start\/[A-Za-z0-9-]+$/,
   /^\/audits$/,
   /^\/audits\/\d+$/,
@@ -160,16 +161,6 @@ const ROUTE_PATTERNS = [
   /^\/qms-forms\/[A-Za-z0-9_-]+\/\d+$/,
   /^\/scar-forms$/,
   /^\/scar-forms\/\d+$/,
-  /^\/fai$/,
-  /^\/fai\/csa$/,
-  /^\/fai\/csa\/\d+$/,
-  /^\/fai\/fuel-pump$/,
-  /^\/fai\/fuel-pump\/\d+$/,
-  /^\/fai\/plans\/new$/,
-  /^\/fai\/plans\/\d+$/,
-  /^\/fai\/records\/\d+$/,
-  /^\/fai\/sources$/,
-  /^\/fai\/pull$/,
   /^\/quality-inspection-reports$/,
   /^\/quality-inspection-reports\/\d+$/,
   /^\/ppap$/,
@@ -263,7 +254,6 @@ export function acceptSidebarPath(path: string): string | null {
   if (!trimmed.startsWith("/")) return null;
 
   const next = trimmed.length > 1 ? trimmed.replace(/\/+$/, "") : trimmed;
-  if (next === "/blank-forms") return blankFormsFolderHref();
   if (next === LEGACY_VALIDATION_REPORTS_PATH) return faiValidationDocumentsHref();
   if (next === "/reports" || next.startsWith("/reports/")) return "/reporting";
   if (next === "/onboarding" || next.startsWith("/onboarding/")) return "/settings";

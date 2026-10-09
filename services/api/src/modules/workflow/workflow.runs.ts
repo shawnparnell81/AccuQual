@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { withDb, type Db } from "../../lib/requestDb.js";
+import { isRetiredFirstArticleWork } from "../dashboard/waitingOnMe.js";
 import { workflowDefinitions, workflowRuns, type WorkflowRun } from "../../drizzle/schema/workflow.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -112,7 +113,8 @@ export async function approvalsWaitingOnUser(
     .map(({ run, workflowName }) => {
       const pending = pendingOf(run);
       return { id: run.id, workflowName, label: pending?.label?.trim() || "Waiting for approval", startedAt: run.startedAt };
-    });
+    })
+    .filter((row) => !isRetiredFirstArticleWork(row.workflowName, row.label));
 }
 
 /** Runs waiting on a decision that the signed-in user is allowed to make. */
