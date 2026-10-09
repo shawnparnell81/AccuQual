@@ -60,6 +60,8 @@ export const updateCompanyProfileSchema = z.object({
   contactName: z.string().max(200).optional().or(z.literal("")),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().max(50).optional().or(z.literal("")),
+  /** Sidebar is the default. Top bar is the same menu across the top. */
+  navigationLayout: z.enum(["sidebar", "top"]).optional(),
 });
 
 export const updateCompanySecuritySchema = z

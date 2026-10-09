@@ -12,6 +12,7 @@ import { validateApiKey } from "../ai/llm-gateway.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
+import { navigationLayoutFromProfile } from "./navigationLayout.js";
 
 /**
  * Self-service settings for the company
@@ -75,6 +76,7 @@ export const getProfileHandler = asyncHandler(async (req: Request, res: Response
     contactName: co.profile?.contactName ?? null,
     contactEmail: co.profile?.contactEmail ?? null,
     contactPhone: co.profile?.contactPhone ?? null,
+    navigationLayout: navigationLayoutFromProfile(co.profile),
   });
 });
 
@@ -108,6 +110,7 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
     contactName: updated!.profile?.contactName ?? null,
     contactEmail: updated!.profile?.contactEmail ?? null,
     contactPhone: updated!.profile?.contactPhone ?? null,
+    navigationLayout: navigationLayoutFromProfile(updated!.profile),
   });
 });
 

@@ -39,18 +39,21 @@ interface DocFolder {
   parentId: number | null;
 }
 
-export function SidebarShortcutsButton({ catalog, placement = "sidebar" }: { catalog: SidebarNode[]; placement?: "sidebar" | "page" }) {
+export function SidebarShortcutsButton({ catalog, placement = "sidebar" }: { catalog: SidebarNode[]; placement?: "sidebar" | "page" | "menu" }) {
   const [open, setOpen] = useState(false);
   const sidebar = placement === "sidebar";
+  const menu = placement === "menu";
   return (
     <>
       <button
         type="button"
-        className={sidebar ? "aq-side-shortcuts" : "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"}
+        className={sidebar ? "aq-side-shortcuts" : menu ? "aq-topnav-root" : "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"}
         data-testid="customize-sidebar"
+        role={menu ? "menuitem" : undefined}
+        title="Customize sidebar"
         onClick={() => setOpen(true)}
       >
-        <SlidersHorizontal size={16} />
+        <SlidersHorizontal size={menu ? 14 : 16} />
         <span>Customize sidebar</span>
       </button>
       <SidebarShortcutsDialog catalog={catalog} open={open} onClose={() => setOpen(false)} />

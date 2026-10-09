@@ -690,6 +690,8 @@ export interface CompanyProfile {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** Sidebar until an admin saves Top bar. */
+  navigationLayout?: "sidebar" | "top";
 }
 
 /** GET /system-health (admin only) — Phase 10's consolidated Admin Console dashboard. Each check's shape varies by domain; `status`/`detail` are the two fields every check always has. */

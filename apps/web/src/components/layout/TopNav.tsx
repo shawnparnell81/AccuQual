@@ -25,6 +25,9 @@ import {
 } from "./sidebarStructure";
 import { SidebarDragChrome, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { SidebarShortcutsButton } from "./sidebarShortcutsPanel";
+import { TopMenuBar } from "./TopMenuBar";
+import { useNavigationLayout } from "../../hooks/useNavigationLayout";
+import { useSiteNavigation } from "../../hooks/useSiteNavigation";
 import { SHORTCUTS_FOLDER_KEY, isPersonalShortcutKey } from "../../lib/sidebarShortcuts";
 import { prefetchRoute } from "../../routes/pages";
 import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
@@ -88,7 +91,11 @@ export function TopNav() {
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
   const { folders, catalog } = useArrangedSidebar();
-  const links = flattenSidebarLinks(folders);
+  const menuNodes = useSiteNavigation(folders);
+  const navigationLayout = useNavigationLayout();
+  const topLayout = navigationLayout === "top";
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const links = flattenSidebarLinks(menuNodes);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];
 
@@ -101,6 +108,29 @@ export function TopNav() {
   }, [location.pathname]);
 
   useLayoutEffect(() => {
+    if (topLayout) {
+      document.body.classList.add("nav-top");
+      document.body.classList.remove("side-collapsed", "side-open");
+      const apply = () => {
+        setViewportWidth(window.innerWidth);
+        const height = chromeRef.current?.offsetHeight ?? 62;
+        document.documentElement.style.setProperty("--side-w", "0px");
+        document.documentElement.style.setProperty("--top-h", `${height}px`);
+        document.documentElement.style.removeProperty("--side-drawer");
+      };
+      apply();
+      const observer = new ResizeObserver(apply);
+      if (chromeRef.current) observer.observe(chromeRef.current);
+      window.addEventListener("resize", apply);
+      return () => {
+        observer.disconnect();
+        window.removeEventListener("resize", apply);
+        document.body.classList.remove("nav-top", "side-collapsed", "side-open");
+        document.documentElement.style.removeProperty("--side-w");
+        document.documentElement.style.removeProperty("--top-h");
+        document.documentElement.style.removeProperty("--side-drawer");
+      };
+    }
     const apply = () => {
       const viewport = window.innerWidth;
       setViewportWidth(viewport);
@@ -117,11 +147,11 @@ export function TopNav() {
     window.addEventListener("resize", apply);
     return () => {
       window.removeEventListener("resize", apply);
-      document.body.classList.remove("side-collapsed", "side-open");
+      document.body.classList.remove("side-collapsed", "side-open", "nav-top");
       document.documentElement.style.removeProperty("--side-w");
       document.documentElement.style.removeProperty("--side-drawer");
     };
-  }, [sideCollapsed, sideOpen, sideWidth]);
+  }, [sideCollapsed, sideOpen, sideWidth, topLayout]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -217,10 +247,13 @@ export function TopNav() {
       <a className="aq-skip" href="#main-content">
         Skip to content
       </a>
+      <div className="aq-chrome" ref={chromeRef}>
       <header className="aq-topbar">
-        <button type="button" className="aq-icon-btn aq-menu-btn" aria-label="Open navigation" aria-expanded={sideOpen} onClick={() => setSideOpen((v) => !v)}>
-          {sideOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+        {!topLayout && (
+          <button type="button" className="aq-icon-btn aq-menu-btn" aria-label="Open navigation" aria-expanded={sideOpen} onClick={() => setSideOpen((v) => !v)}>
+            {sideOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        )}
         <Link to="/" className="aq-brand" aria-label={PRODUCT_LINE}>
           <DmaLogo height={34} />
           <ProductLine />
@@ -260,6 +293,7 @@ export function TopNav() {
 
         <div className="aq-top-tools">
           <BackButton />
+          {topLayout && <span className="aq-site-caption">Site</span>}
           <SiteSwitcher />
           <button type="button" className="aq-icon-btn aq-only-sm" aria-label="Search" title="Search" onClick={() => window.dispatchEvent(new Event("accuqual-open-palette"))}>
             <Search size={16} />
@@ -274,9 +308,11 @@ export function TopNav() {
           <UserMenu />
         </div>
       </header>
+      {topLayout && <TopMenuBar nodes={menuNodes} catalog={catalog} />}
+      </div>
 
-      <div className="aq-scrim" onClick={closeSide} />
-      <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} onFitWidth={fitPanelWidth} />
+      {!topLayout && <div className="aq-scrim" onClick={closeSide} />}
+      {!topLayout && <SidebarNav folders={menuNodes} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} onFitWidth={fitPanelWidth} />}
     </>
   );
 }
