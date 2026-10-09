@@ -116,9 +116,20 @@ export function deletionSummary(label: string, recordNumber: string | number, ti
   return `Deleted ${label}`;
 }
 
+const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
+
 export function userMayDeleteRecord(roleName: string | null | undefined, userId: number | undefined, owners: number[]): boolean {
   if (canDeleteAnyRecord(roleName)) return true;
   return userId != null && owners.includes(userId);
+}
+
+function ownerIdsOf(row: Row): number[] {
+  const ids: number[] = [];
+  for (const key of OWNER_FIELDS) {
+    const value = row[key];
+    if (typeof value === "number") ids.push(value);
+  }
+  return ids;
 }
 
 function textOf(row: Row, keys: string[], max = 160): string | null {
@@ -842,6 +853,25 @@ function isoFormLabel(row: Row): string {
   return ISO_FORM_LABELS[String(row.formType ?? "")] ?? "ISO form";
 }
 
+/** Saved forms. Delete follows the Admin-assigned grant for that module. */
+const ASSIGNED_DELETE = new Set<RecordKind>([
+  "ncr",
+  "capa",
+  "eight_d",
+  "validation_report",
+  "iso_quality_form",
+  "qms",
+  "dcr",
+  "risk",
+  "audit",
+  "equipment",
+  "training",
+  "change",
+  "quarantine",
+  "scar",
+  "complaint",
+]);
+
 const DELETE_RESOURCE: Record<RecordKind, ResourceKey> = {
   ncr: "ncr",
   capa: "capa",
@@ -880,8 +910,13 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
   if (!row) throw AppError.notFound(spec.label);
   await assertNotOnLegalHold(req.db, kind, id);
 
-  const assignedEdit = (await getUserAccessLevel(req.db, req.user, DELETE_RESOURCE[kind])) === "edit";
-  if (!assignedEdit) {
+  const assignedEdit = ASSIGNED_DELETE.has(kind)
+    ? (await getUserAccessLevel(req.db, req.user, DELETE_RESOURCE[kind])) === "edit"
+    : kind === "document"
+      ? (await getUserAccessLevel(req.db, req.user, "documents")) === "edit"
+      : false;
+  const allowed = ASSIGNED_DELETE.has(kind) ? assignedEdit : assignedEdit || userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row));
+  if (!allowed) {
     throw AppError.forbidden("You don't have permission to delete this record.");
   }
   if (spec.siteScoped) {

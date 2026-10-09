@@ -54,19 +54,19 @@ describe("record delete", () => {
     await pool.end();
   });
 
-  it("refuses a low role that did not create the record, and a department with no access", async () => {
+  it("refuses a department without the NCR grant, and allows one that has it", async () => {
     const created = await request(app).post("/ncr").set("Authorization", `Bearer ${creator.token}`).send({ title: "Keep me" });
     expect(created.status).toBe(201);
     const id = created.body.id as number;
-
-    const other = await request(app).delete(`/ncr/${id}`).set("Authorization", `Bearer ${otherQuality.token}`);
-    expect(other.status).toBe(403);
 
     const blocked = await request(app).delete(`/ncr/${id}`).set("Authorization", `Bearer ${production.token}`);
     expect(blocked.status).toBe(403);
 
     const stillThere = await request(app).get(`/ncr/${id}`).set("Authorization", `Bearer ${creator.token}`);
     expect(stillThere.status).toBe(200);
+
+    const other = await request(app).delete(`/ncr/${id}`).set("Authorization", `Bearer ${otherQuality.token}`);
+    expect(other.status).toBe(204);
   });
 
   it("lets the record owner delete their own NCR", async () => {
@@ -198,7 +198,7 @@ describe("record delete", () => {
     expect(created.status).toBe(201);
     const id = created.body.id as number;
 
-    const denied = await request(app).delete(`/validation-reports/${id}`).set("Authorization", `Bearer ${creator.token}`);
+    const denied = await request(app).delete(`/validation-reports/${id}`).set("Authorization", `Bearer ${production.token}`);
     expect(denied.status).toBe(403);
 
     const removed = await request(app).delete(`/validation-reports/${id}`).set("Authorization", `Bearer ${qualityManager.token}`);

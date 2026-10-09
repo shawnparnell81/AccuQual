@@ -6,8 +6,8 @@ import { ensureTestCompany } from "../helpers/company.js";
 // header CRUD, the repeatable "Change Request" items sub-resource, the
 // repeatable "Review & Approval" reviews sub-resource (whose reviewDate is
 // always server-stamped, never client-supplied — same pattern as Work
-// Order's operation signOffDate), and full delete (no department gate at
-// all, same convention as Document Control itself).
+// Order's operation signOffDate), and full delete for a department that
+// can edit documents.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
@@ -30,7 +30,8 @@ let reviewId: number;
 let productionUserId: number;
 const userIds: number[] = [];
 
-let productionToken: string; // no department gate at all — any authenticated user should work
+let productionToken: string;
+let qualityToken: string;
 
 async function makeUser(department: string | null) {
   const [user] = await db.insert(users).values({ email: `dcr-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
@@ -44,9 +45,10 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
     companyId = co!.id;
 
     await seedDefaultPermissions(companyId);
-    const production = await makeUser("production"); // deliberately a department NOT in most PERMISSION_MATRIX entries — proves this module really is ungated
+    const production = await makeUser("production"); // documents is read-only here, so this user cannot delete the record
     productionUserId = production.id;
     productionToken = production.token;
+    qualityToken = (await makeUser("quality")).token;
   });
 
   afterAll(async () => {
@@ -186,7 +188,9 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
   });
 
   it("deletes the whole record, cascading its rows, logged before it disappears", async () => {
-    const res = await request(app).delete(`/document-change-requests/${dcrId}`).set("Authorization", `Bearer ${productionToken}`);
+    const denied = await request(app).delete(`/document-change-requests/${dcrId}`).set("Authorization", `Bearer ${productionToken}`);
+    expect(denied.status).toBe(403);
+    const res = await request(app).delete(`/document-change-requests/${dcrId}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(204);
 
     const [gone] = await db.select().from(documentChangeRequests).where(eq(documentChangeRequests.id, dcrId));
