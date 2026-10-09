@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createIsoQualityFormSchema, signIsoQualityFormSchema, updateIsoQualityFormSchema } from "./iso-quality-forms.validation.js";
@@ -13,7 +14,7 @@ import { deleteRecordHandler } from "../records/recordDeletion.js";
 export const isoQualityFormsRouter = Router();
 
 // Same gate as the other controlled documents: Quality and Engineering edit, every other department can read.
-isoQualityFormsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
+isoQualityFormsRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("documents"));
 
 isoQualityFormsRouter.get("/", baseHandlers.list);
 isoQualityFormsRouter.post("/", validate(createIsoQualityFormSchema), baseHandlers.create);

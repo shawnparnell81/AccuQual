@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { adoptBrowserSession, releaseBrowserSessionTab } from "../lib/browserSession";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
-import { useSiteStore } from "../store/siteStore";
+import { siteHeaderValue, useSiteStore } from "../store/siteStore";
 import {
   classifyRefreshFailure,
   createSessionRefresher,
@@ -31,8 +31,8 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
     config.headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  const siteId = useSiteStore.getState().currentSiteId;
-  if (siteId) config.headers.set("X-AccuQual-Site", String(siteId));
+  const siteHeader = siteHeaderValue();
+  if (siteHeader) config.headers.set("X-AccuQual-Site", siteHeader);
   return config;
 });
 
@@ -67,6 +67,7 @@ function endSession() {
   releaseBrowserSessionTab();
   useAuthStore.getState().logout();
   useSiteStore.getState().setCurrentSiteId(null);
+  useSiteStore.getState().setSiteScope(null);
 }
 
 /** Drops this browser's refresh cookie. Used by an explicit sign-out of a restored cookie. A page load does not call this. The trusted-browser cookie is left in place. */

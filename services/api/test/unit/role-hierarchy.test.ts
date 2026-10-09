@@ -4,7 +4,7 @@ import { decideRoleDeletion, displayNameForRole, hierarchyLevelForRoleName, move
 describe("role hierarchy", () => {
   it("orders the built-in roles from the top of the organization down", () => {
     const ordered = [...ROLE_SEEDS].sort((a, b) => a.hierarchyLevel - b.hierarchyLevel).map((role) => role.name);
-    expect(ordered).toEqual(["owner", "admin", "president", "vice_president", "director", "quality_manager", "lead", "operator", "staff", "read_only", "auditor", "supplier", "customer"]);
+    expect(ordered).toEqual(["owner", "admin", "executive", "president", "vice_president", "director", "quality_manager", "lead", "operator", "staff", "read_only", "auditor", "supplier", "customer"]);
   });
 
   it("maps titles onto the ladder", () => {

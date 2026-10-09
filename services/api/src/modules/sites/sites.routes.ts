@@ -5,8 +5,8 @@ import { validate } from "../../middleware/validate.js";
 import { withDb } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { createSiteSchema, replaceMembersSchema, switchSiteSchema, updateSiteSchema } from "./sites.validation.js";
-import { createHandler, deleteHandler, getContextHandler, listMembersHandler, replaceMembersHandler, switchHandler, updateHandler } from "./sites.controller.js";
+import { changeRecordSiteSchema, createSiteSchema, replaceMembersSchema, switchSiteSchema, updateSiteSchema } from "./sites.validation.js";
+import { changeRecordSiteHandler, createHandler, deleteHandler, getContextHandler, getRecordSiteHandler, listMembersHandler, replaceMembersHandler, switchHandler, updateHandler } from "./sites.controller.js";
 import { callerCanDeletePlants } from "./sites.service.js";
 
 export const sitesRouter = Router();
@@ -22,6 +22,8 @@ const requirePlantDelete = asyncHandler(async (req, _res, next) => {
 
 sitesRouter.get("/", getContextHandler);
 sitesRouter.post("/current", validate(switchSiteSchema), switchHandler);
+sitesRouter.get("/record", getRecordSiteHandler);
+sitesRouter.patch("/record", validate(changeRecordSiteSchema), changeRecordSiteHandler);
 sitesRouter.post("/", requireRole("admin"), validate(createSiteSchema), createHandler);
 sitesRouter.get("/:id/members", requireRole("admin"), listMembersHandler);
 sitesRouter.put("/:id/members", requireRole("admin"), validate(replaceMembersSchema), replaceMembersHandler);

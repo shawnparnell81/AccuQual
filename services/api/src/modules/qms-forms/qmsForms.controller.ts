@@ -16,6 +16,7 @@ import { cellLabel, scalarEdits, showAuditValue, type FormEdit } from "../forms/
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 
 async function loadForm(req: Request, id: number) {
   const [row] = await req.db!.select().from(qmsForms).where(and(eq(qmsForms.id, id)));
@@ -45,6 +46,7 @@ export const createQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   const body = { ...(req.body as Record<string, unknown>) };
   await applyRecordNumber(req.db!, body, QMS_NUMBER);
   const [created] = await req.db!.insert(qmsForms).values({ ...body, revision, createdBy: req.user?.id } as typeof qmsForms.$inferInsert).returning();
+  await stampRecordSite(req.db!, "qms_forms", created!.id, req.siteId);
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   await fileBlankCopy(req.db!, "/qms-forms", created as Record<string, unknown>, req.user?.id);
   res.status(201).json(created);

@@ -4,7 +4,8 @@ import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
-import { isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
+import { roleHasPermission } from "../modules/roles/rolePermissions.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -271,6 +272,8 @@ export async function getUserAccessLevel(
 
   const level = higherLevel(deptLevel, roleLevel);
   if (level === "none" && isBroadViewRole(user.roleName)) return "read";
+  // The executive dashboard permission is read-only. It does not raise anyone to edit.
+  if (level === "none" && (await roleHasPermission(db, user.roleName, EXECUTIVE_DASHBOARD_PERMISSION))) return "read";
   return level;
 }
 

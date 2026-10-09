@@ -11,7 +11,7 @@ import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
 import { commitAndReload, gestureFromKey, gestureSavesEdit, headerBandEnd, moveAddr, moveTab, placedCells, type EditGesture, type GridMove } from "../../lib/controlledListGrid";
 import { useAuthStore } from "../../store/authStore";
-import { useSiteStore } from "../../store/siteStore";
+import { siteHeaderValue } from "../../store/siteStore";
 import { isLocationLine } from "../../lib/folderPath";
 import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
@@ -412,7 +412,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   function sendKeepalive(sheets: Array<{ name: string; cells: Record<string, CellPatch> }>) {
     if (sheets.length === 0) return;
     const token = useAuthStore.getState().accessToken;
-    const siteId = useSiteStore.getState().currentSiteId;
+    const siteHeader = siteHeaderValue();
     const base = apiClient.defaults.baseURL ?? "/api";
     void fetch(`${base}/controlled-lists/${listKey}`, {
       method: "PUT",
@@ -422,7 +422,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
         "Content-Type": "application/json",
         "X-AccuQual-Csrf": "1",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(siteId != null ? { "X-AccuQual-Site": String(siteId) } : {}),
+        ...(siteHeader ? { "X-AccuQual-Site": siteHeader } : {}),
       },
       body: JSON.stringify({ sheets }),
     });
