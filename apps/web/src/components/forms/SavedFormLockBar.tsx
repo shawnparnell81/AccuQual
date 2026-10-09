@@ -41,17 +41,22 @@ export function SavedFormLockBar({
   );
 }
 
-/** Edit / Save / Cancel / Done for a module record. Save, Cancel, and Done all lock it. */
+/** Edit / Save / Cancel / Done for a module record. Save keeps editing. Cancel and Done lock it. */
 export function ModuleFormLock({
   mode,
   canEdit,
+  pending,
   onEdit,
+  onSave,
   onLock,
 }: {
   mode: SavedFormMode;
   canEdit: boolean;
+  pending?: boolean;
   onEdit: () => void;
+  /** Persist the open session. Does not lock. */
+  onSave?: () => void;
   onLock: () => void;
 }) {
-  return <SavedFormLockBar mode={mode} canEdit={canEdit} onEdit={onEdit} onSave={onLock} onCancel={onLock} onDone={onLock} />;
+  return <SavedFormLockBar mode={mode} canEdit={canEdit} pending={pending} onEdit={onEdit} onSave={() => onSave?.()} onCancel={onLock} onDone={onLock} />;
 }

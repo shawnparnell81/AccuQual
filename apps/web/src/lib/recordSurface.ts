@@ -25,7 +25,7 @@ const RULES: SurfaceRule[] = [
   { test: /^\/calibration\/master-list$/, kind: "list", access: "calibration" },
   { test: /^\/iso-forms\/record\/\d+$/, kind: "form", access: "documents", edit: false },
   { test: /^\/qms-forms\/[^/]+\/\d+$/, kind: "form", access: "qms_forms" },
-  { test: /^\/ncr\/\d+$/, kind: "form", access: "ncr" },
+  { test: /^\/ncr\/\d+$/, kind: "form", access: "ncr", edit: false },
   { test: /^\/capa\/\d+$/, kind: "form", access: "capa" },
   { test: /^\/8d\/\d+$/, kind: "form", access: "eight_d" },
   { test: /^\/validation-reports\/\d+$/, kind: "form", access: "documents", edit: false },

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { AUDIT_DETAIL_FALLBACK, formatAuditLine } from "./auditLine.ts";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { AUDIT_DETAIL_FALLBACK, asUtcIso, formatAuditLine } from "./auditLine.ts";
+import { formatDateTime } from "./dates.ts";
 
 test("a status change names the actor, the action, and the old and new values", () => {
   const line = formatAuditLine({
@@ -299,6 +303,100 @@ test("a moved hold names the locations instead of calling them a status", () => 
   assert.equal(line.what, "Updated");
   assert.match(line.description, /Moved from Receiving to "Cage A"/);
   assert.match(line.description, /Quantity set to 4/);
+});
+
+test("a saved NCR field names who changed it and the old and new values", () => {
+  const line = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: {
+      event: "form_saved",
+      edits: [
+        { label: "NCR Number", from: "(blank)", to: "TEST-1008-01" },
+        { label: "Nonconformance Description", from: "Hole oversize", to: "Hole oversize after the edit" },
+      ],
+    },
+  });
+
+  assert.equal(line.who, "Shawn Parnell");
+  assert.equal(line.what, "Saved");
+  assert.match(line.description, /Saved the form/);
+  assert.match(line.description, /NCR Number changed from \(blank\) to TEST-1008-01/);
+  assert.match(line.description, /Nonconformance Description changed from Hole oversize to Hole oversize after the edit/);
+});
+
+test("verification text stays in history when the status field also changed", () => {
+  const line = formatAuditLine({
+    action: "status_change",
+    performedByName: "Shawn Parnell",
+    changes: {
+      action: "verify",
+      from: "Fix",
+      to: "Verify",
+      verification: "Next lot inspected and accepted",
+      note: "Next lot inspected and accepted",
+    },
+    fieldChanges: [{ op: "UPDATE", changes: { status: { from: "fix", to: "verify" } } }],
+  });
+
+  assert.equal(line.who, "Shawn Parnell");
+  assert.match(line.description, /Next lot inspected and accepted/);
+});
+
+test("a zone-less closed-at uses the same local time as the history When column", () => {
+  assert.equal(asUtcIso("2026-10-09T10:52:00"), "2026-10-09T10:52:00Z");
+  assert.equal(asUtcIso("2026-10-09 10:52"), "2026-10-09T10:52:00Z");
+  assert.equal(asUtcIso("2026-10-09T10:52:00.5"), "2026-10-09T10:52:00.5Z");
+  assert.equal(asUtcIso("2026-10-09T10:52:00Z"), "2026-10-09T10:52:00Z");
+  assert.equal(asUtcIso("2026-10-09T06:52:00-04:00"), "2026-10-09T06:52:00-04:00");
+
+  const local = formatDateTime("2026-10-09T10:52:00Z");
+  const line = formatAuditLine({
+    action: "status_change",
+    performedByName: "Shawn Parnell",
+    changes: { action: "closed", from: "Verify", to: "Closed" },
+    fieldChanges: [{ op: "UPDATE", changes: { closed_at: { from: null, to: "2026-10-09T10:52:00" } } }],
+  });
+
+  assert.match(line.description, /Closed at changed from empty to /);
+  assert.ok(line.description.includes(local), `${line.description} should include ${local}`);
+});
+
+test("closed-at in America/New_York reads 6:52 AM, the same instant as the other history times", () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "--eval",
+      `
+        import { formatAuditLine } from ${JSON.stringify(path.join(dir, "auditLine.ts"))};
+        import { formatDateTime } from ${JSON.stringify(path.join(dir, "dates.ts"))};
+        const line = formatAuditLine({
+          action: "status_change",
+          changes: { action: "closed" },
+          fieldChanges: [{ op: "UPDATE", changes: { closed_at: { from: null, to: "2026-10-09T10:52:00" } } }],
+        });
+        const local = formatDateTime("2026-10-09T10:52:00Z");
+        if (!local.includes("6:52")) {
+          console.error("expected 6:52 AM in New York, got", local);
+          process.exit(4);
+        }
+        if (!line.description.includes(local)) {
+          console.error(line.description);
+          process.exit(1);
+        }
+        if (line.description.includes("10:52")) {
+          console.error(line.description);
+          process.exit(2);
+        }
+      `,
+    ],
+    { cwd: path.resolve(dir, "../.."), env: { ...process.env, TZ: "America/New_York" }, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, `${result.stderr ?? ""}\n${result.stdout ?? ""}`);
 });
 
 test("a folder move names who moved it and the path it left and joined", () => {

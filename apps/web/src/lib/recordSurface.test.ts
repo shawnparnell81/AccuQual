@@ -26,7 +26,7 @@ describe("record surfaces", () => {
     assert.equal(recordSurface("/form-builder/1"), null);
     assert.deepEqual(recordSurface("/form-builder/fills/1"), { kind: "form", access: "documents", edit: false });
     assert.deepEqual(recordSurface("/form-builder/template/4"), { kind: "form", access: "documents", edit: false });
-    assert.equal(recordSurface("/ncr/9")?.edit, undefined);
+    assert.equal(recordSurface("/ncr/9")?.edit, false);
     assert.equal(recordSurface("/ncr/9")?.kind, "form");
   });
 });

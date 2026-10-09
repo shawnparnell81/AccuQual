@@ -16,6 +16,7 @@ import { canonicalNcrStep, decorateNcrBody, ncrStatusAliases } from "./ncr.workf
 import { ncrProcessMetrics, type NcrMetricSource } from "./ncrSla.js";
 import { NCR_NUMBER } from "../records/recordNumberSpecs.js";
 import { showRecordNumber } from "../records/userRecordNumber.js";
+import { enrichNcrList } from "./ncr.listFields.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
@@ -46,6 +47,7 @@ export const baseHandlers = crudFactory(ncr, {
     );
     await noteRepeatNcr(req.db!, row.id);
   },
+  enrichList: (rows, req) => enrichNcrList(req.db!, rows),
   afterUpdate: async (updated, req) => {
     const row = updated as { id: number; description: string | null; severity: string | null; recordNumber?: string | null };
     const patch: Parameters<typeof syncNcrFormData>[2] = {};
@@ -158,7 +160,10 @@ export const rejectCloseWhileQuarantineOnHold = asyncHandler(async (req: Request
 
 export const listNcrQuarantineItemsHandler = asyncHandler(async (req: Request, res: Response) => {
   const ncrId = Number(req.params.id);
-  res.json(await quarantineService.listQuarantineItems(req.db!, "active", ncrId));
+  const active = await quarantineService.listQuarantineItems(req.db!, "active", ncrId);
+  const released = await quarantineService.listQuarantineItems(req.db!, "released", ncrId);
+  const seen = new Set(active.map((item) => item.id));
+  res.json([...active, ...released.filter((item) => !seen.has(item.id))]);
 });
 
 export const addNcrQuarantineItemHandler = asyncHandler(async (req: Request, res: Response) => {

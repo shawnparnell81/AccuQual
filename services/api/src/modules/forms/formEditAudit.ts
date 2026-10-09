@@ -22,7 +22,10 @@ export function cellLabel(key: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .trim();
   if (!spaced) return key;
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return spaced
+    .split(/\s+/)
+    .map((word) => (word.toLowerCase() === "ncr" ? "NCR" : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
 }
 
 export function showAuditValue(value: unknown): string {
@@ -78,11 +81,36 @@ function monthHeading(names: unknown[] | undefined, index: number): string {
   return `Month ${index + 1}`;
 }
 
+/** Checkbox groups store `{ "Major": true }`. Auditors should read the chosen words, not the object. */
+function checkboxText(value: unknown): string | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const entries = Object.entries(record);
+  if (entries.length === 0 || entries.some(([, on]) => typeof on !== "boolean")) return null;
+  const selected = entries.filter(([, on]) => on).map(([name]) => name);
+  return selected.length > 0 ? selected.join(", ") : "(blank)";
+}
+
+function structuredText(value: unknown): string | null {
+  const checks = checkboxText(value);
+  if (checks != null) return checks;
+  if (value == null || value === "") return "(blank)";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return showAuditValue(value);
+  return null;
+}
+
 function rowTitle(label: string, index: number, from: Record<string, unknown>, to: Record<string, unknown>): string {
   if (label === "Problem") return `${label} ${index + 1}`;
   const named = to.name ?? to.characteristic ?? from.name ?? from.characteristic;
   if (typeof named === "string" && named.trim()) return named.trim();
   return `${label} ${index + 1}`;
+}
+
+function pushStructured(edits: FormEdit[], label: string, from: unknown, to: unknown): void {
+  const fromShown = structuredText(from);
+  const toShown = structuredText(to);
+  if (fromShown == null || toShown == null || fromShown === toShown) return;
+  edits.push({ label, from: fromShown, to: toShown });
 }
 
 function diffScalarList(title: string, key: string, before: unknown, after: unknown, monthNames?: unknown[]): FormEdit[] {
@@ -116,12 +144,20 @@ function diffRow(label: string, index: number, from: Record<string, unknown>, to
       edits.push(...diffScalarList(title, key, before, after, monthNames));
       continue;
     }
+    const fromShown = structuredText(before);
+    const toShown = structuredText(after);
+    if (fromShown != null && toShown != null) {
+      if (fromShown === toShown || (fromShown === "(blank)" && toShown === "(blank)")) continue;
+      const field = label === "Problem" && key === "problem" ? title : `${title} ${cellLabel(key)}`;
+      edits.push({ label: field, from: fromShown, to: toShown });
+      continue;
+    }
     if ((before && typeof before === "object") || (after && typeof after === "object")) continue;
-    const fromShown = showAuditValue(before);
-    const toShown = showAuditValue(after);
-    if (fromShown === "(blank)" && toShown === "(blank)") continue;
+    const shownFrom = showAuditValue(before);
+    const shownTo = showAuditValue(after);
+    if (shownFrom === "(blank)" && shownTo === "(blank)") continue;
     const field = label === "Problem" && key === "problem" ? title : `${title} ${cellLabel(key)}`;
-    edits.push({ label: field, from: fromShown, to: toShown });
+    edits.push({ label: field, from: shownFrom, to: shownTo });
   }
   return edits;
 }
@@ -134,20 +170,19 @@ function diffList(label: string, before: unknown, after: unknown, monthNames?: u
   for (let index = 0; index < count; index += 1) {
     const from = left[index];
     const to = right[index];
+    if (same(from, to) || (blankish(from) && blankish(to))) continue;
     const fromRecord = asRecord(from) ?? (from == null ? {} : null);
     const toRecord = asRecord(to) ?? (to == null ? {} : null);
     if (fromRecord && toRecord) {
       edits.push(...diffRow(label, index, fromRecord, toRecord, monthNames));
       continue;
     }
-    if (blankish(from) && blankish(to)) continue;
-    const fromShown = showAuditValue(from);
-    const toShown = showAuditValue(to);
-    if (fromShown === "(blank)" && toShown === "(blank)") continue;
-    edits.push({ label: `${label} ${index + 1}`, from: fromShown, to: toShown });
+    pushStructured(edits, `${label} ${index + 1}`, from, to);
   }
   return edits;
 }
+
+const FORM_DIFF_SKIP = new Set(["cells", "lines", "customers", "problems", "months", "photos"]);
 
 /** Field and cell changes between two saved form payloads. Signature bookkeeping stays on its own audit row. */
 export function formDataEdits(previousData: unknown, nextData: unknown): FormEdit[] {
@@ -163,6 +198,20 @@ export function formDataEdits(previousData: unknown, nextData: unknown): FormEdi
   }
   if (!same(prev.photos, next.photos)) {
     edits.push({ label: "Photos", from: showAuditValue(prev.photos), to: showAuditValue(next.photos) });
+  }
+  for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
+    if (key.startsWith("_") || FORM_DIFF_SKIP.has(key)) continue;
+    const before = prev[key];
+    const after = next[key];
+    if (same(before ?? "", after ?? "")) continue;
+    if (Array.isArray(before) || Array.isArray(after)) {
+      edits.push(...diffList(cellLabel(key), before, after));
+      continue;
+    }
+    const fromShown = structuredText(before);
+    const toShown = structuredText(after);
+    if (fromShown == null || toShown == null || fromShown === toShown) continue;
+    edits.push({ label: cellLabel(key), from: fromShown, to: toShown });
   }
   return edits;
 }

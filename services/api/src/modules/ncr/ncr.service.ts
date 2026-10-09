@@ -111,10 +111,28 @@ export const setRootCause = async (db: Db, id: number, rootCause: string, perfor
   return updated;
 };
 
+function withProcessText(current: Record<string, unknown> | null | undefined, key: string, value: string): Record<string, unknown> {
+  const data = current && typeof current === "object" && !Array.isArray(current) ? { ...current } : {};
+  data[key] = value;
+  return data;
+}
+
 /** Workflow Disposition step. Quarantine material disposition stays on POST /ncr/:id/disposition and does not move this step. */
 export const setDispositionStep = async (db: Db, id: number, note: string | undefined, performedBy?: number, allowedSiteIds?: number[]) => {
-  if (!note || !note.trim()) throw requiredMoveError(["Disposition"]);
-  return patchNcr(db, id, { status: "disposition" }, "disposition", performedBy, ["contain"], allowedSiteIds, { note });
+  const text = note?.trim() ?? "";
+  if (!text) throw requiredMoveError(["Disposition"]);
+  const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
+  if (!current) throw AppError.notFound("NCR");
+  return patchNcr(
+    db,
+    id,
+    { status: "disposition", processData: withProcessText(current.processData, "dispositionNote", text) },
+    "disposition",
+    performedBy,
+    ["contain"],
+    allowedSiteIds,
+    { note: text },
+  );
 };
 
 export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
@@ -137,7 +155,19 @@ export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: 
 };
 
 export const setVerify = async (db: Db, id: number, verification: string, performedBy?: number, allowedSiteIds?: number[]) => {
-  return patchNcr(db, id, { status: "verify" }, "verify", performedBy, ["fix"], allowedSiteIds, { verification });
+  const text = verification.trim();
+  const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
+  if (!current) throw AppError.notFound("NCR");
+  return patchNcr(
+    db,
+    id,
+    { status: "verify", processData: withProcessText(current.processData, "verification", text) },
+    "verify",
+    performedBy,
+    ["fix"],
+    allowedSiteIds,
+    { verification: text, note: text },
+  );
 };
 
 export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {

@@ -125,6 +125,22 @@ function isDateKey(key: string): boolean {
   return /(At|Date)$/.test(key) || /_(at|date)$/.test(key);
 }
 
+/**
+ * Postgres `timestamp` values land in audit JSON without a zone. The history
+ * When column is an ISO instant (UTC). Treat a zone-less date-time the same
+ * way, then format it in the user's local time.
+ */
+export function asUtcIso(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /(?:z|Z|[+-]\d{2}:?\d{2})$/.test(trimmed)) return trimmed;
+  const naive = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
+  const day = naive?.[1];
+  const clock = naive?.[2];
+  if (!day || !clock) return trimmed;
+  const time = clock.length === 5 ? `${clock}:00` : clock;
+  return `${day}T${time}Z`;
+}
+
 function skipKey(key: string): boolean {
   if (SECRET.test(key) || AI_KEY.test(key)) return true;
   return NOISE.has(normKey(key));
@@ -144,7 +160,7 @@ function displayValue(value: unknown, key?: string): string | null {
   if (value === "[redacted]") return "a hidden value";
   if (value.startsWith("[large value:")) return "a long value";
   if (key && isDateKey(key)) {
-    const formatted = formatDateTime(value);
+    const formatted = formatDateTime(asUtcIso(value));
     if (formatted !== "—") return formatted;
   }
   const words = value.replace(/_/g, " ").trim();
@@ -544,7 +560,7 @@ function valueSentences(changes: Record<string, unknown> | null, code: string | 
     else if (names.length > 2) out.push(`Changed ${names.slice(0, -1).map((name) => name.toLowerCase()).join(", ")}, and ${names[names.length - 1]!.toLowerCase()}.`);
   }
 
-  const seen = new Set(["action", "event", "subAction", "patch", "from", "to", "oldStatus", "newStatus", "status", "fileName", "filename", "fieldsChanged", "summary", "message", "note", "notes", "reason", "reviewNotes", "errorMessage", "failureMode", "version", "replaced", "rollbackTo", "changes", "attemptedTransition", "userRole", "userDepartment", "permission", "decision", "method", "path", "edits", "rowId"]);
+  const seen = new Set(["action", "event", "subAction", "patch", "from", "to", "oldStatus", "newStatus", "status", "fileName", "filename", "fieldsChanged", "summary", "message", "note", "notes", "reason", "reviewNotes", "errorMessage", "failureMode", "version", "replaced", "rollbackTo", "changes", "attemptedTransition", "userRole", "userDepartment", "permission", "decision", "method", "path", "edits", "rowId", "verification"]);
   for (const [key, value] of Object.entries(changes)) {
     if (seen.has(key) || skipKey(key)) continue;
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || (value !== null && typeof value === "object")) pushScalar(out, key, value);
@@ -555,7 +571,7 @@ function valueSentences(changes: Record<string, unknown> | null, code: string | 
 function noteSentences(changes: Record<string, unknown> | null): string[] {
   if (!changes) return [];
   const out: string[] = [];
-  for (const key of ["errorMessage", "reason", "reviewNotes", "note", "notes", "message"]) {
+  for (const key of ["errorMessage", "reason", "reviewNotes", "note", "notes", "message", "verification"]) {
     const text = stringField(changes, key);
     if (!text || text.startsWith("{") || text.startsWith("[")) continue;
     out.push(sentence(text.length > 240 ? `${text.slice(0, 237)}…` : text));
