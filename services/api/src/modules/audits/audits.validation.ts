@@ -24,3 +24,10 @@ export const addAuditItemSchema = z.object({
   severity: z.enum(["observation", "minor", "major", "critical"]).optional(),
   evidence: z.string().optional(),
 });
+
+export const updateAuditItemSchema = z.object({
+  question: z.string().min(1).optional(),
+  finding: z.string().nullable().optional(),
+  severity: z.enum(["observation", "minor", "major", "critical"]).nullable().optional(),
+  evidence: z.string().nullable().optional(),
+});

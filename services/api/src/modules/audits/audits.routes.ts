@@ -4,8 +4,8 @@ import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createAuditSchema, updateAuditSchema, addAuditItemSchema, reorderAuditItemsSchema } from "./audits.validation.js";
-import { baseHandlers, addItemHandler, listItemsHandler, reorderItemsHandler, startHandler, completeHandler } from "./audits.controller.js";
+import { createAuditSchema, updateAuditSchema, addAuditItemSchema, updateAuditItemSchema, reorderAuditItemsSchema } from "./audits.validation.js";
+import { baseHandlers, addItemHandler, updateItemHandler, deleteItemHandler, listItemsHandler, reorderItemsHandler, startHandler, completeHandler, saveAuditHandler } from "./audits.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { beginAuditEdit } from "../forms/moduleBeginEdit.js";
 
@@ -18,9 +18,12 @@ auditsRouter.post("/", validate(createAuditSchema), baseHandlers.create);
 auditsRouter.get("/:id", baseHandlers.getOne);
 auditsRouter.patch("/:id", validate(updateAuditSchema), baseHandlers.update);
 auditsRouter.post("/:id/begin-edit", beginAuditEdit);
+auditsRouter.post("/:id/save", saveAuditHandler);
 auditsRouter.delete("/:id", deleteRecordHandler("audit"));
 auditsRouter.get("/:id/item", listItemsHandler);
 auditsRouter.post("/:id/item", validate(addAuditItemSchema), addItemHandler);
+auditsRouter.patch("/:id/item/:itemId", validate(updateAuditItemSchema), updateItemHandler);
+auditsRouter.delete("/:id/item/:itemId", deleteItemHandler);
 auditsRouter.post("/:id/item/reorder", validate(reorderAuditItemsSchema), reorderItemsHandler);
 // Promotes Scheduled -> In Progress from generic-PATCH-only (see the
 // Transitions/Rules Dictionaries) to a real, sequence-checked action.

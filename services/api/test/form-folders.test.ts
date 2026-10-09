@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FILEABLE_FORM_KEYS } from "../src/modules/document-folders/editableForms.js";
 import { FORM_TEMPLATES, keptOutOfBlankFormsTemplates } from "../src/modules/document-folders/formFiling.js";
-import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, RETIRED_FORM_FOLDER_KEYS, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
+import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, sharedFolderKey, RETIRED_FORM_FOLDER_KEYS, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
 
 describe("form folders", () => {
   const folders = formFolderIndex(FORM_TEMPLATES);
@@ -158,5 +158,34 @@ describe("form folders", () => {
     expect(formKeyForSharedTitle(matches, "Supplier NCR", "ncr")).toBe("supplier-ncr");
     expect(formKeyForSharedTitle(matches, "Line reject", "ncr")).toBe("ncr");
     expect(formKeyForSharedTitle([{ formKey: "audit-plan", match: "Internal Audit Plan" }], "Weekly audit", null)).toBeNull();
+  });
+
+  it("keeps an exact title when a generic pin would otherwise claim the row", () => {
+    const ncr = { source: "ncr", keys: ["supplier-ncr", "complaint", "ncr"], fallback: "ncr" };
+    const matches = [
+      { formKey: "supplier-ncr", match: "Supplier NCR" },
+      { formKey: "complaint", match: "Customer Complaint Record" },
+      { formKey: "ncr", match: "Nonconformance Report" },
+    ];
+    expect(sharedFolderKey(ncr, matches, "Supplier NCR", "ncr")).toBe("supplier-ncr");
+    expect(sharedFolderKey(ncr, matches, "Customer Complaint Record", "ncr")).toBe("complaint");
+    expect(sharedFolderKey(ncr, matches, "Line reject", "ncr")).toBe("ncr");
+    expect(sharedFolderKey(ncr, matches, "Supplier NCR renamed", "supplier-ncr")).toBe("supplier-ncr");
+
+    const change = { source: "ecr", keys: ["ecr", "eco"], fallback: null };
+    const changeMatches = [
+      { formKey: "ecr", match: "Engineering Change Request" },
+      { formKey: "eco", match: "Engineering Change Order" },
+    ];
+    expect(sharedFolderKey(change, changeMatches, "Engineering Change Order", "ecr")).toBe("eco");
+    expect(sharedFolderKey(change, changeMatches, "Engineering Change Request", "ecr")).toBe("ecr");
+
+    const audits = { source: "audit-plan", keys: ["audit-plan", "audit-report"], fallback: null };
+    const auditMatches = [
+      { formKey: "audit-plan", match: "Internal Audit Plan" },
+      { formKey: "audit-report", match: "Internal Audit Report" },
+    ];
+    expect(sharedFolderKey(audits, auditMatches, "Internal Audit Report", "audit-plan")).toBe("audit-report");
+    expect(sharedFolderKey(audits, auditMatches, "Internal Audit Plan", "audit-plan")).toBe("audit-plan");
   });
 });

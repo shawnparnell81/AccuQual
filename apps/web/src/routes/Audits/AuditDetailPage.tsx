@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Audit } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { TextField, SelectField } from "../../components/forms/Field";
+import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
+import { SaveStatus } from "../../components/shared/SaveStatus";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -67,6 +68,8 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   });
 
   const [item, setItem] = useState({ question: "", finding: "", severity: "observation" });
+  const [headerSaving, setHeaderSaving] = useState(false);
+  const [headerSaved, setHeaderSaved] = useState(false);
   const [autoOpened, setAutoOpened] = useState<number | null>(null);
   const toast = useToast();
   const [dragItemId, setDragItemId] = useState<number | null>(null);
@@ -107,7 +110,22 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+          <ModuleFormLock
+            mode={formLock.mode}
+            canEdit={permitted}
+            pending={headerSaving}
+            onEdit={() => formLock.onEdit()}
+            onSave={() => {
+              setHeaderSaving(true);
+              void apiClient.post(`/audits/${auditId}/save`).then(() => {
+                setHeaderSaved(true);
+                setHeaderSaving(false);
+                void queryClient.invalidateQueries({ queryKey: ["workflow-history", "audit", auditId] });
+              }).catch(() => setHeaderSaving(false));
+            }}
+            onLock={formLock.lock}
+          />
+          {headerSaved && <SaveStatus saving={headerSaving} unsaved={false} />}
           <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} number={audit.recordNumber} ownerIds={[audit.auditorId]} navigateTo="/audits" allowed={permitted} assignedOnly />
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Plan`} label="Audit Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Checklist`} label="Audit Checklist" />
@@ -213,33 +231,27 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
                 void dropItem(i.id, position);
               }}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                  {audit.status !== "completed" && items.length > 1 && (
-                    <span
-                      draggable
-                      title="Drag to reorder"
-                      className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", String(i.id));
-                        const row = (e.currentTarget as HTMLElement).closest("li");
-                        if (row) e.dataTransfer.setDragImage(row, 10, 10);
-                        setDragItemId(i.id);
-                      }}
-                      onDragEnd={() => {
-                        setDragItemId(null);
-                        setOverItem(null);
-                      }}
-                    >
-                      <GripVertical size={15} />
-                    </span>
-                  )}
-                  <span className="truncate">{i.question}</span>
-                </span>
-                <StatusBadge value={i.severity} />
-              </div>
-              {i.finding && <p className="mt-1 text-muted-foreground">{i.finding}</p>}
+              <AuditItemRow
+                item={i}
+                auditId={auditId}
+                canEdit={canEdit}
+                canReorder={audit.status !== "completed" && items.length > 1}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", String(i.id));
+                  const row = (event.currentTarget as HTMLElement).closest("li");
+                  if (row) event.dataTransfer.setDragImage(row, 10, 10);
+                  setDragItemId(i.id);
+                }}
+                onDragEnd={() => {
+                  setDragItemId(null);
+                  setOverItem(null);
+                }}
+                onSaved={() => {
+                  void queryClient.invalidateQueries({ queryKey: ["audits", auditId, "items"] });
+                  void queryClient.invalidateQueries({ queryKey: ["workflow-history", "audit", auditId] });
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -261,6 +273,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             setItem({ question: "", finding: "", severity: "observation" });
             setAutoOpened(created.discrepancyInvestigation?.id ?? null);
             queryClient.invalidateQueries({ queryKey: ["audits", auditId, "items"] });
+            void queryClient.invalidateQueries({ queryKey: ["workflow-history", "audit", auditId] });
           }}
         >
           <TextField label="Question" value={item.question} onChange={(e) => setItem({ ...item, question: e.target.value })} required />
@@ -299,5 +312,123 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
       <AttachmentsPanel entityType="audit" entityId={auditId} />
       <WorkflowHistoryPanel moduleName="audit" recordId={auditId} />
     </div>
+  );
+}
+
+function AuditItemRow({
+  item,
+  auditId,
+  canEdit,
+  canReorder,
+  onDragStart,
+  onDragEnd,
+  onSaved,
+}: {
+  item: AuditItem;
+  auditId: number;
+  canEdit: boolean;
+  canReorder: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ question: item.question, finding: item.finding ?? "", severity: item.severity ?? "observation" });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await apiClient.patch(`/audits/${auditId}/item/${item.id}`, {
+        question: draft.question.trim(),
+        finding: draft.finding.trim() || null,
+        severity: draft.severity,
+      });
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't update this item."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    setSaving(true);
+    try {
+      await apiClient.delete(`/audits/${auditId}/item/${item.id}`);
+      onSaved();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't remove this item."));
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="grid gap-2">
+        <TextField label="Question" value={draft.question} onChange={(event) => setDraft({ ...draft, question: event.target.value })} required />
+        <TextAreaField label="Finding" value={draft.finding} rows={3} onChange={(event) => setDraft({ ...draft, finding: event.target.value })} />
+        <SelectField label="Severity" value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value })}>
+          {["observation", "minor", "major", "critical"].map((severity) => (
+            <option key={severity} value={severity}>
+              {severity}
+            </option>
+          ))}
+        </SelectField>
+        <div className="flex gap-2">
+          <button type="button" disabled={saving || draft.question.trim() === ""} onClick={() => void save()} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            Save item
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setDraft({ question: item.question, finding: item.finding ?? "", severity: item.severity ?? "observation" });
+              setEditing(false);
+            }}
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 font-medium">
+          {canReorder && (
+            <span
+              draggable
+              title="Drag to reorder"
+              className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+            >
+              <GripVertical size={15} />
+            </span>
+          )}
+          <span className="truncate">{item.question}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <StatusBadge value={item.severity} />
+          {canEdit && (
+            <>
+              <button type="button" onClick={() => setEditing(true)} className="text-sm text-primary hover:underline">
+                Edit
+              </button>
+              <button type="button" disabled={saving} onClick={() => void remove()} className="text-sm text-destructive hover:underline disabled:opacity-60">
+                Remove
+              </button>
+            </>
+          )}
+        </span>
+      </div>
+      {item.finding && <p className="mt-1 text-muted-foreground">{item.finding}</p>}
+    </>
   );
 }

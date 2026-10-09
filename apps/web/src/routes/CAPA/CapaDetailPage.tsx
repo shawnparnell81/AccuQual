@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { Link, useParams } from "react-router-dom";
@@ -23,6 +23,7 @@ import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
+import { PictureBoundText } from "../../components/forms/PictureText";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -45,6 +46,19 @@ export function CapaDetailPage() {
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, capa ? recordHeading("CAPA", capa.recordNumber) : "CAPA");
   const updateCapa = capaHooks.useUpdate();
+  const rootCommit = useRef<(() => void) | null>(null);
+  const planCommit = useRef<(() => void) | null>(null);
+  const preventCommit = useRef<(() => void) | null>(null);
+  const [pendingNarrative, setPendingNarrative] = useState<Record<string, boolean>>({});
+  const narrativeDirty = Object.values(pendingNarrative).some(Boolean);
+  function noteNarrative(key: string) {
+    return (value: string | null) => setPendingNarrative((current) => ({ ...current, [key]: value != null }));
+  }
+  function flushNarrative() {
+    rootCommit.current?.();
+    planCommit.current?.();
+    preventCommit.current?.();
+  }
   const startAction = useWorkflowAction("capa", "start", { successMessage: "CAPA started.", invalidateKeys: historyKey });
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
@@ -122,7 +136,7 @@ export function CapaDetailPage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateCapa.isPending} onEdit={() => formLock.onEdit()} onSave={flushNarrative} onLock={formLock.lock} />
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
@@ -144,7 +158,7 @@ export function CapaDetailPage() {
         }
         trail={<LoopTrail steps={CAPA_LOOP} current={capaLoopIndex(capa.status)} />}
       />
-      <SaveStatus saving={updateCapa.isPending} unsaved={verificationTouched && verification !== (capa.verification ?? "")} />
+      <SaveStatus saving={updateCapa.isPending} unsaved={narrativeDirty || (verificationTouched && verification !== (capa.verification ?? ""))} />
       <p className="text-sm text-muted-foreground">
         {capa.ncrId ? (
           <>
@@ -173,32 +187,47 @@ export function CapaDetailPage() {
               insertLabel="Insert as Root Cause"
             />}
           </div>
-          <TextAreaField
-            label=""
-            value={capa.rootCause ?? ""}
-            placeholder="Not written yet."
+          <PictureBoundText
+            saved={capa.rootCause ?? ""}
             readOnly={!canEdit}
-            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, rootCause: e.target.value })}
+            placeholder="Not written yet."
+            entityType="capa"
+            entityId={capaId}
+            rows={4}
+            commitRef={rootCommit}
+            onPendingChange={noteNarrative("rootCause")}
+            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
+            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, rootCause: value })}
           />
         </div>
 
         <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">What you'll do</h2>
-          <TextAreaField
-            label=""
-            value={capa.actionPlan ?? ""}
+          <PictureBoundText
+            saved={capa.actionPlan ?? ""}
             readOnly={!canEdit}
-            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, actionPlan: e.target.value })}
+            entityType="capa"
+            entityId={capaId}
+            rows={4}
+            commitRef={planCommit}
+            onPendingChange={noteNarrative("actionPlan")}
+            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
+            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, actionPlan: value })}
           />
         </div>
 
         <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">How you'll keep it from coming back</h2>
-          <TextAreaField
-            label=""
-            value={capa.preventiveAction ?? ""}
+          <PictureBoundText
+            saved={capa.preventiveAction ?? ""}
             readOnly={!canEdit}
-            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, preventiveAction: e.target.value })}
+            entityType="capa"
+            entityId={capaId}
+            rows={4}
+            commitRef={preventCommit}
+            onPendingChange={noteNarrative("preventiveAction")}
+            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
+            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, preventiveAction: value })}
           />
         </div>
 

@@ -379,6 +379,7 @@ export function PictureBoundText({
   saved,
   onSave,
   onPendingChange,
+  commitRef,
   entityType,
   entityId,
   className,
@@ -391,6 +392,8 @@ export function PictureBoundText({
   onSave: (value: string) => void;
   /** The current text when it differs from the saved value, or null once it matches again. */
   onPendingChange?: (value: string | null) => void;
+  /** Header Save calls this so the latest draft is stored even if blur has not run. */
+  commitRef?: { current: (() => void) | null };
   entityType: string;
   entityId: number;
   className?: string;
@@ -404,6 +407,11 @@ export function PictureBoundText({
   const valueRef = useRef(saved);
   const previousSaved = useRef(saved);
   savedRef.current = saved;
+  if (commitRef) {
+    commitRef.current = () => {
+      if (valueRef.current !== savedRef.current) onSave(valueRef.current);
+    };
+  }
 
   useEffect(() => {
     if (saved === previousSaved.current) return;

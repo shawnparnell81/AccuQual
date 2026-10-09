@@ -3,6 +3,12 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
+import { FORM_LAYOUTS } from "./layouts/index.js";
+
+/** Record fields whose on-screen heading is not the camelCase name. */
+const RECORD_FIELD_LABELS: Record<string, string> = {
+  actionPlan: "What you'll do",
+};
 
 export interface FormEdit {
   label: string;
@@ -16,6 +22,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 /** A spreadsheet address stays a cell name. A camelCase key becomes a field name. */
 export function cellLabel(key: string): string {
+  const named = RECORD_FIELD_LABELS[key];
+  if (named) return named;
   if (/^[A-Z]{1,3}\d+$/.test(key)) return `Cell ${key}`;
   const spaced = key
     .replace(/[_-]+/g, " ")
@@ -131,7 +139,7 @@ function diffScalarList(title: string, key: string, before: unknown, after: unkn
   return edits;
 }
 
-function diffRow(label: string, index: number, from: Record<string, unknown>, to: Record<string, unknown>, monthNames?: unknown[]): FormEdit[] {
+function diffRow(label: string, index: number, from: Record<string, unknown>, to: Record<string, unknown>, monthNames?: unknown[], formType?: string, tableKey?: string): FormEdit[] {
   const edits: FormEdit[] = [];
   const title = rowTitle(label, index, from, to);
   for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
@@ -148,7 +156,8 @@ function diffRow(label: string, index: number, from: Record<string, unknown>, to
     const toShown = structuredText(after);
     if (fromShown != null && toShown != null) {
       if (fromShown === toShown || (fromShown === "(blank)" && toShown === "(blank)")) continue;
-      const field = label === "Problem" && key === "problem" ? title : `${title} ${cellLabel(key)}`;
+      const column = tableKey ? layoutColumnLabel(formType, tableKey, key) : null;
+      const field = label === "Problem" && key === "problem" ? title : `${title} ${column ?? cellLabel(key)}`;
       edits.push({ label: field, from: fromShown, to: toShown });
       continue;
     }
@@ -156,13 +165,44 @@ function diffRow(label: string, index: number, from: Record<string, unknown>, to
     const shownFrom = showAuditValue(before);
     const shownTo = showAuditValue(after);
     if (shownFrom === "(blank)" && shownTo === "(blank)") continue;
-    const field = label === "Problem" && key === "problem" ? title : `${title} ${cellLabel(key)}`;
+    const column = tableKey ? layoutColumnLabel(formType, tableKey, key) : null;
+    const field = label === "Problem" && key === "problem" ? title : `${title} ${column ?? cellLabel(key)}`;
     edits.push({ label: field, from: shownFrom, to: shownTo });
   }
   return edits;
 }
 
-function diffList(label: string, before: unknown, after: unknown, monthNames?: unknown[]): FormEdit[] {
+function layoutFieldLabel(formType: string | undefined, key: string): string | null {
+  if (!formType) return null;
+  const layout = FORM_LAYOUTS[formType];
+  if (!layout) return null;
+  for (const section of layout.sections) {
+    for (const block of section.blocks) {
+      if ((block.type === "textarea" || block.type === "yesno") && block.name === key) return block.label.replace(/:$/, "").trim();
+      if (block.type === "row") {
+        const field = block.fields.find((item) => item.name === key);
+        if (field) return field.label.replace(/:$/, "").trim();
+      }
+    }
+  }
+  return null;
+}
+
+function layoutColumnLabel(formType: string | undefined, tableName: string, key: string): string | null {
+  if (!formType) return null;
+  const layout = FORM_LAYOUTS[formType];
+  if (!layout) return null;
+  for (const section of layout.sections) {
+    for (const block of section.blocks) {
+      if (block.type !== "table" || block.name !== tableName) continue;
+      const column = block.columns.find((item) => item.key === key);
+      return column ? column.label.replace(/:$/, "").trim() : null;
+    }
+  }
+  return null;
+}
+
+function diffList(label: string, before: unknown, after: unknown, monthNames?: unknown[], formType?: string, tableKey?: string): FormEdit[] {
   const left = Array.isArray(before) ? before : [];
   const right = Array.isArray(after) ? after : [];
   const edits: FormEdit[] = [];
@@ -174,7 +214,7 @@ function diffList(label: string, before: unknown, after: unknown, monthNames?: u
     const fromRecord = asRecord(from) ?? (from == null ? {} : null);
     const toRecord = asRecord(to) ?? (to == null ? {} : null);
     if (fromRecord && toRecord) {
-      edits.push(...diffRow(label, index, fromRecord, toRecord, monthNames));
+      edits.push(...diffRow(label, index, fromRecord, toRecord, monthNames, formType, tableKey));
       continue;
     }
     pushStructured(edits, `${label} ${index + 1}`, from, to);
@@ -185,7 +225,7 @@ function diffList(label: string, before: unknown, after: unknown, monthNames?: u
 const FORM_DIFF_SKIP = new Set(["cells", "lines", "customers", "problems", "months", "photos"]);
 
 /** Field and cell changes between two saved form payloads. Signature bookkeeping stays on its own audit row. */
-export function formDataEdits(previousData: unknown, nextData: unknown): FormEdit[] {
+export function formDataEdits(previousData: unknown, nextData: unknown, formType?: string): FormEdit[] {
   const prev = asRecord(previousData) ?? {};
   const next = asRecord(nextData) ?? {};
   const edits = diffCells(prev.cells, next.cells);
@@ -205,13 +245,13 @@ export function formDataEdits(previousData: unknown, nextData: unknown): FormEdi
     const after = next[key];
     if (same(before ?? "", after ?? "")) continue;
     if (Array.isArray(before) || Array.isArray(after)) {
-      edits.push(...diffList(cellLabel(key), before, after));
+      edits.push(...diffList(layoutFieldLabel(formType, key) ?? cellLabel(key), before, after, undefined, formType, key));
       continue;
     }
     const fromShown = structuredText(before);
     const toShown = structuredText(after);
     if (fromShown == null || toShown == null || fromShown === toShown) continue;
-    edits.push({ label: cellLabel(key), from: fromShown, to: toShown });
+    edits.push({ label: layoutFieldLabel(formType, key) ?? cellLabel(key), from: fromShown, to: toShown });
   }
   return edits;
 }

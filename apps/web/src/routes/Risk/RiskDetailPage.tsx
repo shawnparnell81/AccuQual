@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -147,6 +147,23 @@ function EditRiskModal({ risk, isOpen, onClose }: { risk: RiskAssessment; isOpen
     recordNumber: showRecordNumber(risk.recordNumber),
   });
   const [numberError, setNumberError] = useState<string | null>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) {
+      setForm({
+        title: risk.title,
+        description: risk.description ?? "",
+        category: risk.category ?? "process",
+        severity: risk.severity ? String(risk.severity) : "",
+        probability: risk.probability ? String(risk.probability) : "",
+        processArea: risk.processArea ?? "",
+        department: risk.department ?? "",
+        recordNumber: showRecordNumber(risk.recordNumber),
+      });
+      setNumberError(null);
+    }
+    wasOpen.current = isOpen;
+  }, [isOpen, risk]);
 
   const update = useMutation({
     mutationFn: async () =>

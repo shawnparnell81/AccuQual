@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -29,7 +30,7 @@ const inputClass = "w-full min-w-0 bg-transparent px-1 py-0.5 text-xs outline-no
  * SIGN cells use the shared PIN certification control. The previous
  * multi-row change table and free-form review rows are not on this sheet.
  */
-export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest }) {
+export function DocumentChangeRequestForm({ dcr, onSaving }: { dcr: DocumentChangeRequest; onSaving?: (saving: boolean) => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["document-change-requests", dcr.id] });
@@ -47,6 +48,9 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
   });
 
   const save = (body: Record<string, unknown>) => patchHeader.mutate(body);
+  useEffect(() => {
+    onSaving?.(patchHeader.isPending);
+  }, [onSaving, patchHeader.isPending]);
 
   return (
     <div key={dcr.id} className="overflow-x-auto rounded-md border border-border bg-card print:border-black print:bg-white print:text-black" data-testid="dcr-f001-form">
