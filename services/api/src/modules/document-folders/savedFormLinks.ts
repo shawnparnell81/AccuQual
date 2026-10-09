@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { audits } from "../../drizzle/schema/audits.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
@@ -17,14 +18,21 @@ import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { shouldRepairFiledLink } from "../forms/formEditAudit.js";
 import { FILEABLE_FORM_KEYS, ISO_TYPE_TO_FORM_KEY, recordLinkedPath, validationFormKeyFor } from "./editableForms.js";
-import { FORM_TEMPLATES } from "./formFiling.js";
+import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, filedRecordName } from "./formFiling.js";
 
 /**
- * Saved forms must open the record that was filed, and a deleted record must
- * not leave a clickable file behind. Listing folders runs this again. It only
- * rewrites a link that is already wrong, or removes a file whose record is
- * already gone. No migration: the same pass is safe to run more than once.
+ * Saved forms must open the record that was filed. Listing and search run this
+ * again. They rewrite a link that is already wrong, hide a file whose record
+ * is already gone, and file a saved record that is missing its folder copy.
+ * They do not delete a filing or a file. Removing those rows happens only when
+ * someone deletes the record. No migration: the same pass is safe to run more than once.
  */
+
+/** Same folder name as formFolders.SAVED_FORM_FOLDERS_ROOT. Kept here so this file does not import that module. */
+const SAVED_FORM_FOLDERS_ROOT = "Saved Form Folders";
+
+/** First Article folders are retired. Do not file those records back into a folder. */
+const RETIRED_FORM_KEYS = new Set(["frm-fai-001", "first_article_inspection"]);
 
 const FOLDER_AUDIT = "DocumentFolder";
 
@@ -186,8 +194,234 @@ async function deleteExclusiveLeaf(db: Db, nodeId: number, performedBy: number |
   });
 }
 
-/** Drop filings and file nodes that point at a record which is already gone, and point the rest at that record. */
+/** True when this filing's record is still in its table. Unknown keys stay visible. */
+export async function filterLiveFilings<T extends { formKey: string; recordId: number }>(db: Db, filings: T[]): Promise<T[]> {
+  const wanted = new Map<RecordKind, number[]>();
+  for (const filing of filings) {
+    const kind = kindForFormKey(filing.formKey);
+    if (kind && kind !== "page") remember(wanted, kind, filing.recordId);
+  }
+  const alive = await loadAlive(db, wanted);
+  return filings.filter((filing) => {
+    const kind = kindForFormKey(filing.formKey);
+    if (!kind || kind === "page") return true;
+    return alive.has(aliveKey(kind, filing.recordId));
+  });
+}
+
+interface SavedCopy {
+  formKey: string;
+  recordId: number;
+  createdAt: Date | null;
+  recordNumber: string;
+}
+
+function pushCopy(copies: SavedCopy[], formKey: string | null | undefined, recordId: number, createdAt: Date | null, recordNumber: string | null) {
+  if (!formKey || RETIRED_FORM_KEYS.has(formKey)) return;
+  if (!Number.isInteger(recordId) || recordId < 1) return;
+  copies.push({ formKey, recordId, createdAt, recordNumber: recordNumber?.trim() ?? "" });
+}
+
+/** Live saved-form rows. `form_data` is not a record id for these folders, so it is not read here. */
+async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
+  const copies: SavedCopy[] = [];
+  const known = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
+  const validations = await db
+    .select({ id: validationReports.id, data: validationReports.data, recordNumber: validationReports.recordNumber, createdAt: validationReports.createdAt })
+    .from(validationReports);
+  for (const row of validations) pushCopy(copies, validationFormKeyFor(row.data), row.id, row.createdAt, row.recordNumber);
+  const isos = await db
+    .select({ id: isoQualityForms.id, formType: isoQualityForms.formType, recordNumber: isoQualityForms.recordNumber, createdAt: isoQualityForms.createdAt })
+    .from(isoQualityForms);
+  for (const row of isos) pushCopy(copies, ISO_TYPE_TO_FORM_KEY[row.formType], row.id, row.createdAt, row.recordNumber);
+  const qmsRows = await db.select({ id: qmsForms.id, formType: qmsForms.formType, formNo: qmsForms.formNo, createdAt: qmsForms.createdAt }).from(qmsForms);
+  for (const row of qmsRows) {
+    if (!known.has(row.formType)) continue;
+    pushCopy(copies, row.formType, row.id, row.createdAt, row.formNo);
+  }
+  const ncrRows = await db.select({ id: ncr.id, recordNumber: ncr.recordNumber, createdAt: ncr.createdAt }).from(ncr).where(eq(ncr.isDeleted, false));
+  for (const row of ncrRows) pushCopy(copies, "ncr", row.id, row.createdAt, row.recordNumber);
+  const capaRows = await db.select({ id: capa.id, recordNumber: capa.recordNumber, createdAt: capa.createdAt }).from(capa);
+  for (const row of capaRows) pushCopy(copies, "capa", row.id, row.createdAt, row.recordNumber);
+  const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt }).from(eightD);
+  for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber);
+  const dcrRows = await db.select({ id: documentChangeRequests.id, formNo: documentChangeRequests.formNo, createdAt: documentChangeRequests.createdAt }).from(documentChangeRequests);
+  for (const row of dcrRows) pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo);
+  const riskRows = await db.select({ id: riskAssessments.id, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt }).from(riskAssessments);
+  for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber);
+  const auditRows = await db.select({ id: audits.id, recordNumber: audits.recordNumber, createdAt: audits.createdAt }).from(audits);
+  for (const row of auditRows) pushCopy(copies, "audit-plan", row.id, row.createdAt, row.recordNumber);
+  const trainingRows = await db.select({ id: trainingCourses.id, createdAt: trainingCourses.createdAt }).from(trainingCourses);
+  for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null);
+  const changeRows = await db.select({ id: changeRequests.id, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt }).from(changeRequests);
+  for (const row of changeRows) pushCopy(copies, "ecr", row.id, row.createdAt, row.recordNumber);
+  return copies.filter((copy) => known.has(copy.formKey));
+}
+
+function restoredFileName(copy: SavedCopy, formNumber: string, remembered: string | undefined): string {
+  if (remembered?.trim()) return remembered.trim();
+  const seed = FORM_TEMPLATES.find((item) => item.formKey === copy.formKey);
+  const date = (copy.createdAt ?? new Date()).toISOString().slice(0, 10);
+  return filedRecordName(formNumber || seed?.formId || "", copy.recordNumber, date, fileNamePatternFor(seed ?? { fileNamePattern: FILE_NAME_PATTERN }));
+}
+
+async function rememberedFileNames(db: Db): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ changes: auditTrail.changes, createdAt: auditTrail.createdAt })
+    .from(auditTrail)
+    .where(and(eq(auditTrail.entityType, FOLDER_AUDIT), sql`${auditTrail.changes}->>'event' in ('orphan_removed', 'filed')`));
+  const ordered = [...rows].sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0));
+  const names = new Map<string, string>();
+  for (const row of ordered) {
+    const changes = row.changes ?? {};
+    const linked = typeof changes.linkedPath === "string" ? pathOnly(changes.linkedPath) : "";
+    const name = typeof changes.name === "string" ? changes.name.trim() : "";
+    if (!linked || !name || !parseRecordLink(linked)) continue;
+    names.set(linked, name);
+  }
+  return names;
+}
+
+/** Put a saved record back into its per-form folder when the filing or the file node is missing. */
+async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<void> {
+  const copies = await collectSavedCopies(db);
+  if (copies.length === 0) return;
+  const existing = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const have = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
+  const missing = copies.filter((copy) => !have.has(`${copy.formKey}:${copy.recordId}`));
+  if (missing.length > 0) {
+    await db
+      .insert(formFilings)
+      .values(
+        missing.map((copy) => ({
+          formKey: copy.formKey,
+          recordId: copy.recordId,
+          formNumber: FORM_TEMPLATES.find((seed) => seed.formKey === copy.formKey)?.formId ?? "",
+        })),
+      )
+      .onConflictDoNothing({ target: [formFilings.formKey, formFilings.recordId] });
+  }
+
+  const filings = await db.select().from(formFilings);
+  const folders = await db
+    .select({
+      id: documentFolders.id,
+      name: documentFolders.name,
+      parentId: documentFolders.parentId,
+      linkedPath: documentFolders.linkedPath,
+      documentId: documentFolders.documentId,
+      pdfPath: documentFolders.pdfPath,
+    })
+    .from(documentFolders);
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  const usedNodes = new Set(filings.flatMap((filing) => (filing.folderNodeId != null && folderIds.has(filing.folderNodeId) ? [filing.folderNodeId] : [])));
+  const childCount = new Map<number, number>();
+  for (const folder of folders) {
+    if (folder.parentId == null) continue;
+    childCount.set(folder.parentId, (childCount.get(folder.parentId) ?? 0) + 1);
+  }
+  const filingByKey = new Map(filings.map((filing) => [`${filing.formKey}:${filing.recordId}`, filing]));
+  const needNodes = copies.filter((copy) => {
+    if (!FILEABLE_FORM_KEYS.has(copy.formKey)) return false;
+    const filing = filingByKey.get(`${copy.formKey}:${copy.recordId}`);
+    return filing != null && (filing.folderNodeId == null || !folderIds.has(filing.folderNodeId));
+  });
+  if (needNodes.length === 0) return;
+
+  const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_DOCUMENTS_FOLDER);
+  if (!iso) return;
+  const names = await rememberedFileNames(db);
+  let root = folders.find((folder) => folder.parentId === iso.id && folder.name === SAVED_FORM_FOLDERS_ROOT);
+  if (!root) {
+    const siblings = folders.filter((folder) => folder.parentId === iso.id);
+    const [created] = await db.insert(documentFolders).values({ name: SAVED_FORM_FOLDERS_ROOT, parentId: iso.id, sortOrder: siblings.length }).returning({
+      id: documentFolders.id,
+      name: documentFolders.name,
+      parentId: documentFolders.parentId,
+      linkedPath: documentFolders.linkedPath,
+      documentId: documentFolders.documentId,
+      pdfPath: documentFolders.pdfPath,
+    });
+    if (!created) return;
+    root = created;
+    folders.push(created);
+  }
+  const parentByKey = new Map<string, number>();
+
+  for (const copy of needNodes) {
+    const filing = filingByKey.get(`${copy.formKey}:${copy.recordId}`);
+    if (!filing) continue;
+    const canonical = canonicalOpenPath(copy.formKey, copy.recordId);
+    const reusable = folders.find(
+      (folder) =>
+        pathOnly(folder.linkedPath) === canonical &&
+        !usedNodes.has(folder.id) &&
+        folder.documentId == null &&
+        !folder.pdfPath &&
+        (childCount.get(folder.id) ?? 0) === 0,
+    );
+    if (reusable) {
+      await db.update(formFilings).set({ folderNodeId: reusable.id, updatedAt: new Date() }).where(eq(formFilings.id, filing.id));
+      usedNodes.add(reusable.id);
+      continue;
+    }
+    let parentId = parentByKey.get(copy.formKey);
+    if (parentId == null) {
+      const marker = `/form-folders/${copy.formKey}`;
+      const seed = FORM_TEMPLATES.find((item) => item.formKey === copy.formKey);
+      let parent = folders.find((folder) => folder.parentId === root.id && folder.linkedPath === marker);
+      if (!parent) {
+        const siblings = folders.filter((folder) => folder.parentId === root.id);
+        const [created] = await db
+          .insert(documentFolders)
+          .values({ name: seed?.title?.trim() || copy.formKey, parentId: root.id, sortOrder: siblings.length, linkedPath: marker })
+          .returning({
+            id: documentFolders.id,
+            name: documentFolders.name,
+            parentId: documentFolders.parentId,
+            linkedPath: documentFolders.linkedPath,
+            documentId: documentFolders.documentId,
+            pdfPath: documentFolders.pdfPath,
+          });
+        if (!created) continue;
+        parent = created;
+        folders.push(created);
+        childCount.set(root.id, (childCount.get(root.id) ?? 0) + 1);
+      }
+      parentId = parent.id;
+      parentByKey.set(copy.formKey, parentId);
+    }
+    const name = restoredFileName(copy, filing.formNumber, names.get(canonical));
+    const siblings = folders.filter((folder) => folder.parentId === parentId);
+    const [created] = await db
+      .insert(documentFolders)
+      .values({ name, parentId, sortOrder: siblings.length, linkedPath: canonical })
+      .returning({
+        id: documentFolders.id,
+        name: documentFolders.name,
+        parentId: documentFolders.parentId,
+        linkedPath: documentFolders.linkedPath,
+        documentId: documentFolders.documentId,
+        pdfPath: documentFolders.pdfPath,
+      });
+    if (!created) continue;
+    folders.push(created);
+    childCount.set(parentId, (childCount.get(parentId) ?? 0) + 1);
+    usedNodes.add(created.id);
+    await db.update(formFilings).set({ folderNodeId: created.id, updatedAt: new Date() }).where(eq(formFilings.id, filing.id));
+    await recordAuditTrail(db, {
+      entityType: FOLDER_AUDIT,
+      entityId: created.id,
+      action: "create",
+      changes: { event: "filed", name, parentId, formKey: copy.formKey, recordId: copy.recordId, linkedPath: canonical },
+      performedBy,
+    });
+  }
+}
+
+/** Point a filed copy at the record that was saved. Does not delete a filing or a file. */
 export async function repairSavedFormListings(db: Db, performedBy?: number): Promise<void> {
+  await refileMissingSavedRecords(db, performedBy);
   const filings = await db.select().from(formFilings);
   const folders = await db
     .select({
@@ -218,10 +452,6 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
     const kind = kindForFormKey(filing.formKey);
     if (kind && kind !== "page") remember(wanted, kind, filing.recordId);
   }
-  for (const folder of folders) {
-    const parsed = parseRecordLink(folder.linkedPath);
-    if (parsed) remember(wanted, parsed.kind, parsed.id);
-  }
   const alive = await loadAlive(db, wanted);
 
   function filingAlive(formKey: string, recordId: number): boolean {
@@ -231,15 +461,11 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
     return alive.has(aliveKey(kind, recordId));
   }
 
-  const dropIds = filings.filter((filing) => !filingAlive(filing.formKey, filing.recordId)).map((filing) => filing.id);
-  const dropSet = new Set(dropIds);
-  if (dropIds.length > 0) await db.delete(formFilings).where(inArray(formFilings.id, dropIds));
-
   for (const filing of filings) {
-    if (dropSet.has(filing.id) || filing.folderNodeId == null) continue;
+    if (!filingAlive(filing.formKey, filing.recordId) || filing.folderNodeId == null) continue;
     const node = folderById.get(filing.folderNodeId);
     if (!node) continue;
-    const remaining = (filingsByNode.get(node.id) ?? []).filter((item) => !dropSet.has(item.id));
+    const remaining = filingsByNode.get(node.id) ?? [];
     const expected = canonicalOpenPath(filing.formKey, filing.recordId);
     if (
       !shouldRepairFiledLink({
@@ -261,19 +487,6 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
       performedBy,
     });
     node.linkedPath = expected;
-  }
-
-  for (const folder of folders) {
-    const parsed = parseRecordLink(folder.linkedPath);
-    if (!parsed || alive.has(aliveKey(parsed.kind, parsed.id))) continue;
-    const remaining = (filingsByNode.get(folder.id) ?? []).filter((item) => !dropSet.has(item.id));
-    if (remaining.length > 0) continue;
-    if ((childCount.get(folder.id) ?? 0) > 0) continue;
-    if (folder.pdfPath || folder.documentId != null) {
-      if (folder.linkedPath) await db.update(documentFolders).set({ linkedPath: null, updatedAt: new Date() }).where(eq(documentFolders.id, folder.id));
-      continue;
-    }
-    await deleteExclusiveLeaf(db, folder.id, performedBy);
   }
 }
 
@@ -333,19 +546,27 @@ export async function liveRecordPaths(db: Db, paths: string[]): Promise<string[]
 }
 
 /** Folder files whose name matches a search and whose record is still there. */
-export async function searchSavedFormFiles(db: Db, q: string): Promise<{ id: number; label: string; path: string }[]> {
+export async function searchSavedFormFiles(db: Db, q: string, alreadyRepaired = false): Promise<{ id: number; label: string; path: string }[]> {
   const needle = q.trim();
   if (!needle) return [];
-  await repairSavedFormListings(db);
+  if (!alreadyRepaired) await repairSavedFormListings(db);
   const escaped = needle.replace(/[\\%_]/g, (ch) => `\\${ch}`);
   const rows = await db
     .select({ id: documentFolders.id, name: documentFolders.name, linkedPath: documentFolders.linkedPath })
     .from(documentFolders)
     .where(sql`${documentFolders.name} ILIKE ${`%${escaped}%`} ESCAPE '\\'`)
-    .limit(20);
-  return rows.flatMap((row) => {
+    .limit(100);
+  const hits = rows.flatMap((row) => {
     const path = pathOnly(row.linkedPath);
-    if (!parseRecordLink(path)) return [];
-    return [{ id: row.id, label: row.name, path }];
+    const link = parseRecordLink(path);
+    if (!link) return [];
+    return [{ id: row.id, label: row.name, path, link }];
   });
+  const wanted = new Map<RecordKind, number[]>();
+  for (const hit of hits) remember(wanted, hit.link.kind, hit.link.id);
+  const alive = await loadAlive(db, wanted);
+  return hits
+    .filter((hit) => alive.has(aliveKey(hit.link.kind, hit.link.id)))
+    .slice(0, 20)
+    .map(({ id, label, path }) => ({ id, label, path }));
 }
