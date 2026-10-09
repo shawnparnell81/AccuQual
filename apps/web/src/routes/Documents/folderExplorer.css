@@ -1,0 +1,129 @@
+/*
+ * Folder Explorer fills the workspace content box. The page scroller stays
+ * still; the tree and the contents pane are the only vertical scrollers,
+ * and only when their own content is taller than that pane.
+ */
+
+div:has(> .page-enter > .folder-explorer) {
+  overflow: hidden;
+}
+
+.page-enter:has(> .folder-explorer) {
+  position: relative;
+  box-sizing: border-box;
+  width: calc(100% + 2rem);
+  max-width: none;
+  height: calc(100% + 2.5rem);
+  min-height: 0;
+  margin: -1.25rem -1rem;
+}
+
+@media (min-width: 640px) {
+  .page-enter:has(> .folder-explorer) {
+    width: calc(100% + 3.5rem);
+    margin-left: -1.75rem;
+    margin-right: -1.75rem;
+  }
+}
+
+.folder-explorer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.75rem 1rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.folder-explorer-board {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0.75rem;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.folder-explorer-pane {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.folder-explorer-pool {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(12rem, 36%);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* FolderPathBar's own bottom margin stacks on the pane gap and forces a scrollbar. */
+.folder-explorer .folder-path-bar {
+  margin-bottom: 0;
+}
+
+/* The details grid has a wide minimum. Inside this full-page layout the
+   columns shrink so the list does not add a second scrollbar beside the pane. */
+.folder-explorer [data-testid="folder-details"],
+.folder-explorer [data-testid="library-pool-details"] {
+  overflow-x: hidden;
+}
+
+.folder-explorer [data-testid="folder-details"] > [role="table"],
+.folder-explorer [data-testid="library-pool-details"] > [role="table"] {
+  min-width: 0;
+}
+
+.folder-explorer [data-testid="folder-details"] [role="row"] {
+  grid-template-columns: minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
+}
+
+.folder-explorer [data-testid="library-pool-details"] [role="row"] {
+  grid-template-columns: minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
+}
+
+.folder-explorer [data-testid="library-pool-details"] [role="row"]:has(> :nth-child(7)) {
+  grid-template-columns: 1.75rem minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
+}
+
+@media (max-width: 767px) {
+  .folder-explorer-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+}
+
+@media print {
+  div:has(> .page-enter > .folder-explorer),
+  .page-enter:has(> .folder-explorer) {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .folder-explorer,
+  .folder-explorer-board,
+  .folder-explorer-pane,
+  .folder-explorer-pool {
+    position: static !important;
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
