@@ -25,6 +25,22 @@ import { groupDrafts } from "../../lib/formDrafts";
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
 
+function httpStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object" || !("response" in error)) return undefined;
+  const status = (error as { response?: { status?: number } }).response?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+/** One retry. A gateway 502 on begin-edit was leaving the form locked. */
+async function postBeginEdit(formId: number): Promise<void> {
+  try {
+    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+  } catch (error) {
+    if (httpStatus(error) !== 502) throw error;
+    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+  }
+}
+
 /**
  * The generic QMS Simple Form record page — one real, editable, printable
  * page reused by all 35 "ACCUQUAL Forms" batch form types sharing the
@@ -56,7 +72,7 @@ export function QmsFormRecordPage() {
     }
     let cancelled = false;
     setArmed(false);
-    void apiClient.post(`/qms-forms/${formId}/begin-edit`).finally(() => {
+    void postBeginEdit(formId).finally(() => {
       if (!cancelled) setArmed(true);
     });
     return () => {
@@ -132,7 +148,31 @@ export function QmsFormRecordPage() {
     return run;
   }
 
+  function savedHeader(field: string): string {
+    if (field === "effectiveDate") return loadedRecord.effectiveDate ? loadedRecord.effectiveDate.slice(0, 10) : "";
+    const value = loadedRecord[field as keyof QmsForm];
+    return typeof value === "string" ? value : "";
+  }
+
+  function captureFocusedDraft() {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) return;
+    const column = el.dataset.qmsColumn;
+    const rowId = el.dataset.qmsRow;
+    const field = el.dataset.qmsField;
+    if (rowId && column) {
+      const row = loadedRecord.rows?.find((item) => String(item.id) === rowId);
+      const saved = row?.data?.[column] ?? "";
+      noteDraft(`row:${rowId}:${column}`, el.value === saved ? null : el.value);
+      return;
+    }
+    if (field === "formNo" || field === "effectiveDate" || field === "preparedBy" || field === "approvedBy" || field === "additionalComments") {
+      noteDraft(field, el.value === savedHeader(field) ? null : el.value, saveHeader(field));
+    }
+  }
+
   async function flushDrafts() {
+    captureFocusedDraft();
     const grouped = groupDrafts(drafts.current);
     for (const [key, value] of grouped.fields) {
       const save = savers.current.get(key);
@@ -144,9 +184,7 @@ export function QmsFormRecordPage() {
       }
     }
     for (const { rowId, cols } of grouped.rows) {
-      const row = loadedRecord.rows?.find((item) => item.id === rowId);
-      const data = { ...(row?.data ?? {}), ...cols };
-      await patchRow.mutateAsync({ rowId, data });
+      await patchRow.mutateAsync({ rowId, data: cols });
       for (const [column, value] of Object.entries(cols)) {
         const key = `row:${rowId}:${column}`;
         if (drafts.current.get(key) === value) {
@@ -180,7 +218,7 @@ export function QmsFormRecordPage() {
 
   async function startEdit() {
     if (!canEdit) return;
-    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+    await postBeginEdit(formId);
     formLock.unlock();
     await queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
   }
@@ -237,11 +275,11 @@ export function QmsFormRecordPage() {
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <HeaderField label="Form No." value={record.formNo} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("formNo", value, saveHeader("formNo"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="formNo" label="Form No." value={record.formNo} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("formNo", value, saveHeader("formNo"))} onCommit={() => void commitDrafts()} />
           <HeaderField label="Revision" value={record.revision || "A"} readOnly />
-          <HeaderField label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("effectiveDate", value, saveHeader("effectiveDate"))} onCommit={() => void commitDrafts()} />
-          <HeaderField label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("preparedBy", value, saveHeader("preparedBy"))} onCommit={() => void commitDrafts()} />
-          <HeaderField label="Approved By" value={record.approvedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("approvedBy", value, saveHeader("approvedBy"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="effectiveDate" label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("effectiveDate", value, saveHeader("effectiveDate"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="preparedBy" label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("preparedBy", value, saveHeader("preparedBy"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="approvedBy" label="Approved By" value={record.approvedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("approvedBy", value, saveHeader("approvedBy"))} onCommit={() => void commitDrafts()} />
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Status</span>
             <div className="flex flex-wrap gap-3 pt-1">
@@ -331,6 +369,7 @@ export function QmsFormRecordPage() {
 }
 
 function HeaderField({
+  field,
   label,
   value,
   onDraft,
@@ -338,6 +377,7 @@ function HeaderField({
   type = "text",
   readOnly = false,
 }: {
+  field?: string;
   label: string;
   value: string | null | undefined;
   onDraft?: (value: string | null) => void;
@@ -353,12 +393,15 @@ function HeaderField({
         type={type}
         defaultValue={saved}
         readOnly={readOnly}
+        data-qms-field={field}
         onChange={(event) => {
           if (readOnly) return;
           onDraft?.(event.target.value === saved ? null : event.target.value);
         }}
-        onBlur={() => {
-          if (!readOnly) onCommit?.();
+        onBlur={(event) => {
+          if (readOnly) return;
+          onDraft?.(event.currentTarget.value === saved ? null : event.currentTarget.value);
+          onCommit?.();
         }}
         className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary read-only:bg-muted print:border-black print:bg-white print:text-black"
       />
@@ -402,25 +445,33 @@ function QmsRow({
                   ? {
                       value: row.data.signatureRequired === "no" ? "no" : "yes",
                       disabled: readOnly,
-                      onChange: (next: SignatureChoice) => onPatch({ ...row.data, signatureRequired: next }),
+                      onChange: (next: SignatureChoice) => onPatch({ signatureRequired: next }),
                     }
                   : undefined
               }
               onSign={onSign}
             />
           ) : (
-            <input
+            <textarea
               defaultValue={row.data[col.key] ?? ""}
               readOnly={readOnly}
+              rows={1}
+              title={row.data[col.key] ?? ""}
+              data-qms-row={row.id}
+              data-qms-column={col.key}
               onChange={(event) => {
+                event.currentTarget.title = event.currentTarget.value;
                 if (readOnly) return;
                 const next = event.target.value;
                 onDraft?.(col.key, next === (row.data[col.key] ?? "") ? null : next);
               }}
-              onBlur={() => {
-                if (!readOnly) onCommit?.();
+              onBlur={(event) => {
+                if (readOnly) return;
+                const next = event.currentTarget.value;
+                onDraft?.(col.key, next === (row.data[col.key] ?? "") ? null : next);
+                onCommit?.();
               }}
-              className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary read-only:bg-muted print:text-black"
+              className="min-h-[2.25rem] w-full resize-y whitespace-pre-wrap break-words bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary read-only:bg-muted print:text-black"
             />
           )}
         </td>

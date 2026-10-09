@@ -122,18 +122,18 @@ describe("open quality work", () => {
     const work = buildOpenWork(
       input({
         validation: [
-          { id: 1, formType: "csa", data: { formType: "csa", cells: {} }, createdAt: daysAgo(2), updatedAt: null },
-          { id: 2, formType: "air_strut", data: { formType: "air_strut", authorizedSignature: "Dana Wells" }, createdAt: daysAgo(2), updatedAt: null },
-          { id: 3, formType: "air_strut", data: { formType: "air_strut" }, createdAt: daysAgo(6), updatedAt: null },
+          { id: 1, formType: "csa", data: { formType: "csa", cells: {} }, createdAt: daysAgo(2), updatedAt: daysAgo(1) },
+          { id: 2, formType: "air_strut", data: { formType: "air_strut", authorizedSignature: "Dana Wells" }, createdAt: daysAgo(2), updatedAt: daysAgo(1) },
+          { id: 3, formType: "air_strut", data: { formType: "air_strut" }, createdAt: daysAgo(6), updatedAt: daysAgo(1) },
         ],
         forms: [
-          { id: 10, formType: "first_article", data: { cells: { F3: "PN-10" } }, createdAt: daysAgo(1), updatedAt: null },
-          { id: 11, formType: "salt_spray", data: { cells: { B6: "Lot 4" }, testedSignature: "Shawn" }, createdAt: daysAgo(4), updatedAt: null },
-          { id: 12, formType: "salt_spray", data: { approvedSignature: "Shawn" }, createdAt: daysAgo(4), updatedAt: null },
-          { id: 13, formType: "prototype_strut", data: { cells: { B8: "Strut A" }, engineeringSignoffSignature: "Shawn" }, createdAt: daysAgo(3), updatedAt: null },
-          { id: 14, formType: "prototype_strut", data: { cells: { D8: "Strut B" } }, createdAt: daysAgo(9), updatedAt: null },
-          { id: 15, formType: "engineering_change", data: { workflow: { status: "closed" }, cells: { B6: "Done" } }, createdAt: daysAgo(1), updatedAt: null },
-          { id: 16, formType: "engineering_change", data: { cells: { B6: "Housing", B7: "Job 2" } }, createdAt: daysAgo(5), updatedAt: null },
+          { id: 10, formType: "first_article", data: { cells: { F3: "PN-10" } }, createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+          { id: 11, formType: "salt_spray", data: { cells: { B6: "Lot 4" }, testedSignature: "Shawn" }, createdAt: daysAgo(4), updatedAt: daysAgo(1) },
+          { id: 12, formType: "salt_spray", data: { approvedSignature: "Shawn" }, createdAt: daysAgo(4), updatedAt: daysAgo(1) },
+          { id: 13, formType: "prototype_strut", data: { cells: { B8: "Strut A" }, engineeringSignoffSignature: "Shawn" }, createdAt: daysAgo(3), updatedAt: daysAgo(1) },
+          { id: 14, formType: "prototype_strut", data: { cells: { D8: "Strut B" } }, createdAt: daysAgo(9), updatedAt: daysAgo(1) },
+          { id: 15, formType: "engineering_change", data: { workflow: { status: "closed" }, cells: { B6: "Done" } }, createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+          { id: 16, formType: "engineering_change", data: { cells: { B6: "Housing", B7: "Job 2" } }, createdAt: daysAgo(5), updatedAt: daysAgo(1) },
         ],
         changes: [
           { id: 3, title: "Paint spec", status: "under_review", requestedBy: 7, createdAt: daysAgo(2), updatedAt: null },

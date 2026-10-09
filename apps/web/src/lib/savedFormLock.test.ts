@@ -3,9 +3,9 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SavedFormLockBar } from "../components/forms/SavedFormLockBar.tsx";
-import { afterEditClick, afterSaveOrCancel, isFreshFormOpen, openSavedForm, savedFieldsEditable } from "./savedFormLock.ts";
+import { afterEditClick, afterSave, afterSaveOrCancel, isFreshFormOpen, openSavedForm, savedFieldsEditable } from "./savedFormLock.ts";
 
-test("a saved form opens read-only, Edit unlocks it, and Save or Cancel locks it again", () => {
+test("a saved form opens read-only, Edit unlocks it, Save stays editable, and Done or Cancel locks it", () => {
   const opened = openSavedForm();
   assert.equal(opened, "locked");
   assert.equal(savedFieldsEditable(opened, true), false);
@@ -14,9 +14,13 @@ test("a saved form opens read-only, Edit unlocks it, and Save or Cancel locks it
   assert.equal(editing, "editing");
   assert.equal(savedFieldsEditable(editing, true), true);
 
-  const saved = afterSaveOrCancel();
-  assert.equal(saved, "locked");
-  assert.equal(savedFieldsEditable(saved, true), false);
+  const saved = afterSave();
+  assert.equal(saved, "editing");
+  assert.equal(savedFieldsEditable(saved, true), true);
+
+  const done = afterSaveOrCancel();
+  assert.equal(done, "locked");
+  assert.equal(savedFieldsEditable(done, true), false);
 });
 
 test("someone without edit permission stays on the locked form", () => {

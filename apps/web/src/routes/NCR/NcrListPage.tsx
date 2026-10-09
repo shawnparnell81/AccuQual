@@ -28,6 +28,36 @@ import { showRecordNumber } from "../../lib/userRecordNumber";
 
 const NCR_STATUSES = ["ncr_created", "contain", "disposition", "fix", "verify", "closed"] as const;
 
+function ncrClassification(n: Ncr): "Minor" | "Major" | "Critical" | null {
+  if (n.classification === "Minor" || n.classification === "Major" || n.classification === "Critical") return n.classification;
+  if (n.severity === "low") return "Minor";
+  if (n.severity === "medium" || n.severity === "high") return "Major";
+  if (n.severity === "critical") return "Critical";
+  return null;
+}
+
+/** Filter bucket for a row whose classification was set on the form and whose severity column is still empty. */
+function listedSeverity(n: Ncr): string | null {
+  if (n.severity) return n.severity;
+  const classification = ncrClassification(n);
+  if (classification === "Minor") return "low";
+  if (classification === "Major") return "high";
+  if (classification === "Critical") return "critical";
+  return null;
+}
+
+function whatHappenedText(n: Ncr): string {
+  const happened = n.whatHappened?.trim();
+  if (happened) return happened;
+  const description = n.description?.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  return description || n.title;
+}
+
+function csvCell(value: string | number | null | undefined): string {
+  const text = value == null ? "" : String(value);
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 
 interface NcrTriageSuggestion {
@@ -88,24 +118,29 @@ export function NcrListPage() {
   const filtered = useMemo(
     () =>
       ncrs.filter(
-        (n) => (!severityFilter || n.severity === severityFilter) && (!statusFilter || ncrStepKey(n.status) === statusFilter)
+        (n) => (!severityFilter || listedSeverity(n) === severityFilter) && (!statusFilter || ncrStepKey(n.status) === statusFilter)
       ),
     [ncrs, severityFilter, statusFilter]
   );
 
   const columns: Column<Ncr>[] = [
     { header: "NCR No.", accessor: (n) => showRecordNumber(n.recordNumber) || "" },
-    { header: "What happened", accessor: (n) => n.title },
+    { header: "What happened", accessor: (n) => whatHappenedText(n) },
     { header: "State", accessor: (n) => <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} /> },
     { header: "Owner", accessor: (n) => label(n.assignedTo) },
     { header: "Due", accessor: (n) => duePhrase(n.dueDate, ncrStepKey(n.status) === "closed") },
-    { header: "Severity", accessor: (n) => <StatusBadge value={n.severity} /> },
+    { header: "Severity", accessor: (n) => {
+      const classification = ncrClassification(n);
+      return classification ? <StatusBadge value={classification.toLowerCase()} label={classification} /> : <StatusBadge value={n.severity} />;
+    } },
     { header: "Opened", accessor: (n) => formatDate(n.createdAt) },
   ];
 
   function exportCsv() {
-    const rows = filtered.map((n) => `${n.id},${n.title},${n.severity},${n.workflow?.currentStep ?? ncrStepLabel(n.status)}`).join("\n");
-    const blob = new Blob([`id,title,severity,status\n${rows}`], { type: "text/csv" });
+    const rows = filtered
+      .map((n) => [n.id, whatHappenedText(n), ncrClassification(n) ?? "", n.workflow?.currentStep ?? ncrStepLabel(n.status)].map(csvCell).join(","))
+      .join("\n");
+    const blob = new Blob([`id,what_happened,classification,status\n${rows}`], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -171,7 +206,7 @@ export function NcrListPage() {
       {view === "board" ? (
         <>
           <p className="text-xs text-muted-foreground">Drag an issue to the next column to move it forward. Each step asks for what it needs first.</p>
-          <NcrBoard ncrs={isLoading ? [] : ncrs.filter((n) => !severityFilter || n.severity === severityFilter)} canEdit={canEdit} />
+          <NcrBoard ncrs={isLoading ? [] : ncrs.filter((n) => !severityFilter || listedSeverity(n) === severityFilter)} canEdit={canEdit} />
         </>
       ) : (
       <>

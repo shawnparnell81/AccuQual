@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { exportFormPdfResult } from "../../api/formHooks";
 import { PdfExportActions } from "../../components/records/PdfExportActions";
@@ -7,6 +8,7 @@ import type { Ncr, Capa, Rma, WorkOrder } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useWorkflowHistory } from "../../hooks/useWorkflowHistory";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -37,6 +39,7 @@ import { NcrQuarantineSection, ON_HOLD_BLOCK_MESSAGE } from "./NcrQuarantineSect
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { FormSignProvider } from "../../components/forms/formSign";
+import { ncrRecordedSteps } from "../../lib/ncrRecord";
 
 const FORM_TYPE = "ncr";
 
@@ -88,15 +91,22 @@ export function NcrWorkspacePage() {
   // right-pane preview keeps showing stale (blank) data until a reload.
   const formDataKey: unknown[][] = [["form-data", FORM_TYPE, ncrId]];
   const workflowInvalidateKeys = [...historyKey, ...formDataKey];
-  const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded.", invalidateKeys: workflowInvalidateKeys });
-  const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded.", invalidateKeys: workflowInvalidateKeys });
-  const dispositionStepAction = useWorkflowAction("ncr", "disposition-step", { successMessage: "Disposition recorded.", invalidateKeys: workflowInvalidateKeys });
-  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Fix recorded.", invalidateKeys: workflowInvalidateKeys });
-  const verifyAction = useWorkflowAction("ncr", "verify", { successMessage: "Verification recorded.", invalidateKeys: workflowInvalidateKeys });
-  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: workflowInvalidateKeys });
+  const queryClient = useQueryClient();
+  const { data: history } = useWorkflowHistory("ncr", ncrId);
+  function rememberStep(data: unknown) {
+    if (!data || typeof data !== "object" || !("status" in data)) return;
+    queryClient.setQueryData(["ncr", ncrId], data);
+  }
+  const stepOptions = { invalidateKeys: workflowInvalidateKeys };
+  const containmentAction = useWorkflowAction<{ id: number; containment: string }>("ncr", "containment", { successMessage: "Containment recorded.", ...stepOptions });
+  const rootCauseAction = useWorkflowAction<{ id: number; rootCause: string }>("ncr", "root-cause", { successMessage: "Root cause recorded.", ...stepOptions });
+  const dispositionStepAction = useWorkflowAction<{ id: number; note?: string }>("ncr", "disposition-step", { successMessage: "Disposition recorded.", ...stepOptions });
+  const correctiveActionAction = useWorkflowAction<{ id: number; correctiveAction: string }>("ncr", "corrective-action", { successMessage: "Fix recorded.", ...stepOptions });
+  const verifyAction = useWorkflowAction<{ id: number; verification: string }>("ncr", "verify", { successMessage: "Verification recorded.", ...stepOptions });
+  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", ...stepOptions });
 
   const layout = getFormLayout(FORM_TYPE);
-  const { isLoading: formLoading, values, updateField, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  const { isLoading: formLoading, values, updateField, previewField, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
   const [formSaveNote, setFormSaveNote] = useState<string | null>(null);
   const [exportId, setExportId] = useState<string | null>(null);
   const { data: linkedCapaRows = [] } = capaHooks.useList({ ncrId });
@@ -124,7 +134,17 @@ export function NcrWorkspacePage() {
   const owner = label(ncr.assignedTo);
   const step = ncrStepKey(ncr.status);
   const closed = step === "closed";
-  const stepLabel = ncr.workflow?.currentStep ?? ncrStepLabel(ncr.status);
+  const stepIndex = ncrLoopIndex(step);
+  const stepLabel = ncrStepLabel(step);
+  const recorded = ncrRecordedSteps(ncr, history);
+  const stepsReadOnly = closed || !canEdit;
+  const description = firstLine(values.nonconformanceDescription) || firstLine(ncr.description);
+  function saveForm() {
+    setFormSaveNote(null);
+    void saveNow()
+      .then(() => setFormSaveNote("Form saved"))
+      .catch(() => setFormSaveNote("Couldn't save this form."));
+  }
 
   return (
     <FormSignProvider formType={FORM_TYPE} entityId={ncrId}>
@@ -142,7 +162,11 @@ export function NcrWorkspacePage() {
             label="NCR No."
             value={ncr.recordNumber}
             canEdit={canEdit}
-            onSave={(next) => updateNcr.mutateAsync({ id: ncrId, recordNumber: next.trim() || null })}
+            onSave={(next) => {
+              const trimmed = next.trim();
+              previewField("ncrNumber", trimmed);
+              return updateNcr.mutateAsync({ id: ncrId, recordNumber: trimmed || null });
+            }}
           />
         }
         stateValue={step}
@@ -186,24 +210,9 @@ export function NcrWorkspacePage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={isSaving} onEdit={() => formLock.onEdit()} onSave={saveForm} onLock={formLock.lock} />
             <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" allowed={permitted} assignedOnly />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
-            {canEdit && (
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={() => {
-                  setFormSaveNote(null);
-                  void saveNow()
-                    .then(() => setFormSaveNote("Form saved"))
-                    .catch(() => setFormSaveNote("Couldn't save this form."));
-                }}
-                className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
-              >
-                {isSaving ? "Saving…" : "Save"}
-              </button>
-            )}
             <StatusBadge value={ncr.severity} />
             <button onClick={() => setShowHistory(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               History
@@ -224,7 +233,7 @@ export function NcrWorkspacePage() {
                   toast.error(ON_HOLD_BLOCK_MESSAGE);
                   return;
                 }
-                closeAction.mutate({ id: ncrId });
+                closeAction.mutate({ id: ncrId }, { onSuccess: rememberStep });
               }}
               visible={step === "verify"}
               variant="primary"
@@ -251,61 +260,64 @@ export function NcrWorkspacePage() {
         {/* Left pane — status/linking controls + the real editable form. */}
         <div className="no-print flex flex-col gap-4">
           <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-            <p className="text-sm">{ncr.description || "No description provided."}</p>
+            {description ? <p className="text-sm">{description}</p> : null}
             <ActionForm
               label="Containment"
-              readOnly={!canEdit}
-              value={ncr.containment}
-              onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value })}
+              readOnly={stepsReadOnly}
+              value={recorded.containment}
+              onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value }, { onSuccess: rememberStep })}
               assistant={{
                 module: "ncr",
                 recordId: ncrId,
                 buildPrompt: () =>
-                  `Recommend a containment action for ${recordHeading("NCR", ncr.recordNumber)} ("${ncr.title}"). Problem: ${ncr.description || "not described"}.` +
+                  `Recommend a containment action for ${recordHeading("NCR", ncr.recordNumber)} ("${ncr.title}"). Problem: ${description || "not described"}.` +
                   " Keep it specific and actionable — this is a draft for a quality engineer to review and edit, not a final record.",
               }}
             />
-            {step === "ncr_created" ? (
+            {stepIndex === 0 && !closed ? (
               <p className="text-sm text-muted-foreground">Record containment first. The cause and the fix stay locked until the parts are held.</p>
-            ) : (
+            ) : null}
+            {stepIndex > 0 && (
               <div className="border-t border-border pt-4">
                 <ActionForm
                   label="Cause"
-                  readOnly={!canEdit}
-                  value={ncr.rootCause}
-                  onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
-                  structuredRootCause={{ ncrId: ncr.id, title: ncr.title, description: ncr.description, containment: ncr.containment }}
+                  readOnly={stepsReadOnly}
+                  value={recorded.cause}
+                  onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value }, { onSuccess: rememberStep })}
+                  structuredRootCause={stepsReadOnly ? undefined : { ncrId: ncr.id, title: ncr.title, description: ncr.description, containment: ncr.containment }}
                 />
               </div>
             )}
-            {step === "contain" && (
+            {stepIndex >= 1 && (
               <div className="border-t border-border pt-4">
                 <ActionForm
                   label="Disposition"
-                  readOnly={!canEdit}
-                  value=""
-                  onSubmit={(value) => dispositionStepAction.mutate({ id: ncrId, ...(value.trim() ? { note: value.trim() } : {}) })}
+                  readOnly={stepsReadOnly || stepIndex !== 1}
+                  value={recorded.disposition}
+                  onSubmit={(value) => dispositionStepAction.mutate({ id: ncrId, note: value.trim() }, { onSuccess: rememberStep })}
                 />
-                <p className="text-xs text-muted-foreground">This moves the NCR to Disposition. Quarantine decisions stay in the section above.</p>
+                {stepIndex === 1 && !closed ? (
+                  <p className="text-xs text-muted-foreground">This moves the NCR to Disposition. Quarantine decisions stay in the section above.</p>
+                ) : null}
               </div>
             )}
-            {step !== "ncr_created" && step !== "contain" && (
+            {stepIndex >= 2 && (
               <div className="border-t border-border pt-4">
                 <ActionForm
                   label="Fix"
-                  readOnly={!canEdit}
-                  value={ncr.correctiveAction}
-                  onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+                  readOnly={stepsReadOnly}
+                  value={recorded.fix}
+                  onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value }, { onSuccess: rememberStep })}
                 />
               </div>
             )}
-            {step === "fix" && (
+            {stepIndex >= 3 && (
               <div className="border-t border-border pt-4">
                 <ActionForm
                   label="Verify"
-                  readOnly={!canEdit}
-                  value=""
-                  onSubmit={(value) => verifyAction.mutate({ id: ncrId, verification: value })}
+                  readOnly={stepsReadOnly || stepIndex !== 3}
+                  value={recorded.verify}
+                  onSubmit={(value) => verifyAction.mutate({ id: ncrId, verification: value }, { onSuccess: rememberStep })}
                 />
               </div>
             )}
@@ -346,6 +358,11 @@ interface NcrRootCauseSuggestion {
   suggestedCorrectiveActions: string[];
 }
 
+function firstLine(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
+}
+
 function ActionForm({
   label,
   value,
@@ -363,6 +380,9 @@ function ActionForm({
   readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
   return (
     <form
       className="flex flex-col gap-2"

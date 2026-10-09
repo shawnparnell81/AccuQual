@@ -86,6 +86,13 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
     return task;
   }
 
+  /** Show a server-owned value in the document immediately, without starting another save. */
+  function previewField(name: string, value: unknown) {
+    const next = { ...valuesRef.current, [name]: value };
+    valuesRef.current = next;
+    setValues(next);
+  }
+
   function updateField(name: string, value: unknown) {
     editGeneration.current += 1;
     const next = { ...valuesRef.current, [name]: value };
@@ -107,5 +114,5 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
     await flushSave();
   }
 
-  return { formData, isLoading, values, updateField, saveNow, isSaving: saveForm.isPending };
+  return { formData, isLoading, values, updateField, previewField, saveNow, isSaving: saveForm.isPending };
 }

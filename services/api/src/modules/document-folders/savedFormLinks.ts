@@ -289,8 +289,6 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   for (const row of dcrRows) pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo, row.updatedAt != null);
   const riskRows = await db.select({ id: riskAssessments.id, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt }).from(riskAssessments);
   for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
-  const auditRows = await db.select({ id: audits.id, recordNumber: audits.recordNumber, createdAt: audits.createdAt, updatedAt: audits.updatedAt }).from(audits);
-  for (const row of auditRows) pushCopy(copies, "audit-plan", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
   const trainingRows = await db.select({ id: trainingCourses.id, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt }).from(trainingCourses);
   for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null, row.updatedAt != null);
   const changeRows = await db.select({ id: changeRequests.id, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt, updatedAt: changeRequests.updatedAt }).from(changeRequests);

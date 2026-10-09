@@ -77,6 +77,10 @@ export interface Ncr {
   status: NcrStep | "open" | "contained" | "investigating" | "corrective_action";
   workflow?: NcrWorkflow;
   severity: "low" | "medium" | "high" | "critical" | null;
+  /** Form classification (Minor/Major/Critical), filled in on the NCR list. */
+  classification?: "Minor" | "Major" | "Critical" | null;
+  /** First line of the nonconformance description, for the list. */
+  whatHappened?: string;
   containment: string | null;
   rootCause: string | null;
   correctiveAction: string | null;

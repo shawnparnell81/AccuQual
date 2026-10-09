@@ -12,12 +12,14 @@ describe("clear auto record numbers migration", () => {
     expect(entry).toMatchObject({ idx: 116, tag: "0116_clear_auto_record_numbers" });
     expect(journal.entries.find((row) => row.tag === "0115_pin_saved_form_folders")?.idx).toBe(115);
     expect(entry?.when).toBeGreaterThan(journal.entries.find((row) => row.idx === 115)?.when ?? 0);
-    expect(sql).toContain("'NCR-' || id::text");
-    expect(sql).toContain("'VAL-' || id::text");
-    expect(sql).toContain("'SCAR-' || id::text");
+    expect(sql).toContain("'NCR-' || row.id::text");
+    expect(sql).toContain("'VAL-' || row.id::text");
+    expect(sql).toContain("'SCAR-' || row.id::text");
     expect(sql).toContain("FAI-");
     expect(sql).toContain("regexp_replace");
-    expect(sql).toContain('ADD COLUMN IF NOT EXISTS "updated_at"');
+    expect(sql).toContain("audit_trail");
+    expect(sql).toContain("numberEdit");
+    expect(sql).not.toContain('ADD COLUMN IF NOT EXISTS "updated_at"');
     expect(sql).not.toMatch(/DELETE FROM/i);
     expect(sql).not.toMatch(/DROP TABLE/i);
   });

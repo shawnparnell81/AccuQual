@@ -170,14 +170,14 @@ describe("signature required choice", () => {
       assignments: [],
       equipment: [],
       validation: [
-        { id: 1, formType: "fuel_injector", data: { formType: "fuel_injector", [SIGNATURE_REQUIRED_KEY]: { authorizedSignature: "no" } }, createdAt: now, updatedAt: null },
-        { id: 2, formType: "fuel_injector", data: { formType: "fuel_injector", [SIGNATURE_REQUIRED_KEY]: { furtherSignature: "no" } }, createdAt: now, updatedAt: null },
-        { id: 3, formType: "air_strut", data: { formType: "air_strut", [SIGNATURE_REQUIRED_KEY]: { authorizedSignature: "no" } }, createdAt: now, updatedAt: null },
+        { id: 1, formType: "fuel_injector", data: { formType: "fuel_injector", [SIGNATURE_REQUIRED_KEY]: { authorizedSignature: "no" } }, createdAt: now, updatedAt: now },
+        { id: 2, formType: "fuel_injector", data: { formType: "fuel_injector", [SIGNATURE_REQUIRED_KEY]: { furtherSignature: "no" } }, createdAt: now, updatedAt: now },
+        { id: 3, formType: "air_strut", data: { formType: "air_strut", [SIGNATURE_REQUIRED_KEY]: { authorizedSignature: "no" } }, createdAt: now, updatedAt: now },
       ],
       forms: [
-        { id: 11, formType: "salt_spray", data: { [SIGNATURE_REQUIRED_KEY]: { approvedSignature: "no" } }, createdAt: now, updatedAt: null },
-        { id: 12, formType: "salt_spray", data: { [SIGNATURE_REQUIRED_KEY]: { testedSignature: "no" } }, createdAt: now, updatedAt: null },
-        { id: 13, formType: "prototype_strut", data: { [SIGNATURE_REQUIRED_KEY]: { engineeringSignoffSignature: "no" } }, createdAt: now, updatedAt: null },
+        { id: 11, formType: "salt_spray", data: { [SIGNATURE_REQUIRED_KEY]: { approvedSignature: "no" } }, createdAt: now, updatedAt: now },
+        { id: 12, formType: "salt_spray", data: { [SIGNATURE_REQUIRED_KEY]: { testedSignature: "no" } }, createdAt: now, updatedAt: now },
+        { id: 13, formType: "prototype_strut", data: { [SIGNATURE_REQUIRED_KEY]: { engineeringSignoffSignature: "no" } }, createdAt: now, updatedAt: now },
       ],
     };
     const work = buildOpenWork(input);

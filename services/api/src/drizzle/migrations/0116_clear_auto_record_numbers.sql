@@ -1,27 +1,141 @@
--- Drop the numbers migration 0113 wrote from each row's id.
--- A number someone typed stays, unless it is exactly that prefix plus this row's id.
+-- Clear a number only when it is exactly the prefix plus this row's id,
+-- migration 0113 wrote it, and nobody typed a number for that record.
+-- A typed number stays, even when the text is prefix+id.
+-- User-entered means a create audit that already stored the number,
+-- or any audit with numberEdit (the field a person changed).
+-- 0113 wrote prefix+id in SQL and did not write an audit row.
+-- This file does not add columns. Deploys before it runs keep working.
 -- Saved-copy file names that end in _{that id}_{date} drop the id.
--- Audits and equipment record a save time. Rows that already exist count as saved.
 
-UPDATE "ncr" SET "record_number" = NULL WHERE btrim("record_number") = 'NCR-' || id::text;
+UPDATE "ncr" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'NCR-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'NCR'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "capa" SET "record_number" = NULL WHERE btrim("record_number") = 'CAPA-' || id::text;
+UPDATE "capa" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'CAPA-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'CAPA'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "eight_d" SET "record_number" = NULL WHERE btrim("record_number") = '8D-' || id::text;
+UPDATE "eight_d" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = '8D-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = '8D Report'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "audits" SET "record_number" = NULL WHERE btrim("record_number") = 'Audit #' || id::text;
+UPDATE "audits" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'Audit #' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'Audit'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "complaints" SET "record_number" = NULL WHERE btrim("record_number") = 'Complaint #' || id::text;
+UPDATE "complaints" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'Complaint #' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'Complaint'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "change_requests" SET "record_number" = NULL WHERE btrim("record_number") = 'CHG-' || id::text;
+UPDATE "change_requests" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'CHG-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'Change request'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "ppap_packages" SET "record_number" = NULL WHERE btrim("record_number") = 'PPAP-' || id::text;
+UPDATE "ppap_packages" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'PPAP-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'PPAP package'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "risk_assessments" SET "record_number" = NULL WHERE btrim("record_number") = 'RISK-' || id::text;
+UPDATE "risk_assessments" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'RISK-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'RiskAssessment'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "work_orders" SET "record_number" = NULL WHERE btrim("record_number") = 'WO-' || id::text;
+UPDATE "work_orders" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'WO-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'WorkOrder'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "validation_reports" SET "record_number" = NULL WHERE btrim("record_number") = 'VAL-' || id::text;
+UPDATE "validation_reports" AS row
+SET "record_number" = NULL
+WHERE btrim(row."record_number") = 'VAL-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'Validation Report'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
 UPDATE "iso_quality_forms" AS row
 SET "record_number" = NULL
@@ -31,9 +145,29 @@ WHERE row."form_type" IN ('first_article', 'engineering_change', 'salt_spray', '
     WHEN 'engineering_change' THEN 'ECR-' || row.id::text
     WHEN 'salt_spray' THEN 'TRP-' || row.id::text
     WHEN 'prototype_strut' THEN 'TRP-' || row.id::text
-  END;
+  END
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'ISO form'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'recordNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
-UPDATE "scar_forms" SET "scar_number" = NULL WHERE btrim("scar_number") = 'SCAR-' || id::text;
+UPDATE "scar_forms" AS row
+SET "scar_number" = NULL
+WHERE btrim(row."scar_number") = 'SCAR-' || row.id::text
+  AND NOT EXISTS (
+    SELECT 1 FROM "audit_trail" AS audit
+    WHERE audit."entity_type" = 'ScarForm'
+      AND audit."entity_id" = row.id
+      AND (
+        audit."changes" ? 'numberEdit'
+        OR (audit."action" = 'create' AND nullif(btrim(audit."changes"->>'scarNumber'), '') IS NOT NULL)
+      )
+  );
 --> statement-breakpoint
 UPDATE "document_folders"
 SET "name" = regexp_replace(
@@ -43,11 +177,3 @@ SET "name" = regexp_replace(
 )
 WHERE "linked_path" ~ '/[0-9]+$'
   AND "name" ~ ('_' || substring("linked_path" from '/([0-9]+)$') || '_[0-9]{4}-[0-9]{2}-[0-9]{2}$');
---> statement-breakpoint
-ALTER TABLE "audits" ADD COLUMN IF NOT EXISTS "updated_at" timestamp;
---> statement-breakpoint
-UPDATE "audits" SET "updated_at" = "created_at" WHERE "updated_at" IS NULL;
---> statement-breakpoint
-ALTER TABLE "equipment" ADD COLUMN IF NOT EXISTS "updated_at" timestamp;
---> statement-breakpoint
-UPDATE "equipment" SET "updated_at" = "created_at" WHERE "updated_at" IS NULL;

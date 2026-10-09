@@ -37,8 +37,9 @@ export function WorkflowHistoryPanel({
   title?: string;
   bare?: boolean;
 }) {
-  const { data, isLoading, isError, refetch, isFetching } = useWorkflowHistory(moduleName, recordId);
+  const { data, isPending, isSuccess, isError, refetch, isFetching } = useWorkflowHistory(moduleName, recordId);
   const deepLinkedId = useDeepLinkedEntryId();
+  const canLoad = typeof recordId === "number" && Number.isInteger(recordId) && recordId > 0;
 
   useEffect(() => {
     if (deepLinkedId === null || !data) return;
@@ -54,13 +55,13 @@ export function WorkflowHistoryPanel({
           <h3 className="flex items-center gap-2 text-sm font-medium">
             <History size={15} className="text-muted-foreground" /> {title}
           </h3>
-          {isFetching && !isLoading && <span className="text-xs text-muted-foreground">Refreshing…</span>}
+          {isFetching && !isPending && <span className="text-xs text-muted-foreground">Refreshing…</span>}
         </div>
       )}
 
-      {isLoading && <p className="text-sm text-muted-foreground">Loading history…</p>}
+      {canLoad && isPending && data === undefined && <p className="text-sm text-muted-foreground">Loading history…</p>}
 
-      {isError && (
+      {canLoad && isError && data === undefined && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span className="flex items-center gap-2">
             <AlertTriangle size={14} /> Couldn't load history.
@@ -71,9 +72,9 @@ export function WorkflowHistoryPanel({
         </div>
       )}
 
-      {!isLoading && !isError && entries.length === 0 && <p className="text-sm text-muted-foreground">No history yet — actions on this record will appear here.</p>}
+      {canLoad && isSuccess && entries.length === 0 && <p className="text-sm text-muted-foreground">No history yet — actions on this record will appear here.</p>}
 
-      {!isLoading && !isError && entries.length > 0 && (
+      {canLoad && isSuccess && entries.length > 0 && (
         <ul className="flex flex-col gap-3">
           {entries.map((entry) => (
             <WorkflowHistoryItem key={entry.id} entry={entry} highlighted={entry.id === deepLinkedId} />

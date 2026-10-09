@@ -1,15 +1,27 @@
 import type { Request, Response } from "express";
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { parseLimitOffset } from "./listQuery.js";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
-import { fileBlankCopy, fileOnFirstSave } from "../modules/document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave, patchIsNumberOnly } from "../modules/document-folders/defaultFormFiling.js";
 import { withFormEdits, withScalarEdits } from "../modules/forms/formEditAudit.js";
 import { applyRecordNumber, showRecordNumber, type RecordNumberSpec } from "../modules/records/userRecordNumber.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
 import type { Db } from "../lib/requestDb.js";
+
+/** A number-only edit is not a Save. Tables without updated_at are left alone so a deploy can run before that column exists. */
+function touchUpdatedAt(table: PgTable, patch: Record<string, unknown>): { updatedAt?: Date } {
+  if (!("updatedAt" in getTableColumns(table)) || patchIsNumberOnly(patch)) return {};
+  return { updatedAt: new Date() };
+}
+
+/** Empty after Zod strips unknown fields. Drizzle rejects an update with nothing to set. */
+function valuesToWrite(table: PgTable, patch: Record<string, unknown>): Record<string, unknown> | null {
+  const next = { ...patch, ...touchUpdatedAt(table, patch) };
+  return Object.keys(next).length === 0 ? null : next;
+}
 
 interface CrudOptions {
   entityName: string;
@@ -45,6 +57,8 @@ interface CrudOptions {
   recordNumber?: RecordNumberSpec;
   /** When set, a new row is filed into that blank's default form folder. */
   blankCreatePath?: string;
+  /** Adds list-only fields after the rows are loaded. The response stays an array. */
+  enrichList?: (rows: Record<string, unknown>[], req: Request) => Promise<Record<string, unknown>[]>;
 }
 
 /**
@@ -151,7 +165,8 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       const [countRow] = await req.db.select({ count: sql<number>`count(*)::int` }).from(table).where(where);
       res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
     }
-    res.json(rows);
+    const presented = options.enrichList ? await options.enrichList(rows as Record<string, unknown>[], req) : rows;
+    res.json(presented);
   });
 
   const getOne = asyncHandler(async (req: Request, res: Response) => {
@@ -218,11 +233,10 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
           row: existing,
         })
       : null;
-    const [updated] = await db
-      .update(table)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(where)
-      .returning();
+    const values = valuesToWrite(table, patch);
+    const [updated] = values
+      ? await db.update(table).set(values).where(where).returning()
+      : [existing];
     if (!updated) throw AppError.notFound(options.entityName);
     const rawChanges: Record<string, unknown> = numberChange
       ? { ...(req.body as Record<string, unknown>), ...numberChange, recordNumber: showRecordNumber(patch[options.recordNumber!.field]) }
@@ -297,11 +311,10 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       const where = sitePredicate
         ? and(eq(idCol as never, id), sitePredicate)
         : eq(idCol as never, id);
-      const [updated] = await db
-        .update(table)
-        .set({ ...clean, updatedAt: new Date() })
-        .where(where)
-        .returning();
+      const values = valuesToWrite(table, clean);
+      const [updated] = values
+        ? await db.update(table).set(values).where(where).returning()
+        : await db.select().from(table).where(where).limit(1);
       if (!updated) throw AppError.notFound(`${options.entityName} #${id}`);
       await recordAuditTrail(req.db!, {
         entityType: options.entityName,

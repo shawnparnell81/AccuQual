@@ -126,16 +126,26 @@ export async function fileOnFirstSave(
 ): Promise<void> {
   if (before.updatedAt != null) return;
   if (patchIsNumberOnly(patch)) return;
-  await fileBlankCopy(db, createPath, after, performedBy, "save");
+  // The first save can rename the blank. The folder is the one that was opened, not the new name.
+  const started = before as Record<string, unknown>;
+  const formKey = blankFormKeyForCreate(createPath, { ...after, ...started }) ?? blankFormKeyForCreate(createPath, after);
+  await fileBlankCopy(db, createPath, after, performedBy, "save", formKey);
 }
 
 /**
  * Starting a blank remembers the form number and does not put a copy in a folder.
  * The first Save files it. Save as files it into the folder the user picks.
  */
-export async function fileBlankCopy(db: Db, createPath: string, created: Record<string, unknown>, performedBy?: number, when: "start" | "save" = "start"): Promise<void> {
+export async function fileBlankCopy(
+  db: Db,
+  createPath: string,
+  created: Record<string, unknown>,
+  performedBy?: number,
+  when: "start" | "save" = "start",
+  knownKey?: string | null,
+): Promise<void> {
   const recordId = Number(created.id);
-  const formKey = blankFormKeyForCreate(createPath, created);
+  const formKey = knownKey ?? blankFormKeyForCreate(createPath, created);
   if (!formKey || RETIRED_FORM_FOLDER_KEYS.has(formKey) || !Number.isInteger(recordId) || recordId < 1) return;
   if (when === "start") {
     if (FILEABLE_FORM_KEYS.has(formKey)) await snapshotFormNumber(db, formKey, recordId);

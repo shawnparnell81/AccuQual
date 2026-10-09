@@ -68,7 +68,7 @@ export async function stampNewEcr(db: Db, created: Record<string, unknown>): Pro
     workflow: blankEcrWorkflow(),
     _formTemplate: { version: master.version, revision: master.revision, structureHash: master.structureHash },
   };
-  const [updated] = await db.update(isoQualityForms).set({ data, updatedAt: new Date() }).where(eq(isoQualityForms.id, id)).returning();
+  const [updated] = await db.update(isoQualityForms).set({ data }).where(eq(isoQualityForms.id, id)).returning();
   if (updated) Object.assign(created, updated);
 }
 

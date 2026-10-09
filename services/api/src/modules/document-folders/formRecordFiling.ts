@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
-import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
+import { isoQualityForms, type IsoFormType } from "../../drizzle/schema/isoQualityForms.js";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -227,6 +227,8 @@ export async function fileFormRecord(
     filing = created;
   }
 
+  await markFiledRecordSaved(db, formKey, recordId);
+
   const linkedPath = recordLinkedPath(formKey, recordId);
   if (filing.folderNodeId != null) {
     const [node] = await db.select().from(documentFolders).where(eq(documentFolders.id, filing.folderNodeId));
@@ -287,6 +289,21 @@ export async function fileFormRecord(
     performedBy,
   });
   return presentFiling(db, formKey, recordId, await loadFolders(db));
+}
+
+/** Filing is a save. A later edit must not create a second folder row, and repair must not drop this one. */
+async function markFiledRecordSaved(db: Db, formKey: string, recordId: number): Promise<void> {
+  const savedAt = new Date();
+  if (validationKindForKey(formKey)) {
+    await db.update(validationReports).set({ updatedAt: savedAt }).where(and(eq(validationReports.id, recordId), isNull(validationReports.updatedAt)));
+    return;
+  }
+  const formType = Object.entries(ISO_TYPE_TO_FORM_KEY).find(([, key]) => key === formKey)?.[0] as IsoFormType | undefined;
+  if (!formType) return;
+  await db
+    .update(isoQualityForms)
+    .set({ updatedAt: savedAt })
+    .where(and(eq(isoQualityForms.id, recordId), eq(isoQualityForms.formType, formType), isNull(isoQualityForms.updatedAt)));
 }
 
 export function filingQuery(formKey: unknown, recordId: unknown): { formKey: string; recordId: number } {

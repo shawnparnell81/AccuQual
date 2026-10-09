@@ -297,7 +297,9 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));
   const seeds = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed]));
 
-  const pinRows = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const pinRows = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId, folderNodeId: formFilings.folderNodeId }).from(formFilings);
+  const filedModule = new Set(pinRows.filter((row) => row.folderNodeId != null).map((row) => `${row.formKey}:${row.recordId}`));
+  const filedUnder = (keys: readonly string[], id: number) => keys.some((key) => filedModule.has(`${key}:${id}`));
   const pins = new Map<string, string>();
   const pinNamespace = (formKey: string): string | null => {
     for (const group of SHARED_GROUPS) {
@@ -396,8 +398,8 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const riskRows = await db
     .select({ id: riskAssessments.id, title: riskAssessments.title, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt })
     .from(riskAssessments);
-  const auditRows = await db.select({ id: audits.id, name: audits.name, recordNumber: audits.recordNumber, createdAt: audits.createdAt, updatedAt: audits.updatedAt }).from(audits);
-  const equipmentRows = await db.select({ id: equipment.id, name: equipment.name, createdAt: equipment.createdAt, updatedAt: equipment.updatedAt }).from(equipment);
+  const auditRows = await db.select({ id: audits.id, name: audits.name, recordNumber: audits.recordNumber, createdAt: audits.createdAt }).from(audits);
+  const equipmentRows = await db.select({ id: equipment.id, name: equipment.name, createdAt: equipment.createdAt }).from(equipment);
   const trainingRows = await db
     .select({ id: trainingCourses.id, title: trainingCourses.title, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt })
     .from(trainingCourses);
@@ -422,8 +424,8 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
       })),
     ],
     ["risk", riskRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["audit-plan", auditRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["cal-register", equipmentRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["audit-plan", auditRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["audit-plan", "audit-report"], row.id) }))],
+    ["cal-register", equipmentRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["cal-register", "cal-record"], row.id) }))],
     ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
     ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
   ]);

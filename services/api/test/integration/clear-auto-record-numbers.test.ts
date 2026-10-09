@@ -21,13 +21,34 @@ describe("clear auto record numbers", () => {
       const typed = await client.query<{ id: number }>(
         `INSERT INTO validation_reports (data, record_number) VALUES ('{"formType":"csa"}'::jsonb, 'TEST-1008-03') RETURNING id`,
       );
+      const edited = await client.query<{ id: number }>(
+        `INSERT INTO validation_reports (data, record_number) VALUES ('{"formType":"csa"}'::jsonb, 'TEMP') RETURNING id`,
+      );
+      const editedId = edited.rows[0]!.id;
+      await client.query(`UPDATE validation_reports SET record_number = 'VAL-' || id::text WHERE id = $1`, [editedId]);
+      await client.query(
+        `INSERT INTO audit_trail (entity_type, entity_id, action, changes) VALUES ('Validation Report', $1, 'update', $2::jsonb)`,
+        [editedId, JSON.stringify({ numberEdit: { label: "Report No.", from: "", to: `VAL-${editedId}` } })],
+      );
+      const created = await client.query<{ id: number }>(
+        `INSERT INTO validation_reports (data, record_number) VALUES ('{"formType":"csa"}'::jsonb, 'TEMP') RETURNING id`,
+      );
+      const createdId = created.rows[0]!.id;
+      await client.query(`UPDATE validation_reports SET record_number = 'VAL-' || id::text WHERE id = $1`, [createdId]);
+      await client.query(
+        `INSERT INTO audit_trail (entity_type, entity_id, action, changes) VALUES ('Validation Report', $1, 'create', $2::jsonb)`,
+        [createdId, JSON.stringify({ recordNumber: `VAL-${createdId}` })],
+      );
       await client.query(clearValidation!);
+      const keepIds = [id, typed.rows[0]!.id, editedId, createdId];
       const numbers = await client.query<{ id: number; record_number: string | null }>(
         `SELECT id, record_number FROM validation_reports WHERE id = ANY($1::int[]) ORDER BY id`,
-        [[id, typed.rows[0]!.id]],
+        [keepIds],
       );
       expect(numbers.rows.find((row) => row.id === id)?.record_number).toBeNull();
       expect(numbers.rows.find((row) => row.id === typed.rows[0]!.id)?.record_number).toBe("TEST-1008-03");
+      expect(numbers.rows.find((row) => row.id === editedId)?.record_number).toBe(`VAL-${editedId}`);
+      expect(numbers.rows.find((row) => row.id === createdId)?.record_number).toBe(`VAL-${createdId}`);
 
       const embedded = await client.query<{ id: number }>(
         `INSERT INTO document_folders (name, linked_path, sort_order) VALUES ($1, $2, 0) RETURNING id`,
