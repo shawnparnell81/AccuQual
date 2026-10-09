@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FILEABLE_FORM_KEYS } from "../src/modules/document-folders/editableForms.js";
 import { FORM_TEMPLATES, keptOutOfBlankFormsTemplates } from "../src/modules/document-folders/formFiling.js";
-import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, sharedFolderKey, RETIRED_FORM_FOLDER_KEYS, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
+import { cleanFormFolderTitle, compareSavedFills, formFolderIndex, formKeyForSharedTitle, listedSharedFolderKey, sharedFolderKey, RETIRED_FORM_FOLDER_KEYS, savedFillFileName, sortSavedFills, type FolderTemplate } from "../src/modules/document-folders/formFolders.js";
 
 describe("form folders", () => {
   const folders = formFolderIndex(FORM_TEMPLATES);
@@ -187,5 +187,17 @@ describe("form folders", () => {
     ];
     expect(sharedFolderKey(audits, auditMatches, "Internal Audit Report", "audit-plan")).toBe("audit-report");
     expect(sharedFolderKey(audits, auditMatches, "Internal Audit Plan", "audit-plan")).toBe("audit-plan");
+  });
+
+  it("shows a generic filing on the matching form only while it sits in the default folder", () => {
+    const ncr = { source: "ncr", keys: ["supplier-ncr", "complaint", "ncr"], fallback: "ncr" };
+    const matches = [
+      { formKey: "supplier-ncr", match: "Supplier NCR" },
+      { formKey: "complaint", match: "Customer Complaint Record" },
+      { formKey: "ncr", match: "Nonconformance Report" },
+    ];
+    expect(listedSharedFolderKey(ncr, matches, "Supplier NCR", "ncr", true)).toBe("supplier-ncr");
+    expect(listedSharedFolderKey(ncr, matches, "Supplier NCR", "ncr", false)).toBe("ncr");
+    expect(listedSharedFolderKey(ncr, matches, "Supplier NCR renamed", "supplier-ncr", false)).toBe("supplier-ncr");
   });
 });

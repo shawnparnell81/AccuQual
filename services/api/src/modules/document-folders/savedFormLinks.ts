@@ -427,9 +427,24 @@ async function releaseUnsavedFolderNodes(db: Db, performedBy?: number): Promise<
 async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<void> {
   const copies = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
   if (copies.length === 0) return;
-  const existing = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const existing = await db
+    .select({ formKey: formFilings.formKey, recordId: formFilings.recordId, folderNodeId: formFilings.folderNodeId })
+    .from(formFilings);
   const have = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
-  const missing = copies.filter((copy) => !have.has(`${copy.formKey}:${copy.recordId}`));
+  const placedFolderIds = new Set((await db.select({ id: documentFolders.id }).from(documentFolders)).map((folder) => folder.id));
+  // A live file already stored under any key for this record stays where it is. Repair does not add a second copy.
+  const alreadyPlaced = (formKey: string, recordId: number) => {
+    const kind = MODULE_KIND[formKey];
+    if (!kind) return false;
+    return existing.some(
+      (filing) =>
+        filing.recordId === recordId &&
+        MODULE_KIND[filing.formKey] === kind &&
+        filing.folderNodeId != null &&
+        placedFolderIds.has(filing.folderNodeId),
+    );
+  };
+  const missing = copies.filter((copy) => !have.has(`${copy.formKey}:${copy.recordId}`) && !alreadyPlaced(copy.formKey, copy.recordId));
   if (missing.length > 0) {
     await db
       .insert(formFilings)
@@ -465,7 +480,18 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
   const needNodes = copies.filter((copy) => {
     if (!FILEABLE_FORM_KEYS.has(copy.formKey) && !(copy.formKey in MODULE_KIND)) return false;
     const filing = filingByKey.get(`${copy.formKey}:${copy.recordId}`);
-    return filing != null && (filing.folderNodeId == null || !folderIds.has(filing.folderNodeId));
+    if (filing == null || (filing.folderNodeId != null && folderIds.has(filing.folderNodeId))) return false;
+    const kind = MODULE_KIND[copy.formKey];
+    if (!kind) return true;
+    const siblingHasFile = filings.some(
+      (row) =>
+        row.recordId === copy.recordId &&
+        row.id !== filing.id &&
+        MODULE_KIND[row.formKey] === kind &&
+        row.folderNodeId != null &&
+        folderIds.has(row.folderNodeId),
+    );
+    return !siblingHasFile;
   });
   if (needNodes.length === 0) return;
 
@@ -580,34 +606,11 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
   }
 }
 
-/** A generic pin must not keep a second explorer file once the copy belongs to its own form. */
-async function releaseMismatchedModuleNodes(db: Db, performedBy?: number): Promise<void> {
-  const copies = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
-  const wanted = new Map<string, string>();
-  for (const copy of copies) {
-    const kind = MODULE_KIND[copy.formKey];
-    if (!kind) continue;
-    wanted.set(`${kind}:${copy.recordId}`, copy.formKey);
-  }
-  if (wanted.size === 0) return;
-  const filings = await db.select().from(formFilings);
-  for (const filing of filings) {
-    const kind = MODULE_KIND[filing.formKey];
-    if (!kind || filing.folderNodeId == null) continue;
-    const correct = wanted.get(`${kind}:${filing.recordId}`);
-    if (!correct || correct === filing.formKey) continue;
-    const nodeId = filing.folderNodeId;
-    await db.update(formFilings).set({ folderNodeId: null, updatedAt: new Date() }).where(eq(formFilings.id, filing.id));
-    await deleteExclusiveLeaf(db, nodeId, performedBy);
-  }
-}
-
-/** Point a filed copy at the record that was saved. Does not delete a filing or a file. */
+/** Point a filed copy at the record that was saved. Adds a missing file. Does not detach, delete, or move a live one. */
 export async function repairSavedFormListings(db: Db, performedBy?: number): Promise<void> {
   await deleteExpiredUnsavedDrafts(db);
   await releaseUnsavedFolderNodes(db, performedBy);
   await refileMissingSavedRecords(db, performedBy);
-  await releaseMismatchedModuleNodes(db, performedBy);
   const filings = await db.select().from(formFilings);
   const folders = await db
     .select({

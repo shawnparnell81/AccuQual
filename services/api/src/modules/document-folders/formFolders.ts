@@ -146,6 +146,24 @@ export function sharedFolderKey(
 }
 
 /**
+ * Show a generic filing on the title-matched form when that file is still in the default saved-form folder.
+ * A copy the user saved or moved into another Documents folder stays on the key it was filed under.
+ */
+export function listedSharedFolderKey(
+  group: { source: string; keys: string[]; fallback: string | null },
+  matches: { formKey: string; match: string }[],
+  label: string,
+  pinned: string | undefined,
+  inDefaultGenericFolder: boolean,
+): string | null {
+  const listed = sharedFolderKey(group, matches, label, pinned);
+  if (!listed || !pinned || listed === pinned || inDefaultGenericFolder) return listed;
+  const generic = pinned === group.fallback || (group.fallback == null && pinned === group.source);
+  if (generic && group.keys.includes(pinned)) return pinned;
+  return listed;
+}
+
+/**
  * A controlled document number such as FRM-VAL-010. An empty id is not one.
  * A lowercase key such as frm-fai-001 is not one either: that is the internal
  * id, and it must not keep two copies of the same form apart.
@@ -343,6 +361,12 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
           .from(documentFolders)
           .where(inArray(documentFolders.id, nodeIds));
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const parentIds = [...new Set(nodes.map((node) => node.parentId).filter((id): id is number => id != null))];
+  const parents =
+    parentIds.length === 0
+      ? []
+      : await db.select({ id: documentFolders.id, linkedPath: documentFolders.linkedPath }).from(documentFolders).where(inArray(documentFolders.id, parentIds));
+  const parentPath = new Map(parents.map((parent) => [parent.id, parent.linkedPath]));
 
   for (const filing of filings) {
     if (!FILEABLE_FORM_KEYS.has(filing.formKey) || filing.folderNodeId == null) continue;
@@ -479,7 +503,10 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
       .filter((item): item is { formKey: string; match: string } => item != null);
     for (const row of rows) {
       const pinned = pins.get(`${group.source}:${row.id}`);
-      const formKey = sharedFolderKey(group, matches, row.label ?? "", pinned);
+      const filingNodeId = pinned ? pinRows.find((pin) => pin.formKey === pinned && pin.recordId === row.id)?.folderNodeId ?? null : null;
+      const parentLinkedPath = filingNodeId == null ? null : parentPath.get(nodeById.get(filingNodeId)?.parentId ?? -1) ?? null;
+      const inDefaultGenericFolder = filingNodeId == null || parentLinkedPath === `/form-folders/${pinned}`;
+      const formKey = listedSharedFolderKey(group, matches, row.label ?? "", pinned, inDefaultGenericFolder);
       if (!formKey) continue;
       pushModuleFill(fills, templateByKey, seeds, formKey, row);
     }
