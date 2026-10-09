@@ -21,7 +21,7 @@ import { rememberDeletedFormFolders, rememberFormFolderName } from "./folderTomb
 import { folderIsBlankLibrary, ISO_DOCUMENTS_FOLDER } from "./formFiling.js";
 import { folderLocationLabel } from "./mainIsoFolders.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
-import { canonicalOpenPath, repairSavedFormListings } from "./savedFormLinks.js";
+import { canonicalOpenPath, filterLiveFilings, repairSavedFormListings } from "./savedFormLinks.js";
 import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, type FormTemplateSeed } from "./formFiling.js";
 import { listFormTemplates } from "./formTemplates.js";
 
@@ -286,15 +286,15 @@ const SHARED_GROUPS: SharedGroup[] = [
   { source: "ecr", keys: ["ecr", "eco"], field: "title", fallback: null },
 ];
 
-async function catalog(db: Db): Promise<{ folders: FormFolderSummary[]; fills: Map<string, SavedFill[]> }> {
-  await repairSavedFormListings(db);
+async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFolderSummary[]; fills: Map<string, SavedFill[]> }> {
+  await repairSavedFormListings(db, performedBy);
   const { templates } = await listFormTemplates(db);
   const index = formFolderIndex(templates);
   const fills = new Map<string, SavedFill[]>(index.flatMap((folder) => folder.formKeys.map((key) => [key, [] as SavedFill[]])));
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));
   const seeds = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed]));
 
-  const filings = await db.select().from(formFilings).where(isNotNull(formFilings.folderNodeId));
+  const filings = await filterLiveFilings(db, await db.select().from(formFilings).where(isNotNull(formFilings.folderNodeId)));
   const nodeIds = [...new Set(filings.map((row) => row.folderNodeId).filter((id): id is number => id != null))];
   const nodes =
     nodeIds.length === 0
@@ -463,17 +463,17 @@ function withAlias<T extends { formKey: string; formKeys: string[]; name: string
   return { ...folder, name: alias.trim().replace(/\s+/g, " ") };
 }
 
-export async function listFormFolders(db: Db): Promise<FormFolderSummary[]> {
-  const { folders } = await catalog(db);
+export async function listFormFolders(db: Db, performedBy?: number): Promise<FormFolderSummary[]> {
+  const { folders } = await catalog(db, performedBy);
   const profile = await folderProfile(db);
   const deleted = new Set(profile.deletedFormFolderKeys ?? []);
   return folders.filter((folder) => !hiddenFormFolder(folder.formKeys, deleted)).map((folder) => withAlias(folder, profile.formFolderDisplayNames));
 }
 
-export async function getFormFolder(db: Db, formKey: string): Promise<FormFolderDetail> {
+export async function getFormFolder(db: Db, formKey: string, performedBy?: number): Promise<FormFolderDetail> {
   const key = formKey.trim();
   if (!key) throw AppError.badRequest("Form is required");
-  const { folders, fills } = await catalog(db);
+  const { folders, fills } = await catalog(db, performedBy);
   const profile = await folderProfile(db);
   const deleted = new Set(profile.deletedFormFolderKeys ?? []);
   const found = folders.find((item) => item.formKey === key || item.formKeys.includes(key));
@@ -496,7 +496,7 @@ function sameFolderName(left: string, right: string): boolean {
 export async function renameFormFolder(db: Db, formKey: string, name: string, performedBy?: number): Promise<FormFolderSummary> {
   const next = name.trim().replace(/\s+/g, " ");
   if (!next) throw AppError.badRequest("Folder name is required");
-  const folders = await listFormFolders(db);
+  const folders = await listFormFolders(db, performedBy);
   const folder = folders.find((item) => item.formKey === formKey || item.formKeys.includes(formKey));
   if (!folder) throw AppError.notFound("Form folder");
   if (folders.some((item) => item.formKey !== folder.formKey && sameFolderName(item.name, next))) {
@@ -524,7 +524,7 @@ export async function renameFormFolder(db: Db, formKey: string, name: string, pe
 }
 
 export async function retireFormFolder(db: Db, formKey: string, destinationId: number | null, performedBy?: number): Promise<void> {
-  const detail = await getFormFolder(db, formKey);
+  const detail = await getFormFolder(db, formKey, performedBy);
   if (detail.fills.length > 0) {
     if (destinationId == null) throw AppError.badRequest("Choose a folder for the saved forms.");
     const all = await db.select().from(documentFolders);
@@ -611,7 +611,7 @@ export async function retireFormFolder(db: Db, formKey: string, destinationId: n
 /** Finds or creates the document folder that holds copies saved into this form's folder. */
 export async function ensureSavedFormFolder(db: Db, formKey: string, performedBy?: number, requestedKey?: string): Promise<number> {
   const key = formKey.trim();
-  const folders = await listFormFolders(db);
+  const folders = await listFormFolders(db, performedBy);
   const folder = folders.find((item) => item.formKey === key || item.formKeys.includes(key));
   if (!folder) throw AppError.badRequest("That form does not have a folder. Pick a Documents folder.");
   if (requestedKey) {

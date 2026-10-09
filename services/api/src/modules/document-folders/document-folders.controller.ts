@@ -321,12 +321,12 @@ export const fileForm = asyncHandler(async (req: Request, res: Response) => {
 
 /** One folder per fillable form. Counts are saved copies, not blank templates. */
 export const formFolders = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await listFormFolders(req.db!));
+  res.json(await listFormFolders(req.db!, req.user?.id));
 });
 
 /** Saved filled copies of one form, newest save date first. */
 export const formFolderDetail = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await getFormFolder(req.db!, String(req.params.formKey ?? "")));
+  res.json(await getFormFolder(req.db!, String(req.params.formKey ?? ""), req.user?.id));
 });
 
 /** Renames one Folders tab row. The name is remembered so a later template sync does not put the old title back. */

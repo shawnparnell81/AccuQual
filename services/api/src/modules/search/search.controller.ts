@@ -22,7 +22,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { Db } from "../../lib/requestDb.js";
 import { wantsRecordType, type SearchTypeName } from "./searchFilters.js";
 import { showRecordNumber } from "../records/userRecordNumber.js";
-import { searchSavedFormFiles } from "../document-folders/savedFormLinks.js";
+import { repairSavedFormListings, searchSavedFormFiles } from "../document-folders/savedFormLinks.js";
 
 const RESULTS_PER_TYPE = 5;
 
@@ -311,6 +311,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   }
 
   if (includeModule("Document", "company", true, false) && (await allowed("documents"))) {
+    await repairSavedFormListings(db, req.user?.id);
     const textMatch = q ? or(ilike(documents.title, contains(q)), ilike(documents.revisionCode, contains(q))) : undefined;
     const idMatch = digits ? or(idPrefix(documents.id, digits), textMatch) : textMatch;
     jobs.push(
@@ -338,7 +339,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     );
     jobs.push(searchRemovedPoolFiles(db, q));
     jobs.push(
-      searchSavedFormFiles(db, q).then((rows) => rows.map((row) => ({ type: "Document" as const, id: row.id, label: row.label, path: row.path }))),
+      searchSavedFormFiles(db, q, true).then((rows) => rows.map((row) => ({ type: "Document" as const, id: row.id, label: row.label, path: row.path }))),
     );
   }
 
