@@ -813,6 +813,13 @@
       "when": 1794006000000,
       "tag": "0115_pin_saved_form_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1794092400000,
+      "tag": "0116_clear_auto_record_numbers",
+      "breakpoints": true
     }
   ]
 }

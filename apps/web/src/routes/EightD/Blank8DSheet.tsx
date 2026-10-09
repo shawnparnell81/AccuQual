@@ -4,7 +4,8 @@ import { FormHeader } from "../../components/brand/DmaLogo";
 import "./blank8d.css";
 
 interface Blank8DSheetProps {
-  eightDNo: number;
+  recordId: number;
+  eightDNo: string;
   values: Blank8DValues;
   readOnly?: boolean;
   onChange: (patch: Partial<Blank8DValues>) => void;
@@ -39,13 +40,13 @@ function Area({
   readOnly,
   onChange,
   label,
-  eightDNo,
+  recordId,
 }: {
   value: string;
   readOnly?: boolean;
   onChange: (value: string) => void;
   label: string;
-  eightDNo: number;
+  recordId: number;
 }) {
   return (
     <PictureText
@@ -56,7 +57,7 @@ function Area({
       readOnly={readOnly}
       rows={3}
       entityType="eight_d"
-      entityId={eightDNo}
+      entityId={recordId}
       onChange={onChange}
     />
   );
@@ -81,7 +82,7 @@ function Check({
   );
 }
 
-export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSheetProps) {
+export function Blank8DSheet({ recordId, eightDNo, values, readOnly, onChange }: Blank8DSheetProps) {
   const L = BLANK_8D_LABELS;
   const set = (key: keyof Blank8DValues) => (value: string) => onChange({ [key]: value } as Partial<Blank8DValues>);
   const setBool = (key: keyof Blank8DValues) => (checked: boolean) => onChange({ [key]: checked } as Partial<Blank8DValues>);
@@ -98,7 +99,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         </div>
         <div className="b8-lab" style={{ gridColumn: "7" }}>{L.eightDNo}</div>
         <div className="b8-val" style={{ gridColumn: "8 / 10" }}>
-          <TextBox label={L.eightDNo} value={String(eightDNo)} readOnly align="left" onChange={() => undefined} />
+          <TextBox label={L.eightDNo} value={eightDNo} readOnly align="left" onChange={() => undefined} />
         </div>
 
         <div className="b8-lab" style={{ gridColumn: "1" }}>{L.customer}</div>
@@ -169,7 +170,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
           <TextBox label={L.champion} align="left" value={values.champion} readOnly={readOnly} onChange={set("champion")} />
         </div>
         <div className="b8-box problem">
-          <Area eightDNo={eightDNo} label={L.d2} value={values.problemStatement} readOnly={readOnly} onChange={set("problemStatement")} />
+          <Area recordId={recordId} label={L.d2} value={values.problemStatement} readOnly={readOnly} onChange={set("problemStatement")} />
         </div>
         <div className="b8-lab left" style={{ gridColumn: "1" }}>{L.teamLeader}</div>
         <div className="b8-val" style={{ gridColumn: "2 / 4" }}>
@@ -177,7 +178,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         </div>
         <div className="b8-lab left" style={{ gridColumn: "1", alignItems: "flex-start" }}>{L.teamMembers}</div>
         <div className="b8-val" style={{ gridColumn: "2 / 4" }}>
-          <Area eightDNo={eightDNo} label={L.teamMembers} value={values.teamMembers} readOnly={readOnly} onChange={set("teamMembers")} />
+          <Area recordId={recordId} label={L.teamMembers} value={values.teamMembers} readOnly={readOnly} onChange={set("teamMembers")} />
         </div>
       </div>
 
@@ -187,7 +188,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 7" }}>
-          <Area eightDNo={eightDNo} label={L.d3} value={values.ica} readOnly={readOnly} onChange={set("ica")} />
+          <Area recordId={recordId} label={L.d3} value={values.ica} readOnly={readOnly} onChange={set("ica")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "7" }}>
           <TextBox label={L.percentEffective} value={values.icaPercentEffective} readOnly={readOnly} onChange={set("icaPercentEffective")} />
@@ -204,7 +205,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         <div className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d4}</div>
         <div className="b8-head center" style={{ gridColumn: "8 / 10" }}>{L.percentContribution}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area eightDNo={eightDNo} label={L.d4} value={values.rootCauses} readOnly={readOnly} onChange={set("rootCauses")} />
+          <Area recordId={recordId} label={L.d4} value={values.rootCauses} readOnly={readOnly} onChange={set("rootCauses")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8 / 10" }}>
           <TextBox label={L.percentContribution} value={values.rootCausePercentContribution} readOnly={readOnly} onChange={set("rootCausePercentContribution")} />
@@ -215,7 +216,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         <div className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d5}</div>
         <div className="b8-head center" style={{ gridColumn: "8 / 10" }}>{L.percentEffective}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area eightDNo={eightDNo} label={L.d5} value={values.pca} readOnly={readOnly} onChange={set("pca")} />
+          <Area recordId={recordId} label={L.d5} value={values.pca} readOnly={readOnly} onChange={set("pca")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8 / 10" }}>
           <TextBox label={L.percentEffective} value={values.pcaPercentEffective} readOnly={readOnly} onChange={set("pcaPercentEffective")} />
@@ -227,7 +228,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area eightDNo={eightDNo} label={L.d6} value={values.implementation} readOnly={readOnly} onChange={set("implementation")} />
+          <Area recordId={recordId} label={L.d6} value={values.implementation} readOnly={readOnly} onChange={set("implementation")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8" }}>
           <TextBox label={L.targetDate} align="left" value={values.implementationTargetDate} readOnly={readOnly} onChange={set("implementationTargetDate")} />
@@ -245,7 +246,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area eightDNo={eightDNo} label={L.d7} value={values.prevention} readOnly={readOnly} onChange={set("prevention")} />
+          <Area recordId={recordId} label={L.d7} value={values.prevention} readOnly={readOnly} onChange={set("prevention")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8" }}>
           <TextBox label={`${L.d7} ${L.targetDate}`} align="left" value={values.preventionTargetDate} readOnly={readOnly} onChange={set("preventionTargetDate")} />
@@ -270,7 +271,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
       <div className="b8-block d8-body">
         <div className="b8-head">{L.d8}</div>
         <div className="b8-box">
-          <Area eightDNo={eightDNo} label={L.d8} value={values.recognition} readOnly={readOnly} onChange={set("recognition")} />
+          <Area recordId={recordId} label={L.d8} value={values.recognition} readOnly={readOnly} onChange={set("recognition")} />
         </div>
       </div>
     </section>

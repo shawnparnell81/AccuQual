@@ -5,6 +5,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/dates";
 import type { AuditFieldChange } from "../../lib/auditLine";
+import { auditSubject } from "../../lib/userRecordNumber";
 import { canViewAuditLog } from "../../lib/recordDelete";
 
 interface AuditRow {
@@ -43,7 +44,7 @@ export function AuditLogPage() {
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (
             <li key={row.id} className="rounded-lg border border-border bg-card px-4 py-3">
-              <AuditFacts entry={row} when={formatDateTime(row.createdAt)} whenIso={row.createdAt} record={`${row.entityType} #${row.entityId}`} />
+              <AuditFacts entry={row} when={formatDateTime(row.createdAt)} whenIso={row.createdAt} record={auditSubject(row.entityType, row.changes)} />
             </li>
           ))}
         </ul>

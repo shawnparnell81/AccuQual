@@ -119,19 +119,11 @@ describe("every saved form opens locked, keeps an audit, and leaves no ghost aft
         const openPath = start.openPath.replaceAll("{id}", String(id));
         opened.push(openPath);
 
-        const folder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(seed.formKey)}`).set(auth(adminToken));
-        expect(folder.status, `${seed.formKey} folder ${JSON.stringify(folder.body)}`).toBe(200);
-        const fills = folder.body.fills as { recordId: number; openPath: string; fileName: string }[];
-        const mine = fills.find((fill) => fill.recordId === id);
-        expect(mine, seed.formKey).toBeTruthy();
-        expect(mine?.openPath).toBe(openPath);
-
-        const tree = await request(app).get("/document-folders").set(auth(adminToken));
-        const node = (tree.body as { linkedPath: string | null }[]).find((row) => row.linkedPath === openPath);
-        expect(node, `${seed.formKey} explorer link`).toBeTruthy();
-        const found = await request(app).get("/search").query({ q: mine?.fileName ?? seed.title }).set(auth(adminToken));
-        expect(found.status).toBe(200);
-        expect((found.body.results as { path: string }[]).some((row) => row.path === openPath), seed.formKey).toBe(true);
+        const earlyFolder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(seed.formKey)}`).set(auth(adminToken));
+        expect(earlyFolder.status, `${seed.formKey} folder before save`).toBe(200);
+        expect((earlyFolder.body.fills as { recordId: number }[]).some((fill) => fill.recordId === id), `${seed.formKey} filed before save`).toBe(false);
+        const earlyTree = await request(app).get("/document-folders").set(auth(adminToken));
+        expect((earlyTree.body as { linkedPath: string | null }[]).some((row) => row.linkedPath === openPath), `${seed.formKey} explorer before save`).toBe(false);
 
         const loaded = await request(app).get(apiPath(openPath)).set(auth(adminToken));
         expect(loaded.status, `${seed.formKey} open ${JSON.stringify(loaded.body)}`).toBe(200);
@@ -143,6 +135,18 @@ describe("every saved form opens locked, keeps an audit, and leaves no ghost aft
         const write = () => (start.createPath === "/risk" ? request(app).put(`${start.createPath}/${id}`) : request(app).patch(`${start.createPath}/${id}`));
         const saved = await write().set(auth(adminToken)).send(edit.patch);
         expect(saved.status, `${seed.formKey} save ${JSON.stringify(saved.body)}`).toBe(200);
+
+        const folder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(seed.formKey)}`).set(auth(adminToken));
+        expect(folder.status, `${seed.formKey} folder ${JSON.stringify(folder.body)}`).toBe(200);
+        const fills = folder.body.fills as { recordId: number; openPath: string; fileName: string }[];
+        const mine = fills.find((fill) => fill.recordId === id);
+        expect(mine, seed.formKey).toBeTruthy();
+        expect(mine?.openPath).toBe(openPath);
+        const tree = await request(app).get("/document-folders").set(auth(adminToken));
+        expect((tree.body as { linkedPath: string | null }[]).some((row) => row.linkedPath === openPath), `${seed.formKey} explorer link`).toBe(true);
+        const found = await request(app).get("/search").query({ q: mine?.fileName ?? seed.title }).set(auth(adminToken));
+        expect(found.status).toBe(200);
+        expect((found.body.results as { path: string }[]).some((row) => row.path === openPath), seed.formKey).toBe(true);
 
         const rename = renameBody(start.createPath, start.body);
         if (rename) {

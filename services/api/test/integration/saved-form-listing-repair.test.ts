@@ -9,6 +9,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { formFilings } from "../../src/drizzle/schema/formFilings.js";
 import { validationReports } from "../../src/drizzle/schema/validationReport.js";
+import { isoQualityForms } from "../../src/drizzle/schema/isoQualityForms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 
@@ -40,6 +41,8 @@ describe("folder listing and search do not delete a saved form", () => {
     const created = await request(app).post("/validation-reports").set(auth(adminToken)).send({ data: { formType: "csa", cells: { B6: "PN-KEEP" } } });
     expect(created.status).toBe(201);
     const recordId = created.body.id as number;
+    const kept = await request(app).patch(`/validation-reports/${recordId}`).set(auth(adminToken)).send({ data: { formType: "csa", cells: { B6: "PN-KEEP" } } });
+    expect(kept.status).toBe(200);
     const filed = await request(app).post("/document-folders/form-filings").set(auth(adminToken)).send({ formKey: "frm-val-001", recordId, formFolderKey: "frm-val-001" });
     expect(filed.status).toBe(201);
     const before = await filingFor(recordId);
@@ -75,6 +78,8 @@ describe("folder listing and search do not delete a saved form", () => {
     const created = await request(app).post("/validation-reports").set(auth(adminToken)).send({ data: { formType: "csa", cells: { B6: "PN-RESTORE" } } });
     expect(created.status).toBe(201);
     const recordId = created.body.id as number;
+    const saved = await request(app).patch(`/validation-reports/${recordId}`).set(auth(adminToken)).send({ data: { formType: "csa", cells: { B6: "PN-RESTORE" } } });
+    expect(saved.status).toBe(200);
     const openPath = `/validation-reports/${recordId}`;
     const existing = await filingFor(recordId);
     if (existing?.folderNodeId != null) await db.delete(documentFolders).where(eq(documentFolders.id, existing.folderNodeId));
@@ -138,5 +143,60 @@ describe("folder listing and search do not delete a saved form", () => {
     expect(await filingFor(recordId)).toBeUndefined();
     const [report] = await db.select().from(validationReports).where(eq(validationReports.id, recordId));
     expect(report).toBeUndefined();
+  });
+
+  it("leaves a started blank out of folders until Save, and deletes only a day-old unsaved blank", async () => {
+    const started = await request(app)
+      .post("/iso-quality-forms")
+      .set(auth(adminToken))
+      .send({ formType: "process_change", data: { cells: { F2: "Maxwell Tollefson", D5: "Shawn Parnell" } } });
+    expect(started.status).toBe(201);
+    const id = started.body.id as number;
+    const openPath = `/iso-forms/record/${id}`;
+
+    const before = await request(app).get("/document-folders/form-folders/frm-pcr-001").set(auth(adminToken));
+    expect(before.status).toBe(200);
+    expect((before.body.fills as { recordId: number }[]).some((fill) => fill.recordId === id)).toBe(false);
+    const tree = await request(app).get("/document-folders").set(auth(adminToken));
+    expect((tree.body as { linkedPath: string | null }[]).some((row) => row.linkedPath === openPath)).toBe(false);
+    const search = await request(app).get("/search").query({ q: "FRM-PCR-001" }).set(auth(adminToken));
+    expect((search.body.results as { path: string }[]).some((row) => row.path === openPath)).toBe(false);
+    const waiting = await request(app).get("/dashboard/waiting-on-me").set(auth(adminToken));
+    expect(waiting.status).toBe(200);
+    expect(JSON.stringify(waiting.body)).not.toContain(openPath);
+    const overview = await request(app).get("/dashboard/overview").set(auth(adminToken));
+    expect(overview.status).toBe(200);
+    expect(JSON.stringify(overview.body)).not.toContain(openPath);
+
+    const numbered = await request(app).post("/validation-reports").set(auth(adminToken)).send({ data: { formType: "csa", cells: {} } });
+    expect(numbered.status).toBe(201);
+    const numberOnly = await request(app)
+      .patch(`/validation-reports/${numbered.body.id}`)
+      .set(auth(adminToken))
+      .send({ recordNumber: `BLANK-${suffix}` });
+    expect(numberOnly.status).toBe(200);
+    const numberedFolder = await request(app).get("/document-folders/form-folders/frm-val-001").set(auth(adminToken));
+    expect((numberedFolder.body.fills as { recordId: number }[]).some((fill) => fill.recordId === numbered.body.id)).toBe(false);
+
+    const saved = await request(app)
+      .patch(`/iso-quality-forms/${id}`)
+      .set(auth(adminToken))
+      .send({ data: { cells: { F2: "Maxwell Tollefson", D5: "Shawn Parnell", B6: "Saved" } } });
+    expect(saved.status).toBe(200);
+    const after = await request(app).get("/document-folders/form-folders/frm-pcr-001").set(auth(adminToken));
+    expect((after.body.fills as { recordId: number; openPath: string }[]).some((fill) => fill.recordId === id && fill.openPath === openPath)).toBe(true);
+    const afterTree = await request(app).get("/document-folders").set(auth(adminToken));
+    expect((afterTree.body as { linkedPath: string | null }[]).some((row) => row.linkedPath === openPath)).toBe(true);
+
+    const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const [stale] = await db.insert(isoQualityForms).values({ formType: "process_change", data: { cells: {} }, createdAt: old }).returning();
+    const [kept] = await db.insert(isoQualityForms).values({ formType: "process_change", data: { cells: { B6: "kept" } }, createdAt: old, updatedAt: new Date() }).returning();
+    const cleanup = await request(app).get("/document-folders/form-folders/frm-pcr-001").set(auth(adminToken));
+    expect(cleanup.status).toBe(200);
+    const [staleRow] = await db.select().from(isoQualityForms).where(eq(isoQualityForms.id, stale!.id));
+    const [keptRow] = await db.select().from(isoQualityForms).where(eq(isoQualityForms.id, kept!.id));
+    expect(staleRow).toBeUndefined();
+    expect(keptRow?.id).toBe(kept!.id);
+    expect((cleanup.body.fills as { recordId: number }[]).some((fill) => fill.recordId === id)).toBe(true);
   });
 });

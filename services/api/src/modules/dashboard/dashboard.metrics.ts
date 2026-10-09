@@ -351,7 +351,7 @@ const ACTIVITY_META: Record<string, { label: string; href: (id: number) => strin
 
 function activityText(entry: DashActivity, meta: { label: string }): string {
   const verb = entry.action === "create" ? "added" : entry.action === "delete" ? "removed" : entry.action === "status_change" ? "updated" : "changed";
-  return entry.title ? `${meta.label} ${verb}: ${entry.title}` : `${meta.label} #${entry.entityId} ${verb}`;
+  return entry.title ? `${meta.label} ${verb}: ${entry.title}` : `${meta.label} ${verb}`;
 }
 
 /** A deleted record stays in the audit log. The dashboard must not link to it. */
@@ -490,7 +490,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
         id: `trn-${row.id}`,
         href: `/training/${row.courseId}`,
         ref: "",
-        title: row.courseTitle?.trim() || `Course #${row.courseId}`,
+        title: row.courseTitle?.trim() || "Course",
         kind: "Training assigned to you",
         due: iso(row.dueAt),
       });

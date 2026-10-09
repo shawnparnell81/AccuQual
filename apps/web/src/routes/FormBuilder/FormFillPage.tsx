@@ -104,7 +104,7 @@ export function FormFillPage() {
             mode={formLock.mode}
             canEdit={permitted}
             pending={save.isPending}
-            onEdit={() => void formLock.onEdit()}
+            onEdit={() => formLock.onEdit()}
             onSave={() => {
               void save.mutateAsync().then(() => formLock.lock());
             }}

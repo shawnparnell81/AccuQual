@@ -29,7 +29,7 @@ describe("ISO Compliance Documents form templates", () => {
   });
 
   it("files each fillable blank once under Blank Forms Templates and leaves the living lists on the older drawer", async () => {
-    expect(filedRecordName("FRM-VAL-007", 12, "2026-09-28")).toBe("FRM-VAL-007_12_2026-09-28");
+    expect(filedRecordName("FRM-VAL-007", 12, "2026-09-28")).toBe("FRM-VAL-007_2026-09-28");
 
     const first = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${token}`);
     expect(first.status).toBe(200);
@@ -83,7 +83,7 @@ describe("ISO Compliance Documents form templates", () => {
     expect(crossTraining?.formId).toBe("FRM-TRN-002");
     expect(crossTraining?.title).toBe("GRADING RUBRIC: CROSS-TRAINING EVALUATION");
     expect((crossTraining as { fileNamePattern?: string } | undefined)?.fileNamePattern).toBe("{formId}_{recordNumber}_{date}");
-    expect(filedRecordName("FRM-TRN-002", 4, "2026-09-28", "{formId}_{recordNumber}_{date}")).toBe("FRM-TRN-002_4_2026-09-28");
+    expect(filedRecordName("FRM-TRN-002", 4, "2026-09-28", "{formId}_{recordNumber}_{date}")).toBe("FRM-TRN-002_2026-09-28");
     expect(templates.find((form) => form.formKey === "frm-trn-001")).toMatchObject({ formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD" });
     expect(training?.title).toBe("Training & Competency Record");
     expect(auditForm?.start?.createPath).toBe("/iso-quality-forms");

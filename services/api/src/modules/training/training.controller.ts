@@ -6,7 +6,7 @@ import { trainingCourses, trainingAssignments, type TrainingAssignment } from ".
 import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { scalarEdits } from "../forms/formEditAudit.js";
 import * as service from "./training.service.js";
@@ -55,6 +55,7 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
     changes: fieldEdits.length > 0 ? { ...body, event: "form_saved", edits: fieldEdits } : body,
     performedBy: req.user?.id,
   });
+  await fileOnFirstSave(req.db!, "/training", current, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 

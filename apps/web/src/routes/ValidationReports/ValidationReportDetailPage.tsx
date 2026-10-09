@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
@@ -34,6 +34,8 @@ import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
 import { savedFieldsEditable } from "../../lib/savedFormLock";
+import { sheetIsDirty, sheetSnap } from "../../lib/sheetDirty";
+import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 
 interface ValidationReport {
@@ -81,8 +83,11 @@ export function ValidationReportDetailPage() {
   const mode = formLock.mode;
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
+  const [savedSnap, setSavedSnap] = useState<{ id: number; snap: string } | null>(null);
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
+  const openingRef = useRef(false);
+  const [opening, setOpening] = useState(false);
 
   const formType: ValidationFormType = formTypeOf(report?.data);
   const meta = VALIDATION_FORMS[formType];
@@ -100,16 +105,19 @@ export function ValidationReportDetailPage() {
     if (!report || loadedFor === report.id) return;
     const next = loadCells(formTypeOf(report.data), report.data);
     setCells(next);
+    setSavedSnap({ id: report.id, snap: sheetSnap(next) });
     setLoadedFor(report.id);
   }, [loadedFor, report]);
+
+  const liveSnap = cells == null ? "" : sheetSnap(cells);
+  const dirty = report == null || cells == null ? false : sheetIsDirty(report.id, liveSnap, savedSnap);
+  useReportTabDirty(dirty);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this validation report. Refresh the page and try again.</p>;
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
   const fieldsEditable = savedFieldsEditable(mode, canEdit);
   const filled = cells;
-  const saved = loadCells(formType, report.data);
-  const dirty = JSON.stringify(filled) !== JSON.stringify(saved);
   const result = loadOverall(formType, filled);
   const passed = result === "Pass" || result === "Passed" || result === "PASS";
   const failed = result === "Fail" || result === "Failed" || result === "FAIL";
@@ -122,14 +130,22 @@ export function ValidationReportDetailPage() {
   const savedReport = report;
   async function setSignatureRequired(path: string, choice: SignatureChoice) {
     await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled, _signatureRequired: withChoice(savedReport.data, path, choice) } });
+    setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
+  }
+
+  /** Write the sheet, clear the dirty flag, and lock. Folder filing stays with the caller. */
+  async function persistRecord() {
+    await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } });
+    setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
+    formLock.lock();
+    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
   }
 
   async function saveRecord() {
     setPending(true);
     setSaveNote(null);
     try {
-      await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } });
-      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
+      await persistRecord();
     } catch {
       setSaveNote("error");
       setPending(false);
@@ -138,7 +154,6 @@ export function ValidationReportDetailPage() {
     try {
       const filed = await fileChosenFolder(queryClient, formKey, reportId);
       setSaveNote(filed ?? "unfiled");
-      formLock.lock();
     } catch {
       setSaveNote("file-error");
     } finally {
@@ -147,18 +162,25 @@ export function ValidationReportDetailPage() {
   }
 
   async function startEdit() {
-    if (!canEdit) return;
+    if (!canEdit || openingRef.current || mode === "editing") return;
+    openingRef.current = true;
+    setOpening(true);
     try {
       await beginEdit.mutateAsync({ id: reportId });
       formLock.unlock();
       await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
     } catch {
       setSaveNote("error");
+    } finally {
+      openingRef.current = false;
+      setOpening(false);
     }
   }
 
   function cancelEdit() {
-    setCells(loadCells(formType, savedReport.data));
+    const next = loadCells(formType, savedReport.data);
+    setCells(next);
+    setSavedSnap({ id: savedReport.id, snap: sheetSnap(next) });
     formLock.lock();
   }
 
@@ -187,7 +209,7 @@ export function ValidationReportDetailPage() {
                 {validationReportsCrumb().label}
               </Link>
             </p>
-            <RecordFolderField formKey={formKey} recordId={reportId} prepare={() => updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } })} />
+            <RecordFolderField formKey={formKey} recordId={reportId} prepare={() => persistRecord()} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DeleteRecordButton
@@ -208,7 +230,8 @@ export function ValidationReportDetailPage() {
               mode={mode}
               canEdit={canEdit}
               pending={updateReport.isPending || pending}
-              onEdit={() => void startEdit()}
+              opening={opening}
+              onEdit={() => startEdit()}
               onSave={() => void saveRecord()}
               onCancel={cancelEdit}
               onDone={() => {

@@ -8,6 +8,7 @@ import { TextAreaField, SelectField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SupplierCorrectiveAction, Ncr, Capa } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { recordHeading } from "../../lib/userRecordNumber";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -72,7 +73,7 @@ export function SupplierCARForm({ supplierId, isReviewer }: { supplierId?: numbe
             <option value="">None</option>
             {ncrs.map((n) => (
               <option key={n.id} value={n.id}>
-                NCR #{n.id} — {n.title}
+                {recordHeading("NCR", n.recordNumber)} — {n.title}
               </option>
             ))}
           </SelectField>
@@ -80,7 +81,7 @@ export function SupplierCARForm({ supplierId, isReviewer }: { supplierId?: numbe
             <option value="">None</option>
             {capas.map((c) => (
               <option key={c.id} value={c.id}>
-                CAPA #{c.id}
+                {recordHeading("CAPA", c.recordNumber)}
               </option>
             ))}
           </SelectField>

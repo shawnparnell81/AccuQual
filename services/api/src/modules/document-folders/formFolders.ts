@@ -77,6 +77,8 @@ interface Stamp {
   number?: string | null;
   createdAt: Date | null;
   updatedAt: Date | null;
+  /** False until the user saves. Omitted when this table has no save timestamp. */
+  saved?: boolean;
 }
 
 /**
@@ -118,7 +120,7 @@ export function savedFillFileName(input: { formId: string; title: string; record
   if (label && label !== input.title.trim()) return label;
   const date = input.savedAt.slice(0, 10);
   const formId = input.formId.trim();
-  const token = input.number !== undefined ? (input.number ?? "").trim() : String(input.recordId);
+  const token = (input.number ?? "").trim();
   if (formId) return filedRecordName(formId, token, date, input.pattern);
   const title = input.title.trim() || "Form";
   return token ? `${title}_${token}_${date}` : `${title}_${date}`;
@@ -248,6 +250,7 @@ function qmsFormType(seed: FormTemplateSeed): string | null {
 
 function pushModuleFill(bucket: Map<string, SavedFill[]>, templates: Map<string, { title: string; formId: string }>, seeds: Map<string, FormTemplateSeed>, formKey: string, row: Stamp) {
   if (FILEABLE_FORM_KEYS.has(formKey)) return;
+  if (row.saved === false) return;
   const list = bucket.get(formKey);
   const template = templates.get(formKey);
   const seed = seeds.get(formKey);
@@ -294,7 +297,9 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));
   const seeds = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed]));
 
-  const pinRows = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const pinRows = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId, folderNodeId: formFilings.folderNodeId }).from(formFilings);
+  const filedModule = new Set(pinRows.filter((row) => row.folderNodeId != null).map((row) => `${row.formKey}:${row.recordId}`));
+  const filedUnder = (keys: readonly string[], id: number) => keys.some((key) => filedModule.has(`${key}:${id}`));
   const pins = new Map<string, string>();
   const pinNamespace = (formKey: string): string | null => {
     for (const group of SHARED_GROUPS) {
@@ -370,6 +375,7 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
         number: row.formNo,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        saved: row.updatedAt != null,
       });
     }
   }
@@ -402,9 +408,9 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
     .from(changeRequests);
 
   const rowsFor = new Map<string, Stamp[]>([
-    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt }))],
-    ["capa", capaRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt }))],
-    ["8d", eightRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt }))],
+    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["capa", capaRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["8d", eightRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
     [
       "dcr",
       dcrRows.map((row) => ({
@@ -414,13 +420,14 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
         number: row.formNo,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        saved: row.updatedAt != null,
       })),
     ],
-    ["risk", riskRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt }))],
-    ["audit-plan", auditRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: null }))],
-    ["cal-register", equipmentRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: null }))],
-    ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt }))],
-    ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt }))],
+    ["risk", riskRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["audit-plan", auditRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["audit-plan", "audit-report"], row.id) }))],
+    ["cal-register", equipmentRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["cal-register", "cal-record"], row.id) }))],
+    ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
   ]);
 
   for (const group of SHARED_GROUPS) {

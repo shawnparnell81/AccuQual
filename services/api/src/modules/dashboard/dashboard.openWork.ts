@@ -391,6 +391,7 @@ function buildRecords(input: OpenWorkInput): Built {
   if (access.documents) {
     modules.push({ key: "VAL", label: "VAL" }, { key: "TRP", label: "TRP" }, { key: "ECR", label: "ECR" });
     for (const row of input.validation) {
+      if (row.updatedAt == null) continue;
       if (!validationOpen(row.data)) continue;
       const kind = validationKind(row.data);
       pushRecord(records, {
@@ -407,6 +408,7 @@ function buildRecords(input: OpenWorkInput): Built {
       }, now, plantName);
     }
     for (const row of input.forms) {
+      if (row.updatedAt == null) continue;
       if (row.formType === "salt_spray" || row.formType === "prototype_strut") {
         const approved = row.formType === "salt_spray" ? field(row.data, "approvedSignature") : field(row.data, "engineeringSignoffSignature");
         if (approved) continue;

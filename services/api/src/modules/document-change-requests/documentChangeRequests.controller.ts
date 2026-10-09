@@ -3,7 +3,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { documentChangeRequests, documentChangeItems, documentChangeReviews } from "../../drizzle/schema/documentChangeRequests.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { scalarEdits } from "../forms/formEditAudit.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
@@ -73,6 +73,7 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
     changes: fieldEdits.length > 0 ? { ...saved, event: "form_saved", edits: fieldEdits } : saved,
     performedBy: req.user?.id,
   });
+  await fileOnFirstSave(req.db!, "/document-change-requests", record, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 

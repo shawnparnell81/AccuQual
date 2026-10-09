@@ -226,6 +226,7 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
   const [synced, setSynced] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const signature = `${filing.data?.parentId ?? ""}:${(filing.data?.parentPath ?? []).join("/")}`;
 
   useEffect(() => {
@@ -256,6 +257,19 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
     },
     onError: () => setMessage("Couldn't file this record."),
   });
+
+  async function saveCopy(body: { folderId?: number; formFolderKey?: string; partNumber?: string }) {
+    if (preparing || file.isPending) return;
+    setMessage(null);
+    setPreparing(true);
+    try {
+      if (prepare) await prepare();
+      file.mutate(body, { onSettled: () => setPreparing(false) });
+    } catch {
+      setPreparing(false);
+      setMessage("Couldn't file this record.");
+    }
+  }
 
   if (!FILEABLE_FORM_KEYS.has(formKey)) return null;
 
@@ -305,29 +319,16 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
           formFolders={formFolders.data ?? []}
           defaultFormFolderKey={destination?.kind === "form" ? destination.formKey : ""}
           selectedId={destination?.kind === "documents" ? destination.folderId : selected}
-          pending={file.isPending}
-          onClose={() => setPickerOpen(false)}
+          pending={file.isPending || preparing}
+          onClose={() => {
+            if (preparing || file.isPending) return;
+            setPickerOpen(false);
+          }}
           onSave={(folderId, partNumber) => {
-            setMessage(null);
-            void (async () => {
-              try {
-                if (prepare) await prepare();
-                file.mutate({ folderId, partNumber });
-              } catch {
-                setMessage("Couldn't file this record.");
-              }
-            })();
+            void saveCopy({ folderId, partNumber });
           }}
           onSaveFormFolder={(formFolderKey, partNumber) => {
-            setMessage(null);
-            void (async () => {
-              try {
-                if (prepare) await prepare();
-                file.mutate({ formFolderKey, partNumber });
-              } catch {
-                setMessage("Couldn't file this record.");
-              }
-            })();
+            void saveCopy({ formFolderKey, partNumber });
           }}
         />
       )}

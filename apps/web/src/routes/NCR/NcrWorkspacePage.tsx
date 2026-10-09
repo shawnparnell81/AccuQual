@@ -210,7 +210,7 @@ export function NcrWorkspacePage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={isSaving} onEdit={() => void formLock.onEdit()} onSave={saveForm} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={isSaving} onEdit={() => formLock.onEdit()} onSave={saveForm} onLock={formLock.lock} />
             <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" allowed={permitted} assignedOnly />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
             <StatusBadge value={ncr.severity} />
@@ -579,7 +579,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
         {linkedWorkOrders.map((w) => (
           <li key={`wo-${w.id}`} className="border-b border-border pb-1">
             <button onClick={() => navigate(`/work-orders/${w.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>Work Order #{w.id}</span>
+              <span>{recordHeading("Work order", w.recordNumber)}</span>
               <StatusBadge value={w.status} />
             </button>
           </li>

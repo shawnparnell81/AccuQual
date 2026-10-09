@@ -17,7 +17,8 @@ import type { WorkflowHistoryEntry, WorkflowModuleName } from "../api/types";
 export function useWorkflowHistory(moduleName: WorkflowModuleName, recordId: number | undefined) {
   return useQuery<WorkflowHistoryEntry[]>({
     queryKey: ["workflow-history", moduleName, recordId],
-    queryFn: async () => (await apiClient.get(`/workflow/history/${moduleName}/${recordId}`)).data,
-    enabled: recordId !== undefined,
+    queryFn: async () => (await apiClient.get(`/workflow/history/${moduleName}/${recordId}`, { timeout: 20_000 })).data,
+    enabled: typeof recordId === "number" && Number.isInteger(recordId) && recordId > 0,
+    retry: 1,
   });
 }

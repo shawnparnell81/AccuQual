@@ -19,7 +19,7 @@ import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
-import { showRecordNumber } from "../../lib/userRecordNumber";
+import { copyFileName } from "../../lib/userRecordNumber";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { filledCopyFolderSentence, revisionLabel } from "../../lib/formDocument";
 
@@ -33,11 +33,6 @@ interface IsoQualityForm {
 }
 
 const hooks = createResourceHooks<IsoQualityForm>("iso-quality-forms");
-
-function filedName(pattern: string, formId: string, recordNumber: string, createdAt?: string | null) {
-  const date = (createdAt ?? "").slice(0, 10);
-  return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", recordNumber).replaceAll("{date}", date);
-}
 
 function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
   const cells = data.cells ?? {};
@@ -145,7 +140,7 @@ export function IsoFormListPage() {
                 <tr key={row.id} className="border-t border-border">
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => navigate(`/iso-forms/record/${row.id}`)} className="text-left text-primary hover:underline">
-                      {filedName(pattern, filingId, showRecordNumber(row.recordNumber), row.createdAt) || meta.title}
+                      {copyFileName(pattern, filingId, row.recordNumber, row.createdAt) || meta.title}
                     </button>
                   </td>
                   <td className="px-3 py-2">{summary(meta.formType, row.data ?? {}) || "—"}</td>

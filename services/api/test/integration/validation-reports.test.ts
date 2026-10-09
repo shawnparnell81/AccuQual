@@ -7,7 +7,8 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { validationReports } from "../../src/drizzle/schema/validationReport.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
+import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -85,6 +86,32 @@ describe("validation reports", () => {
 
     const create = await request(app).post("/validation-reports").set("Authorization", `Bearer ${productionToken}`).send({});
     expect(create.status).toBe(403);
+
+    await db.delete(validationReports).where(eq(validationReports.id, id));
+  });
+
+  it("saves a typed Report No. without the sheet body and writes an audit line", async () => {
+    const created = await request(app).post("/validation-reports").set("Authorization", `Bearer ${qualityToken}`).send({ data: { formType: "csa", cells: { B6: "CSA-100" } } });
+    expect(created.status).toBe(201);
+    const id = created.body.id as number;
+
+    const saved = await request(app).patch(`/validation-reports/${id}`).set("Authorization", `Bearer ${qualityToken}`).send({ recordNumber: "TEST-1008-03" });
+    expect(saved.status).toBe(200);
+    expect(saved.body.recordNumber).toBe("TEST-1008-03");
+
+    const again = await request(app).get(`/validation-reports/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(again.status).toBe(200);
+    expect(again.body.recordNumber).toBe("TEST-1008-03");
+
+    const rows = await db
+      .select()
+      .from(auditTrail)
+      .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "update")))
+      .orderBy(desc(auditTrail.createdAt));
+    const changes = rows.find((row) => (row.changes as { numberEdit?: unknown } | null)?.numberEdit)?.changes as {
+      numberEdit?: { label?: string; from?: string; to?: string };
+    } | null;
+    expect(changes?.numberEdit).toEqual({ label: "Report No.", from: "", to: "TEST-1008-03" });
 
     await db.delete(validationReports).where(eq(validationReports.id, id));
   });

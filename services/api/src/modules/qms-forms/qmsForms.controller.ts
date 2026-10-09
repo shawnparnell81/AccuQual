@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { qmsForms, qmsFormRows } from "../../drizzle/schema/qmsForms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -10,9 +10,9 @@ import { showsRequiredControl, writeSignatureRequiredAudit } from "../signatures
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
-import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
-import { scalarEdits, type FormEdit } from "../forms/formEditAudit.js";
+import { cellLabel, scalarEdits, showAuditValue, type FormEdit } from "../forms/formEditAudit.js";
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
@@ -211,6 +211,7 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
     ? { ...changesWithNumberEdit({}, numberChange), event: "form_saved", edits: headerEdits }
     : changesWithNumberEdit(req.body, numberChange);
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: headerChanges, performedBy: req.user?.id });
+  await fileOnFirstSave(req.db!, "/qms-forms", record, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 
@@ -242,19 +243,47 @@ function choiceText(value: unknown): "yes" | "no" {
   return value === "no" ? "no" : "yes";
 }
 
+/** Names the column from the form definition and the row's place in that section. */
+function qmsRowEdits(
+  section: { columns: { key: string; label: string }[] } | undefined,
+  rowNumber: number,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  keys: string[],
+): FormEdit[] {
+  const edits: FormEdit[] = [];
+  for (const key of keys) {
+    if (key.startsWith("_") || key === "signature" || key === "signatureRequired") continue;
+    const from = before[key];
+    const to = after[key];
+    if ((from ?? "") === (to ?? "")) continue;
+    const column = section?.columns.find((item) => item.key === key)?.label ?? cellLabel(key);
+    edits.push({ label: `Row ${rowNumber} ${column}`, from: showAuditValue(from), to: showAuditValue(to) });
+  }
+  return edits;
+}
+
 export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadForm(req, Number(req.params.id));
-  const row = await loadRow(req, record.id, Number(req.params.rowId));
+  const formId = Number(req.params.id);
+  const rowId = Number(req.params.rowId);
+  // Hold the row until this request commits, so overlapping cell saves merge instead of replacing each other.
+  await req.db!.execute(sql`SELECT 1 FROM "qms_form_rows" WHERE "id" = ${rowId} AND "form_id" = ${formId} FOR UPDATE`);
+  const record = await loadForm(req, formId);
+  const row = await loadRow(req, record.id, rowId);
   const incoming = req.body.data as Record<string, string>;
-  const data = retainSignatureValues((row.data ?? {}) as Record<string, string>, incoming) as Record<string, string>;
+  const before = { ...((row.data ?? {}) as Record<string, string>) };
+  const data = retainSignatureValues(before, incoming) as Record<string, string>;
   const definition = getQmsFormDefinition(record.formType);
   const section = definition?.sections.find((item) => item.key === row.sectionKey);
+  const ordered = await req.db!
+    .select({ id: qmsFormRows.id })
+    .from(qmsFormRows)
+    .where(and(eq(qmsFormRows.formId, record.id), eq(qmsFormRows.sectionKey, row.sectionKey)))
+    .orderBy(asc(qmsFormRows.sortOrder), asc(qmsFormRows.id));
+  const rowNumber = Math.max(1, ordered.findIndex((item) => item.id === row.id) + 1);
   const signatureColumn = section?.columns.some((column) => column.key === "signature") === true;
-  const siblings = signatureColumn
-    ? await req.db!.select({ id: qmsFormRows.id }).from(qmsFormRows).where(and(eq(qmsFormRows.formId, record.id), eq(qmsFormRows.sectionKey, row.sectionKey)))
-    : [];
-  const multi = signatureColumn && showsRequiredControl(siblings.length);
-  const previous = choiceText((row.data ?? {}).signatureRequired);
+  const multi = signatureColumn && showsRequiredControl(ordered.length);
+  const previous = choiceText(before.signatureRequired);
   if (!multi) delete data.signatureRequired;
   else if (data.signatureRequired !== "yes" && data.signatureRequired !== "no") delete data.signatureRequired;
   const next = choiceText(data.signatureRequired);
@@ -268,7 +297,7 @@ export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
     });
   }
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
-  const rowEdits = scalarEdits((row.data ?? {}) as Record<string, unknown>, data);
+  const rowEdits = qmsRowEdits(section, rowNumber, before, data, Object.keys(incoming));
   await recordAuditTrail(req.db!, {
     entityType: "QmsForm",
     entityId: record.id,
@@ -276,6 +305,8 @@ export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
     changes: rowEdits.length ? { event: "form_saved", subAction: "row_updated", rowId: row.id, edits: rowEdits } : { subAction: "row_updated", rowId: row.id },
     performedBy: req.user?.id,
   });
+  await fileOnFirstSave(req.db!, "/qms-forms", record, record as unknown as Record<string, unknown>, incoming, req.user?.id);
+  await req.db!.update(qmsForms).set({ updatedAt: new Date() }).where(eq(qmsForms.id, record.id));
   res.json(updated);
 });
 
@@ -290,10 +321,14 @@ export const signQmsFormRowHandler = asyncHandler(async (req: Request, res: Resp
     field: `row ${row.id} signature`,
     description: "I certify that this entry is accurate and complete.",
   });
-  const data = { ...(row.data ?? {}) };
+  await req.db!.execute(sql`SELECT 1 FROM "qms_form_rows" WHERE "id" = ${row.id} AND "form_id" = ${record.id} FOR UPDATE`);
+  const fresh = await loadRow(req, record.id, row.id);
+  const data = { ...(fresh.data ?? {}) };
   data.signature = stamp.stamp;
   if (!data.date) data.date = stamp.signedOn;
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
+  await fileOnFirstSave(req.db!, "/qms-forms", record, record as unknown as Record<string, unknown>, { signature: stamp.stamp }, req.user?.id);
+  await req.db!.update(qmsForms).set({ updatedAt: new Date() }).where(eq(qmsForms.id, record.id));
   res.json({ ...updated, stamp: stamp.stamp, signedOn: stamp.signedOn });
 });
 

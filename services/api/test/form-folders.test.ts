@@ -114,7 +114,7 @@ describe("form folders", () => {
         pattern: "{formId}_{recordNumber}_{date}",
         recordLabel: "NON-CONFORMANCE REPORT (NCR)",
       }),
-    ).toBe("FRM-NCR-001_4_2026-10-05");
+    ).toBe("FRM-NCR-001_2026-10-05");
     expect(
       savedFillFileName({
         formId: "FRM-NCR-001",
@@ -125,7 +125,7 @@ describe("form folders", () => {
         recordLabel: "NON-CONFORMANCE REPORT (NCR)",
         number: "",
       }),
-    ).toBe("FRM-NCR-001__2026-10-05");
+    ).toBe("FRM-NCR-001_2026-10-05");
     expect(
       savedFillFileName({
         formId: "FRM-NCR-001",

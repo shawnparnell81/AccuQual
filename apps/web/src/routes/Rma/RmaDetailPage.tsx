@@ -263,13 +263,13 @@ export function RmaDetailPage() {
               <option value="">None</option>
               {ncrs.map((n) => (
                 <option key={n.id} value={n.id}>
-                  NCR #{n.id} — {n.title}
+                  {recordHeading("NCR", n.recordNumber)} — {n.title}
                 </option>
               ))}
             </SelectField>
           ) : record.linkedNcr ? (
             <Link to={`/ncr/${record.linkedNcr.id}`} className="text-sm text-primary hover:underline">
-              NCR #{record.linkedNcr.id} — {record.linkedNcr.title}
+              {recordHeading("NCR", null)} — {record.linkedNcr.title}
             </Link>
           ) : (
             <p className="text-sm text-muted-foreground">Not linked.</p>
@@ -288,13 +288,13 @@ export function RmaDetailPage() {
               <option value="">None</option>
               {capas.map((c) => (
                 <option key={c.id} value={c.id}>
-                  CAPA #{c.id}
+                  {recordHeading("CAPA", c.recordNumber)}
                 </option>
               ))}
             </SelectField>
           ) : record.linkedCapa ? (
             <Link to={`/capa/${record.linkedCapa.id}`} className="text-sm text-primary hover:underline">
-              CAPA #{record.linkedCapa.id}
+              {recordHeading("CAPA", null)}
             </Link>
           ) : (
             <p className="text-sm text-muted-foreground">Not linked.</p>

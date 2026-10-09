@@ -115,12 +115,12 @@ export const closeHandler = asyncHandler(async (req: Request, res: Response) => 
 export const escalateToNcrHandler = asyncHandler(async (req: Request, res: Response) => {
   const current = await loadOwned(req);
   if (current.status === "closed") throw AppError.badRequest("A closed complaint cannot be escalated.");
-  if (current.linkedNcrId) throw AppError.badRequest(`This complaint is already linked to NCR #${current.linkedNcrId}.`);
+  if (current.linkedNcrId) throw AppError.badRequest("This complaint is already linked to an NCR.");
   if ((await getUserAccessLevel(req.db!, req.user!, "ncr")) !== "edit") {
     throw AppError.forbidden("Escalating a complaint creates an NCR — you need edit access to NCRs.");
   }
 
-  const title = `Customer complaint #${current.id}${current.customerName ? ` — ${current.customerName}` : ""}`.slice(0, 200);
+  const title = `Customer complaint${current.customerName ? ` — ${current.customerName}` : ""}`.slice(0, 200);
   const [createdNcr] = await req.db!.insert(ncr).values({ title, description: current.description, severity: current.severity ?? undefined, status: "ncr_created", createdBy: req.user?.id, ...(req.siteId ? { siteId: req.siteId } : {}) }).returning();
   await recordAuditTrail(req.db!, { entityType: "NCR", entityId: createdNcr!.id, action: "create", changes: { fromComplaintId: current.id }, performedBy: req.user?.id });
   await syncNcrFormData(

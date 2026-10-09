@@ -36,7 +36,6 @@ export function TrainingPage() {
         onRowClick={(c) => navigate(`/training/${c.id}`)}
         onCreated={(c) => navigate(`/training/${c.id}`)}
         columns={[
-          { header: "ID", accessor: (c) => `#${c.id}` },
           { header: "Course", accessor: (c) => c.title },
           { header: "Description", accessor: (c) => c.description ?? "—" },
           { header: "Required for", accessor: (c) => (c.requiredForDepartment ? departmentLabel(c.requiredForDepartment) : "—") },

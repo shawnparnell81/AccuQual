@@ -107,7 +107,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
           <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} number={audit.recordNumber} ownerIds={[audit.auditorId]} navigateTo="/audits" allowed={permitted} assignedOnly />
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Plan`} label="Audit Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`${recordHeading("Audit", audit.recordNumber)} — Audit Checklist`} label="Audit Checklist" />
@@ -117,7 +117,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             recordId={auditId}
             triggerLabel="Generate Audit Plan"
             buildInitialPrompt={() =>
-              `Help plan Audit #${auditId} ("${audit.name}", type: ${audit.type ?? "not set"}). Propose a checklist of areas to audit, suggest` +
+              `Help plan ${recordHeading("Audit", audit.recordNumber)} ("${audit.name}", type: ${audit.type ?? "not set"}). Propose a checklist of areas to audit, suggest` +
               " the overall scope, propose a sampling plan appropriate to that type of audit, and summarize what regulatory or standard" +
               " requirements are typically relevant for an audit like this. Base it on any prior findings noted for this audit. This is a" +
               " draft for the auditor to review and adapt into the real Audit Plan document — not the document itself."

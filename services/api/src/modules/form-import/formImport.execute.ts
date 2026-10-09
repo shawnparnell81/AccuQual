@@ -281,7 +281,7 @@ async function writeValidation(db: Db, actor: Actor, template: FormImportTemplat
   });
   await publishEvent(AI_STREAM, { job: "embed", entityType: "Validation Report", entityId: created.id, content: JSON.stringify(data) });
   await snapshotFormNumber(db, persist.formKey, created.id);
-  const part = typeof cells.B6 === "string" && cells.B6 ? cells.B6 : `Report ${created.id}`;
+  const part = typeof cells.B6 === "string" && cells.B6 ? cells.B6 : "Validation report";
   return { kind: "create", id: created.id, href: hrefFor(template, created.id), label: part };
 }
 
