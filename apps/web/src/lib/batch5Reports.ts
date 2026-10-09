@@ -67,13 +67,21 @@ export function blankBatch5(kind: Batch5Kind): Record<string, CellValue> {
   return { E2: MAXWELL, B9: SHAWN };
 }
 
+function present(value: CellValue | undefined): boolean {
+  return !(value === undefined || value === null || (typeof value === "string" && value.trim() === ""));
+}
+
 function arith(value: CellValue | undefined): number | string {
-  if (value === undefined || value === null || value === "") return 0;
+  if (!present(value)) return 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : VALUE;
   if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "string" && (value.startsWith("#") || value === "")) return value.startsWith("#") ? value : 0;
-  const parsed = Number(String(value).trim());
-  return Number.isFinite(parsed) ? parsed : VALUE;
+  const text = String(value).trim();
+  if (text.startsWith("#")) return text;
+  const body = text.replace(/,/g, "").replace(/%$/, "").trim();
+  if (/^-?\d+(\.\d+)?$/.test(body)) return Number(body);
+  const leading = body.match(/^(-?\d+(?:\.\d+)?)(?:\s+[A-Za-zµ°].*)?$/);
+  if (leading?.[1]) return Number(leading[1]);
+  return VALUE;
 }
 
 function div(numerator: number | string, denominator: number | string): number | string {
@@ -118,14 +126,24 @@ function regression(xs: number[], ys: number[]): { slope: number; intercept: num
 export function evaluateFuelInjectorDev(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
   const divisors = [6000, 6000, 3000, 3000, 3000];
+  const rows = [30, 31, 32, 33, 34];
   const converted: Array<number | string> = [];
+  const allFlows = rows.every((row) => present(cells[`B${row}`]));
   for (let index = 0; index < 5; index += 1) {
-    const row = 30 + index;
+    const row = rows[index] ?? 30;
+    if (!present(cells[`B${row}`])) continue;
     const raw = arith(cells[`B${row}`]);
     const divisor = divisors[index] ?? 1;
     const value = typeof raw === "string" ? raw : raw / divisor;
     computed[`C${row}`] = value;
     converted.push(value);
+  }
+  if (!allFlows) {
+    if (present(cells.B36)) {
+      const staticRaw = arith(cells.B36);
+      computed.B37 = typeof staticRaw === "string" ? staticRaw : staticRaw * 2;
+    }
+    return computed;
   }
   const knownY: number[] = [];
   let trendError: string | null = null;
@@ -141,8 +159,10 @@ export function evaluateFuelInjectorDev(cells: Record<string, CellValue>): Recor
     else if (pulse === undefined) computed[`D${row}`] = VALUE;
     else computed[`D${row}`] = fit.intercept + fit.slope * pulse;
   }
-  const staticRaw = arith(cells.B36);
-  computed.B37 = typeof staticRaw === "string" ? staticRaw : staticRaw * 2;
+  if (present(cells.B36)) {
+    const staticRaw = arith(cells.B36);
+    computed.B37 = typeof staticRaw === "string" ? staticRaw : staticRaw * 2;
+  }
   const c30 = computed.C30;
   const d30 = computed.D30;
   if (typeof c30 !== "number") computed.B38 = typeof c30 === "string" ? c30 : VALUE;
@@ -161,7 +181,9 @@ export function evaluateFuelInjectorDev(cells: Record<string, CellValue>): Recor
 
 /** 0–100 PSI fill-time average and dynamic CFM from the 0.5-gal tank formula. */
 export function evaluateAirCompressorDev(cells: Record<string, CellValue>): Record<string, CellValue> {
-  const averageTime = average([cells.B27, cells.B28, cells.B29]);
+  const times = [cells.B27, cells.B28, cells.B29];
+  if (!times.some(present)) return {};
+  const averageTime = average(times);
   const flow = div((100 / 14.7) * (0.5 / 7.48), averageTime);
   return {
     B30: averageTime,
@@ -171,6 +193,7 @@ export function evaluateAirCompressorDev(cells: Record<string, CellValue>): Reco
 
 /** Spring rate from F4, F3, and stroke: (F4 − F3) / (stroke − 20). */
 export function evaluateElectricLiftDev(cells: Record<string, CellValue>): Record<string, CellValue> {
+  if (!present(cells.B42) || !present(cells.B41) || !present(cells.B14)) return {};
   const f4 = arith(cells.B42);
   const f3 = arith(cells.B41);
   const stroke = arith(cells.B14);
@@ -185,6 +208,7 @@ export function evaluateElectricLiftDev(cells: Record<string, CellValue>): Recor
  * B26 = vehicle weight × weight distribution / 2 / motion ratio × 4.45 / 100.
  */
 export function evaluateAirStrutDev(cells: Record<string, CellValue>): Record<string, CellValue> {
+  if (!present(cells.B8) || !present(cells.D8) || !present(cells.F8)) return {};
   const weight = arith(cells.B8);
   const distribution = arith(cells.D8);
   const motion = arith(cells.F8);
@@ -194,6 +218,7 @@ export function evaluateAirStrutDev(cells: Record<string, CellValue>): Record<st
   const target = div((weight * distribution) / 2, motion);
   if (typeof target === "string") return { B26: target, B27: target, B28: target };
   const force = (target * 4.45) / 100;
+  if (!present(cells.B24) || !present(cells.B25) || !present(cells.C24) || !present(cells.C25)) return { B26: force };
   const at20 = arith(cells.B24);
   const at40 = arith(cells.B25);
   const rate20 = arith(cells.C24);

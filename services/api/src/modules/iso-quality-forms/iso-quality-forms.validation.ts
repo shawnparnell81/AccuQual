@@ -6,6 +6,7 @@ import { SIGNATURE_REQUIRED_KEY, signatureRequiredField } from "../signatures/si
 const cellValue = z.union([z.string().max(20_000), z.number(), z.boolean(), z.null()]);
 
 const scalar = z.union([z.string().max(2_000), z.number(), z.null()]);
+const note = z.union([z.string().max(20_000), z.number(), z.null()]);
 
 const faiLine = z.object({
   balloon: z.string().max(40).optional(),
@@ -46,20 +47,20 @@ const scorecardRow = z.object({
 });
 
 const failureRow = z.object({
-  claimed: scalar.optional(),
-  op: z.string().max(500).optional(),
-  problem: z.string().max(500).optional(),
-  pca: z.string().max(40).optional(),
-  months: z.array(scalar).max(18).optional(),
+  claimed: note.optional(),
+  op: note.optional(),
+  problem: note.optional(),
+  pca: note.optional(),
+  months: z.array(note).max(18).optional(),
 });
 
 const formData = z.object({
-  cells: z.record(z.string().max(12), cellValue).optional(),
+  cells: z.record(z.string().max(64), cellValue).optional(),
   photos: z.string().max(200_000).optional(),
   lines: z.array(faiLine).max(40).optional(),
   customers: z.array(scorecardRow).max(24).optional(),
   problems: z.array(failureRow).max(40).optional(),
-  months: z.array(z.string().max(40)).max(18).optional(),
+  months: z.array(note).max(18).optional(),
   [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
 });
 

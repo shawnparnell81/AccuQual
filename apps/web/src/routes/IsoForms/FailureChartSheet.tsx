@@ -25,8 +25,12 @@ interface FailureChartSheetProps {
 }
 
 function visibleMonths(months: string[]): string[] {
-  if (months.length > 0) return months;
-  return [...FAILURE_MONTHS];
+  const count = months.length > 0 ? months.length : FAILURE_MONTHS.length;
+  return Array.from({ length: count }, (_, index) => {
+    const stored = months[index];
+    if (typeof stored === "string" && stored.trim()) return stored;
+    return FAILURE_MONTHS[index] ?? `Month ${index + 1}`;
+  });
 }
 
 function visibleProblems(problems: FailureRow[], monthCount: number): FailureRow[] {
@@ -68,7 +72,18 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
   return (
     <div className="flex flex-col gap-4">
       <div className="iso-wrap">
-        <table className="iso" data-testid="failure-chart-sheet" aria-label="Failure Action Effectiveness Chart">
+        <table className="iso failure-chart" data-testid="failure-chart-sheet" aria-label="Failure Action Effectiveness Chart">
+          <colgroup>
+            <col style={{ width: 40 }} />
+            <col style={{ width: 88 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 220 }} />
+            <col style={{ width: 110 }} />
+            {headers.map((_, index) => (
+              <col key={index} style={{ width: 72 }} />
+            ))}
+            <col style={{ width: 64 }} />
+          </colgroup>
           <tbody>
             <tr>
               <td className="title" colSpan={headers.length + 6}>
@@ -85,8 +100,8 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
               <td className="header">Problem description</td>
               <td className="header">PCA implemented</td>
               {headers.map((month, index) => (
-                <td key={index} className="header">
-                  <input className="iso-in center" aria-label={`Month ${index + 1}`} value={month} disabled={readOnly} onChange={(event) => editMonth(index, event.target.value)} />
+                <td key={index} className="header month" title={month}>
+                  <input className="iso-in center" aria-label={`Month ${index + 1}`} title={month} value={month} disabled={readOnly} onChange={(event) => editMonth(index, event.target.value)} />
                 </td>
               ))}
               <td className="header">Total</td>
@@ -100,8 +115,8 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
                 <td>
                   <input className="iso-in" aria-label={`OP ${index + 1}`} value={row.op} disabled={readOnly} onChange={(event) => editRow(index, { op: event.target.value })} />
                 </td>
-                <td>
-                  <input className="iso-in" aria-label={`Problem ${index + 1}`} value={row.problem} disabled={readOnly} onChange={(event) => editRow(index, { problem: event.target.value })} />
+                <td className="problem" title={row.problem || undefined}>
+                  <textarea className="iso-in" aria-label={`Problem ${index + 1}`} title={row.problem || undefined} rows={2} value={row.problem} disabled={readOnly} onChange={(event) => editRow(index, { problem: event.target.value })} />
                 </td>
                 <td className={pcaFill(row.pca)}>
                   <select className="iso-in" aria-label={`PCA ${index + 1}`} value={row.pca} disabled={readOnly} onChange={(event) => editRow(index, { pca: event.target.value })}>
@@ -116,8 +131,8 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
                   <td key={monthIndex}>
                     <input
                       className="iso-in center"
-                      inputMode="decimal"
                       aria-label={`Problem ${index + 1} ${headers[monthIndex]}`}
+                      title={row.months[monthIndex] || headers[monthIndex]}
                       value={row.months[monthIndex] ?? ""}
                       disabled={readOnly}
                       onChange={(event) => editCount(index, monthIndex, event.target.value)}

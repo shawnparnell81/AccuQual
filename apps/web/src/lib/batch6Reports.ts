@@ -38,13 +38,21 @@ export function blankBatch6(kind: Batch6Kind): Record<string, CellValue> {
   return { F2: MAXWELL, D5: SHAWN };
 }
 
+function present(value: CellValue | undefined): boolean {
+  return !(value === undefined || value === null || (typeof value === "string" && value.trim() === ""));
+}
+
 function arith(value: CellValue | undefined): number | string {
-  if (value === undefined || value === null || value === "") return 0;
+  if (!present(value)) return 0;
   if (typeof value === "number") return Number.isFinite(value) ? value : VALUE;
   if (typeof value === "boolean") return value ? 1 : 0;
-  if (typeof value === "string" && value.startsWith("#")) return value;
-  const parsed = Number(String(value).trim());
-  return Number.isFinite(parsed) ? parsed : VALUE;
+  const text = String(value).trim();
+  if (text.startsWith("#")) return text;
+  const body = text.replace(/,/g, "").replace(/%$/, "").trim();
+  if (/^-?\d+(\.\d+)?$/.test(body)) return Number(body);
+  const leading = body.match(/^(-?\d+(?:\.\d+)?)(?:\s+[A-Za-zµ°].*)?$/);
+  if (leading?.[1]) return Number(leading[1]);
+  return VALUE;
 }
 
 function div(numerator: number | string, denominator: number | string): number | string {
@@ -67,6 +75,23 @@ function firstError(...values: Array<number | string>): string | null {
 
 /** Same spring block as CSA development: target force, natural frequency, Wahl stress, and stroke percents. */
 export function evaluateElectronicCsa(cells: Record<string, CellValue>): Record<string, CellValue> {
+  const result: Record<string, CellValue> = {};
+  const loadReady = present(cells.B8) && present(cells.D8) && present(cells.B9);
+  if (!loadReady && !present(cells.B22) && !present(cells.B34) && !present(cells.B38) && !present(cells.B40)) return result;
+  if (!loadReady) {
+    if (present(cells.B22) && present(cells.B34) && present(cells.B38)) {
+      const unloaded = arith(cells.B22);
+      const ride = arith(cells.B34);
+      const stroke = arith(cells.B38);
+      result.B39 = typeof unloaded === "string" || typeof ride === "string" || typeof stroke === "string" ? unloaded : div((unloaded as number) - (ride as number), stroke as number);
+    }
+    if (present(cells.B40) && present(cells.B38)) {
+      const bump = arith(cells.B40);
+      const stroke = arith(cells.B38);
+      result.B41 = typeof bump === "string" || typeof stroke === "string" ? bump : div(bump as number, stroke as number);
+    }
+    return result;
+  }
   const weight = arith(cells.B8);
   const distribution = arith(cells.D8);
   const motion = arith(cells.B9);
@@ -74,46 +99,52 @@ export function evaluateElectronicCsa(cells: Record<string, CellValue>): Record<
   const scaled = loadError ? loadError : div(((weight as number) * (distribution as number)) / 2, motion as number);
   const load = typeof scaled === "string" ? scaled : (scaled * 4.45) / 100;
 
-  const rate = arith(cells.B33);
-  let hertz: number | string;
-  if (typeof load === "string") hertz = load;
-  else if (typeof rate === "string") hertz = rate;
-  else if (typeof motion === "string") hertz = motion;
-  else {
-    const wheelMass = div(load * motion, 9.81);
-    const wheelRate = rate * motion * motion * 1000;
-    const ratio = typeof wheelMass === "string" ? wheelMass : div(wheelRate, wheelMass);
-    const root = typeof ratio === "string" ? ratio : sqrt(ratio);
-    hertz = typeof root === "string" ? root : (1 / (2 * Math.PI)) * root;
-  }
-
-  const outside = arith(cells.B27);
-  const wire = arith(cells.B24);
-  let stress: number | string;
-  if (typeof load === "string") stress = load;
-  else if (typeof outside === "string") stress = outside;
-  else if (typeof wire === "string") stress = wire;
-  else {
-    const mean = outside - wire;
-    const forceMax = (load * 3.25) / 2;
-    const index = div(mean, wire);
-    if (typeof index === "string") stress = index;
-    else if (4 * index - 4 === 0 || index === 0) stress = DIV0;
+  result.B30 = load;
+  if (present(cells.B33)) {
+    const rate = arith(cells.B33);
+    if (typeof load === "string") result.B31 = load;
+    else if (typeof rate === "string") result.B31 = rate;
+    else if (typeof motion === "string") result.B31 = motion;
     else {
-      const wahl = (4 * index - 1) / (4 * index - 4) + 0.615 / index;
-      stress = div(8 * mean * forceMax * wahl, Math.PI * wire ** 3);
+      const wheelMass = div(load * motion, 9.81);
+      const wheelRate = rate * motion * motion * 1000;
+      const ratio = typeof wheelMass === "string" ? wheelMass : div(wheelRate, wheelMass);
+      const root = typeof ratio === "string" ? ratio : sqrt(ratio);
+      result.B31 = typeof root === "string" ? root : (1 / (2 * Math.PI)) * root;
     }
   }
-
-  const unloaded = arith(cells.B22);
-  const ride = arith(cells.B34);
-  const stroke = arith(cells.B38);
-  const bump = arith(cells.B40);
-  const displacedError = firstError(unloaded, ride, stroke);
-  const displaced = displacedError ? displacedError : div((unloaded as number) - (ride as number), stroke as number);
-  const bumpError = firstError(bump, stroke);
-  const bumpPercent = bumpError ? bumpError : div(bump as number, stroke as number);
-  return { B30: load, B31: hertz, B32: stress, B39: displaced, B41: bumpPercent };
+  if (present(cells.B27) && present(cells.B24)) {
+    const outside = arith(cells.B27);
+    const wire = arith(cells.B24);
+    if (typeof load === "string") result.B32 = load;
+    else if (typeof outside === "string") result.B32 = outside;
+    else if (typeof wire === "string") result.B32 = wire;
+    else {
+      const mean = outside - wire;
+      const forceMax = (load * 3.25) / 2;
+      const index = div(mean, wire);
+      if (typeof index === "string") result.B32 = index;
+      else if (4 * index - 4 === 0 || index === 0) result.B32 = DIV0;
+      else {
+        const wahl = (4 * index - 1) / (4 * index - 4) + 0.615 / index;
+        result.B32 = Number.isFinite(wahl) ? div(8 * mean * forceMax * wahl, Math.PI * wire ** 3) : DIV0;
+      }
+    }
+  }
+  if (present(cells.B22) && present(cells.B34) && present(cells.B38)) {
+    const unloaded = arith(cells.B22);
+    const ride = arith(cells.B34);
+    const stroke = arith(cells.B38);
+    const displacedError = firstError(unloaded, ride, stroke);
+    result.B39 = displacedError ? displacedError : div((unloaded as number) - (ride as number), stroke as number);
+  }
+  if (present(cells.B40) && present(cells.B38)) {
+    const bump = arith(cells.B40);
+    const stroke = arith(cells.B38);
+    const bumpError = firstError(bump, stroke);
+    result.B41 = bumpError ? bumpError : div(bump as number, stroke as number);
+  }
+  return result;
 }
 
 export function evaluateBatch6(kind: Batch6Kind, cells: Record<string, CellValue>): Record<string, CellValue> {

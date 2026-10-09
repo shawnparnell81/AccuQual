@@ -28,4 +28,17 @@ describe("NCR form field audit", () => {
     );
     expect(second).toEqual([{ label: "Nonconformance Description", from: "Hole oversize", to: "Hole oversize after the edit" }]);
   });
+
+  it("reads a classification checkbox as the selected word", () => {
+    const edits = formDataEdits(
+      {},
+      { ncrClassification: [{ classification: { Minor: false, Major: true, Critical: false } }] },
+    );
+    expect(edits).toContainEqual({
+      label: "NCR Classification 1 Classification",
+      from: "(blank)",
+      to: "Major",
+    });
+    expect(edits.some((edit) => edit.from === "(blank)" && edit.to === "(blank)")).toBe(false);
+  });
 });

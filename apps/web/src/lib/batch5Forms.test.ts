@@ -39,7 +39,7 @@ test("batch F development documents stay separate from validation forms", () => 
 
 test("air compressor development averages fill time and converts CFM", () => {
   const cells = blankBatch5("dev_air_compressor");
-  assert.equal(evaluateAirCompressorDev(cells).B30, "#DIV/0!");
+  assert.equal(evaluateAirCompressorDev(cells).B30, undefined);
   cells.B27 = 10;
   cells.B28 = 12;
   cells.B29 = 14;
@@ -81,7 +81,7 @@ test("electric lift development spring rate uses stroke minus 20", () => {
 
 test("air strut development interpolates ride height from 20 and 40 PSI", () => {
   const cells = blankBatch5("dev_air_strut");
-  assert.equal(evaluateAirStrutDev(cells).B26, "#DIV/0!");
+  assert.equal(evaluateAirStrutDev(cells).B26, undefined);
   cells.B8 = 4000;
   cells.D8 = 50;
   cells.F8 = 1;

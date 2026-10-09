@@ -24,7 +24,7 @@ test("electronic CSA and shock development stay separate from the earlier forms"
 
 test("electronic CSA development matches the workbook spring formulas", () => {
   const cells = blankBatch6("dev_electronic_csa");
-  assert.equal(evaluateElectronicCsa(cells).B30, "#DIV/0!");
+  assert.equal(evaluateElectronicCsa(cells).B30, undefined);
   cells.B8 = 4000;
   cells.D8 = 50;
   cells.B9 = 1;

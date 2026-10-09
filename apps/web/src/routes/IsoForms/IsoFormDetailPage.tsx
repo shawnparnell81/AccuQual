@@ -195,10 +195,12 @@ export function IsoFormDetailPage() {
 
   async function saveRecord() {
     const data = payload();
-    await updateRecord.mutateAsync({ id: recordId, data });
+    const saved = (await apiClient.patch<IsoQualityForm>(`/iso-quality-forms/${recordId}`, { data })).data;
     setSavedSnap({ id: recordId, snap: liveSnap });
     formLock.lock();
-    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+    queryClient.setQueryData(["iso-quality-forms", recordId], saved);
+    void queryClient.invalidateQueries({ queryKey: ["iso-quality-forms"] });
+    void queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
   }
 
   async function startEdit() {
@@ -441,7 +443,7 @@ function IsoFormDetailBody({
           </div>
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} allowed={canEdit} assignedOnly />
-            <SaveStatus saving={saving} unsaved={dirty && !saving} />
+            <SaveStatus saving={saving || pending} unsaved={dirty && !saving && !pending} />
             <SavedFormLockBar
               mode={mode}
               canEdit={canEdit}
