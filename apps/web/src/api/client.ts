@@ -7,6 +7,7 @@ import {
   createSessionRefresher,
   nextProactiveDelayMs,
   refreshDecision,
+  refreshWhileBackingOff,
   settleAfterRefresh,
   type RefreshReason,
   type RefreshResult,
@@ -38,6 +39,8 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 let lastSuccessAt = 0;
 /** How many load-time checks in a row failed for a reason other than "signed out", so the next wait grows. */
 let bootstrapMisses = 0;
+/** Earliest time another renewal may hit the network after a 429, a 5xx, or a dropped connection. */
+let nextRetryAt = 0;
 let proactiveTimer: ReturnType<typeof setTimeout> | undefined;
 let inFlight: Promise<RefreshResult> | null = null;
 
@@ -125,6 +128,7 @@ function scheduleProactiveRefresh(token: string | null, delayOverride?: number) 
   const delay = delayOverride ?? (token ? nextProactiveDelayMs(token, Date.now(), lastSuccessAt) : null);
   if (delay == null) return;
   proactiveTimer = setTimeout(() => {
+    nextRetryAt = 0;
     const current = useAuthStore.getState().accessToken;
     // A signed-out retry (the first check failed before a token existed) is a bootstrap, not a proactive skip.
     void refreshSession(current ? "proactive" : "bootstrap");
@@ -134,12 +138,19 @@ function scheduleProactiveRefresh(token: string | null, delayOverride?: number) 
 function settleRefreshResult(result: RefreshResult): RefreshResult {
   if (result.ok) {
     bootstrapMisses = 0;
+    nextRetryAt = 0;
+    useAuthStore.getState().setReconnecting(false);
     return result;
   }
   if (result.logout) {
     bootstrapMisses = 0;
+    nextRetryAt = 0;
     endSession();
-  } else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
+  } else {
+    nextRetryAt = Date.now() + result.retryAfterMs;
+    useAuthStore.getState().setReconnecting(true);
+    scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
+  }
   return result;
 }
 
@@ -183,7 +194,9 @@ async function performRefreshAttempt(attempt: number) {
  * just received instead of sending the same cookie again — that second send
  * was coming back 401, and enough of them together came back 429.
  * A 401 right after a renewal replays with the new token instead of renewing
- * again. A 429 does not end the session; one retry is scheduled.
+ * again. A 429, a 5xx, or a dropped connection does not end the session.
+ * The page stays put and one retry is scheduled. Only a 401 from this call
+ * (expired, revoked, or no cookie) clears the session.
  */
 export function refreshSession(reason: RefreshReason = "proactive"): Promise<RefreshResult> {
   const token = useAuthStore.getState().accessToken;
@@ -191,13 +204,24 @@ export function refreshSession(reason: RefreshReason = "proactive"): Promise<Ref
     if (inFlight) return inFlight;
     if (token) return Promise.resolve({ ok: true, accessToken: token });
   }
-  if (!inFlight) {
-    // The first check is a single try. Repeating a 500 inline leaves ProtectedRoute
-    // rendering nothing until the backoff finishes, which is a blank page.
-    inFlight = coordinatedRefresh(reason === "bootstrap").then(settleRefreshResult).finally(() => {
+  if (inFlight) return inFlight;
+  const waiting = refreshWhileBackingOff(Date.now(), nextRetryAt);
+  if (waiting) return Promise.resolve(waiting);
+  // The first check is a single try. Repeating a 500 inline leaves ProtectedRoute
+  // rendering nothing until the backoff finishes, which is a blank page.
+  inFlight = coordinatedRefresh(reason === "bootstrap")
+    .then(settleRefreshResult)
+    .catch(() => {
+      const retryAfterMs = 2_000;
+      const failed: RefreshResult = { ok: false, logout: false, retryAfterMs };
+      nextRetryAt = Date.now() + retryAfterMs;
+      useAuthStore.getState().setReconnecting(true);
+      scheduleProactiveRefresh(useAuthStore.getState().accessToken, retryAfterMs);
+      return failed;
+    })
+    .finally(() => {
       inFlight = null;
     });
-  }
   return inFlight;
 }
 
@@ -247,6 +271,8 @@ apiClient.interceptors.response.use(
         },
         endSession,
       );
+      // A 429, a 5xx, or a dropped connection comes back logout: false.
+      // The request fails, the page stays, and the scheduled retry renews the cookie.
       if (settled.ok) return settled.value;
     }
 

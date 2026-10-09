@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, refreshSession } from "../api/client";
 import { bootstrapSessionDecision } from "../api/sessionRefresh";
-import { adoptBrowserSession, coldLoadKeepsSession, releaseBrowserSessionTab } from "../lib/browserSession";
+import { adoptBrowserSession, releaseBrowserSessionTab } from "../lib/browserSession";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
@@ -96,6 +96,7 @@ export function useCurrentCompany() {
 export function useAuthBootstrap() {
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
   const setBootstrapped = useAuthStore((s) => s.setBootstrapped);
+  const setReconnecting = useAuthStore((s) => s.setReconnecting);
   const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
@@ -107,23 +108,28 @@ export function useAuthBootstrap() {
       logout();
       setBootstrapped();
     };
+    const holdForRetry = () => {
+      if (cancelled) return;
+      // The cookie was not refused. Leave the address alone; the refresher
+      // already scheduled another try. Sending this tab to /login made a
+      // later successful try look like a sign-in that nobody typed.
+      setReconnecting(true);
+      setBootstrapped();
+    };
     void (async () => {
       try {
         const result = await refreshSession("bootstrap");
         if (cancelled) return;
-        // A server error used to leave `bootstrapped` false, and ProtectedRoute
-        // renders nothing until that flag is set — a failed check was a blank page.
-        // Signed out is the fallback when the cookie is missing or refused.
-        // A retry scheduled by the refresher can still restore the session if
-        // the cookie is good.
-        const cookieAccepted = coldLoadKeepsSession({ refreshCookieAccepted: result.ok });
-        if (!cookieAccepted || bootstrapSessionDecision(result) === "signed-out") finishSignedOut();
+        const decision = bootstrapSessionDecision(result);
+        if (decision === "signed-out") finishSignedOut();
+        else if (decision === "retry") holdForRetry();
         else {
+          setReconnecting(false);
           adoptBrowserSession();
           setBootstrapped();
         }
       } catch {
-        finishSignedOut();
+        holdForRetry();
       }
     })();
     return () => {

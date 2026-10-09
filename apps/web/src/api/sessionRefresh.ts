@@ -78,10 +78,14 @@ export async function settleAfterRefresh<T>(
   return { ok: false, logout: result.logout };
 }
 
+/**
+ * Only a 401 from the refresh call means the server refused the session
+ * (expired, revoked, or no cookie). A 403, a 429, a 5xx, or a dropped
+ * connection leaves the cookie alone, so the page stays put and the call is
+ * tried again.
+ */
 export function classifyRefreshFailure(status: number | undefined, retryAfterHeader: string | null | undefined, attempt: number, now = Date.now()): RefreshAttempt {
-  // 401/403 (and any other refusal that is not "slow down") means the session
-  // is really gone. 429, a dropped connection, and server errors do not.
-  if (status !== 429 && status !== undefined && status < 500) return { kind: "unauthenticated" };
+  if (status === 401) return { kind: "unauthenticated" };
   return { kind: "backoff", retryAfterMs: retryDelayMs(attempt, retryAfterHeader, now) };
 }
 
@@ -118,12 +122,29 @@ export function accessTokenExpiresAtMs(token: string): number | null {
 export type RefreshReason = "proactive" | "bootstrap" | "unauthorized";
 
 /**
- * The load-time session check has finished. Only a successful renewal is a
- * session. A rejection, a slow-down, a server error, or a dropped connection
- * is signed out — leaving the check unresolved paints an empty shell.
+ * The load-time session check has finished.
+ * "ready" is a renewed session. "signed-out" is a 401: the server said the
+ * session is expired or revoked. "retry" is a 429, a 5xx, or a dropped
+ * connection — the cookie may still be valid, so the app stays on the page.
  */
-export function bootstrapSessionDecision(result: RefreshResult): "ready" | "signed-out" {
-  return result.ok ? "ready" : "signed-out";
+export function bootstrapSessionDecision(result: RefreshResult): "ready" | "signed-out" | "retry" {
+  if (result.ok) return "ready";
+  if (result.logout) return "signed-out";
+  return "retry";
+}
+
+/** The sign-in page is only for a session the server refused. A retry stays on the current page. */
+export function shouldRedirectToLogin(input: { accessToken: string | null; reconnecting: boolean }): boolean {
+  if (input.accessToken) return false;
+  if (input.reconnecting) return false;
+  return true;
+}
+
+/** While a renewal is waiting out a 429 or a server error, another caller must not start a new one. */
+export function refreshWhileBackingOff(now: number, retryNotBefore: number): { ok: false; logout: false; retryAfterMs: number } | null {
+  const waitMs = retryNotBefore - now;
+  if (waitMs <= 0) return null;
+  return { ok: false, logout: false, retryAfterMs: waitMs };
 }
 
 /** True when there is no readable expiry, or the access token is inside the lead window (including already expired). */

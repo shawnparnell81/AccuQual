@@ -129,6 +129,9 @@ export function LoginPage() {
   const startSession = useStartSession();
   const accessToken = useAuthStore((s) => s.accessToken);
 
+  // The token is set only after a password, an authenticator code, single sign-on,
+  // or a refresh cookie the server accepted. This is why a tab left here can
+  // show the dashboard again without another password once that cookie renews.
   if (accessToken) return <Navigate to="/" replace />;
 
   function backToPassword() {

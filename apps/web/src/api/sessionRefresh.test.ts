@@ -7,8 +7,10 @@ import {
   proactiveRefreshDelayMs,
   bootstrapSessionDecision,
   refreshDecision,
+  refreshWhileBackingOff,
   retryDelayMs,
   settleAfterRefresh,
+  shouldRedirectToLogin,
   tokenNearExpiry,
   type RefreshAttempt,
 } from "./sessionRefresh.ts";
@@ -172,17 +174,63 @@ describe("single-flight session refresh", () => {
 });
 
 describe("when a renewal failure should end the session", () => {
-  it("treats 401 as signed out and 429 as a wait", () => {
+  it("treats a definitive 401 as signed out and a 429 or 5xx as a wait", () => {
     assert.equal(classifyRefreshFailure(401, null, 0).kind, "unauthenticated");
-    assert.equal(classifyRefreshFailure(403, null, 0).kind, "unauthenticated");
     const limited = classifyRefreshFailure(429, "2", 0);
     assert.equal(limited.kind, "backoff");
     if (limited.kind === "backoff") assert.equal(limited.retryAfterMs, 2_000);
     const dropped = classifyRefreshFailure(undefined, null, 1);
     assert.equal(dropped.kind, "backoff");
     if (dropped.kind === "backoff") assert.equal(dropped.retryAfterMs, 2_000);
-    const server = classifyRefreshFailure(503, null, 0);
-    assert.equal(server.kind, "backoff");
+    for (const status of [403, 408, 500, 502, 503]) {
+      assert.equal(classifyRefreshFailure(status, null, 0).kind, "backoff");
+    }
+  });
+
+  it("does not log the user out on a 429 or a 5xx, and does on a 401", async () => {
+    for (const status of [429, 500, 502, 503, undefined] as const) {
+      const outcome = classifyRefreshFailure(status, "30", 0);
+      assert.equal(outcome.kind, "backoff");
+      const gate = createSessionRefresher({
+        attempt: async () => outcome,
+        sleep: async () => {
+          throw new Error("a long wait must not block the request");
+        },
+      });
+      let logouts = 0;
+      const settled = await settleAfterRefresh(
+        () => gate.refresh(),
+        async () => "kept",
+        () => {
+          logouts += 1;
+        },
+      );
+      assert.equal(settled.ok, false);
+      if (!settled.ok) assert.equal(settled.logout, false);
+      assert.equal(logouts, 0);
+      assert.equal(bootstrapSessionDecision(await gate.refresh()), "retry");
+      assert.equal(shouldRedirectToLogin({ accessToken: "still-here", reconnecting: true }), false);
+      assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: true }), false);
+    }
+
+    const expired = classifyRefreshFailure(401, null, 0);
+    assert.equal(expired.kind, "unauthenticated");
+    const dead = createSessionRefresher({
+      attempt: async () => expired,
+    });
+    let expiredLogouts = 0;
+    const rejected = await settleAfterRefresh(
+      () => dead.refresh(),
+      async () => "nope",
+      () => {
+        expiredLogouts += 1;
+      },
+    );
+    assert.equal(rejected.ok, false);
+    if (!rejected.ok) assert.equal(rejected.logout, true);
+    assert.equal(expiredLogouts, 1);
+    assert.equal(bootstrapSessionDecision(await dead.refresh()), "signed-out");
+    assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: false }), true);
   });
 
   it("reads Retry-After as seconds or a date, and backs off when it is missing", () => {
@@ -245,9 +293,20 @@ describe("when a renewal is redundant", () => {
 });
 
 describe("load-time session check", () => {
-  it("keeps a renewed session and treats every failed check as signed out", () => {
+  it("keeps a renewed session, signs out only when the server refused it, and retries a transient failure", () => {
     assert.equal(bootstrapSessionDecision({ ok: true, accessToken: "tok" }), "ready");
     assert.equal(bootstrapSessionDecision({ ok: false, logout: true }), "signed-out");
-    assert.equal(bootstrapSessionDecision({ ok: false, logout: false, retryAfterMs: 8_000 }), "signed-out");
+    assert.equal(bootstrapSessionDecision({ ok: false, logout: false, retryAfterMs: 8_000 }), "retry");
+    assert.equal(shouldRedirectToLogin({ accessToken: "tok", reconnecting: false }), false);
+    assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: true }), false);
+    assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: false }), true);
+  });
+
+  it("does not start another renewal while a backoff is still open", () => {
+    const now = 1_700_000_000_000;
+    assert.equal(refreshWhileBackingOff(now, now + 8_000)?.retryAfterMs, 8_000);
+    assert.equal(refreshWhileBackingOff(now, now + 8_000)?.logout, false);
+    assert.equal(refreshWhileBackingOff(now, now), null);
+    assert.equal(refreshWhileBackingOff(now, now - 1), null);
   });
 });

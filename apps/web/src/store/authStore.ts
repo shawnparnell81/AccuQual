@@ -65,9 +65,15 @@ interface AuthState {
   // "definitely logged out" and doesn't bounce a real session to /login
   // for one render while that check is in flight.
   bootstrapped: boolean;
+  /**
+   * A renewal failed because the network, a 429, or a 5xx got in the way.
+   * The refresh cookie was not refused. ProtectedRoute keeps the current page.
+   */
+  reconnecting: boolean;
   setSession: (user: AuthUser, accessToken: string, company?: CompanyContext | null) => void;
   setAccessToken: (accessToken: string) => void;
   setBootstrapped: () => void;
+  setReconnecting: (reconnecting: boolean) => void;
   logout: () => void;
 }
 
@@ -78,10 +84,12 @@ export const useAuthStore = create<AuthState>()(
       company: null,
       accessToken: null,
       bootstrapped: false,
-      setSession: (user, accessToken, company = null) => set({ user, accessToken, company, bootstrapped: true }),
+      reconnecting: false,
+      setSession: (user, accessToken, company = null) => set({ user, accessToken, company, bootstrapped: true, reconnecting: false }),
       setAccessToken: (accessToken) => set({ accessToken }),
       setBootstrapped: () => set({ bootstrapped: true }),
-      logout: () => set({ user: null, company: null, accessToken: null }),
+      setReconnecting: (reconnecting) => set({ reconnecting }),
+      logout: () => set({ user: null, company: null, accessToken: null, reconnecting: false }),
     }),
     {
       name: AUTH_STORAGE_KEY,
@@ -102,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
           company: stored.company ?? null,
           accessToken: null,
           bootstrapped: false,
+          reconnecting: false,
         };
       },
     }
