@@ -110,6 +110,8 @@ export function isValidationSetupCell(formType: string, key: string): boolean {
 }
 
 function csaSetup(key: string): boolean {
+  // B14 (min length) and B17 (percent stroke) are formulas. A cached result is not a nominal.
+  if (key === "B14" || key === "B17") return false;
   if (["B6", "F6", "B7"].includes(key)) return true;
   const column = columnOf(key);
   const row = rowOf(key);

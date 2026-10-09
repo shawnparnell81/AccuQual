@@ -36,12 +36,18 @@ describe("copy from previous", () => {
       C12: "10",
       D12: "10.4",
       E12: "Fail",
+      C14: 7,
+      B14: -20,
+      B17: 0.5,
       B8: "Inspector",
       authorizedSignature: "Shawn 2026-10-01",
     });
     expect(cells.B6).toBe("STRUT-1");
     expect(cells.B12).toBe("Length");
     expect(cells.C12).toBe("10");
+    expect(cells.C14).toBe(7);
+    expect(cells.B14).toBeUndefined();
+    expect(cells.B17).toBeUndefined();
     expect(cells.D12).toBeUndefined();
     expect(cells.E12).toBeUndefined();
     expect(cells.B8).toBeUndefined();

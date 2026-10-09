@@ -238,6 +238,8 @@ export function cellsFromData(data: unknown): Record<string, CellValue> {
   const cells = (data as { cells?: unknown }).cells;
   if (!cells || typeof cells !== "object") return base;
   for (const [key, value] of Object.entries(cells as Record<string, unknown>)) {
+    // Formula cells are recalculated from inputs. A cached -20 is not a saved answer.
+    if (key in FORMULA_TEXT) continue;
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") base[key] = value;
     else if (value === null) base[key] = "";
   }
@@ -305,7 +307,10 @@ function filledNumber(v: Value): number | string | null {
   return null;
 }
 
-/** Min length is max minus stroke. Either blank input leaves the cell blank. */
+/**
+ * Min length is max minus stroke for that same column.
+ * Both source cells have to be filled. A nominal or sample on another row does not stand in for the missing one.
+ */
 function subtractFilled(a: Value, b: Value): number | string {
   const x = filledNumber(a);
   const y = filledNumber(b);
@@ -365,9 +370,14 @@ function judge(sample: Value, nominal: Value, tol: Value): string {
 
 export function evaluate(cells: Record<string, CellValue>): Record<string, CellValue> {
   const computed: Record<string, CellValue> = {};
+  const inputs: Record<string, CellValue> = {};
+  for (const [addr, value] of Object.entries(cells)) {
+    if (addr in FORMULA_TEXT) continue;
+    inputs[addr] = value;
+  }
   const read = (addr: string): Value => {
     if (Object.prototype.hasOwnProperty.call(computed, addr)) return computed[addr] ?? null;
-    const v = cells[addr];
+    const v = inputs[addr];
     if (v === undefined || v === "") return null;
     return v;
   };
@@ -415,7 +425,7 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
     seen.add(addr);
     consider(addr, val);
   }
-  for (const [addr, val] of Object.entries(cells)) {
+  for (const [addr, val] of Object.entries(inputs)) {
     if (seen.has(addr)) continue;
     consider(addr, val);
   }
