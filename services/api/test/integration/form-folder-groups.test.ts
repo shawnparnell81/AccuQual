@@ -9,6 +9,7 @@ import { company } from "../../src/drizzle/schema/company.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../src/drizzle/schema/controlledForms.js";
 import { formFilings } from "../../src/drizzle/schema/formFilings.js";
+import { isoQualityForms } from "../../src/drizzle/schema/isoQualityForms.js";
 import { qmsForms } from "../../src/drizzle/schema/qmsForms.js";
 import { documentChangeRequests } from "../../src/drizzle/schema/documentChangeRequests.js";
 import { changeRequests } from "../../src/drizzle/schema/change.js";
@@ -80,13 +81,16 @@ describe("form folder groups and department folder edit", () => {
     expect(departmentNames.has("Quality Manual")).toBe(true);
 
     const [shelf] = await db.insert(documentFolders).values({ name: `Filed copies ${suffix}`, parentId: iso!.id, sortOrder: 80 }).returning();
-    const [faiNode] = await db.insert(documentFolders).values({ name: "FAI from the blank", parentId: shelf!.id, linkedPath: "/iso-forms/record/41" }).returning();
-    const [dcrNode] = await db.insert(documentFolders).values({ name: "DCR from the blank", parentId: shelf!.id, linkedPath: "/iso-forms/record/42" }).returning();
-    const [ecrNode] = await db.insert(documentFolders).values({ name: "ECR from the blank", parentId: shelf!.id, linkedPath: "/iso-forms/record/43" }).returning();
+    const [faiForm] = await db.insert(isoQualityForms).values({ formType: "first_article", data: {} }).returning();
+    const [dcrForm] = await db.insert(isoQualityForms).values({ formType: "document_change", data: {} }).returning();
+    const [ecrForm] = await db.insert(isoQualityForms).values({ formType: "engineering_change", data: {} }).returning();
+    const [faiNode] = await db.insert(documentFolders).values({ name: "FAI from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${faiForm!.id}` }).returning();
+    const [dcrNode] = await db.insert(documentFolders).values({ name: "DCR from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${dcrForm!.id}` }).returning();
+    const [ecrNode] = await db.insert(documentFolders).values({ name: "ECR from the blank", parentId: shelf!.id, linkedPath: `/iso-forms/record/${ecrForm!.id}` }).returning();
     await db.insert(formFilings).values([
-      { formKey: "frm-fai-001", recordId: 41, folderNodeId: faiNode!.id },
-      { formKey: "frm-doc-001", recordId: 42, folderNodeId: dcrNode!.id },
-      { formKey: "frm-ecr-001", recordId: 43, folderNodeId: ecrNode!.id },
+      { formKey: "frm-fai-001", recordId: faiForm!.id, folderNodeId: faiNode!.id },
+      { formKey: "frm-doc-001", recordId: dcrForm!.id, folderNodeId: dcrNode!.id },
+      { formKey: "frm-ecr-001", recordId: ecrForm!.id, folderNodeId: ecrNode!.id },
     ]);
     await db.insert(qmsForms).values({ formType: "first_article_inspection", formNo: "FAI-1" });
     await db.insert(documentChangeRequests).values({ documentProcessName: "Work instruction" });

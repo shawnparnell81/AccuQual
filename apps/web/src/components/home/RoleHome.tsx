@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { WorkspaceArrange } from "./WorkspaceArrange";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
@@ -21,7 +21,7 @@ import { useSites } from "../../hooks/useSites";
 import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
 import { WaitingOnMe } from "./WaitingOnMe";
-import { readRecentRecords, type RecentRecord } from "../../lib/recentRecords";
+import { useRecentRecords } from "../../hooks/useRecentRecords";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { recordHeading } from "../../lib/userRecordNumber";
@@ -233,11 +233,7 @@ export function RoleHome() {
 }
 
 function RecentWork({ canStartNcr }: { canStartNcr: boolean }) {
-  const user = useCurrentUser();
-  const [rows, setRows] = useState<RecentRecord[]>([]);
-  useEffect(() => {
-    setRows(readRecentRecords(user?.id));
-  }, [user?.id]);
+  const rows = useRecentRecords();
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
@@ -252,7 +248,7 @@ function RecentWork({ canStartNcr }: { canStartNcr: boolean }) {
                 <tr key={row.path} className="border-t border-border">
                   <td className="w-28 py-1.5 text-muted-foreground">{row.type}</td>
                   <td className="py-1.5">
-                    <Link to={row.path} className="font-medium text-primary hover:underline">
+                    <Link to={row.path} title={row.title} className="block truncate font-medium text-primary hover:underline">
                       {row.title}
                     </Link>
                   </td>
@@ -359,7 +355,7 @@ function Callout({ kicker, title, detail, href }: { kicker: string; title: strin
       >
         <span className="relative min-w-0">
           <span className="block text-[10px] font-semibold uppercase tracking-widest text-primary">{kicker}</span>
-          <span className="mt-1 block truncate text-lg font-semibold">{title}</span>
+          <span className="mt-1 block truncate text-lg font-semibold" title={title}>{title}</span>
           <span className="block text-sm text-muted-foreground">{detail}</span>
         </span>
         <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:translate-x-1">
@@ -381,10 +377,10 @@ function NamedList({ title, empty, rows }: { title: string; empty: string; rows:
           <ul className="flex flex-col gap-1">
             {rows.map((row) => (
               <li key={row.key}>
-                <Link to={row.href} className="group flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/60">
+                <Link to={row.href} title={row.label} className="group flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/60">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{row.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>
+                    <span className="block truncate text-sm font-medium" title={row.label}>{row.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground" title={row.detail}>{row.detail}</span>
                   </span>
                   <ChevronRight size={16} className="text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </Link>

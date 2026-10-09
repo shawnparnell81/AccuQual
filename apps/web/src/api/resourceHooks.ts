@@ -26,7 +26,7 @@ export function createResourceHooks<T extends { id: number }>(resource: string) 
     return useQuery({
       queryKey: [...key, id],
       queryFn: async () => (await apiClient.get<T>(`/${resource}/${id}`)).data,
-      enabled: id !== undefined,
+      enabled: typeof id === "number" && Number.isInteger(id) && id > 0,
     });
   }
 

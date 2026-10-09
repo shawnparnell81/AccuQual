@@ -198,6 +198,9 @@ export const MODULE_ENTITY_TYPES: Record<string, string> = {
   // works for them too, if anything ever wants it).
   eight_d: "8D Report",
   iso_forms: "ISO form",
+  validation_reports: "Validation Report",
+  change: "Change request",
+  training_courses: "TrainingCourse",
   warranty: "WarrantyClaim",
   crar: "Crar",
   rma_log: "RmaLog",

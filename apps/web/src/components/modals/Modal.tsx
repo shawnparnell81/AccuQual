@@ -10,6 +10,8 @@ interface ModalProps {
   children: ReactNode;
   /** A roomier card for wizards and tables. */
   wide?: boolean;
+  /** Wide enough that long menu titles wrap instead of being clipped. */
+  expanded?: boolean;
 }
 
 /** How much of the title bar must stay on screen so a dragged card can always be grabbed again. */
@@ -32,7 +34,7 @@ interface DragState {
  * readable) and clicking outside no longer closes it, so an errant click
  * while reading the page behind can't throw away half-filled form data.
  */
-export function Modal({ title, isOpen, onClose, children, wide = false }: ModalProps) {
+export function Modal({ title, isOpen, onClose, children, wide = false, expanded = false }: ModalProps) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
@@ -81,7 +83,7 @@ export function Modal({ title, isOpen, onClose, children, wide = false }: ModalP
     >
       <div
         ref={cardRef}
-        className={clsx("aq-menu flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-card text-foreground shadow-2xl ring-1 ring-primary/10", wide ? "max-w-3xl" : "max-w-lg")}
+        className={clsx("aq-menu flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-card text-foreground shadow-2xl ring-1 ring-primary/10", expanded ? "max-w-6xl" : wide ? "max-w-3xl" : "max-w-lg")}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >

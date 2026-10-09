@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
+import { TruncatedName } from "../shared/TruncatedName";
 import { ChevronDown, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useCurrentCompany, useCurrentUser } from "../../hooks/useAuth";
 import { GlobalSearchResults } from "./GlobalSearchResults";
@@ -483,12 +484,12 @@ function FolderBlock({
         {node.path ? (
           <NavLink to={node.path} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path!)} onFocus={() => prefetchRoute(node.path!)} className={() => clsx("aq-nav-folder-link", pathMatches(pathname, node.path!) && "active")} title={node.label}>
             <node.icon size={18} className="shrink-0" />
-            <span className="aq-nav-label min-w-0 flex-1 truncate text-left">{node.label}</span>
+            <TruncatedName name={node.label} className="aq-nav-label flex-1 text-left" />
           </NavLink>
         ) : (
           <button type="button" className="aq-nav-folder-link" onClick={onToggle} title={node.label}>
             <node.icon size={18} className="shrink-0" />
-            <span className="aq-nav-label min-w-0 flex-1 truncate text-left">{node.label}</span>
+            <TruncatedName name={node.label} className="aq-nav-label flex-1 text-left" />
           </button>
         )}
         <button type="button" className="aq-nav-chevron-btn" aria-expanded={open} aria-label={open ? `Collapse ${node.label}` : `Expand ${node.label}`} onClick={onToggle}>
@@ -524,7 +525,7 @@ function SidebarDestination({ node, className, iconSize, onNavigate }: { node: S
   const body = (
     <>
       <node.icon size={iconSize} className="shrink-0" />
-      <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
+      <TruncatedName name={node.label} className="aq-nav-label flex-1" />
     </>
   );
   if (sidebarLinkOpensNewTab(node)) {

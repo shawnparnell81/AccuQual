@@ -3,10 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { GripVertical, Lock, SlidersHorizontal } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
-import { useCurrentUser } from "../../hooks/useAuth";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useSidebarPrefs } from "../../hooks/useSidebarPrefs";
-import { readRecentRecords } from "../../lib/recentRecords";
+import { useRecentRecords } from "../../hooks/useRecentRecords";
 import { dropPosition } from "../../lib/listReorder";
 import { placementParent } from "../../lib/sidebarLayout";
 import { EXTRA_SIDEBAR_PAGES, acceptSidebarPath, resourceForPath, sidebarAllows } from "../../lib/sidebarAccess";
@@ -61,7 +60,6 @@ export function SidebarShortcutsButton({ catalog, placement = "sidebar" }: { cat
 
 export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: SidebarNode[]; open: boolean; onClose: () => void }) {
   const toast = useToast();
-  const user = useCurrentUser();
   const { prefs, access, save, reset } = useSidebarPrefs();
   const templates = useFormTemplates({ enabled: open });
   const folders = useQuery({
@@ -131,12 +129,13 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
       .slice(0, 40);
   }, [templates.data, access, needle]);
 
+  const recentRows = useRecentRecords();
   const recent = useMemo(() => {
-    return readRecentRecords(user?.id)
+    return recentRows
       .map((record) => ({ ...record, path: acceptSidebarPath(record.path) }))
       .filter((record): record is { path: string; title: string; type: string } => Boolean(record.path) && sidebarAllows(resourceForPath(record.path!), access))
       .filter((record) => !needle || `${record.title} ${record.path}`.toLowerCase().includes(needle));
-  }, [user?.id, access, needle]);
+  }, [recentRows, access, needle]);
 
   function fail(err: unknown) {
     void extractErrorMessageAsync(err, "Couldn't save your sidebar").then((message) => toast.error(message));
@@ -168,13 +167,13 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   }
 
   return (
-    <Modal title="Customize sidebar" isOpen={open} onClose={onClose} wide>
+    <Modal title="Customize sidebar" isOpen={open} onClose={onClose} expanded>
       <div className="flex flex-col gap-4 text-sm" data-testid="customize-sidebar-dialog">
         <p className="text-muted-foreground">Choose what shows, the order, and your own sections. Home stays pinned at the top. Settings stays at the bottom. This is your menu only. Reset puts the original menu back.</p>
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
             <h3 className="mb-2 font-medium">Your menu</h3>
-            <ul className="max-h-80 overflow-auto rounded-md border border-border" data-testid="customize-sidebar-rows">
+            <ul className="max-h-[60vh] overflow-auto rounded-md border border-border" data-testid="customize-sidebar-rows">
               {rows.map((row) =>
                 row.locked ? (
                   <LockedMenuRow key={row.key} row={row} />
@@ -317,7 +316,7 @@ function folderPath(folders: DocFolder[], id: number): string {
 function Choice({ label, showing, onPin }: { label: string; showing: boolean; onPin: () => void }) {
   return (
     <li className="flex items-center justify-between gap-2 px-3 py-1.5">
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 whitespace-normal break-words" title={label}>{label}</span>
       {showing ? (
         <span className="text-xs text-muted-foreground">Already showing</span>
       ) : (
@@ -338,7 +337,7 @@ function LockedMenuRow({ row }: { row: { key: string; label: string; depth: numb
       title={`${row.label} stays at the top of the sidebar`}
     >
       <Lock size={14} className="aq-side-locked-mark shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate font-medium">{row.label}</span>
+      <span className="min-w-0 flex-1 whitespace-normal break-words font-medium" title={row.label}>{row.label}</span>
       <span className="aq-side-locked-mark text-xs">Pinned</span>
     </li>
   );
@@ -399,7 +398,7 @@ function MenuRow({
       </button>
       <label className="flex min-w-0 flex-1 items-center gap-2">
         <input type="checkbox" checked={!row.hidden} onChange={onToggle} aria-label={`Show ${row.label}`} />
-        <span className="truncate">{row.label}</span>
+        <span className="min-w-0 flex-1 whitespace-normal break-words" title={row.label}>{row.label}</span>
       </label>
       <button type="button" className="rounded px-1 text-xs text-muted-foreground hover:text-foreground" aria-label={`Move ${row.label} up`} onClick={() => onNudge(-1)}>
         Up

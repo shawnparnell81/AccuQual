@@ -35,6 +35,7 @@ import { collapseDuplicateLivingListNodes, ensureLivingControlledLists } from ".
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { getFormFolder, listFormFolders, renameFormFolder, retireFormFolder } from "./formFolders.js";
+import { liveRecordPaths, repairSavedFormListings } from "./savedFormLinks.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import { retireQualityManualCopies } from "./retiredListCopies.js";
@@ -457,8 +458,16 @@ async function folderListResponse(db: Db, folders: (typeof documentFolders.$infe
 }
 
 /** Full flat folder list for the company, seeding the default department tree on first use. */
+export const livePaths = asyncHandler(async (req: Request, res: Response) => {
+  const raw = req.query.path ?? req.query["path[]"];
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  const paths = list.filter((path): path is string => typeof path === "string").slice(0, 40);
+  res.json({ live: await liveRecordPaths(req.db!, paths) });
+});
+
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
+  await repairSavedFormListings(db, req.user?.id);
 
   const existing = await db.select().from(documentFolders);
   if (existing.length === 0) {

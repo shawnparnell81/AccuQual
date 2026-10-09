@@ -72,6 +72,33 @@ test("a status change with no stored detail does not show the raw action code", 
   assert.doesNotMatch(line.what, /status_change/);
 });
 
+test("a saved form names who opened it and each cell that changed", () => {
+  const opened = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: { event: "edit_started" },
+  });
+  assert.equal(opened.who, "Shawn Parnell");
+  assert.equal(opened.what, "Opened for editing");
+  assert.match(opened.description, /Opened the form for editing/);
+
+  const saved = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: {
+      event: "form_saved",
+      edits: [
+        { label: "Cell B6", from: "(blank)", to: "CSA-9" },
+        { label: "Prepared By", from: "Pat", to: "Shawn" },
+      ],
+    },
+  });
+  assert.equal(saved.what, "Saved");
+  assert.match(saved.description, /Saved the form/);
+  assert.match(saved.description, /Cell B6 changed from \(blank\) to CSA-9/);
+  assert.match(saved.description, /Prepared By changed from Pat to Shawn/);
+});
+
 test("an update written as a patch, before field diffs existed, names the fields", () => {
   const line = formatAuditLine({
     action: "update",

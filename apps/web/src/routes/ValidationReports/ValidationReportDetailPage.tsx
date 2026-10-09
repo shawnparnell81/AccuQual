@@ -4,6 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { validationReportsCrumb } from "../../lib/folderBrowse";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { RecordFrame } from "../../components/records/RecordFrame";
@@ -31,6 +33,7 @@ import { withChoice, type SignatureChoice } from "../../components/forms/signatu
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
+import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 
 interface ValidationReport {
   id: number;
@@ -67,11 +70,13 @@ export function ValidationReportDetailPage() {
   const reportId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
-  const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
+  const canEdit = effective?.documents === "edit";
   const queryClient = useQueryClient();
   const { data: report, isLoading, isError } = hooks.useOne(reportId);
   const updateReport = hooks.useUpdate();
   const signReport = hooks.useAction("sign");
+  const beginEdit = hooks.useAction("begin-edit");
+  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
@@ -90,6 +95,10 @@ export function ValidationReportDetailPage() {
   }, [report, user?.id]);
 
   useEffect(() => {
+    setMode(openSavedForm());
+  }, [reportId]);
+
+  useEffect(() => {
     if (!report || loadedFor === report.id) return;
     const next = loadCells(formTypeOf(report.data), report.data);
     setCells(next);
@@ -99,6 +108,7 @@ export function ValidationReportDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this validation report. Refresh the page and try again.</p>;
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
+  const fieldsEditable = savedFieldsEditable(mode, canEdit);
   const filled = cells;
   const saved = loadCells(formType, report.data);
   const dirty = JSON.stringify(filled) !== JSON.stringify(saved);
@@ -121,6 +131,7 @@ export function ValidationReportDetailPage() {
     setSaveNote(null);
     try {
       await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } });
+      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
     } catch {
       setSaveNote("error");
       setPending(false);
@@ -129,11 +140,28 @@ export function ValidationReportDetailPage() {
     try {
       const filed = await fileChosenFolder(queryClient, formKey, reportId);
       setSaveNote(filed ?? "unfiled");
+      setMode(afterSaveOrCancel());
     } catch {
       setSaveNote("file-error");
     } finally {
       setPending(false);
     }
+  }
+
+  async function startEdit() {
+    if (!canEdit) return;
+    try {
+      await beginEdit.mutateAsync({ id: reportId });
+      setMode(afterEditClick(true));
+      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
+    } catch {
+      setSaveNote("error");
+    }
+  }
+
+  function cancelEdit() {
+    setCells(loadCells(formType, savedReport.data));
+    setMode(afterSaveOrCancel());
   }
 
   return (
@@ -151,7 +179,7 @@ export function ValidationReportDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
-            <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={canEdit} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
+            <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={fieldsEditable} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
             <FormNumberEditor formKey={formKey} compact />
             <p className="text-sm text-muted-foreground">
               {doc}
@@ -176,16 +204,18 @@ export function ValidationReportDetailPage() {
               {result}
             </span>
             <SaveStatus saving={updateReport.isPending || pending} unsaved={dirty && !updateReport.isPending && !pending} />
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => void saveRecord()}
-                disabled={updateReport.isPending || pending}
-                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
-              >
-                {updateReport.isPending || pending ? "Saving…" : "Save"}
-              </button>
-            )}
+            <SavedFormLockBar
+              mode={mode}
+              canEdit={canEdit}
+              pending={updateReport.isPending || pending}
+              onEdit={() => void startEdit()}
+              onSave={() => void saveRecord()}
+              onCancel={cancelEdit}
+              onDone={() => {
+                if (dirty) void saveRecord();
+                else setMode(afterSaveOrCancel());
+              }}
+            />
             <SaveResult result={saveNote} />
           </div>
         </div>
@@ -198,7 +228,7 @@ export function ValidationReportDetailPage() {
         {formType === "fuel_pump" ? (
           <FuelPumpSheet
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
@@ -206,7 +236,7 @@ export function ValidationReportDetailPage() {
         ) : formType === "air_strut" ? (
           <AirStrutSheet
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             signature={authorizedSignatureOf(report.data)}
@@ -218,7 +248,7 @@ export function ValidationReportDetailPage() {
         ) : formType === "air_spring" ? (
           <AirSpringSheet
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             signature={authorizedSignatureOf(report.data)}
@@ -231,7 +261,7 @@ export function ValidationReportDetailPage() {
           <PartInspectionSheet
             variant={formType}
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             signature={authorizedSignatureOf(report.data)}
@@ -243,14 +273,14 @@ export function ValidationReportDetailPage() {
               await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
             }}
             signatureRequired={multiSignature ? (report.data._signatureRequired ?? {}) : undefined}
-            onSignatureRequired={canEdit ? setSignatureRequired : undefined}
+            onSignatureRequired={fieldsEditable ? setSignatureRequired : undefined}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : isBatch3(formType) ? (
           <Batch3Sheet
             variant={formType}
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             signature={authorizedSignatureOf(report.data)}
@@ -270,18 +300,21 @@ export function ValidationReportDetailPage() {
                 : undefined
             }
             signatureRequired={formType === "gas_lift" ? (report.data._signatureRequired ?? {}) : undefined}
-            onSignatureRequired={formType === "gas_lift" && canEdit ? setSignatureRequired : undefined}
+            onSignatureRequired={formType === "gas_lift" && fieldsEditable ? setSignatureRequired : undefined}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : (
           <ValidationReportSheet
             cells={cells}
-            readOnly={!canEdit}
+            readOnly={!fieldsEditable}
             documentNumber={documentNumber}
             revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         )}
+      </div>
+      <div className="no-print">
+        <WorkflowHistoryPanel moduleName="validation_reports" recordId={reportId} />
       </div>
     </RecordFrame>
   );

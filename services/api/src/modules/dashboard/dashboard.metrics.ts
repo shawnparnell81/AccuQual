@@ -354,6 +354,19 @@ function activityText(entry: DashActivity, meta: { label: string }): string {
   return entry.title ? `${meta.label} ${verb}: ${entry.title}` : `${meta.label} #${entry.entityId} ${verb}`;
 }
 
+/** A deleted record stays in the audit log. The dashboard must not link to it. */
+function activityRecordExists(source: DashboardSource, entry: DashActivity): boolean {
+  const id = entry.entityId;
+  if (entry.entityType === "NCR") return source.ncrs.some((row) => row.id === id && !row.isDeleted);
+  if (entry.entityType === "CAPA") return source.capas.some((row) => row.id === id);
+  if (entry.entityType === "Audit") return source.audits.some((row) => row.id === id);
+  if (entry.entityType === "Document") return source.documents.some((row) => row.id === id && !row.isDeleted);
+  if (entry.entityType === "Equipment") return source.equipment.some((row) => row.id === id);
+  if (entry.entityType === "Change request") return source.changes.some((row) => row.id === id);
+  if (entry.entityType === "PPAP package") return source.ppaps.some((row) => row.id === id);
+  return false;
+}
+
 function capaTitle(capa: DashCapa): string {
   const text = capa.actionPlan?.trim() || capa.rootCause?.trim();
   if (text) return text;
@@ -602,7 +615,7 @@ export function buildDashboardOverview(source: DashboardSource): DashboardOvervi
         id: entry.id,
         at: iso(entry.createdAt),
         text: activityText(entry, meta),
-        href: meta.href(entry.entityId),
+        href: activityRecordExists(source, entry) ? meta.href(entry.entityId) : null,
         by: personName(source.names, entry.performedBy),
       };
     });

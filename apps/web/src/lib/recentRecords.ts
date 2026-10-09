@@ -27,6 +27,20 @@ export function readRecentRecords(userId?: number | null): RecentRecord[] {
   }
 }
 
+export function writeRecentRecords(rows: RecentRecord[], userId?: number | null): void {
+  try {
+    localStorage.setItem(bucket(userId), JSON.stringify(rows.slice(0, MAX)));
+  } catch {
+    // Preference only.
+  }
+}
+
+/** Drop recent rows whose path is no longer a live record. Unrecognized paths stay. */
+export function withoutDeadPaths(rows: RecentRecord[], live: readonly string[]): RecentRecord[] {
+  const kept = new Set(live);
+  return rows.filter((row) => kept.has(row.path));
+}
+
 export function rememberRecord(record: RecentRecord, userId?: number | null): RecentRecord[] {
   const next = [record, ...readRecentRecords(userId).filter((row) => row.path !== record.path)].slice(0, MAX);
   try {

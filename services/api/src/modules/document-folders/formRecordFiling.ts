@@ -225,6 +225,17 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
   if (filing.folderNodeId != null) {
     const [node] = await db.select().from(documentFolders).where(eq(documentFolders.id, filing.folderNodeId));
     if (node) {
+      const [child] = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, node.id)).limit(1);
+      if (!child && node.linkedPath !== linkedPath) {
+        await db.update(documentFolders).set({ linkedPath, updatedAt: new Date() }).where(eq(documentFolders.id, node.id));
+        await recordAuditTrail(db, {
+          entityType: FOLDER_AUDIT,
+          entityId: node.id,
+          action: "update",
+          changes: { event: "link_repaired", name: node.name, from: node.linkedPath, to: linkedPath, formKey, recordId },
+          performedBy,
+        });
+      }
       if (node.parentId !== folderId) {
         if (await wouldCreateCycle(db, node.id, folderId)) throw AppError.badRequest("That move would nest a folder inside itself");
         await db.update(documentFolders).set({ parentId: folderId, updatedAt: new Date() }).where(eq(documentFolders.id, node.id));

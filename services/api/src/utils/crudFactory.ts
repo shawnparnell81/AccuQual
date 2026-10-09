@@ -5,6 +5,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
+import { withFormEdits } from "../modules/forms/formEditAudit.js";
 import { applyRecordNumber, showRecordNumber, type RecordNumberSpec } from "../modules/records/userRecordNumber.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
 import type { Db } from "../lib/requestDb.js";
@@ -219,11 +220,15 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       .where(where)
       .returning();
     if (!updated) throw AppError.notFound(options.entityName);
+    const rawChanges: Record<string, unknown> = numberChange
+      ? { ...(req.body as Record<string, unknown>), ...numberChange, recordNumber: showRecordNumber(patch[options.recordNumber!.field]) }
+      : { ...(req.body as Record<string, unknown>) };
+    const changes = existing && patch.data && typeof patch.data === "object" ? withFormEdits(rawChanges, existing.data, patch.data) : rawChanges;
     await recordAuditTrail(req.db!, {
       entityType: options.entityName,
       entityId: id,
       action: "update",
-      changes: numberChange ? { ...req.body, ...numberChange, recordNumber: showRecordNumber(patch[options.recordNumber!.field]) } : req.body,
+      changes,
       performedBy: req.user?.id,
     });
     if (options.afterUpdate) await options.afterUpdate(updated as Record<string, unknown>, req);

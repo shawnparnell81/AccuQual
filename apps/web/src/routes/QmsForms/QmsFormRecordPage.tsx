@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -14,6 +15,9 @@ import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import type { SignatureChoice } from "../../components/forms/signatureRequired";
 import { BrandMark } from "../../components/brand/DmaLogo";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { afterEditClick, afterSaveOrCancel, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -35,6 +39,15 @@ export function QmsFormRecordPage() {
   const toast = useToast();
   const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const definition = getQmsFormDefinition(formType!);
+
+  const { effective } = useEffectivePermissions();
+  const canEdit = effective?.qms_forms === "edit";
+  const [mode, setMode] = useState<SavedFormMode>(openSavedForm());
+  const [editEpoch, setEditEpoch] = useState(0);
+  const fieldsEditable = savedFieldsEditable(mode, canEdit);
+  useEffect(() => {
+    setMode(openSavedForm());
+  }, [formId]);
 
   const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);
 
@@ -71,6 +84,13 @@ export function QmsFormRecordPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <LoadingPlaceholder />;
 
+  async function startEdit() {
+    if (!canEdit) return;
+    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+    setMode(afterEditClick(true));
+    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
+  }
+
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);
   const retired = isRetiredQmsFormType(formType);
   const backTo = retired ? "/documents/master-list" : `/qms-forms/${formType}`;
@@ -81,12 +101,24 @@ export function QmsFormRecordPage() {
         <button onClick={() => navigate(backTo)} className="text-sm text-muted-foreground hover:text-foreground">
           {retired ? "← Master Document List" : "← Back to list"}
         </button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SavedFormLockBar
+            mode={mode}
+            canEdit={canEdit}
+            onEdit={() => void startEdit()}
+            onSave={() => setMode(afterSaveOrCancel())}
+            onCancel={() => {
+              setMode(afterSaveOrCancel());
+              setEditEpoch((epoch) => epoch + 1);
+              void queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] });
+            }}
+            onDone={() => setMode(afterSaveOrCancel())}
+          />
           <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} number={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} />
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
+      <div key={editEpoch} className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
         <div className="aq-doc-head flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
           <div className="flex items-center gap-3">
             <BrandMark logoUrl={logoUrl} />
@@ -102,17 +134,17 @@ export function QmsFormRecordPage() {
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <HeaderField label="Form No." value={record.formNo} onSave={(v) => patchHeader.mutate({ formNo: v || null })} />
+          <HeaderField label="Form No." value={record.formNo} readOnly={!fieldsEditable} onSave={(v) => patchHeader.mutate({ formNo: v || null })} />
           <HeaderField label="Revision" value={record.revision || "A"} readOnly />
-          <HeaderField label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} onSave={(v) => patchHeader.mutate({ effectiveDate: v || null })} />
-          <HeaderField label="Prepared By" value={record.preparedBy} onSave={(v) => patchHeader.mutate({ preparedBy: v || null })} />
-          <HeaderField label="Approved By" value={record.approvedBy} onSave={(v) => patchHeader.mutate({ approvedBy: v || null })} />
+          <HeaderField label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onSave={(v) => patchHeader.mutate({ effectiveDate: v || null })} />
+          <HeaderField label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onSave={(v) => patchHeader.mutate({ preparedBy: v || null })} />
+          <HeaderField label="Approved By" value={record.approvedBy} readOnly={!fieldsEditable} onSave={(v) => patchHeader.mutate({ approvedBy: v || null })} />
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Status</span>
             <div className="flex flex-wrap gap-3 pt-1">
               {STATUSES.map((s) => (
                 <label key={s} className="flex items-center gap-1.5 text-sm capitalize">
-                  <input type="checkbox" checked={record.status === s} onChange={() => patchHeader.mutate({ status: s })} className="print:accent-black" />
+                  <input type="checkbox" checked={record.status === s} disabled={!fieldsEditable} onChange={() => patchHeader.mutate({ status: s })} className="print:accent-black" />
                   {s}
                 </label>
               ))}
@@ -146,14 +178,16 @@ export function QmsFormRecordPage() {
                     </tr>
                   )}
                   {rowsBySection(section.key).map((row) => (
-                    <QmsRow key={row.id} row={row} columns={section.columns} showRequired={section.columns.some((column) => column.key === "signature") && rowsBySection(section.key).length > 1} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })} />
+                    <QmsRow key={row.id} row={row} columns={section.columns} readOnly={!fieldsEditable} showRequired={section.columns.some((column) => column.key === "signature") && rowsBySection(section.key).length > 1} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })} />
                   ))}
                 </tbody>
               </table>
             </div>
-            <button onClick={() => addRow.mutate(section.key)} disabled={addRow.isPending} className="mt-2 rounded-md border border-dashed border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/10 print:hidden">
-              + Add Row
-            </button>
+            {fieldsEditable && (
+              <button onClick={() => addRow.mutate(section.key)} disabled={addRow.isPending} className="mt-2 rounded-md border border-dashed border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/10 print:hidden">
+                + Add Row
+              </button>
+            )}
           </div>
         ))}
 
@@ -168,6 +202,7 @@ export function QmsFormRecordPage() {
             saved={record.additionalComments ?? ""}
             entityType="qms_forms"
             entityId={formId}
+            readOnly={!fieldsEditable}
             onSave={(value) => patchHeader.mutate({ additionalComments: value || null })}
           />
         </div>
@@ -199,6 +234,7 @@ function QmsRow({
   row,
   columns,
   showRequired,
+  readOnly,
   onPatch,
   onDelete,
   onSign,
@@ -206,6 +242,7 @@ function QmsRow({
   row: QmsFormRow;
   columns: { key: string; label: string }[];
   showRequired: boolean;
+  readOnly: boolean;
   onPatch: (data: Record<string, string>) => void;
   onDelete: () => void;
   onSign: (pin: string) => Promise<unknown>;
@@ -219,10 +256,12 @@ function QmsRow({
               value={row.data.signature ?? ""}
               certify="I certify that this entry is accurate and complete."
               variant="sheet"
+              disabled={readOnly}
               requirement={
                 showRequired
                   ? {
                       value: row.data.signatureRequired === "no" ? "no" : "yes",
+                      disabled: readOnly,
                       onChange: (next: SignatureChoice) => onPatch({ ...row.data, signatureRequired: next }),
                     }
                   : undefined
@@ -232,16 +271,19 @@ function QmsRow({
           ) : (
             <input
               defaultValue={row.data[col.key] ?? ""}
-              onBlur={(e) => e.target.value !== (row.data[col.key] ?? "") && onPatch({ ...row.data, [col.key]: e.target.value })}
-              className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black"
+              readOnly={readOnly}
+              onBlur={(e) => !readOnly && e.target.value !== (row.data[col.key] ?? "") && onPatch({ ...row.data, [col.key]: e.target.value })}
+              className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary read-only:bg-muted print:text-black"
             />
           )}
         </td>
       ))}
       <td className="border border-border text-center print:hidden">
-        <button onClick={onDelete} title="Remove row" className="px-1 text-muted-foreground hover:text-destructive">
-          ✕
-        </button>
+        {readOnly ? null : (
+          <button onClick={onDelete} title="Remove row" className="px-1 text-muted-foreground hover:text-destructive">
+            ✕
+          </button>
+        )}
       </td>
     </tr>
   );

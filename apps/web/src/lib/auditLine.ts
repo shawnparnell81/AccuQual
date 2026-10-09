@@ -67,6 +67,8 @@ const KEEP_WITH_FIELDS = new Set([
   "row_added",
   "row_updated",
   "row_removed",
+  "form_saved",
+  "edit_started",
   "escalate_to_ncr",
   "fmea_item_added",
   "obsolete",
@@ -193,6 +195,8 @@ function auditWhat(action: string, changes?: Record<string, unknown> | null): st
   if (code === "logout") return "Signed out";
   if (code && /publish/.test(code)) return "Published";
   if (code && /file_downloaded|download/.test(code)) return "Downloaded file";
+  if (code === "form_saved") return "Saved";
+  if (code === "edit_started") return "Opened for editing";
   if (isAttachment(action, record, code)) return "Attached file";
   if (action === "create") return "Created";
   if (action === "status_change") return "Status changed";
@@ -302,6 +306,10 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       return "Updated the assignee.";
     case "obsolete":
       return "Marked this record obsolete.";
+    case "form_saved":
+      return "Saved the form.";
+    case "edit_started":
+      return "Opened the form for editing.";
     default:
       return `${fieldLabel(code)}.`;
   }
@@ -442,7 +450,7 @@ function valueSentences(changes: Record<string, unknown> | null, code: string | 
     else if (names.length > 2) out.push(`Changed ${names.slice(0, -1).map((name) => name.toLowerCase()).join(", ")}, and ${names[names.length - 1]!.toLowerCase()}.`);
   }
 
-  const seen = new Set(["action", "event", "subAction", "patch", "from", "to", "oldStatus", "newStatus", "status", "fileName", "filename", "fieldsChanged", "summary", "message", "note", "notes", "reason", "reviewNotes", "errorMessage", "failureMode", "version", "replaced", "rollbackTo", "changes", "attemptedTransition", "userRole", "userDepartment", "permission", "decision", "method", "path"]);
+  const seen = new Set(["action", "event", "subAction", "patch", "from", "to", "oldStatus", "newStatus", "status", "fileName", "filename", "fieldsChanged", "summary", "message", "note", "notes", "reason", "reviewNotes", "errorMessage", "failureMode", "version", "replaced", "rollbackTo", "changes", "attemptedTransition", "userRole", "userDepartment", "permission", "decision", "method", "path", "edits", "rowId"]);
   for (const [key, value] of Object.entries(changes)) {
     if (seen.has(key) || skipKey(key)) continue;
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || (value !== null && typeof value === "object")) pushScalar(out, key, value);
@@ -496,6 +504,22 @@ function dedupe(lines: string[]): string[] {
   return kept;
 }
 
+function editSentences(changes: Record<string, unknown> | null): string[] {
+  const edits = changes?.edits;
+  if (!Array.isArray(edits)) return [];
+  const lines: string[] = [];
+  for (const item of edits) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const label = typeof row.label === "string" ? row.label.trim() : "";
+    if (!label) continue;
+    const from = typeof row.from === "string" && row.from.trim() ? row.from.trim() : "(blank)";
+    const to = typeof row.to === "string" && row.to.trim() ? row.to.trim() : "(blank)";
+    lines.push(`${label} changed from ${from} to ${to}.`);
+  }
+  return lines;
+}
+
 function numberEditSentence(changes: Record<string, unknown> | null): string | null {
   const edit = changes && typeof changes.numberEdit === "object" && changes.numberEdit ? (changes.numberEdit as Record<string, unknown>) : null;
   if (!edit) return null;
@@ -519,6 +543,7 @@ function auditDescription(action: string, changes: Record<string, unknown> | nul
   const parts: string[] = [];
   if (lead && (fields.length === 0 || (code && KEEP_WITH_FIELDS.has(code)))) parts.push(lead);
   parts.push(...(fields.length > 0 ? capFields(fields) : valueSentences(record, code)));
+  parts.push(...editSentences(record));
   const decision = decisionSentence(action, record);
   if (decision) parts.push(decision);
   parts.push(...blockedSentences(action, record));

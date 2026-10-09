@@ -5,7 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, fileFormRecordSchema, renameFormFolderSchema, retireFolderSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, retire, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail, renameFormFolderHandler, retireFormFolderHandler } from "./document-folders.controller.js";
+import { list, create, update, remove, retire, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail, renameFormFolderHandler, retireFormFolderHandler, livePaths } from "./document-folders.controller.js";
 import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
 
 export const documentFoldersRouter = Router();
@@ -28,6 +28,7 @@ documentFoldersRouter.patch("/form-templates/:formKey", validate(updateFormNumbe
 documentFoldersRouter.get("/form-filings", formFiling);
 documentFoldersRouter.post("/form-filings", validate(fileFormRecordSchema), fileForm);
 documentFoldersRouter.get("/form-folders", formFolders);
+documentFoldersRouter.get("/live-paths", livePaths);
 documentFoldersRouter.patch("/form-folders/:formKey", validate(renameFormFolderSchema), renameFormFolderHandler);
 documentFoldersRouter.post("/form-folders/:formKey/retire", validate(retireFolderSchema), retireFormFolderHandler);
 documentFoldersRouter.get("/form-folders/:formKey", formFolderDetail);
