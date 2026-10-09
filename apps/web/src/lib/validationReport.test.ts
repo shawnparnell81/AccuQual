@@ -7,6 +7,7 @@ import {
   FAILED_FILL,
   SUPPLIER_OPTIONS,
   blankCells,
+  cellsFromData,
   conditionalFill,
   evaluate,
   inPassFailRange,
@@ -180,6 +181,56 @@ test("live CSA copy: ≤ rows pass inside the max, blank tolerance stays blank, 
   assert.equal(evaluate(band).G13, "Failed");
   band.C13 = "";
   assert.equal(evaluate(band).F13, "");
+});
+
+test("saved row 14 cache is ignored when only the tolerance was stored", () => {
+  const saved = {
+    C14: 7,
+    B14: -20,
+    D14: -20,
+    F14: "Passed" as const,
+    B12: 10,
+    D12: 10,
+    C13: 7,
+    B13: "",
+    D13: "",
+    E13: "",
+    B15: "",
+    D15: "",
+    E14: "",
+  };
+  const loaded = cellsFromData({ cells: saved });
+  assert.equal(loaded.C14, 7);
+  assert.equal(loaded.B12, 10);
+  assert.equal(loaded.B13, "");
+  assert.equal(loaded.B15, "");
+  assert.equal(Object.hasOwn(loaded, "B14"), false);
+  assert.equal(Object.hasOwn(loaded, "D14"), false);
+  assert.equal(Object.hasOwn(loaded, "F14"), false);
+
+  const fromLoad = evaluate(loaded);
+  assert.equal(fromLoad.B14, "");
+  assert.equal(fromLoad.D14, "");
+  assert.equal(fromLoad.F14, "");
+  assert.equal(showValue("B14", fromLoad.B14), "");
+  assert.equal(showValue("D14", fromLoad.D14), "");
+  assert.equal(showValue("F14", fromLoad.F14), "");
+
+  const stale = evaluate({ ...saved, F14: "Failed" });
+  assert.equal(stale.B14, "");
+  assert.equal(stale.D14, "");
+  assert.equal(stale.F14, "");
+  assert.equal(stale.A1, "Passed");
+
+  const oneSided = evaluate({ ...saved, B13: 320, D15: 20 });
+  assert.equal(oneSided.B14, "");
+  assert.equal(oneSided.D14, "");
+  assert.equal(oneSided.F14, "");
+
+  const both = evaluate({ ...saved, B13: 320, B15: 140, D13: 300, D15: 120, F14: "Failed" });
+  assert.equal(both.B14, 180);
+  assert.equal(both.D14, 180);
+  assert.equal(both.F14, "Passed");
 });
 
 test("the sheet keeps the workbook labels, including the original spelling", () => {
