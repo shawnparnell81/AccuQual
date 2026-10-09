@@ -67,7 +67,7 @@ export function ScarFormDetailPage() {
             <input type="checkbox" checked={scar.status === "closed"} disabled={!formLock.fieldsEditable} onChange={(e) => patch.mutate({ status: e.target.checked ? "closed" : "open" })} />
             Closed
           </label>
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
           <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.partNumberDescription} number={scar.scarNumber} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" allowed={permitted} assignedOnly />
         </div>
       </div>

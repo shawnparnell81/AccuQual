@@ -122,7 +122,7 @@ export function CapaDetailPage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
@@ -164,7 +164,7 @@ export function CapaDetailPage() {
               recordId={capaId}
               triggerLabel="AI Root Cause Analysis"
               buildInitialPrompt={() =>
-                `Analyze the probable root cause for CAPA #${capaId}${capa.ncrId ? ` (linked to NCR #${capa.ncrId})` : ""}. ` +
+                `Analyze the probable root cause for ${recordHeading("CAPA", capa.recordNumber)}${capa.ncrId ? " (linked to an NCR)" : ""}. ` +
                 "Walk through a 5-Why analysis, note which Fishbone (Ishikawa) categories are most likely involved (e.g. method, machine," +
                 " material, man, measurement, environment), and conclude with the single most probable root cause and a short list of" +
                 " recommended corrective actions. This is a draft analysis for a quality engineer to review, not a final record."
@@ -232,7 +232,7 @@ export function CapaDetailPage() {
               recordId={capaId}
               triggerLabel="AI Effectiveness Score"
               buildInitialPrompt={() =>
-                `Score the effectiveness of CAPA #${capaId} on a 0–100 scale. Base the score on how well-documented and complete the root` +
+                `Score the effectiveness of ${recordHeading("CAPA", capa.recordNumber)} on a 0–100 scale. Base the score on how well-documented and complete the root` +
                 " cause, action plan, preventive action, and verification are, and on any recurrence signal noted in the context below." +
                 " Respond with: the effectiveness score (0–100), a short reasoning summary for that score, a few recommended follow-up" +
                 " actions, and an assessment of the risk of recurrence (low/medium/high with a one-line justification)."

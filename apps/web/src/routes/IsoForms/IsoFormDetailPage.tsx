@@ -7,6 +7,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
+import { sheetIsDirty, sheetSnap } from "../../lib/sheetDirty";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -107,15 +108,27 @@ export function IsoFormDetailPage() {
   const [months, setMonths] = useState<string[]>([]);
   const [sheet, setSheet] = useState<"form" | "photos">("form");
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
+  const [savedSnap, setSavedSnap] = useState<{ id: number; snap: string } | null>(null);
 
   useEffect(() => {
     if (!record || loadedFor === record.id) return;
-    setCells({ ...(record.data?.cells ?? {}) });
-    setPhotos(record.data?.photos ?? "");
-    setLines(record.data?.lines ?? []);
-    setCustomers(record.data?.customers ?? []);
-    setProblems(record.data?.problems ?? []);
-    setMonths(record.data?.months ?? []);
+    const nextCells = { ...(record.data?.cells ?? {}) };
+    const nextPhotos = record.data?.photos ?? "";
+    const nextLines = record.data?.lines ?? [];
+    const nextCustomers = record.data?.customers ?? [];
+    const nextProblems = record.data?.problems ?? [];
+    const nextMonths = record.data?.months ?? [];
+    const scored = record.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
+    setCells(nextCells);
+    setPhotos(nextPhotos);
+    setLines(nextLines);
+    setCustomers(nextCustomers);
+    setProblems(nextProblems);
+    setMonths(nextMonths);
+    setSavedSnap({
+      id: record.id,
+      snap: sheetSnap({ cells: nextCells, photos: nextPhotos, lines: scored, customers: nextCustomers, problems: nextProblems, months: nextMonths }),
+    });
     setLoadedFor(record.id);
   }, [loadedFor, record]);
 
@@ -125,18 +138,11 @@ export function IsoFormDetailPage() {
   const meta = formByType(record.formType);
   if (!meta) return <p className="text-sm text-destructive">This form type isn't recognized.</p>;
 
-  const saved = record.data ?? {};
   const formType = record.formType;
   const scoredLines = (rows: FaiLine[]) => rows.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) }));
   const currentLines = formType === "first_article" ? scoredLines(lines) : lines;
-  const savedLines = formType === "first_article" ? scoredLines(saved.lines ?? []) : (saved.lines ?? []);
-  const dirty =
-    JSON.stringify(cells) !== JSON.stringify(saved.cells ?? {}) ||
-    photos !== (saved.photos ?? "") ||
-    JSON.stringify(currentLines) !== JSON.stringify(savedLines) ||
-    JSON.stringify(customers) !== JSON.stringify(saved.customers ?? []) ||
-    JSON.stringify(problems) !== JSON.stringify(saved.problems ?? []) ||
-    JSON.stringify(months) !== JSON.stringify(saved.months ?? []);
+  const liveSnap = sheetSnap({ cells, photos, lines: currentLines, customers, problems, months });
+  const dirty = sheetIsDirty(record.id, liveSnap, savedSnap);
 
   const calculated: Record<string, CellValue> = {};
   if (formType === "quarantine_notice") {
@@ -188,7 +194,9 @@ export function IsoFormDetailPage() {
   const fieldsEditable = savedFieldsEditable(mode, canEdit);
 
   async function saveRecord() {
-    await updateRecord.mutateAsync({ id: recordId, data: payload() });
+    const data = payload();
+    await updateRecord.mutateAsync({ id: recordId, data });
+    setSavedSnap({ id: recordId, snap: liveSnap });
     formLock.lock();
     await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
   }
@@ -202,18 +210,30 @@ export function IsoFormDetailPage() {
 
   function cancelEdit() {
     if (!record) return;
-    setCells({ ...(record.data?.cells ?? {}) });
-    setPhotos(record.data?.photos ?? "");
-    setLines(record.data?.lines ?? []);
-    setCustomers(record.data?.customers ?? []);
-    setProblems(record.data?.problems ?? []);
-    setMonths(record.data?.months ?? []);
+    const nextCells = { ...(record.data?.cells ?? {}) };
+    const nextPhotos = record.data?.photos ?? "";
+    const nextLines = record.data?.lines ?? [];
+    const nextCustomers = record.data?.customers ?? [];
+    const nextProblems = record.data?.problems ?? [];
+    const nextMonths = record.data?.months ?? [];
+    const scored = record.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
+    setCells(nextCells);
+    setPhotos(nextPhotos);
+    setLines(nextLines);
+    setCustomers(nextCustomers);
+    setProblems(nextProblems);
+    setMonths(nextMonths);
+    setSavedSnap({
+      id: record.id,
+      snap: sheetSnap({ cells: nextCells, photos: nextPhotos, lines: scored, customers: nextCustomers, problems: nextProblems, months: nextMonths }),
+    });
     formLock.lock();
   }
 
   const savedRecord = record;
   async function setSignatureRequired(path: string, choice: SignatureChoice) {
     await updateRecord.mutateAsync({ id: recordId, data: { ...payload(), _signatureRequired: withChoice(savedRecord.data, path, choice) } });
+    setSavedSnap({ id: recordId, snap: liveSnap });
   }
 
   const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : isBatch5(formType) ? summaryBatch5(formType, cells) : isBatch6(formType) ? summaryBatch6(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
@@ -237,7 +257,7 @@ export function IsoFormDetailPage() {
       canEdit={canEdit}
       mode={mode}
       fieldsEditable={fieldsEditable}
-      onEdit={() => void startEdit()}
+      onEdit={() => startEdit()}
       onCancel={cancelEdit}
       onDone={() => {
         if (dirty) void saveRecord();

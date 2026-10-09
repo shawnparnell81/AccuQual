@@ -11,8 +11,10 @@ describe("cross-training filing name", () => {
     expect(training).toMatchObject({ formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD" });
     expect(moduleRecord?.title).toBe("Training & Competency Record");
     expect(fileNamePatternFor(form!)).toBe("{formId}_{recordNumber}_{date}");
-    expect(filedRecordName("FRM-TRN-002", 4, "2026-09-28", fileNamePatternFor(form!))).toBe("FRM-TRN-002_4_2026-09-28");
-    expect(filedRecordName("FRM-NCR-001", 4, "2026-09-28")).toBe("FRM-NCR-001_4_2026-09-28");
+    expect(filedRecordName("FRM-TRN-002", 4, "2026-09-28", fileNamePatternFor(form!))).toBe("FRM-TRN-002_2026-09-28");
+    expect(filedRecordName("FRM-NCR-001", 4, "2026-09-28")).toBe("FRM-NCR-001_2026-09-28");
+    expect(filedRecordName("FRM-VAL-007", "TEST-1008-03", "2026-09-28")).toBe("FRM-VAL-007_TEST-1008-03_2026-09-28");
+    expect(filedRecordName("FRM-VAL-007", "QA-14", "2026-09-28")).toBe("FRM-VAL-007_QA-14_2026-09-28");
     expect(storedFormId("", "FRM-TRN-001")).toBe("FRM-TRN-001");
     expect(storedFormId("FRM-TRN-001", "FRM-TRN-001")).toBe("FRM-TRN-001");
     expect(storedFormId("FRM-VAL-001", "")).toBe("");
@@ -31,14 +33,14 @@ describe("cross-training filing name", () => {
 
   it("names quality and engineering copies without a form number", () => {
     const names: Record<string, string> = {
-      "frm-psw-001": "PSW_9_2026-09-28",
-      "frm-prc-001": "TurtleDiagram_9_2026-09-28",
-      "frm-qa-001": "QualityAlert_9_2026-09-28",
-      "frm-fai-001": "FirstArticle_9_2026-09-28",
-      "frm-cus-001": "CustomerScorecard_9_2026-09-28",
-      "frm-fae-001": "FailureActionEffectiveness_9_2026-09-28",
-      "frm-msa-001": "GageRR_9_2026-09-28",
-      "frm-par-001": "Pareto_9_2026-09-28",
+      "frm-psw-001": "PSW_2026-09-28",
+      "frm-prc-001": "TurtleDiagram_2026-09-28",
+      "frm-qa-001": "QualityAlert_2026-09-28",
+      "frm-fai-001": "FirstArticle_2026-09-28",
+      "frm-cus-001": "CustomerScorecard_2026-09-28",
+      "frm-fae-001": "FailureActionEffectiveness_2026-09-28",
+      "frm-msa-001": "GageRR_2026-09-28",
+      "frm-par-001": "Pareto_2026-09-28",
     };
     for (const [formKey, expected] of Object.entries(names)) {
       const form = FORM_TEMPLATES.find((item) => item.formKey === formKey);

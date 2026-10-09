@@ -11,7 +11,7 @@ import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, 
 import { cellsFromData, formTypeOf, overallResult, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
-import { showRecordNumber } from "../../lib/userRecordNumber";
+import { recordHeading } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
@@ -145,7 +145,7 @@ export function ValidationReportsPanel() {
                 const passed = result === "Pass" || result === "Passed" || result === "PASS";
                 const failed = result === "Fail" || result === "Failed" || result === "FAIL";
                 const color = passed ? VALIDATION_FORMS[kind].pass : failed ? "#FF0000" : "transparent";
-                const name = showRecordNumber(row.recordNumber) || VALIDATION_FORMS[kind].title;
+                const name = recordHeading(VALIDATION_FORMS[kind].title, row.recordNumber);
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">

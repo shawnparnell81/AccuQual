@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { audits } from "../../drizzle/schema/audits.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { capa } from "../../drizzle/schema/capa.js";
@@ -24,8 +24,9 @@ import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatter
  * Saved forms must open the record that was filed. Listing and search run this
  * again. They rewrite a link that is already wrong, hide a file whose record
  * is already gone, and file a saved record that is missing its folder copy.
- * They do not delete a filing or a file. Removing those rows happens only when
- * someone deletes the record. No migration: the same pass is safe to run more than once.
+ * A copy the user has not saved is taken out of its folder. The record stays
+ * until it is a day old. A saved copy is not deleted. No migration: the same
+ * pass is safe to run more than once.
  */
 
 /** Same folder name as formFolders.SAVED_FORM_FOLDERS_ROOT. Kept here so this file does not import that module. */
@@ -214,12 +215,51 @@ interface SavedCopy {
   recordId: number;
   createdAt: Date | null;
   recordNumber: string;
+  /** False until the user saves. Tables without a save time stay true. */
+  userSaved: boolean;
 }
 
-function pushCopy(copies: SavedCopy[], formKey: string | null | undefined, recordId: number, createdAt: Date | null, recordNumber: string | null) {
+function pushCopy(copies: SavedCopy[], formKey: string | null | undefined, recordId: number, createdAt: Date | null, recordNumber: string | null, userSaved = true) {
   if (!formKey || RETIRED_FORM_KEYS.has(formKey)) return;
   if (!Number.isInteger(recordId) || recordId < 1) return;
-  copies.push({ formKey, recordId, createdAt, recordNumber: recordNumber?.trim() ?? "" });
+  copies.push({ formKey, recordId, createdAt, recordNumber: recordNumber?.trim() ?? "", userSaved });
+}
+
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Drop ISO and validation blanks nobody saved, once they are a day old. A saved copy stays. */
+export async function deleteExpiredUnsavedDrafts(db: Db, now = new Date()): Promise<void> {
+  const cutoff = new Date(now.getTime() - DRAFT_MAX_AGE_MS);
+  const staleIso = await db
+    .select({ id: isoQualityForms.id, formType: isoQualityForms.formType })
+    .from(isoQualityForms)
+    .where(and(isNull(isoQualityForms.updatedAt), lt(isoQualityForms.createdAt, cutoff)));
+  const staleValidation = await db
+    .select({ id: validationReports.id, data: validationReports.data })
+    .from(validationReports)
+    .where(and(isNull(validationReports.updatedAt), lt(validationReports.createdAt, cutoff)));
+  const pairs: { formKey: string; recordId: number }[] = [];
+  for (const row of staleIso) {
+    const formKey = ISO_TYPE_TO_FORM_KEY[row.formType];
+    if (formKey) pairs.push({ formKey, recordId: row.id });
+  }
+  for (const row of staleValidation) {
+    const formKey = validationFormKeyFor(row.data);
+    if (formKey) pairs.push({ formKey, recordId: row.id });
+  }
+  if (pairs.length > 0) {
+    const filings = await db.select().from(formFilings);
+    const drop = filings.filter((filing) => pairs.some((pair) => pair.formKey === filing.formKey && pair.recordId === filing.recordId));
+    for (const filing of drop) {
+      if (filing.folderNodeId == null) continue;
+      const nodeId = filing.folderNodeId;
+      await db.update(formFilings).set({ folderNodeId: null }).where(eq(formFilings.id, filing.id));
+      await deleteExclusiveLeaf(db, nodeId, undefined);
+    }
+    if (drop.length > 0) await db.delete(formFilings).where(inArray(formFilings.id, drop.map((filing) => filing.id)));
+  }
+  if (staleIso.length > 0) await db.delete(isoQualityForms).where(inArray(isoQualityForms.id, staleIso.map((row) => row.id)));
+  if (staleValidation.length > 0) await db.delete(validationReports).where(inArray(validationReports.id, staleValidation.map((row) => row.id)));
 }
 
 /** Live saved-form rows. `form_data` is not a record id for these folders, so it is not read here. */
@@ -227,34 +267,34 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   const copies: SavedCopy[] = [];
   const known = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
   const validations = await db
-    .select({ id: validationReports.id, data: validationReports.data, recordNumber: validationReports.recordNumber, createdAt: validationReports.createdAt })
+    .select({ id: validationReports.id, data: validationReports.data, recordNumber: validationReports.recordNumber, createdAt: validationReports.createdAt, updatedAt: validationReports.updatedAt })
     .from(validationReports);
-  for (const row of validations) pushCopy(copies, validationFormKeyFor(row.data), row.id, row.createdAt, row.recordNumber);
+  for (const row of validations) pushCopy(copies, validationFormKeyFor(row.data), row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
   const isos = await db
-    .select({ id: isoQualityForms.id, formType: isoQualityForms.formType, recordNumber: isoQualityForms.recordNumber, createdAt: isoQualityForms.createdAt })
+    .select({ id: isoQualityForms.id, formType: isoQualityForms.formType, recordNumber: isoQualityForms.recordNumber, createdAt: isoQualityForms.createdAt, updatedAt: isoQualityForms.updatedAt })
     .from(isoQualityForms);
-  for (const row of isos) pushCopy(copies, ISO_TYPE_TO_FORM_KEY[row.formType], row.id, row.createdAt, row.recordNumber);
-  const qmsRows = await db.select({ id: qmsForms.id, formType: qmsForms.formType, formNo: qmsForms.formNo, createdAt: qmsForms.createdAt }).from(qmsForms);
+  for (const row of isos) pushCopy(copies, ISO_TYPE_TO_FORM_KEY[row.formType], row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const qmsRows = await db.select({ id: qmsForms.id, formType: qmsForms.formType, formNo: qmsForms.formNo, createdAt: qmsForms.createdAt, updatedAt: qmsForms.updatedAt }).from(qmsForms);
   for (const row of qmsRows) {
     if (!known.has(row.formType)) continue;
-    pushCopy(copies, row.formType, row.id, row.createdAt, row.formNo);
+    pushCopy(copies, row.formType, row.id, row.createdAt, row.formNo, row.updatedAt != null);
   }
-  const ncrRows = await db.select({ id: ncr.id, recordNumber: ncr.recordNumber, createdAt: ncr.createdAt }).from(ncr).where(eq(ncr.isDeleted, false));
-  for (const row of ncrRows) pushCopy(copies, "ncr", row.id, row.createdAt, row.recordNumber);
-  const capaRows = await db.select({ id: capa.id, recordNumber: capa.recordNumber, createdAt: capa.createdAt }).from(capa);
-  for (const row of capaRows) pushCopy(copies, "capa", row.id, row.createdAt, row.recordNumber);
-  const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt }).from(eightD);
-  for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber);
-  const dcrRows = await db.select({ id: documentChangeRequests.id, formNo: documentChangeRequests.formNo, createdAt: documentChangeRequests.createdAt }).from(documentChangeRequests);
-  for (const row of dcrRows) pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo);
-  const riskRows = await db.select({ id: riskAssessments.id, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt }).from(riskAssessments);
-  for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber);
-  const auditRows = await db.select({ id: audits.id, recordNumber: audits.recordNumber, createdAt: audits.createdAt }).from(audits);
-  for (const row of auditRows) pushCopy(copies, "audit-plan", row.id, row.createdAt, row.recordNumber);
-  const trainingRows = await db.select({ id: trainingCourses.id, createdAt: trainingCourses.createdAt }).from(trainingCourses);
-  for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null);
-  const changeRows = await db.select({ id: changeRequests.id, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt }).from(changeRequests);
-  for (const row of changeRows) pushCopy(copies, "ecr", row.id, row.createdAt, row.recordNumber);
+  const ncrRows = await db.select({ id: ncr.id, recordNumber: ncr.recordNumber, createdAt: ncr.createdAt, updatedAt: ncr.updatedAt }).from(ncr).where(eq(ncr.isDeleted, false));
+  for (const row of ncrRows) pushCopy(copies, "ncr", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const capaRows = await db.select({ id: capa.id, recordNumber: capa.recordNumber, createdAt: capa.createdAt, updatedAt: capa.updatedAt }).from(capa);
+  for (const row of capaRows) pushCopy(copies, "capa", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt, updatedAt: eightD.updatedAt }).from(eightD);
+  for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const dcrRows = await db.select({ id: documentChangeRequests.id, formNo: documentChangeRequests.formNo, createdAt: documentChangeRequests.createdAt, updatedAt: documentChangeRequests.updatedAt }).from(documentChangeRequests);
+  for (const row of dcrRows) pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo, row.updatedAt != null);
+  const riskRows = await db.select({ id: riskAssessments.id, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt }).from(riskAssessments);
+  for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const auditRows = await db.select({ id: audits.id, recordNumber: audits.recordNumber, createdAt: audits.createdAt, updatedAt: audits.updatedAt }).from(audits);
+  for (const row of auditRows) pushCopy(copies, "audit-plan", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const trainingRows = await db.select({ id: trainingCourses.id, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt }).from(trainingCourses);
+  for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null, row.updatedAt != null);
+  const changeRows = await db.select({ id: changeRequests.id, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt, updatedAt: changeRequests.updatedAt }).from(changeRequests);
+  for (const row of changeRows) pushCopy(copies, "ecr", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
   return copies.filter((copy) => known.has(copy.formKey));
 }
 
@@ -282,9 +322,22 @@ async function rememberedFileNames(db: Db): Promise<Map<string, string>> {
   return names;
 }
 
+/** Take a never-saved copy out of its folder. The record and its form-number snapshot stay. */
+async function releaseUnsavedFolderNodes(db: Db, performedBy?: number): Promise<void> {
+  const unsaved = new Set((await collectSavedCopies(db)).filter((copy) => !copy.userSaved).map((copy) => `${copy.formKey}:${copy.recordId}`));
+  if (unsaved.size === 0) return;
+  const filings = await db.select().from(formFilings);
+  for (const filing of filings) {
+    if (filing.folderNodeId == null || !unsaved.has(`${filing.formKey}:${filing.recordId}`)) continue;
+    const nodeId = filing.folderNodeId;
+    await db.update(formFilings).set({ folderNodeId: null, updatedAt: new Date() }).where(eq(formFilings.id, filing.id));
+    await deleteExclusiveLeaf(db, nodeId, performedBy);
+  }
+}
+
 /** Put a saved record back into its per-form folder when the filing or the file node is missing. */
 async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<void> {
-  const copies = await collectSavedCopies(db);
+  const copies = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
   if (copies.length === 0) return;
   const existing = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
   const have = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
@@ -421,6 +474,8 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
 
 /** Point a filed copy at the record that was saved. Does not delete a filing or a file. */
 export async function repairSavedFormListings(db: Db, performedBy?: number): Promise<void> {
+  await deleteExpiredUnsavedDrafts(db);
+  await releaseUnsavedFolderNodes(db, performedBy);
   await refileMissingSavedRecords(db, performedBy);
   const filings = await db.select().from(formFilings);
   const folders = await db

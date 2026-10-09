@@ -23,6 +23,8 @@ export const equipment = pgTable("equipment", {
   statusChangedBy: integer("status_changed_by").references(() => users.id),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at").defaultNow(),
+  /** Null until the user saves. Existing rows are backfilled so they stay filed. */
+  updatedAt: timestamp("updated_at"),
 });
 
 export const calibrations = pgTable("calibrations", {

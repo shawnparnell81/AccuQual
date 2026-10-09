@@ -4,9 +4,11 @@ import { apiClient } from "../../api/client";
 import type { Capa } from "../../api/types";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { recordHeading } from "../../lib/userRecordNumber";
 
 interface RepeatMatch {
   id: number;
+  recordNumber?: string | null;
   title: string;
   part: string | null;
   defectCode: string | null;
@@ -68,7 +70,7 @@ export function RepeatNcrBanner({ ncrId, canEdit }: { ncrId: number; canEdit: bo
           {others.map((match) => (
             <li key={match.id}>
               <Link to={`/ncr/${match.id}`} className="text-primary hover:underline">
-                NCR #{match.id}
+                {recordHeading("NCR", match.recordNumber)}
               </Link>
               <span className="text-muted-foreground">
                 {" "}

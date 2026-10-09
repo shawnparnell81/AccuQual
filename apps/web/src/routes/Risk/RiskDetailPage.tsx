@@ -89,9 +89,7 @@ export function RiskDetailPage() {
           <ModuleFormLock
             mode={formLock.mode}
             canEdit={permitted}
-            onEdit={() => {
-              void formLock.onEdit().then(() => setEditOpen(true));
-            }}
+            onEdit={() => formLock.onEdit().then(() => setEditOpen(true))}
             onLock={() => {
               formLock.lock();
               setEditOpen(false);

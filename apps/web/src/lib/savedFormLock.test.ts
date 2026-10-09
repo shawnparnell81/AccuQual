@@ -27,6 +27,16 @@ test("someone without edit permission stays on the locked form", () => {
   assert.equal(isFreshFormOpen(null), false);
 });
 
+test("Edit stays disabled and reads Opening while begin-edit is still running", () => {
+  const noop = () => undefined;
+  const opening = renderToStaticMarkup(
+    createElement(SavedFormLockBar, { mode: "locked", canEdit: true, opening: true, onEdit: noop, onSave: noop, onCancel: noop, onDone: noop }),
+  );
+  assert.match(opening, /Opening…/);
+  assert.match(opening, /disabled=""/);
+  assert.equal(opening.includes(">Edit<"), false);
+});
+
 test("a new blank shows Save and a reopened record shows Edit", () => {
   const noop = () => undefined;
   const fresh = renderToStaticMarkup(

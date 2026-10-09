@@ -10,7 +10,7 @@ import { showsRequiredControl, writeSignatureRequiredAudit } from "../signatures
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
-import { fileBlankCopy } from "../document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { scalarEdits, type FormEdit } from "../forms/formEditAudit.js";
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
@@ -211,6 +211,7 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
     ? { ...changesWithNumberEdit({}, numberChange), event: "form_saved", edits: headerEdits }
     : changesWithNumberEdit(req.body, numberChange);
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: headerChanges, performedBy: req.user?.id });
+  await fileOnFirstSave(req.db!, "/qms-forms", record, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 

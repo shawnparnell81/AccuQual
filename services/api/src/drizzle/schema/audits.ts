@@ -14,6 +14,8 @@ export const audits = pgTable("audits", {
   scheduledAt: timestamp("scheduled_at"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  /** Null until the user saves. Existing rows are backfilled so they stay filed. */
+  updatedAt: timestamp("updated_at"),
 });
 
 export const auditItems = pgTable("audit_items", {

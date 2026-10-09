@@ -21,11 +21,7 @@ export const createValidationReportSchema = z.object({
 
 export const updateValidationReportSchema = z.object({
   recordNumber: recordNumberSchema,
-  data: z.object({
-    formType,
-    cells: z.record(z.string(), cellValue),
-    [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
-  }),
+  data: z.object(reportData).optional(),
 });
 
 export const signValidationReportSchema = z.object({

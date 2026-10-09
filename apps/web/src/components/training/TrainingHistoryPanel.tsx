@@ -34,10 +34,10 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
                 <span className="flex-1 font-medium">
                   {r.documentId ? (
                     <Link to={`/documents/${r.documentId}`} className="hover:underline">
-                      {r.courseTitle ?? `Course #${r.courseId}`}
+                      {r.courseTitle ?? "Course"}
                     </Link>
                   ) : (
-                    r.courseTitle ?? `Course #${r.courseId}`
+                    r.courseTitle ?? "Course"
                   )}
                 </span>
                 <StatusBadge value={r.status} />

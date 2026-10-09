@@ -93,7 +93,7 @@ export function EquipmentDetailPage() {
   const equipmentId = Number(id);
   const toast = useToast();
   const { data: equipment, isLoading, isError } = equipmentHooks.useOne(equipmentId);
-  useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : `Equipment #${equipmentId}`);
+  useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : "Equipment");
   const uploadCertificate = useUploadCertificate(equipmentId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
@@ -167,14 +167,14 @@ export function EquipmentDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <OpenFormButton formType="calibration" entityId={equipment.id} title={`Equipment #${equipment.id} — Calibration Record`} label="Calibration Record" />
-          <OpenFormButton formType="maintenance_work_order" entityId={equipment.id} title={`Equipment #${equipment.id} — Maintenance Work Order`} label="Maintenance Work Order" />
+          <OpenFormButton formType="calibration" entityId={equipment.id} title={`${equipment.name} — Calibration Record`} label="Calibration Record" />
+          <OpenFormButton formType="maintenance_work_order" entityId={equipment.id} title={`${equipment.name} — Maintenance Work Order`} label="Maintenance Work Order" />
           {useBlock ? (
             <button type="button" disabled title={useBlock} className="rounded-md border border-border px-3 py-2 text-sm opacity-50">
               Gage R&R Study
             </button>
           ) : (
-            <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
+            <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`${equipment.name} — Gage R&R Study`} label="Gage R&R Study" />
           )}
           {mayEdit && (
             <>
@@ -189,9 +189,7 @@ export function EquipmentDetailPage() {
           <ModuleFormLock
             mode={formLock.mode}
             canEdit={permitted}
-            onEdit={() => {
-              void formLock.onEdit().then(() => setEditOpen(true));
-            }}
+            onEdit={() => formLock.onEdit().then(() => setEditOpen(true))}
             onLock={() => {
               formLock.lock();
               setEditOpen(false);

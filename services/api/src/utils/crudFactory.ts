@@ -5,7 +5,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
-import { fileBlankCopy } from "../modules/document-folders/defaultFormFiling.js";
+import { fileBlankCopy, fileOnFirstSave } from "../modules/document-folders/defaultFormFiling.js";
 import { withFormEdits, withScalarEdits } from "../modules/forms/formEditAudit.js";
 import { applyRecordNumber, showRecordNumber, type RecordNumberSpec } from "../modules/records/userRecordNumber.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
@@ -236,6 +236,9 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       changes,
       performedBy: req.user?.id,
     });
+    if (options.blankCreatePath) {
+      await fileOnFirstSave(req.db!, options.blankCreatePath, existing, updated as Record<string, unknown>, patch, req.user?.id);
+    }
     if (options.afterUpdate) await options.afterUpdate(updated as Record<string, unknown>, req);
     res.json(updated);
   });

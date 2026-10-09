@@ -198,7 +198,8 @@ describe("Complaints module (real DB + real HTTP path)", () => {
       const res = await request(app).post(`/complaints/${id}/escalate-to-ncr`).set(auth(qualityToken));
       expect(res.status).toBe(201);
       expect(res.body.ncr).toMatchObject({ description: "Cracked housing", severity: "high", status: "ncr_created" });
-      expect(res.body.ncr.title).toContain(`Customer complaint #${id}`);
+      expect(res.body.ncr.title).toContain("Customer complaint");
+      expect(res.body.ncr.title).not.toContain(`#${id}`);
       expect(res.body.complaint.linkedNcrId).toBe(res.body.ncr.id);
 
       const again = await request(app).post(`/complaints/${id}/escalate-to-ncr`).set(auth(qualityToken));

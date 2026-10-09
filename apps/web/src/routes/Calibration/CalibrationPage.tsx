@@ -38,7 +38,6 @@ export function CalibrationPage() {
         onRowClick={(e) => navigate(`/calibration/${e.id}`)}
         onCreated={(e) => navigate(`/calibration/${e.id}`)}
         columns={[
-          { header: "ID", accessor: (e) => `#${e.id}` },
           { header: "Equipment", accessor: (e) => e.name },
           { header: "Type", accessor: (e) => e.type ?? "—" },
           { header: "Serial #", accessor: (e) => e.serialNumber ?? "—" },

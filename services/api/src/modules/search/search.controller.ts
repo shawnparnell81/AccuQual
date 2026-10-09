@@ -351,7 +351,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .where(and(digits ? idPrefix(trainingCourses.id, digits) : undefined, !digits && q ? ilike(trainingCourses.title, contains(q)) : undefined))
         .orderBy(desc(trainingCourses.id))
         .limit(RESULTS_PER_TYPE)
-        .then((rows) => rows.map((r) => ({ type: "Training" as const, id: r.id, label: `Course #${r.id} — ${r.title}`, path: `/training/${r.id}` }))),
+        .then((rows) => rows.map((r) => ({ type: "Training" as const, id: r.id, label: r.title, path: `/training/${r.id}` }))),
     );
   }
 
@@ -368,7 +368,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
         .then((rows) =>
           rows.map((r) => {
             const serial = r.serialNumber ? ` · ${r.serialNumber}` : "";
-            return { type: "Calibration" as const, id: r.id, label: `${r.name}${serial} (#${r.id})`, path: `/calibration/${r.id}`, status: r.status };
+            return { type: "Calibration" as const, id: r.id, label: `${r.name}${serial}`, path: `/calibration/${r.id}`, status: r.status };
           }),
         ),
     );

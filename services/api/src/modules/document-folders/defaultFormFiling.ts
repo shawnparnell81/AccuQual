@@ -6,7 +6,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
 import { fileNamePatternFor, FORM_TEMPLATES, type FormTemplateSeed } from "./formFiling.js";
 import { ensureSavedFormFolder, isoStamp, RETIRED_FORM_FOLDER_KEYS, savedFillFileName } from "./formFolders.js";
-import { fileFormRecord } from "./formRecordFiling.js";
+import { fileFormRecord, snapshotFormNumber } from "./formRecordFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { canonicalOpenPath } from "./savedFormLinks.js";
 
@@ -109,11 +109,38 @@ async function fileModuleCopy(db: Db, formKey: string, recordId: number, created
   });
 }
 
-/** File one new saved copy into that form's default folder. Does not sweep other filings. */
-export async function fileBlankCopy(db: Db, createPath: string, created: Record<string, unknown>, performedBy?: number): Promise<void> {
+/** A Report No. edit is not a Save. Any other field is. */
+export function patchIsNumberOnly(patch: Record<string, unknown>): boolean {
+  const keys = Object.keys(patch).filter((key) => key !== "updatedAt");
+  return keys.length === 0 || keys.every((key) => key === "recordNumber" || key === "formNo" || key === "scarNumber");
+}
+
+/** The first Save puts the copy in its folder. A later Save leaves that filing alone. */
+export async function fileOnFirstSave(
+  db: Db,
+  createPath: string,
+  before: { updatedAt?: Date | string | null },
+  after: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  performedBy?: number,
+): Promise<void> {
+  if (before.updatedAt != null) return;
+  if (patchIsNumberOnly(patch)) return;
+  await fileBlankCopy(db, createPath, after, performedBy, "save");
+}
+
+/**
+ * Starting a blank remembers the form number and does not put a copy in a folder.
+ * The first Save files it. Save as files it into the folder the user picks.
+ */
+export async function fileBlankCopy(db: Db, createPath: string, created: Record<string, unknown>, performedBy?: number, when: "start" | "save" = "start"): Promise<void> {
   const recordId = Number(created.id);
   const formKey = blankFormKeyForCreate(createPath, created);
   if (!formKey || RETIRED_FORM_FOLDER_KEYS.has(formKey) || !Number.isInteger(recordId) || recordId < 1) return;
+  if (when === "start") {
+    if (FILEABLE_FORM_KEYS.has(formKey)) await snapshotFormNumber(db, formKey, recordId);
+    return;
+  }
   if (FILEABLE_FORM_KEYS.has(formKey)) {
     await fileFormRecord(db, { formKey, recordId, formFolderKey: formKey }, performedBy);
     return;

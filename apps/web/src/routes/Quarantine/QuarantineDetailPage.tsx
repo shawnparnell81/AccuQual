@@ -57,7 +57,7 @@ export function QuarantineDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => void formLock.onEdit()} onLock={formLock.lock} />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
           <DeleteRecordButton resource="quarantine" id={r.id} kind="Quarantine" title={r.itemLabel} ownerIds={[r.createdBy]} navigateTo="/quarantine" allowed={permitted} assignedOnly />
         </div>
         {open && formLock.fieldsEditable && (
