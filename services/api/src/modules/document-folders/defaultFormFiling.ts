@@ -4,41 +4,11 @@ import { formFilings } from "../../drizzle/schema/formFilings.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
-import { fileNamePatternFor, FORM_TEMPLATES, type FormTemplateSeed } from "./formFiling.js";
+import { blankFormKeyForCreate, fileNamePatternFor, FORM_TEMPLATES, type FormTemplateSeed } from "./formFiling.js";
 import { ensureSavedFormFolder, isoStamp, RETIRED_FORM_FOLDER_KEYS, savedFillFileName } from "./formFolders.js";
 import { fileFormRecord, snapshotFormNumber } from "./formRecordFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { canonicalOpenPath } from "./savedFormLinks.js";
-
-const FALLBACK_PATH: Record<string, string> = {
-  "/ncr": "ncr",
-  "/capa": "capa",
-  "/8d": "8d",
-  "/document-change-requests": "dcr",
-  "/risk": "risk",
-};
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-}
-
-/** Which blank this create belongs to. Exact title, name, or form type wins. A shared table falls back to its general form. */
-export function blankFormKeyForCreate(createPath: string, body: Record<string, unknown>): string | null {
-  const data = asRecord(body.data);
-  const formType = typeof body.formType === "string" ? body.formType : typeof data?.formType === "string" ? data.formType : null;
-  const title = typeof body.title === "string" ? body.title : null;
-  const name = typeof body.name === "string" ? body.name : null;
-  for (const seed of FORM_TEMPLATES) {
-    if (seed.start?.createPath !== createPath) continue;
-    const start = seed.start.body;
-    const startData = asRecord(start.data);
-    if (typeof start.formType === "string" && start.formType === formType) return seed.formKey;
-    if (typeof startData?.formType === "string" && startData.formType === formType) return seed.formKey;
-    if (typeof start.title === "string" && title != null && start.title === title) return seed.formKey;
-    if (typeof start.name === "string" && name != null && start.name === name) return seed.formKey;
-  }
-  return FALLBACK_PATH[createPath] ?? null;
-}
 
 function textField(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
@@ -119,16 +89,24 @@ export function patchIsNumberOnly(patch: Record<string, unknown>): boolean {
 export async function fileOnFirstSave(
   db: Db,
   createPath: string,
-  before: { updatedAt?: Date | string | null },
+  before: Record<string, unknown>,
   after: Record<string, unknown>,
   patch: Record<string, unknown>,
   performedBy?: number,
 ): Promise<void> {
-  if (before.updatedAt != null) return;
   if (patchIsNumberOnly(patch)) return;
   // The first save can rename the blank. The folder is the one that was opened, not the new name.
   const started = before as Record<string, unknown>;
   const formKey = blankFormKeyForCreate(createPath, { ...after, ...started }) ?? blankFormKeyForCreate(createPath, after);
+  const recordId = Number(after.id);
+  // A number-only edit can stamp updated_at without filing. The next real save still files once.
+  if (before.updatedAt != null && formKey && Number.isInteger(recordId)) {
+    const [existing] = await db
+      .select({ folderNodeId: formFilings.folderNodeId })
+      .from(formFilings)
+      .where(and(eq(formFilings.formKey, formKey), eq(formFilings.recordId, recordId)));
+    if (existing?.folderNodeId != null) return;
+  }
   await fileBlankCopy(db, createPath, after, performedBy, "save", formKey);
 }
 

@@ -10,6 +10,8 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { syncDiRecordToForm } from "../quality/quality.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
+import { fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
+import type { Db } from "../../lib/requestDb.js";
 
 export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true, recordNumber: AUDIT_NUMBER, blankCreatePath: "/audits" });
 
@@ -46,6 +48,8 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     changes: { auditId, severity: item.severity, question: item.question },
     performedBy: req.user?.id,
   });
+  await logAuditItem(req.db!, auditId, "item_added", itemFieldEdits({}, item), req.user?.id);
+  await fileAudit(req.db!, audit, req.user?.id);
 
   // Same "embed" job crudFactory's generic create() already queues for
   // every other entity (see its own comment + workers/ai-worker) — this
@@ -142,6 +146,7 @@ export const startHandler = asyncHandler(async (req: Request, res: Response) => 
   const [updated] = await req.db!.update(audits).set({ status: "in_progress" }).where(eq(audits.id, id)).returning();
 
   await recordAuditTrail(req.db!, { entityType: "Audit", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
+  await fileAudit(req.db!, audit, req.user?.id);
   await publishEvent(WORKFLOW_STREAM, { module: "audit", event: "start", entityId: id });
 
   res.json(updated);
@@ -159,7 +164,104 @@ export const completeHandler = asyncHandler(async (req: Request, res: Response) 
   // Was missing entirely (see the Outputs Dictionary) — the one dedicated
   // transition in the app that left no audit trail of itself.
   await recordAuditTrail(req.db!, { entityType: "Audit", entityId: id, action: "status_change", changes: { action: "complete" }, performedBy: req.user?.id });
+  await fileAudit(req.db!, audit, req.user?.id);
   await publishEvent(WORKFLOW_STREAM, { module: "audit", event: "complete", entityId: id });
 
   res.json(updated);
+});
+
+const ITEM_FIELDS = [
+  ["question", "Question"],
+  ["finding", "Finding"],
+  ["severity", "Severity"],
+  ["evidence", "Evidence"],
+] as const;
+
+function shownItemValue(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || "(blank)";
+}
+
+function itemFieldEdits(
+  before: { question?: string | null; finding?: string | null; severity?: string | null; evidence?: string | null },
+  after: { question?: string | null; finding?: string | null; severity?: string | null; evidence?: string | null },
+  keys?: ReadonlySet<string>,
+) {
+  const edits: { label: string; from: string; to: string }[] = [];
+  for (const [key, label] of ITEM_FIELDS) {
+    if (keys && !keys.has(key)) continue;
+    const from = shownItemValue(before[key]);
+    const to = shownItemValue(after[key]);
+    if (from === to) continue;
+    edits.push({ label, from, to });
+  }
+  return edits;
+}
+
+async function fileAudit(db: Db, audit: { id: number }, userId: number | undefined) {
+  await fileOnFirstSave(db, "/audits", audit, audit as Record<string, unknown>, { saved: true }, userId);
+}
+
+async function logAuditItem(db: Db, auditId: number, event: "item_added" | "item_updated" | "item_removed", edits: { label: string; from: string; to: string }[], userId: number | undefined) {
+  if (edits.length === 0 && event === "item_updated") return;
+  await recordAuditTrail(db, {
+    entityType: "Audit",
+    entityId: auditId,
+    action: event === "item_removed" ? "delete" : event === "item_added" ? "create" : "update",
+    changes: { event, edits },
+    performedBy: userId,
+  });
+}
+
+async function loadAuditItem(req: Request, auditId: number, itemId: number) {
+  const [audit] = await req.db!.select().from(audits).where(eq(audits.id, auditId));
+  if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
+  const [item] = await req.db!.select().from(auditItems).where(and(eq(auditItems.id, itemId), eq(auditItems.auditId, auditId)));
+  if (!item) throw AppError.notFound("Audit item");
+  return { audit, item };
+}
+
+/** Header Save files the audit once, even when the name did not change. */
+export const saveAuditHandler = asyncHandler(async (req: Request, res: Response) => {
+  const auditId = Number(req.params.id);
+  const [audit] = await req.db!.select().from(audits).where(eq(audits.id, auditId));
+  if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
+  await fileAudit(req.db!, audit, req.user?.id);
+  res.json(audit);
+});
+
+export const updateItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const auditId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const { audit, item } = await loadAuditItem(req, auditId, itemId);
+  const body = req.body as { question?: string; finding?: string | null; severity?: string | null; evidence?: string | null };
+  const patch: { question?: string; finding?: string | null; severity?: string | null; evidence?: string | null } = {};
+  if (body.question !== undefined) patch.question = body.question;
+  if (body.finding !== undefined) patch.finding = body.finding;
+  if (body.severity !== undefined) patch.severity = body.severity;
+  if (body.evidence !== undefined) patch.evidence = body.evidence;
+  const [updated] = await req.db!.update(auditItems).set(patch).where(eq(auditItems.id, item.id)).returning();
+  if (!updated) throw AppError.notFound("Audit item");
+  await logAuditItem(req.db!, auditId, "item_updated", itemFieldEdits(item, updated, new Set(Object.keys(patch))), req.user?.id);
+  await fileAudit(req.db!, audit, req.user?.id);
+  res.json(updated);
+});
+
+export const deleteItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const auditId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const { audit, item } = await loadAuditItem(req, auditId, itemId);
+  await req.db!.update(discrepancyInvestigations).set({ sourceAuditItemId: null }).where(eq(discrepancyInvestigations.sourceAuditItemId, item.id));
+  await req.db!.delete(auditItems).where(eq(auditItems.id, item.id));
+  await logAuditItem(
+    req.db!,
+    auditId,
+    "item_removed",
+    itemFieldEdits(item, { question: null, finding: null, severity: null, evidence: null }),
+    req.user?.id,
+  );
+  await fileAudit(req.db!, audit, req.user?.id);
+  res.status(204).send();
 });

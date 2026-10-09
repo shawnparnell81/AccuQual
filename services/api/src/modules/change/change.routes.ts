@@ -4,7 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createChangeSchema, updateChangeSchema } from "./change.validation.js";
-import { baseHandlers, approveHandler } from "./change.controller.js";
+import { baseHandlers, approveHandler, saveChangeHandler } from "./change.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { beginChangeEdit } from "../forms/moduleBeginEdit.js";
 
@@ -19,5 +19,6 @@ changeRouter.post("/", validate(createChangeSchema), baseHandlers.create);
 changeRouter.get("/:id", baseHandlers.getOne);
 changeRouter.patch("/:id", validate(updateChangeSchema), baseHandlers.update);
 changeRouter.post("/:id/begin-edit", beginChangeEdit);
+changeRouter.post("/:id/save", saveChangeHandler);
 changeRouter.delete("/:id", deleteRecordHandler("change"));
 changeRouter.post("/:id/approve", approveHandler);

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -8,6 +9,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { SavedFormFields } from "../../components/forms/SavedFormFields";
+import { SaveStatus } from "../../components/shared/SaveStatus";
 import type { DocumentChangeRequest } from "../../api/types";
 
 const dcrHooks = createResourceHooks<DocumentChangeRequest>("document-change-requests");
@@ -20,6 +22,13 @@ export function DocumentChangeRequestDetailPage() {
   const { effective } = useEffectivePermissions();
   const permitted = effective?.documents === "edit";
   const formLock = useModuleFormLock(dcrId, permitted, `/document-change-requests/${dcrId}/begin-edit`);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const wasSaving = useRef(false);
+  useEffect(() => {
+    if (wasSaving.current && !saving) setSaved(true);
+    wasSaving.current = saving;
+  }, [saving]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this doc change. Refresh the page and try again.</p>;
   if (isLoading || !dcr) return <p className="text-sm text-muted-foreground">Loading this doc change…</p>;
@@ -31,13 +40,24 @@ export function DocumentChangeRequestDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+          <ModuleFormLock
+            mode={formLock.mode}
+            canEdit={permitted}
+            pending={saving}
+            onEdit={() => formLock.onEdit()}
+            onSave={() => {
+              if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+              setSaved(true);
+            }}
+            onLock={formLock.lock}
+          />
+          {(saved || saving) && <SaveStatus saving={saving} unsaved={false} />}
           <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber} number={dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" allowed={permitted} assignedOnly />
         </div>
       </div>
 
       <SavedFormFields locked={!formLock.fieldsEditable}>
-        <DocumentChangeRequestForm dcr={dcr} />
+        <DocumentChangeRequestForm dcr={dcr} onSaving={setSaving} />
       </SavedFormFields>
 
       <div className="flex flex-col gap-4 print:hidden">

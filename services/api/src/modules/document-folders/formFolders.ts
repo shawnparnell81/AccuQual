@@ -1,6 +1,6 @@
 import { eq, inArray, isNotNull } from "drizzle-orm";
 import { company } from "../../drizzle/schema/company.js";
-import { audits } from "../../drizzle/schema/audits.js";
+import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
@@ -22,8 +22,10 @@ import { folderIsBlankLibrary, ISO_DOCUMENTS_FOLDER } from "./formFiling.js";
 import { folderLocationLabel } from "./mainIsoFolders.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
 import { canonicalOpenPath, filterLiveFilings, repairSavedFormListings } from "./savedFormLinks.js";
-import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, type FormTemplateSeed } from "./formFiling.js";
+import { FORM_TEMPLATES, auditRecordKept, fileNamePatternFor, moduleRecordKept, savedFillFileName, type FormTemplateSeed } from "./formFiling.js";
 import { listFormTemplates } from "./formTemplates.js";
+
+export { savedFillFileName };
 
 /**
  * One Folders row per fillable form. The name is the blank / QMS title.
@@ -114,18 +116,6 @@ export function isoStamp(updatedAt: Date | string | null | undefined, createdAt:
   return new Date(0).toISOString();
 }
 
-/** File name for a saved copy that was not given one by Save as. */
-export function savedFillFileName(input: { formId: string; title: string; recordId: number; savedAt: string; pattern: string; recordLabel?: string | null; number?: string | null }): string {
-  const label = input.recordLabel?.trim() ?? "";
-  if (label && label !== input.title.trim()) return label;
-  const date = input.savedAt.slice(0, 10);
-  const formId = input.formId.trim();
-  const token = (input.number ?? "").trim();
-  if (formId) return filedRecordName(formId, token, date, input.pattern);
-  const title = input.title.trim() || "Form";
-  return token ? `${title}_${token}_${date}` : `${title}_${date}`;
-}
-
 /**
  * First exact label match wins. `fallback` catches records on a shared table
  * that are not one of the more specific blanks (ordinary NCRs, for example).
@@ -133,6 +123,44 @@ export function savedFillFileName(input: { formId: string; title: string; record
 export function formKeyForSharedTitle(matches: { formKey: string; match: string }[], value: string, fallback: string | null): string | null {
   const hit = matches.find((item) => item.match === value);
   return hit?.formKey ?? fallback;
+}
+
+/**
+ * Exact title wins over a generic pin (`ncr`, or the group source when that source is not this row's own form).
+ * A specific pin still wins after the title is renamed.
+ */
+export function sharedFolderKey(
+  group: { source: string; keys: string[]; fallback: string | null },
+  matches: { formKey: string; match: string }[],
+  label: string,
+  pinned: string | undefined,
+): string | null {
+  const exact = matches.find((item) => item.match === label)?.formKey ?? null;
+  const generic =
+    pinned === group.fallback ||
+    (group.fallback == null && pinned === group.source && exact != null && exact !== pinned);
+  if (pinned && group.keys.includes(pinned) && !generic) return pinned;
+  if (exact) return exact;
+  if (pinned && group.keys.includes(pinned)) return pinned;
+  return group.fallback;
+}
+
+/**
+ * Show a generic filing on the title-matched form when that file is still in the default saved-form folder.
+ * A copy the user saved or moved into another Documents folder stays on the key it was filed under.
+ */
+export function listedSharedFolderKey(
+  group: { source: string; keys: string[]; fallback: string | null },
+  matches: { formKey: string; match: string }[],
+  label: string,
+  pinned: string | undefined,
+  inDefaultGenericFolder: boolean,
+): string | null {
+  const listed = sharedFolderKey(group, matches, label, pinned);
+  if (!listed || !pinned || listed === pinned || inDefaultGenericFolder) return listed;
+  const generic = pinned === group.fallback || (group.fallback == null && pinned === group.source);
+  if (generic && group.keys.includes(pinned)) return pinned;
+  return listed;
 }
 
 /**
@@ -333,6 +361,12 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
           .from(documentFolders)
           .where(inArray(documentFolders.id, nodeIds));
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const parentIds = [...new Set(nodes.map((node) => node.parentId).filter((id): id is number => id != null))];
+  const parents =
+    parentIds.length === 0
+      ? []
+      : await db.select({ id: documentFolders.id, linkedPath: documentFolders.linkedPath }).from(documentFolders).where(inArray(documentFolders.id, parentIds));
+  const parentPath = new Map(parents.map((parent) => [parent.id, parent.linkedPath]));
 
   for (const filing of filings) {
     if (!FILEABLE_FORM_KEYS.has(filing.formKey) || filing.folderNodeId == null) continue;
@@ -398,8 +432,12 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const riskRows = await db
     .select({ id: riskAssessments.id, title: riskAssessments.title, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt })
     .from(riskAssessments);
-  const auditRows = await db.select({ id: audits.id, name: audits.name, recordNumber: audits.recordNumber, createdAt: audits.createdAt }).from(audits);
-  const equipmentRows = await db.select({ id: equipment.id, name: equipment.name, createdAt: equipment.createdAt }).from(equipment);
+  const auditRows = await db.select({ id: audits.id, name: audits.name, recordNumber: audits.recordNumber, status: audits.status, createdAt: audits.createdAt }).from(audits);
+  const auditItemRows = await db.select({ auditId: auditItems.auditId }).from(auditItems);
+  const auditsWithItems = new Set(auditItemRows.map((row) => row.auditId));
+  const equipmentRows = await db
+    .select({ id: equipment.id, name: equipment.name, location: equipment.location, serialNumber: equipment.serialNumber, type: equipment.type, createdAt: equipment.createdAt })
+    .from(equipment);
   const trainingRows = await db
     .select({ id: trainingCourses.id, title: trainingCourses.title, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt })
     .from(trainingCourses);
@@ -407,10 +445,12 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
     .select({ id: changeRequests.id, title: changeRequests.title, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt, updatedAt: changeRequests.updatedAt })
     .from(changeRequests);
 
+  const kept = (updatedAt: Date | null, number: string | null, keys: readonly string[], id: number) =>
+    moduleRecordKept(updatedAt, number) || filedUnder(keys, id);
   const rowsFor = new Map<string, Stamp[]>([
-    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["capa", capaRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["8d", eightRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["supplier-ncr", "complaint", "ncr"], row.id) }))],
+    ["capa", capaRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["capa"], row.id) }))],
+    ["8d", eightRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["8d"], row.id) }))],
     [
       "dcr",
       dcrRows.map((row) => ({
@@ -420,14 +460,36 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
         number: row.formNo,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-        saved: row.updatedAt != null,
+        saved: kept(row.updatedAt, row.formNo, ["dcr"], row.id),
       })),
     ],
-    ["risk", riskRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["audit-plan", auditRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["audit-plan", "audit-report"], row.id) }))],
-    ["cal-register", equipmentRows.map((row) => ({ id: row.id, label: row.name, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: null, saved: filedUnder(["cal-register", "cal-record"], row.id) }))],
-    ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
-    ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: row.updatedAt != null }))],
+    ["risk", riskRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["risk"], row.id) }))],
+    [
+      "audit-plan",
+      auditRows.map((row) => ({
+        id: row.id,
+        label: row.name,
+        formNumber: null,
+        number: row.recordNumber,
+        createdAt: row.createdAt,
+        updatedAt: null,
+        saved: filedUnder(["audit-plan", "audit-report"], row.id) || auditRecordKept({ recordNumber: row.recordNumber, status: row.status, hasItems: auditsWithItems.has(row.id) }),
+      })),
+    ],
+    [
+      "cal-register",
+      equipmentRows.map((row) => ({
+        id: row.id,
+        label: row.name,
+        formNumber: null,
+        number: "",
+        createdAt: row.createdAt,
+        updatedAt: null,
+        saved: filedUnder(["cal-register", "cal-record"], row.id) || Boolean(row.location?.trim() || row.serialNumber?.trim() || row.type?.trim()),
+      })),
+    ],
+    ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, null, ["training-record"], row.id) }))],
+    ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["ecr", "eco"], row.id) }))],
   ]);
 
   for (const group of SHARED_GROUPS) {
@@ -441,9 +503,11 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
       .filter((item): item is { formKey: string; match: string } => item != null);
     for (const row of rows) {
       const pinned = pins.get(`${group.source}:${row.id}`);
-      const formKey = pinned && group.keys.includes(pinned) ? pinned : formKeyForSharedTitle(matches, row.label ?? "", group.fallback);
+      const filingNodeId = pinned ? pinRows.find((pin) => pin.formKey === pinned && pin.recordId === row.id)?.folderNodeId ?? null : null;
+      const parentLinkedPath = filingNodeId == null ? null : parentPath.get(nodeById.get(filingNodeId)?.parentId ?? -1) ?? null;
+      const inDefaultGenericFolder = filingNodeId == null || parentLinkedPath === `/form-folders/${pinned}`;
+      const formKey = listedSharedFolderKey(group, matches, row.label ?? "", pinned, inDefaultGenericFolder);
       if (!formKey) continue;
-      if (pinned && pinned !== formKey) continue;
       pushModuleFill(fills, templateByKey, seeds, formKey, row);
     }
   }

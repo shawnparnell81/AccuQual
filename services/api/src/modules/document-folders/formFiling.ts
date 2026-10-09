@@ -377,3 +377,58 @@ export function filedRecordName(formId: string, recordNumber: number | string | 
   if (!token) used = used.replace(/\{recordNumber\}_?|_\{recordNumber\}/g, "");
   return used.replaceAll("{formId}", id).replaceAll("{recordNumber}", token).replaceAll("{date}", date).replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
+
+/** File name for a saved copy that was not given one by Save as. A module with no form number uses its title. */
+export function savedFillFileName(input: { formId: string; title: string; recordId: number; savedAt: string; pattern: string; recordLabel?: string | null; number?: string | null }): string {
+  const label = input.recordLabel?.trim() ?? "";
+  if (label && label !== input.title.trim()) return label;
+  const date = input.savedAt.slice(0, 10);
+  const formId = input.formId.trim();
+  const token = (input.number ?? "").trim();
+  if (formId) return filedRecordName(formId, token, date, input.pattern);
+  const title = input.title.trim() || "Form";
+  return token ? `${title}_${token}_${date}` : `${title}_${date}`;
+}
+
+const FALLBACK_PATH: Record<string, string> = {
+  "/ncr": "ncr",
+  "/capa": "capa",
+  "/8d": "8d",
+  "/document-change-requests": "dcr",
+  "/risk": "risk",
+};
+
+function asCreateRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/** Which blank this create belongs to. Exact title, name, or form type wins. A shared table falls back to its general form. */
+export function blankFormKeyForCreate(createPath: string, body: Record<string, unknown>): string | null {
+  const data = asCreateRecord(body.data);
+  const formType = typeof body.formType === "string" ? body.formType : typeof data?.formType === "string" ? data.formType : null;
+  const title = typeof body.title === "string" ? body.title : null;
+  const name = typeof body.name === "string" ? body.name : null;
+  for (const seed of FORM_TEMPLATES) {
+    if (seed.start?.createPath !== createPath) continue;
+    const start = seed.start.body;
+    const startData = asCreateRecord(start.data);
+    if (typeof start.formType === "string" && start.formType === formType) return seed.formKey;
+    if (typeof startData?.formType === "string" && startData.formType === formType) return seed.formKey;
+    if (typeof start.title === "string" && title != null && start.title === title) return seed.formKey;
+    if (typeof start.name === "string" && name != null && start.name === name) return seed.formKey;
+  }
+  return FALLBACK_PATH[createPath] ?? null;
+}
+
+/** A module row the user has saved. A typed number counts. A database id does not. */
+export function moduleRecordKept(updatedAt: Date | string | null | undefined, recordNumber: unknown): boolean {
+  if (updatedAt != null) return true;
+  return typedFileToken(typeof recordNumber === "string" ? recordNumber : undefined).length > 0;
+}
+
+/** Audits have no updated_at. A typed number, a checklist item, or leaving Scheduled means the copy was used. */
+export function auditRecordKept(input: { recordNumber: unknown; status: string | null | undefined; hasItems: boolean }): boolean {
+  if (typedFileToken(typeof input.recordNumber === "string" ? input.recordNumber : undefined).length > 0) return true;
+  if (input.hasItems) return true;
+  return (input.status ?? "scheduled") !== "scheduled";
+}

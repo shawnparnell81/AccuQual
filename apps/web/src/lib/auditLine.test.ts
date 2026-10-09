@@ -469,3 +469,23 @@ test("a problem description records the old and new text", () => {
   assert.doesNotMatch(line.description, /from \(blank\) to \(blank\)/);
   assert.doesNotMatch(line.description, /template/i);
 });
+
+test("a CAPA action plan change uses the on-screen field name", () => {
+  const line = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: {
+      event: "form_saved",
+      edits: [{ label: "What you'll do", from: "short", to: "the full corrective action" }],
+    },
+    fieldChanges: [
+      {
+        tableName: "capa",
+        op: "UPDATE",
+        changes: { action_plan: { from: "short", to: "the full corrective action" } },
+      },
+    ],
+  });
+  assert.match(line.description, /What you'll do changed from short to the full corrective action/);
+  assert.doesNotMatch(line.description, /Action plan/i);
+});

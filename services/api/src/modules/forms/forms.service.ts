@@ -7,6 +7,7 @@ import { eightD } from "../../drizzle/schema/eightD.js";
 import { blank8dFromData } from "../eight-d/blank8dForm.js";
 import { renderBlank8DPdf } from "../eight-d/blank8d-pdf.js";
 import { mergePdfFields } from "./pdf-merger.js";
+import { fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
@@ -42,6 +43,10 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { formDataEdits } from "./formEditAudit.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
+import { changeRequests } from "../../drizzle/schema/change.js";
+import { audits } from "../../drizzle/schema/audits.js";
+import { riskAssessments } from "../../drizzle/schema/risk.js";
+import { equipment } from "../../drizzle/schema/calibration.js";
 import { NCR_NUMBER, CAPA_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit, showRecordNumber } from "../records/userRecordNumber.js";
 import { auditReason, emptyFrame, exportTrace, type AttachmentLine, type AuditLine, type ControlledPdfFrame } from "./controlledPdf.js";
@@ -104,8 +109,8 @@ export async function saveData(db: Db, input: SaveInput) {
     blocks,
   );
   const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, signed, !existing);
+  const edits = input.entityId != null ? formDataEdits(existing?.data, data, input.formType) : [];
   if (input.entityId != null) {
-    const edits = formDataEdits(existing?.data, data);
     const entityType = FORM_AUDIT_ENTITY[input.formType];
     if (entityType && edits.length > 0) {
       await recordAuditTrail(db, {
@@ -137,6 +142,7 @@ export async function saveData(db: Db, input: SaveInput) {
       .where(and(eq(formData.id, existing.id)))
       .returning();
     await mirrorTypedNumber(db, input.formType, input.entityId, data, input.userId);
+    if (input.entityId != null && hasContentEdit(edits)) await fileParentOnFormSave(db, input.formType, input.entityId, input.userId);
     return updated;
   }
 
@@ -154,7 +160,90 @@ export async function saveData(db: Db, input: SaveInput) {
     .returning();
   if (created && input.entityId != null) await snapshotFormDataNumber(db, input.formType, input.entityId);
   await mirrorTypedNumber(db, input.formType, input.entityId, data, input.userId);
+  if (input.entityId != null && hasContentEdit(edits)) await fileParentOnFormSave(db, input.formType, input.entityId, input.userId);
   return created;
+}
+
+function hasContentEdit(edits: { label: string }[]): boolean {
+  return edits.some((edit) => !/number$/i.test(edit.label.trim()));
+}
+
+/** A filled form is a save of its parent record. A number field alone is not. */
+async function fileParentOnFormSave(db: Db, formType: string, entityId: number, userId: number | undefined) {
+  if (formType === "ncr" || formType === "five_why" || formType === "pareto_chart") {
+    await touchAndFile(
+      db,
+      "/ncr",
+      userId,
+      async () => (await db.select().from(ncr).where(eq(ncr.id, entityId)))[0],
+      async () => (await db.update(ncr).set({ updatedAt: new Date() }).where(eq(ncr.id, entityId)).returning())[0],
+    );
+    return;
+  }
+  if (formType === "capa") {
+    await touchAndFile(
+      db,
+      "/capa",
+      userId,
+      async () => (await db.select().from(capa).where(eq(capa.id, entityId)))[0],
+      async () => (await db.update(capa).set({ updatedAt: new Date() }).where(eq(capa.id, entityId)).returning())[0],
+    );
+    return;
+  }
+  if (formType === "eight_d") {
+    await touchAndFile(
+      db,
+      "/8d",
+      userId,
+      async () => (await db.select().from(eightD).where(eq(eightD.id, entityId)))[0],
+      async () => (await db.update(eightD).set({ updatedAt: new Date() }).where(eq(eightD.id, entityId)).returning())[0],
+    );
+    return;
+  }
+  if (formType === "change" || formType === "pcn") {
+    await touchAndFile(
+      db,
+      "/change",
+      userId,
+      async () => (await db.select().from(changeRequests).where(eq(changeRequests.id, entityId)))[0],
+      async () => (await db.update(changeRequests).set({ updatedAt: new Date() }).where(eq(changeRequests.id, entityId)).returning())[0],
+    );
+    return;
+  }
+  if (formType === "fmea") {
+    await touchAndFile(
+      db,
+      "/risk",
+      userId,
+      async () => (await db.select().from(riskAssessments).where(eq(riskAssessments.id, entityId)))[0],
+      async () => (await db.update(riskAssessments).set({ updatedAt: new Date() }).where(eq(riskAssessments.id, entityId)).returning())[0],
+    );
+    return;
+  }
+  if (formType === "audit_plan" || formType === "audit_checklist" || formType === "lpa") {
+    const [before] = await db.select().from(audits).where(eq(audits.id, entityId));
+    if (!before) return;
+    await fileOnFirstSave(db, "/audits", before, before, { saved: true }, userId);
+    return;
+  }
+  if (formType === "calibration" || formType === "gage_rr" || formType === "maintenance_work_order") {
+    const [before] = await db.select().from(equipment).where(eq(equipment.id, entityId));
+    if (!before) return;
+    await fileOnFirstSave(db, "/equipment", before, before, { saved: true }, userId);
+  }
+}
+
+async function touchAndFile(
+  db: Db,
+  createPath: string,
+  userId: number | undefined,
+  load: () => Promise<Record<string, unknown> | undefined>,
+  touch: () => Promise<Record<string, unknown> | undefined>,
+) {
+  const before = await load();
+  if (!before) return;
+  const after = (await touch()) ?? before;
+  await fileOnFirstSave(db, createPath, before, after, { saved: true }, userId);
 }
 
 async function mirrorTypedNumber(db: Db, formType: string, entityId: number | undefined, data: Record<string, unknown>, userId: number | undefined) {
@@ -164,7 +253,7 @@ async function mirrorTypedNumber(db: Db, formType: string, entityId: number | un
     if (!row || showRecordNumber(row.recordNumber) === showRecordNumber(data.ncrNumber)) return;
     const body: Record<string, unknown> = { recordNumber: data.ncrNumber };
     const change = await applyRecordNumber(db, body, NCR_NUMBER, { id: row.id, current: row.recordNumber, row });
-    await db.update(ncr).set({ recordNumber: (body.recordNumber as string | null) ?? null, updatedAt: new Date() }).where(eq(ncr.id, row.id));
+    await db.update(ncr).set({ recordNumber: (body.recordNumber as string | null) ?? null }).where(eq(ncr.id, row.id));
     if (change) await recordAuditTrail(db, { entityType: "NCR", entityId: row.id, action: "update", changes: changesWithNumberEdit({}, change), performedBy: userId });
   }
   if (formType === "capa" && Object.prototype.hasOwnProperty.call(data, "capaNumber")) {
@@ -172,7 +261,7 @@ async function mirrorTypedNumber(db: Db, formType: string, entityId: number | un
     if (!row || showRecordNumber(row.recordNumber) === showRecordNumber(data.capaNumber)) return;
     const body: Record<string, unknown> = { recordNumber: data.capaNumber };
     const change = await applyRecordNumber(db, body, CAPA_NUMBER, { id: row.id, current: row.recordNumber, row });
-    await db.update(capa).set({ recordNumber: (body.recordNumber as string | null) ?? null, updatedAt: new Date() }).where(eq(capa.id, row.id));
+    await db.update(capa).set({ recordNumber: (body.recordNumber as string | null) ?? null }).where(eq(capa.id, row.id));
     if (change) await recordAuditTrail(db, { entityType: "CAPA", entityId: row.id, action: "update", changes: changesWithNumberEdit({}, change), performedBy: userId });
   }
 }

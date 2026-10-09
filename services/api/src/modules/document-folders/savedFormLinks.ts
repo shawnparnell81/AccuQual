@@ -1,5 +1,5 @@
-import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
-import { audits } from "../../drizzle/schema/audits.js";
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
@@ -7,6 +7,7 @@ import { changeRequests } from "../../drizzle/schema/change.js";
 import { documentChangeRequests } from "../../drizzle/schema/documentChangeRequests.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
+import { formData } from "../../drizzle/schema/forms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -18,7 +19,8 @@ import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { shouldRepairFiledLink } from "../forms/formEditAudit.js";
 import { FILEABLE_FORM_KEYS, ISO_TYPE_TO_FORM_KEY, recordLinkedPath, validationFormKeyFor } from "./editableForms.js";
-import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, filedRecordName } from "./formFiling.js";
+import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, auditRecordKept, blankFormKeyForCreate, fileNamePatternFor, moduleRecordKept, savedFillFileName } from "./formFiling.js";
+import { ensureFormTemplates } from "./formTemplates.js";
 
 /**
  * Saved forms must open the record that was filed. Listing and search run this
@@ -214,15 +216,34 @@ interface SavedCopy {
   formKey: string;
   recordId: number;
   createdAt: Date | null;
+  updatedAt: Date | null;
   recordNumber: string;
+  /** Title or name, when the folder list uses that instead of the form number. */
+  label: string | null;
   /** False until the user saves. Tables without a save time stay true. */
   userSaved: boolean;
 }
 
-function pushCopy(copies: SavedCopy[], formKey: string | null | undefined, recordId: number, createdAt: Date | null, recordNumber: string | null, userSaved = true) {
+function pushCopy(
+  copies: SavedCopy[],
+  formKey: string | null | undefined,
+  recordId: number,
+  createdAt: Date | null,
+  recordNumber: string | null,
+  userSaved = true,
+  extra?: { label?: string | null; updatedAt?: Date | null },
+) {
   if (!formKey || RETIRED_FORM_KEYS.has(formKey)) return;
   if (!Number.isInteger(recordId) || recordId < 1) return;
-  copies.push({ formKey, recordId, createdAt, recordNumber: recordNumber?.trim() ?? "", userSaved });
+  copies.push({
+    formKey,
+    recordId,
+    createdAt,
+    updatedAt: extra?.updatedAt ?? null,
+    recordNumber: recordNumber?.trim() ?? "",
+    label: extra?.label?.trim() ? extra.label.trim() : null,
+    userSaved,
+  });
 }
 
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -262,7 +283,20 @@ export async function deleteExpiredUnsavedDrafts(db: Db, now = new Date()): Prom
   if (staleValidation.length > 0) await db.delete(validationReports).where(inArray(validationReports.id, staleValidation.map((row) => row.id)));
 }
 
-/** Live saved-form rows. `form_data` is not a record id for these folders, so it is not read here. */
+async function formSavedIds(db: Db, formTypes: string[]): Promise<Set<number>> {
+  if (formTypes.length === 0) return new Set();
+  const rows = await db
+    .select({ entityId: formData.entityId })
+    .from(formData)
+    .where(and(inArray(formData.formType, formTypes), isNotNull(formData.updatedAt)));
+  const ids = new Set<number>();
+  for (const row of rows) {
+    if (row.entityId != null) ids.add(row.entityId);
+  }
+  return ids;
+}
+
+/** Live saved-form rows. A module copy is kept once it has been saved, numbered, or had its form filled in. */
 async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   const copies: SavedCopy[] = [];
   const known = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
@@ -279,28 +313,84 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
     if (!known.has(row.formType)) continue;
     pushCopy(copies, row.formType, row.id, row.createdAt, row.formNo, row.updatedAt != null);
   }
-  const ncrRows = await db.select({ id: ncr.id, recordNumber: ncr.recordNumber, createdAt: ncr.createdAt, updatedAt: ncr.updatedAt }).from(ncr).where(eq(ncr.isDeleted, false));
-  for (const row of ncrRows) pushCopy(copies, "ncr", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  const ncrSaved = await formSavedIds(db, ["ncr", "five_why", "pareto_chart"]);
+  const ncrRows = await db
+    .select({ id: ncr.id, title: ncr.title, recordNumber: ncr.recordNumber, createdAt: ncr.createdAt, updatedAt: ncr.updatedAt })
+    .from(ncr)
+    .where(eq(ncr.isDeleted, false));
+  for (const row of ncrRows) {
+    const key = blankFormKeyForCreate("/ncr", { title: row.title });
+    pushCopy(copies, key, row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || ncrSaved.has(row.id), { label: row.title, updatedAt: row.updatedAt });
+  }
+  const capaSaved = await formSavedIds(db, ["capa"]);
   const capaRows = await db.select({ id: capa.id, recordNumber: capa.recordNumber, createdAt: capa.createdAt, updatedAt: capa.updatedAt }).from(capa);
-  for (const row of capaRows) pushCopy(copies, "capa", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  for (const row of capaRows) pushCopy(copies, "capa", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || capaSaved.has(row.id), { updatedAt: row.updatedAt });
+  const eightSaved = await formSavedIds(db, ["eight_d"]);
   const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt, updatedAt: eightD.updatedAt }).from(eightD);
-  for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
-  const dcrRows = await db.select({ id: documentChangeRequests.id, formNo: documentChangeRequests.formNo, createdAt: documentChangeRequests.createdAt, updatedAt: documentChangeRequests.updatedAt }).from(documentChangeRequests);
-  for (const row of dcrRows) pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo, row.updatedAt != null);
-  const riskRows = await db.select({ id: riskAssessments.id, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt }).from(riskAssessments);
-  for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
-  const trainingRows = await db.select({ id: trainingCourses.id, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt }).from(trainingCourses);
-  for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null, row.updatedAt != null);
-  const changeRows = await db.select({ id: changeRequests.id, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt, updatedAt: changeRequests.updatedAt }).from(changeRequests);
-  for (const row of changeRows) pushCopy(copies, "ecr", row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || eightSaved.has(row.id), { updatedAt: row.updatedAt });
+  const dcrRows = await db
+    .select({
+      id: documentChangeRequests.id,
+      formNo: documentChangeRequests.formNo,
+      documentProcessName: documentChangeRequests.documentProcessName,
+      createdAt: documentChangeRequests.createdAt,
+      updatedAt: documentChangeRequests.updatedAt,
+    })
+    .from(documentChangeRequests);
+  for (const row of dcrRows) {
+    pushCopy(copies, "dcr", row.id, row.createdAt, row.formNo, moduleRecordKept(row.updatedAt, row.formNo), { label: row.documentProcessName, updatedAt: row.updatedAt });
+  }
+  const riskSaved = await formSavedIds(db, ["fmea"]);
+  const riskRows = await db.select({ id: riskAssessments.id, title: riskAssessments.title, recordNumber: riskAssessments.recordNumber, createdAt: riskAssessments.createdAt, updatedAt: riskAssessments.updatedAt }).from(riskAssessments);
+  for (const row of riskRows) pushCopy(copies, "risk", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || riskSaved.has(row.id), { label: row.title, updatedAt: row.updatedAt });
+  const trainingSaved = await formSavedIds(db, ["training", "competency_matrix"]);
+  const trainingRows = await db.select({ id: trainingCourses.id, title: trainingCourses.title, createdAt: trainingCourses.createdAt, updatedAt: trainingCourses.updatedAt }).from(trainingCourses);
+  for (const row of trainingRows) pushCopy(copies, "training-record", row.id, row.createdAt, null, moduleRecordKept(row.updatedAt, null) || trainingSaved.has(row.id), { label: row.title, updatedAt: row.updatedAt });
+  const changeSaved = await formSavedIds(db, ["change", "pcn"]);
+  const changeRows = await db
+    .select({ id: changeRequests.id, title: changeRequests.title, recordNumber: changeRequests.recordNumber, createdAt: changeRequests.createdAt, updatedAt: changeRequests.updatedAt })
+    .from(changeRequests);
+  for (const row of changeRows) {
+    const key = blankFormKeyForCreate("/change", { title: row.title });
+    pushCopy(copies, key, row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || changeSaved.has(row.id), { label: row.title, updatedAt: row.updatedAt });
+  }
+  const auditSaved = await formSavedIds(db, ["audit_plan", "audit_checklist", "lpa"]);
+  const auditRows = await db.select({ id: audits.id, name: audits.name, recordNumber: audits.recordNumber, status: audits.status, createdAt: audits.createdAt }).from(audits);
+  const auditItemRows = await db.select({ auditId: auditItems.auditId }).from(auditItems);
+  const auditsWithItems = new Set(auditItemRows.map((row) => row.auditId));
+  for (const row of auditRows) {
+    if (!auditRecordKept({ recordNumber: row.recordNumber, status: row.status, hasItems: auditsWithItems.has(row.id) }) && !auditSaved.has(row.id)) continue;
+    const key = blankFormKeyForCreate("/audits", { name: row.name });
+    pushCopy(copies, key, row.id, row.createdAt, row.recordNumber, true, { label: row.name });
+  }
+  const equipmentSaved = await formSavedIds(db, ["calibration", "gage_rr", "maintenance_work_order"]);
+  const equipmentRows = await db
+    .select({ id: equipment.id, name: equipment.name, location: equipment.location, serialNumber: equipment.serialNumber, type: equipment.type, createdAt: equipment.createdAt })
+    .from(equipment);
+  for (const row of equipmentRows) {
+    const used = Boolean(row.location?.trim() || row.serialNumber?.trim() || row.type?.trim()) || equipmentSaved.has(row.id);
+    if (!used) continue;
+    const key = blankFormKeyForCreate("/equipment", { name: row.name });
+    pushCopy(copies, key, row.id, row.createdAt, null, true, { label: row.name });
+  }
   return copies.filter((copy) => known.has(copy.formKey));
 }
 
 function restoredFileName(copy: SavedCopy, formNumber: string, remembered: string | undefined): string {
   if (remembered?.trim()) return remembered.trim();
   const seed = FORM_TEMPLATES.find((item) => item.formKey === copy.formKey);
-  const date = (copy.createdAt ?? new Date()).toISOString().slice(0, 10);
-  return filedRecordName(formNumber || seed?.formId || "", copy.recordNumber, date, fileNamePatternFor(seed ?? { fileNamePattern: FILE_NAME_PATTERN }));
+  const formId = (formNumber || seed?.formId || "").trim();
+  // The folder list dates a module copy from its save. A numbered form keeps the created date.
+  const when = !formId && copy.updatedAt ? copy.updatedAt : (copy.createdAt ?? new Date());
+  return savedFillFileName({
+    formId,
+    title: seed?.title ?? "Form",
+    recordId: copy.recordId,
+    savedAt: when.toISOString(),
+    pattern: fileNamePatternFor(seed ?? { fileNamePattern: FILE_NAME_PATTERN }),
+    recordLabel: copy.label,
+    number: copy.recordNumber,
+  });
 }
 
 async function rememberedFileNames(db: Db): Promise<Map<string, string>> {
@@ -337,9 +427,24 @@ async function releaseUnsavedFolderNodes(db: Db, performedBy?: number): Promise<
 async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<void> {
   const copies = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
   if (copies.length === 0) return;
-  const existing = await db.select({ formKey: formFilings.formKey, recordId: formFilings.recordId }).from(formFilings);
+  const existing = await db
+    .select({ formKey: formFilings.formKey, recordId: formFilings.recordId, folderNodeId: formFilings.folderNodeId })
+    .from(formFilings);
   const have = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
-  const missing = copies.filter((copy) => !have.has(`${copy.formKey}:${copy.recordId}`));
+  const placedFolderIds = new Set((await db.select({ id: documentFolders.id }).from(documentFolders)).map((folder) => folder.id));
+  // A live file already stored under any key for this record stays where it is. Repair does not add a second copy.
+  const alreadyPlaced = (formKey: string, recordId: number) => {
+    const kind = MODULE_KIND[formKey];
+    if (!kind) return false;
+    return existing.some(
+      (filing) =>
+        filing.recordId === recordId &&
+        MODULE_KIND[filing.formKey] === kind &&
+        filing.folderNodeId != null &&
+        placedFolderIds.has(filing.folderNodeId),
+    );
+  };
+  const missing = copies.filter((copy) => !have.has(`${copy.formKey}:${copy.recordId}`) && !alreadyPlaced(copy.formKey, copy.recordId));
   if (missing.length > 0) {
     await db
       .insert(formFilings)
@@ -373,13 +478,44 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
   }
   const filingByKey = new Map(filings.map((filing) => [`${filing.formKey}:${filing.recordId}`, filing]));
   const needNodes = copies.filter((copy) => {
-    if (!FILEABLE_FORM_KEYS.has(copy.formKey)) return false;
+    if (!FILEABLE_FORM_KEYS.has(copy.formKey) && !(copy.formKey in MODULE_KIND)) return false;
     const filing = filingByKey.get(`${copy.formKey}:${copy.recordId}`);
-    return filing != null && (filing.folderNodeId == null || !folderIds.has(filing.folderNodeId));
+    if (filing == null || (filing.folderNodeId != null && folderIds.has(filing.folderNodeId))) return false;
+    const kind = MODULE_KIND[copy.formKey];
+    if (!kind) return true;
+    const siblingHasFile = filings.some(
+      (row) =>
+        row.recordId === copy.recordId &&
+        row.id !== filing.id &&
+        MODULE_KIND[row.formKey] === kind &&
+        row.folderNodeId != null &&
+        folderIds.has(row.folderNodeId),
+    );
+    return !siblingHasFile;
   });
   if (needNodes.length === 0) return;
 
-  const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_DOCUMENTS_FOLDER);
+  let iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_DOCUMENTS_FOLDER);
+  if (!iso) {
+    await ensureFormTemplates(db, performedBy);
+    const refreshed = await db
+      .select({
+        id: documentFolders.id,
+        name: documentFolders.name,
+        parentId: documentFolders.parentId,
+        linkedPath: documentFolders.linkedPath,
+        documentId: documentFolders.documentId,
+        pdfPath: documentFolders.pdfPath,
+      })
+      .from(documentFolders);
+    folders.splice(0, folders.length, ...refreshed);
+    childCount.clear();
+    for (const folder of folders) {
+      if (folder.parentId == null) continue;
+      childCount.set(folder.parentId, (childCount.get(folder.parentId) ?? 0) + 1);
+    }
+    iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_DOCUMENTS_FOLDER);
+  }
   if (!iso) return;
   const names = await rememberedFileNames(db);
   let root = folders.find((folder) => folder.parentId === iso.id && folder.name === SAVED_FORM_FOLDERS_ROOT);
@@ -470,7 +606,7 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
   }
 }
 
-/** Point a filed copy at the record that was saved. Does not delete a filing or a file. */
+/** Point a filed copy at the record that was saved. Adds a missing file. Does not detach, delete, or move a live one. */
 export async function repairSavedFormListings(db: Db, performedBy?: number): Promise<void> {
   await deleteExpiredUnsavedDrafts(db);
   await releaseUnsavedFolderNodes(db, performedBy);
