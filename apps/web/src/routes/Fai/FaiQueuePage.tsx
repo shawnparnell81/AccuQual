@@ -156,19 +156,19 @@ export function FaiQueuePage() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Open first articles</h2>
-        <DataTable columns={openColumns} rows={queue.data?.open ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="No open first articles." onRowClick={(row) => navigate(`/fai/records/${row.id}`)} />
+        <DataTable columns={openColumns} rows={queue.data?.open ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="No open first articles." onRowClick={(row) => navigate(`/fai/records/${row.id}`)} listChrome={false} />
       </section>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Due within 30 days</h2>
-        <DataTable columns={sourceColumns} rows={queue.data?.dueSoon ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="Nothing is due in the next 30 days." onRowClick={() => navigate("/fai/sources")} />
+        <DataTable columns={sourceColumns} rows={queue.data?.dueSoon ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="Nothing is due in the next 30 days." onRowClick={() => navigate("/fai/sources")} listChrome={false} />
       </section>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Overdue</h2>
-        <DataTable columns={sourceColumns} rows={queue.data?.overdue ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="Nothing is overdue." onRowClick={() => navigate("/fai/sources")} />
+        <DataTable columns={sourceColumns} rows={queue.data?.overdue ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="Nothing is overdue." onRowClick={() => navigate("/fai/sources")} listChrome={false} />
       </section>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Not approved</h2>
-        <DataTable columns={sourceColumns} rows={queue.data?.failed ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="No source is marked not approved." onRowClick={() => navigate("/fai/sources")} />
+        <DataTable columns={sourceColumns} rows={queue.data?.failed ?? []} rowKey={(row) => row.id} isLoading={queue.isLoading} isError={queue.isError} emptyMessage="No source is marked not approved." onRowClick={() => navigate("/fai/sources")} listChrome={false} />
       </section>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Recent first articles</h2>
@@ -185,6 +185,7 @@ export function FaiQueuePage() {
           isError={records.isError}
           emptyMessage="No first articles yet."
           onRowClick={(row) => navigate(`/fai/records/${row.id}`)}
+          listChrome={false}
         />
       </section>
     </div>

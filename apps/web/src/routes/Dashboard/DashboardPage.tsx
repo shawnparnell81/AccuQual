@@ -243,19 +243,20 @@ export function DashboardPage() {
   const { shown } = useWorkspaceSurface("dashboard", dashAllowed);
 
   return (
-    <div className="flex flex-col gap-4 pb-8">
+    <div className="flex flex-col gap-6 pb-8">
       <WorkspaceArrange surface="dashboard" labels={DASHBOARD_LABELS} allowed={dashAllowed} />
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
       <OrderedBlock id="hero" shown={shown}>
-      <section className="hero-surface rounded-[14px] px-5 py-5 md:px-6">
-        <div className="cc-grid" aria-hidden />
+      <section className="hero-surface rounded-2xl px-5 py-5 md:px-6">
         <div className="relative z-[1] flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span className="led" style={{ ["--tone" as string]: "var(--success)" }} />
-              Live · {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
+            <nav aria-label="Breadcrumb" className="aq-crumbs">
+              <span>Home</span>
+            </nav>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
             </p>
-            <h1 className="glow-text mt-2 font-display text-[1.6rem] font-extrabold tracking-tight">
+            <h1 className="aq-page-title mt-1">
               {greeting()}
               {first ? `, ${first}` : ""}.
             </h1>

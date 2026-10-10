@@ -11,6 +11,7 @@
     "test": "tsx --test src/lib/*.test.ts src/api/*.test.ts src/components/forms/layouts/apqpSummary.test.ts src/components/forms/fmeaPriority.test.ts src/components/forms/pictureText.test.ts src/components/forms/inlinePictures.test.ts src/components/forms/signatureRequired.test.ts"
   },
   "dependencies": {
+    "@fontsource/roboto": "^5.3.0",
     "@sentry/react": "^10.75.3",
     "@tanstack/react-query": "^5.104.0",
     "@xyflow/react": "^12.12.0",
