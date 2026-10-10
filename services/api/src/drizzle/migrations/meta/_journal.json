@@ -855,6 +855,13 @@
       "when": 1794524400000,
       "tag": "0123_user_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1794610800000,
+      "tag": "0124_imported_retailer_reports",
+      "breakpoints": true
     }
   ]
 }

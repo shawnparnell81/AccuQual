@@ -4,6 +4,7 @@ import {
   checkImportHandler,
   downloadErrors,
   getImport,
+  importDestination,
   listImportTypes,
   listImports,
   requireImportPermission,
@@ -18,6 +19,7 @@ export const adminImportRouter = Router();
 adminImportRouter.use(requireAuth, requireImportPermission);
 
 adminImportRouter.get("/types", listImportTypes);
+adminImportRouter.get("/destination", importDestination);
 adminImportRouter.get("/types/:key/template", templateHandler);
 adminImportRouter.get("/", listImports);
 adminImportRouter.post("/", uploadImportFile, uploadImport);

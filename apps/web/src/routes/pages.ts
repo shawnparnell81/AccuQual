@@ -111,6 +111,8 @@ export const WorkflowCanvasPage = lazyNamed("/workflow", () => import("./Workflo
 export const AiInsightsPage = lazyNamed("/ai", () => import("./AI/AiInsightsPage"), "AiInsightsPage");
 export const DigitalTwinPage = lazyNamed("/digital-twin", () => import("./DigitalTwin/DigitalTwinPage"), "DigitalTwinPage");
 export const ReportingHubPage = lazyNamed("/reporting", () => import("./Reporting/ReportingHubPage"), "ReportingHubPage");
+export const ImportedDataPage = lazyNamed("/reporting/imported-data", () => import("./Reporting/ImportedDataPage"), "ImportedDataPage");
+export const ImportedDataDetailPage = lazyNamed("/reporting/imported-data", () => import("./Reporting/ImportedDataPage"), "ImportedDataDetailPage");
 export const ReportsPage = lazyNamed("/reports", () => import("./Reports/ReportsPage"), "ReportsPage");
 export const VerifyExportPage = lazyNamed("/verify", () => import("./Pdf/VerifyExportPage"), "VerifyExportPage");
 export const NavigationSettingsPage = lazyNamed("/settings/navigation", () => import("./Settings/NavigationSettingsPage"), "NavigationSettingsPage");

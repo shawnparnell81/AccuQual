@@ -4,6 +4,8 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import clsx from "clsx";
 import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, type LucideIcon } from "lucide-react";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { isFullAccessRole } from "../../lib/fullAccess";
 
 interface ConsoleSection {
   key: string;
@@ -42,14 +44,26 @@ const SECTIONS: ConsoleSection[] = [
 
 export { SECTIONS as ADMIN_CONSOLE_SECTIONS };
 
-/** Sections this person may open. Login History follows the role permission, which an administrator assigns. */
+function permissionOn(effective: Record<string, string> | undefined, key: string): boolean {
+  const level = effective?.[key];
+  return level === "read" || level === "edit";
+}
+
+/** Sections this person may open. Import data follows the import permission. Other sections stay with Owner and Administrator. */
 export function useAdminConsoleSections(): ConsoleSection[] {
+  const user = useCurrentUser();
+  const admin = isFullAccessRole(user?.roleName);
   const { effective, isLoading } = useEffectivePermissions();
   return SECTIONS.filter((section) => {
+    if (section.key === "import") {
+      if (admin) return true;
+      if (isLoading || !effective) return false;
+      return permissionOn(effective, "import_data");
+    }
+    if (!admin) return false;
     if (!section.permission) return true;
     if (isLoading || !effective) return false;
-    const level = effective[section.permission];
-    return level === "read" || level === "edit";
+    return permissionOn(effective, section.permission);
   });
 }
 

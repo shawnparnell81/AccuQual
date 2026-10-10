@@ -10,6 +10,7 @@ import { notifyRecipients } from "../notifications/notification.service.js";
 import { logger } from "../../utils/logger.js";
 import type { AnyImportEntity, ImportContext } from "./import.entities.js";
 import { getCatalogEntry, rawFromMapping, rowIdentity } from "./import.catalog.js";
+import { commitImportSave, dropImportSave } from "./import.archive.js";
 import { classifyImportRow, type BadRowMode, type DuplicateMode } from "./import.classify.js";
 import { scanSpreadsheet, type ScannedRow } from "./import.scan.js";
 
@@ -83,12 +84,47 @@ async function runStoredImport(id: number): Promise<void> {
     commit: job.status !== "checking",
   };
   try {
-    await processFile(id, job.filePath, job.fileName, entry.key, entry.entity, options, job.startedBy ?? undefined, entry.supportsInvites === true);
+    if (entry.archiveOnly) await finishArchive(id, job.filePath, job.fileName, options);
+    else await processFile(id, job.filePath, job.fileName, entry.key, entry.entity, options, job.startedBy ?? undefined, entry.supportsInvites === true);
+    const [after] = await db.select({ status: dataImports.status }).from(dataImports).where(eq(dataImports.id, id));
+    if (options.commit && after?.status === "completed") {
+      try {
+        await commitImportSave(db, id);
+      } catch (err) {
+        dropImportSave(id);
+        logger.error("Import was saved but the Imported Data folder could not be updated", { id, err });
+      }
+    } else dropImportSave(id);
   } catch (err) {
+    dropImportSave(id);
     logger.error("Import failed", { id, err });
     const message = err instanceof Error ? err.message : "The import stopped because of a problem reading the file.";
     await db.update(dataImports).set({ status: "failed", message, completedAt: new Date() }).where(eq(dataImports.id, id));
   }
+}
+
+async function finishArchive(id: number, filePath: string, fileName: string, options: ImportRunOptions): Promise<void> {
+  let processed = 0;
+  await scanSpreadsheet(filePath, fileName, async () => {
+    processed += 1;
+  });
+  const message = options.commit
+    ? `Saved ${processed.toLocaleString()} rows from ${fileName}.`
+    : `${processed.toLocaleString()} rows will be saved. Nothing has been saved yet.`;
+  await db
+    .update(dataImports)
+    .set({
+      status: options.commit ? "completed" : "checked",
+      processedRows: processed,
+      createdCount: options.commit ? processed : 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      problems: [],
+      message,
+      completedAt: options.commit ? new Date() : null,
+    })
+    .where(eq(dataImports.id, id));
 }
 
 function endStream(stream: WriteStream): Promise<void> {

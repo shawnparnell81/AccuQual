@@ -61,6 +61,7 @@ const EXACT = new Set([
   "/admin/company-ai",
   "/admin/ai-usage",
   "/reporting",
+  "/reporting/imported-data",
   "/reports",
 ]);
 
@@ -99,6 +100,7 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/admin\/[^/]+$/,
   /^\/admin\/users\/new$/,
   /^\/admin\/users\/\d+$/,
+  /^\/reporting\/imported-data\/\d+$/,
   /^\/settings\/erp\/presets\/[^/]+$/,
 ];
 

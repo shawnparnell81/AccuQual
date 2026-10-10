@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { SelectField, TextAreaField, TextField } from "../../components/forms/Field";
 import { PdfExportActions } from "../../components/records/PdfExportActions";
 import { useToast } from "../../components/shared/ToastProvider";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
 import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
@@ -39,6 +40,22 @@ interface Narrative {
   fitment: QaItem[];
   productInfo: QaItem[];
   financialEntries?: FinancialEntry[];
+  importPulls?: ImportPull[];
+}
+
+interface ImportPull {
+  importId: number;
+  section: "returns" | "warranty" | "labor" | "financials";
+  field: string;
+}
+
+interface ImportedDatasetLine {
+  importId: number;
+  section: string;
+  fieldLabel: string;
+  total: number | null;
+  source: string;
+  missing: boolean;
 }
 
 interface Gated<T> {
@@ -105,6 +122,8 @@ interface ReportView {
     emailIssues: { label: string; totalIssues: number | null; orIssues: number | null; napaIssues: number | null }[];
   };
   labor: { mttfDays: number | null; medianDays: number | null };
+  importedDatasets?: ImportedDatasetLine[];
+  importsAvailable?: boolean;
   claimMonth?: {
     laborCount: number | null;
     laborHours: number | null;
@@ -218,6 +237,101 @@ function TrendTable({ months, rows }: { months: { key: string; label: string }[]
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const PULL_SECTIONS: { value: ImportPull["section"]; label: string }[] = [
+  { value: "returns", label: "Returns" },
+  { value: "warranty", label: "Warranty" },
+  { value: "labor", label: "Labor" },
+  { value: "financials", label: "Financials" },
+];
+
+const PULL_FIELDS = [
+  { key: "returns_count", label: "Returns" },
+  { key: "warranty_amount", label: "Warranty amount" },
+  { key: "labor_amount", label: "Labor amount" },
+  { key: "total_amount", label: "Total amount" },
+  { key: "report_date", label: "Report date" },
+  { key: "part_number", label: "Part number" },
+  { key: "claim_number", label: "Claim number" },
+];
+
+function ImportedDatasets({
+  narrative,
+  lines,
+  available,
+  locked,
+  onChange,
+}: {
+  narrative: Narrative;
+  lines: ImportedDatasetLine[];
+  available: boolean;
+  locked: boolean;
+  onChange: (pulls: ImportPull[]) => void;
+}) {
+  const { effective } = useEffectivePermissions();
+  const canPick = effective?.import_data === "read" || effective?.import_data === "edit";
+  const imports = useQuery<{ rows: { id: number; name: string; type: string }[] }>({
+    queryKey: ["imported-data", "report-picker"],
+    queryFn: async () => (await apiClient.get("/reporting/imported-data")).data,
+    enabled: canPick,
+    retry: false,
+  });
+  const pulls = narrative.importPulls ?? [];
+  const [importId, setImportId] = useState("");
+  const [section, setSection] = useState<ImportPull["section"]>("returns");
+  const [field, setField] = useState("returns_count");
+  const choices = imports.data?.rows ?? [];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium">Imported datasets</p>
+      <p className="text-sm text-muted-foreground">Pick an O'Reilly's or NAPA import and the field to total. Each value is labeled with that import.</p>
+      {!available && <p className="text-sm text-muted-foreground">Imported datasets aren't available until the database update runs.</p>}
+      {lines.length === 0 && <p className="text-sm text-muted-foreground">No imported fields on this report yet.</p>}
+      {lines.map((line, index) => (
+        <p key={`${line.importId}-${line.fieldLabel}-${index}`} className="text-sm">
+          {PULL_SECTIONS.find((item) => item.value === line.section)?.label ?? line.section}: {line.total == null ? "—" : line.total.toLocaleString()}{" "}
+          <span className="text-muted-foreground">from {line.source}</span>
+          {!locked && (
+            <button type="button" className="ml-2 text-xs text-primary" onClick={() => onChange(pulls.filter((_, pullIndex) => pullIndex !== index))}>
+              Remove
+            </button>
+          )}
+        </p>
+      ))}
+      {!locked && available && canPick && (
+        <div className="flex flex-wrap items-end gap-2">
+          <SelectField label="Import" value={importId} onChange={(event) => setImportId(event.target.value)}>
+            <option value="">Choose an import</option>
+            {choices.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.name} ({row.type})
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Section" value={section} onChange={(event) => setSection(event.target.value as ImportPull["section"])}>
+            {PULL_SECTIONS.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </SelectField>
+          <SelectField label="Field" value={field} onChange={(event) => setField(event.target.value)}>
+            {PULL_FIELDS.map((item) => (
+              <option key={item.key} value={item.key}>{item.label}</option>
+            ))}
+          </SelectField>
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60"
+            disabled={!importId}
+            onClick={() => onChange([...pulls, { importId: Number(importId), section, field }])}
+          >
+            Add field
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -649,6 +763,7 @@ export function EngineeringMonthlyReport() {
             />
             <p className="text-sm text-muted-foreground">Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.</p>
             <MoneyTable months={view.tables.months} financials={view.tables.financials} narrative={narrative} locked={locked} onChange={(financialEntries) => patch({ financialEntries })} />
+            <ImportedDatasets narrative={narrative} lines={view.importedDatasets ?? []} available={view.importsAvailable !== false} locked={locked} onChange={(importPulls) => patch({ importPulls })} />
             <TrendTable
               months={view.tables.months}
               rows={[

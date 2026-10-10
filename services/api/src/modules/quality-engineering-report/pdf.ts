@@ -18,6 +18,16 @@ function gatedCount(gate: Gated<{ count: number }>): string {
   return String(gate.data.count);
 }
 
+function importedDatasetNote(view: EngineeringReportView): string {
+  const base = "Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.";
+  const lines = (view.importedDatasets ?? []).map((line) => {
+    const amount = line.total == null ? "—" : String(line.total);
+    return `${line.fieldLabel} (${line.section}): ${amount} from ${line.source}`;
+  });
+  if (lines.length === 0) return base;
+  return `${base} Imported datasets: ${lines.join("; ")}.`;
+}
+
 function qaLines(items: QaItem[]): string {
   if (items.length === 0) return "";
   return items.map((item, index) => `${index + 1}. ${item.problem}${item.response ? `\nResponse: ${item.response}` : ""}`).join("\n\n");
@@ -36,7 +46,7 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     requested: moneyCell(view.executive.totalAmountRequested),
     partsAmount: moneyCell(view.executive.partsAmountRequested),
     labor: moneyCell(view.executive.laborAmountRequested),
-    financialNote: "Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.",
+    financialNote: importedDatasetNote(view),
     laborCount: view.claimMonth.laborCount == null ? "—" : String(view.claimMonth.laborCount),
     laborHours: view.claimMonth.laborHours == null ? "—" : String(view.claimMonth.laborHours),
     laborCost: moneyCell(view.claimMonth.laborCost),

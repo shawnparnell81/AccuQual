@@ -318,6 +318,8 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     children: [
       { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
       { key: "dashboard", label: "Overview", path: "/", icon: LayoutDashboard },
+      { key: "imported-data", label: "Imported Data", path: "/reporting/imported-data", icon: Folder },
+      { key: "report-import", label: "Import data", path: "/admin/import", icon: Upload },
       { key: "audit-log", label: "Audit log", path: "/audit-log", icon: ScrollText, auditLog: true },
     ],
   },

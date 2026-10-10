@@ -77,6 +77,7 @@ import { rmaActivityLogRouter } from "../modules/rma-activity-log/rmaActivityLog
 import { rmaLogRouter } from "../modules/rma-log/rmaLog.routes.js";
 import { permissionsRouter } from "../modules/permissions/permissions.routes.js";
 import { reportingRouter } from "../modules/reporting/reporting.routes.js";
+import { importedDataRouter } from "../modules/import/importedData.routes.js";
 import { reportsRouter } from "../modules/reports/reports.routes.js";
 import { systemHealthRouter } from "../modules/system-health/systemHealth.routes.js";
 import { contactRouter } from "../modules/contact/contact.routes.js";
@@ -183,6 +184,7 @@ apiRouter.use("/permissions", permissionsRouter);
 apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/executive", executiveRouter);
 apiRouter.use("/fai", faiRouter);
+apiRouter.use("/reporting/imported-data", importedDataRouter);
 apiRouter.use("/reporting", reportingRouter);
 apiRouter.use("/reports", reportsRouter);
 apiRouter.use("/system-health", systemHealthRouter);

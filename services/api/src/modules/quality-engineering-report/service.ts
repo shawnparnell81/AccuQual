@@ -19,6 +19,7 @@ import {
   type SupplierData,
 } from "./model.js";
 import { parseSupplierFile } from "./supplierParse.js";
+import { loadImportSources, resolveImportPulls } from "../import/import.archive.js";
 
 const SAMPLE_NAME = "quality-engineering-supplier-august-2026.csv";
 const MISSING_SAMPLE = "The sample supplier CSV is not included in this server build.";
@@ -82,16 +83,20 @@ export async function buildEngineeringReport(
   if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
   const row = await loadRow(db, input.year, input.month);
   const live = await pullLive(db, { year: input.year, month: input.month, siteIds: input.siteIds, plantId: input.plantId ?? null, level: access.level });
+  const narrative = normalizeNarrative(row?.narrative);
+  const imported = await loadImportSources(db, narrative.importPulls, input.plantId ?? null);
   return assembleReport({
     year: input.year,
     month: input.month,
-    narrative: normalizeNarrative(row?.narrative),
+    narrative,
     supplier: asSupplier(row?.supplierData),
     live,
     saved: row != null,
     uploadFileName: row?.uploadFileName ?? null,
     canEdit: access.canEdit,
     recipients: readStoredRecipients(row?.recipients),
+    importedDatasets: resolveImportPulls(narrative.importPulls, imported.sources),
+    importsAvailable: imported.available,
   });
 }
 

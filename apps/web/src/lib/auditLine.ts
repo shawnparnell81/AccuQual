@@ -217,6 +217,7 @@ function auditWhat(action: string, changes?: Record<string, unknown> | null): st
   if (code === "logout") return "Signed out";
   if (code && /publish/.test(code)) return "Published";
   if (code && /file_downloaded|download/.test(code)) return "Downloaded file";
+  if (code === "imported") return "Imported";
   if (code === "form_saved") return "Saved";
   if (code === "edit_started") return "Opened for editing";
   if (code === "edit_reverted") return "Reverted the edit";

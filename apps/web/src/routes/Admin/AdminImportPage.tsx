@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
-import { SelectField } from "../../components/forms/Field";
+import { SelectField, TextField } from "../../components/forms/Field";
+import { SaveAsFolderDialog } from "../../components/forms/SaveAsFolderDialog";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { isFullAccessRole } from "../../lib/fullAccess";
+import type { BrowseFolder } from "../../lib/folderBrowse";
 
 interface ImportField {
   key: string;
@@ -19,6 +23,7 @@ interface ImportType {
   label: string;
   description: string;
   supportsInvites: boolean;
+  archiveOnly?: boolean;
   fields: ImportField[];
 }
 
@@ -41,7 +46,9 @@ interface ImportJob {
   mapping: Record<string, number | null> | null;
   fields?: ImportField[];
   supportsInvites?: boolean;
+  archiveOnly?: boolean;
   label?: string;
+  savedMappingApplied?: boolean;
 }
 
 interface HistoryRow {
@@ -70,11 +77,40 @@ async function download(path: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+function defaultImportName(typeLabel: string): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${typeLabel} ${now.getFullYear()}-${month}-${day}`;
+}
+
+function folderPath(folders: BrowseFolder[], id: number): string {
+  const names: string[] = [];
+  let current = folders.find((folder) => folder.id === id);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    names.unshift(current.name);
+    current = current.parentId == null ? undefined : folders.find((folder) => folder.id === current!.parentId);
+  }
+  return names.join(" / ");
+}
+
 const DUPLICATE_OPTIONS = [
   { value: "skip", label: "Skip rows that already exist" },
   { value: "update", label: "Update existing records" },
   { value: "create_only", label: "Only add new records (existing ones are errors)" },
 ];
+
+function ImportAccess({ children }: { children: ReactNode }) {
+  const user = useCurrentUser();
+  const { effective, isLoading } = useEffectivePermissions();
+  if (isFullAccessRole(user?.roleName)) return <>{children}</>;
+  if (isLoading) return <LoadingPlaceholder />;
+  const level = effective?.import_data;
+  if (level === "read" || level === "edit") return <>{children}</>;
+  return <p className="text-sm text-muted-foreground">Importing data isn't turned on for your role. An administrator can add the import permission.</p>;
+}
 
 export function AdminImportPage() {
   const toast = useToast();
@@ -82,6 +118,14 @@ export function AdminImportPage() {
   const typesQuery = useQuery<{ maxBytes: number; types: ImportType[] }>({
     queryKey: ["admin-imports", "types"],
     queryFn: async () => (await apiClient.get("/admin/imports/types")).data,
+  });
+  const destination = useQuery<{ folderId: number; label: string }>({
+    queryKey: ["admin-imports", "destination"],
+    queryFn: async () => (await apiClient.get("/admin/imports/destination")).data,
+  });
+  const folders = useQuery<BrowseFolder[]>({
+    queryKey: ["document-folders"],
+    queryFn: async () => (await apiClient.get("/document-folders")).data,
   });
   const history = useQuery<HistoryRow[]>({
     queryKey: ["admin-imports", "history"],
@@ -95,10 +139,17 @@ export function AdminImportPage() {
   const [duplicateMode, setDuplicateMode] = useState("skip");
   const [sendInvites, setSendInvites] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [folderId, setFolderId] = useState<number | "">("");
+  const [pickingFolder, setPickingFolder] = useState(false);
 
   function saveFile(path: string, fileName: string) {
     void download(path, fileName).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")));
   }
+
+  useEffect(() => {
+    if (folderId === "" && destination.data?.folderId) setFolderId(destination.data.folderId);
+  }, [destination.data, folderId]);
 
   const selected = typesQuery.data?.types.find((type) => type.key === typeKey);
   const maxMb = Math.round((typesQuery.data?.maxBytes ?? 50 * 1024 * 1024) / (1024 * 1024));
@@ -127,12 +178,14 @@ export function AdminImportPage() {
       setMapping(data.mapping ?? {});
       setChecked(false);
       setSendInvites(false);
-      toast.success("File received. Match the columns, then check it before importing.");
+      setDisplayName(defaultImportName(data.label || selected?.label || "Import"));
+      setFolderId(destination.data?.folderId ?? "");
+      toast.success(data.savedMappingApplied ? "File received. Last month's column mapping was applied." : "File received. Match the columns, then check it before importing.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "That file couldn't be read.")),
   });
 
-  const options = () => ({ mapping, badRowMode, duplicateMode, sendInvites });
+  const options = () => ({ mapping, badRowMode, duplicateMode, sendInvites, displayName: displayName.trim(), folderId: folderId === "" ? undefined : folderId });
 
   const check = useMutation({
     mutationFn: async () => (await apiClient.post<ImportJob>(`/admin/imports/${job!.id}/check`, options())).data,
@@ -173,7 +226,7 @@ export function AdminImportPage() {
         <h1 className="text-2xl font-semibold">Import data</h1>
         <p className="text-sm text-muted-foreground">Load a spreadsheet of suppliers, parts, inspections, or other quality records. Nothing is saved until you confirm the check.</p>
       </div>
-      <AdminOnlyGuard>
+      <ImportAccess>
         <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
           <SelectField
             label="What are you importing?"
@@ -279,6 +332,8 @@ export function AdminImportPage() {
                 </div>
               )}
 
+              {current.savedMappingApplied && <p className="text-sm text-muted-foreground">Saved column mapping for this import type was applied. Change a column if this file uses different headers.</p>}
+              {!current.archiveOnly && (
               <SelectField label="Rows that already exist" value={duplicateMode} onChange={(e) => { setDuplicateMode(e.target.value); setChecked(false); }}>
                 {DUPLICATE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -286,10 +341,25 @@ export function AdminImportPage() {
                   </option>
                 ))}
               </SelectField>
+              )}
+              {!current.archiveOnly && (
               <SelectField label="Rows with problems" value={badRowMode} onChange={(e) => { setBadRowMode(e.target.value as "skip" | "fail"); setChecked(false); }}>
                 <option value="skip">Skip bad rows and import the rest</option>
                 <option value="fail">Import nothing if any row has a problem</option>
               </SelectField>
+              )}
+              {checked && (
+                <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+                  <p className="text-sm font-medium">Save as</p>
+                  <TextField label="File name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+                  <p className="text-sm">
+                    Folder: {folderId !== "" && folders.data ? folderPath(folders.data, folderId) || destination.data?.label || "Chosen folder" : (destination.data?.label ?? "Reports / Imported Data")}
+                  </p>
+                  <button type="button" className="w-fit text-sm text-primary hover:underline" onClick={() => setPickingFolder(true)}>
+                    Choose a folder
+                  </button>
+                </div>
+              )}
               {(selected?.supportsInvites || current.supportsInvites) && (
                 <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" className="mt-1" checked={sendInvites} onChange={(e) => setSendInvites(e.target.checked)} />
@@ -304,7 +374,7 @@ export function AdminImportPage() {
                 <button type="button" disabled={busy} onClick={() => check.mutate()} className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60">
                   {check.isPending || current.status === "checking" ? "Checking…" : "Check file"}
                 </button>
-                <button type="button" disabled={busy || !checked || current.status === "completed"} onClick={() => run.mutate()} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+                <button type="button" disabled={busy || !checked || current.status === "completed" || !displayName.trim() || folderId === ""} onClick={() => run.mutate()} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
                   {run.isPending || current.status === "running" ? "Importing…" : "Import"}
                 </button>
               </div>
@@ -336,6 +406,18 @@ export function AdminImportPage() {
                 </button>
               )}
             </div>
+          )}
+          {pickingFolder && (
+            <SaveAsFolderDialog
+              folders={folders.data ?? []}
+              selectedId={folderId}
+              pending={false}
+              onClose={() => setPickingFolder(false)}
+              onSave={(id) => {
+                setFolderId(id);
+                setPickingFolder(false);
+              }}
+            />
           )}
         </div>
 
@@ -380,7 +462,7 @@ export function AdminImportPage() {
             </table>
           )}
         </div>
-      </AdminOnlyGuard>
+      </ImportAccess>
     </div>
   );
 }

@@ -37,6 +37,17 @@ export const saveEngineeringReportSchema = z.object({
       .max(24)
       .optional()
       .default([]),
+    importPulls: z
+      .array(
+        z.object({
+          importId: z.number().int().positive(),
+          section: z.enum(["returns", "warranty", "labor", "financials"]),
+          field: z.string().trim().min(1).max(80),
+        }),
+      )
+      .max(24)
+      .optional()
+      .default([]),
   }),
   recipients: zodRecipients(0).optional(),
 });

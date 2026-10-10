@@ -33,6 +33,27 @@ export interface EngineeringNarrative {
   productInfo: QaItem[];
   /** Company-typed dollars for a month that has no Labor Claim or Warranty cost yet. */
   financialEntries: FinancialEntry[];
+  /** Fields summed from a chosen imported file. The value is labeled with that import. */
+  importPulls: ImportPull[];
+}
+
+export const IMPORT_PULL_SECTIONS = ["returns", "warranty", "labor", "financials"] as const;
+export type ImportPullSection = (typeof IMPORT_PULL_SECTIONS)[number];
+
+export interface ImportPull {
+  importId: number;
+  section: ImportPullSection;
+  field: string;
+}
+
+export interface ImportedDatasetLine {
+  importId: number;
+  section: ImportPullSection;
+  field: string;
+  fieldLabel: string;
+  total: number | null;
+  source: string;
+  missing: boolean;
 }
 
 export interface MonthMetric {
@@ -165,6 +186,8 @@ export interface EngineeringReportView {
   canEdit: boolean;
   /** Inboxes that receive this saved report. */
   recipients: string[];
+  importedDatasets: ImportedDatasetLine[];
+  importsAvailable: boolean;
   narrative: EngineeringNarrative;
   executive: {
     departmentStatus: DepartmentStatus;
@@ -256,6 +279,7 @@ export function emptyNarrative(): EngineeringNarrative {
     fitment: [],
     productInfo: [],
     financialEntries: [],
+    importPulls: [],
   };
 }
 
@@ -434,6 +458,8 @@ export function assembleReport(input: {
   uploadFileName: string | null;
   canEdit: boolean;
   recipients?: string[];
+  importedDatasets?: ImportedDatasetLine[];
+  importsAvailable?: boolean;
 }): EngineeringReportView {
   const { year, month, narrative, supplier, live } = input;
   const selected = monthKey(year, month);
@@ -494,6 +520,8 @@ export function assembleReport(input: {
     uploadFileName: input.uploadFileName,
     canEdit: input.canEdit,
     recipients: input.recipients ?? [],
+    importedDatasets: input.importedDatasets ?? [],
+    importsAvailable: input.importsAvailable ?? true,
     narrative,
     executive: {
       departmentStatus: narrative.departmentStatus,
@@ -637,5 +665,23 @@ export function normalizeNarrative(value: unknown): EngineeringNarrative {
     fitment: asQa(row.fitment),
     productInfo: asQa(row.productInfo),
     financialEntries: normalizeFinancialEntries(row.financialEntries),
+    importPulls: normalizeImportPulls(row.importPulls),
   };
+}
+
+function normalizeImportPulls(value: unknown): ImportPull[] {
+  if (!Array.isArray(value)) return [];
+  const pulls: ImportPull[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const importId = Number(row.importId);
+    const section = row.section;
+    const field = typeof row.field === "string" ? row.field.trim() : "";
+    if (!Number.isInteger(importId) || importId <= 0 || !field) continue;
+    if (section !== "returns" && section !== "warranty" && section !== "labor" && section !== "financials") continue;
+    pulls.push({ importId, section, field });
+    if (pulls.length >= 24) break;
+  }
+  return pulls;
 }

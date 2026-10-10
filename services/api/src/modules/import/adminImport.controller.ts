@@ -18,6 +18,8 @@ import { isFullAccessRole, roleHasImportPermission } from "../roles/roleAccess.j
 import { suggestMapping } from "./import.controller.js";
 import { IMPORT_CATALOG, getCatalogEntry } from "./import.catalog.js";
 import { SYNC_ROW_LIMIT, executeImport, scheduleImport } from "./import.job.js";
+import { applyHeaderMap } from "./import.mapping.js";
+import { IMPORT_ARCHIVE_UNAVAILABLE, assertFolderExists, ensureImportedDataFolder, importArchiveReady, loadHeaderMap, rememberImportSave, saveHeaderMap } from "./import.archive.js";
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { scanSpreadsheet } from "./import.scan.js";
 
@@ -26,6 +28,8 @@ const optionsSchema = z.object({
   badRowMode: z.enum(["skip", "fail"]).default("skip"),
   duplicateMode: z.enum(["skip", "update", "create_only"]).default("skip"),
   sendInvites: z.boolean().optional(),
+  displayName: z.string().trim().min(1).max(180).optional(),
+  folderId: z.number().int().positive().optional(),
 });
 
 function importsDir() {
@@ -137,9 +141,15 @@ export const listImportTypes = asyncHandler(async (_req: Request, res: Response)
       label: entry.label,
       description: entry.description,
       supportsInvites: entry.supportsInvites === true,
+      archiveOnly: entry.archiveOnly === true,
       fields: entry.entity.fields,
     })),
   });
+});
+
+export const importDestination = asyncHandler(async (_req: Request, res: Response) => {
+  const folder = await ensureImportedDataFolder(db);
+  res.json({ folderId: folder.id, label: folder.label });
 });
 
 export const templateHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -235,7 +245,9 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
     throw err;
   }
 
-  const mapping = suggestMapping(entry.entity, scanned.headers);
+  const suggested = suggestMapping(entry.entity, scanned.headers);
+  const savedMap = await loadHeaderMap(db, entry.key);
+  const { mapping, applied } = applyHeaderMap(entry.entity.fields, scanned.headers, savedMap, suggested);
   const [created] = await db
     .insert(dataImports)
     .values({
@@ -257,7 +269,9 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
     label: entry.label,
     description: entry.description,
     supportsInvites: entry.supportsInvites === true,
+    archiveOnly: entry.archiveOnly === true,
     fields: entry.entity.fields,
+    savedMappingApplied: applied,
   });
 });
 
@@ -287,7 +301,8 @@ async function saveOptions(req: Request, status: "checking" | "running") {
       completedAt: null,
     })
     .where(eq(dataImports.id, job.id));
-  return job;
+  await saveHeaderMap(db, entry.key, job.headers ?? [], options.mapping, entry.entity.fields, req.user?.id);
+  return { ...job, mapping: options.mapping };
 }
 
 export const checkImportHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -297,11 +312,29 @@ export const checkImportHandler = asyncHandler(async (req: Request, res: Respons
   res.json(present(await loadJob(job.id)));
 });
 
+function siteIdFromHeader(req: Request): number | null {
+  const raw = req.header("x-accuqual-site");
+  if (!raw || raw.trim().toLowerCase() === "all") return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export const runImportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const parsed = optionsSchema.safeParse(req.body);
+  const displayName = parsed.success ? parsed.data.displayName?.trim() : "";
+  const folderId = parsed.success ? parsed.data.folderId : undefined;
+  if (!displayName || !folderId) throw AppError.badRequest("Name the file and choose a folder before importing.");
+  await assertFolderExists(db, folderId);
+  const existing = await loadJob(Number(req.params.id));
+  const entry = getCatalogEntry(existing.entityKey);
+  if (entry?.archiveOnly && !(await importArchiveReady(db))) throw new AppError(IMPORT_ARCHIVE_UNAVAILABLE, 503);
   const job = await saveOptions(req, "running");
+  rememberImportSave(job.id, { displayName, folderId, userId: req.user?.id, siteId: siteIdFromHeader(req) });
   if (job.totalRows <= SYNC_ROW_LIMIT) {
     await executeImport(job.id);
-    res.json(present(await loadJob(job.id)));
+    const finished = await loadJob(job.id);
+    const archived = await importArchiveReady(db);
+    res.json({ ...present(finished), archiveNote: archived ? null : "The records were imported. The Imported Data folder isn't available until the database update runs." });
     return;
   }
   scheduleImport(job.id);
