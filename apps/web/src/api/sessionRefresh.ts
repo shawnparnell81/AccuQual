@@ -14,8 +14,11 @@ export const PROACTIVE_REFRESH_LEAD_MS = 60_000;
 /** Avoid renewing in a tight loop if a token is already inside the lead window. */
 export const MIN_PROACTIVE_GAP_MS = 30_000;
 const MAX_BACKOFF_MS = 15 * 60 * 1000;
-/** Waits longer than this are left to the scheduler so open requests are not stuck. */
-export const MAX_INLINE_BACKOFF_MS = 5_000;
+/** Extra wait, as a fraction of the floor, so tabs do not retry on the same instant. */
+const JITTER_FRACTION = 0.25;
+/** Cross-tab claim. A crashed tab stops holding it after this. */
+export const REFRESH_LOCK_KEY = "accuqual-refresh-lock";
+export const REFRESH_LOCK_TTL_MS = 20_000;
 
 export type RefreshAttempt =
   | { kind: "ok"; accessToken: string }
@@ -28,26 +31,20 @@ export type RefreshResult =
   | { ok: false; logout: false; retryAfterMs: number };
 
 export function createSessionRefresher(options: {
-  /** `attempt` is how many failures already happened, so the wait can grow. */
+  /**
+   * One try. The attempt number is how many failures already happened, so the
+   * wait can grow across scheduled retries. A slow-down is not tried again
+   * inside this call — that loop was spending the renewal budget.
+   */
   attempt: (attempt: number) => Promise<RefreshAttempt>;
-  sleep?: (ms: number) => Promise<void>;
-  maxAttempts?: number;
 }) {
-  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const maxAttempts = options.maxAttempts ?? 4;
   let inFlight: Promise<RefreshResult> | null = null;
 
   async function run(): Promise<RefreshResult> {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const outcome = await options.attempt(attempt);
-      if (outcome.kind === "ok") return { ok: true, accessToken: outcome.accessToken };
-      if (outcome.kind === "unauthenticated") return { ok: false, logout: true };
-      if (outcome.retryAfterMs > MAX_INLINE_BACKOFF_MS || attempt === maxAttempts - 1) {
-        return { ok: false, logout: false, retryAfterMs: outcome.retryAfterMs };
-      }
-      await sleep(outcome.retryAfterMs);
-    }
-    return { ok: false, logout: false, retryAfterMs: 1_000 };
+    const outcome = await options.attempt(0);
+    if (outcome.kind === "ok") return { ok: true, accessToken: outcome.accessToken };
+    if (outcome.kind === "unauthenticated") return { ok: false, logout: true };
+    return { ok: false, logout: false, retryAfterMs: outcome.retryAfterMs };
   }
 
   return {
@@ -84,15 +81,41 @@ export async function settleAfterRefresh<T>(
  * connection leaves the cookie alone, so the page stays put and the call is
  * tried again.
  */
-export function classifyRefreshFailure(status: number | undefined, retryAfterHeader: string | null | undefined, attempt: number, now = Date.now()): RefreshAttempt {
+export function classifyRefreshFailure(status: number | undefined, retryAfterHeader: string | null | undefined, attempt: number, now = Date.now(), random: () => number = Math.random): RefreshAttempt {
   if (status === 401) return { kind: "unauthenticated" };
-  return { kind: "backoff", retryAfterMs: retryDelayMs(attempt, retryAfterHeader, now) };
+  return { kind: "backoff", retryAfterMs: retryDelayMs(attempt, retryAfterHeader, now, random) };
 }
 
-export function retryDelayMs(attempt: number, retryAfterHeader: string | null | undefined, now = Date.now()): number {
+/**
+ * How long to wait before the next renewal.
+ * Retry-After is the earliest time. Without it, the wait doubles each failure.
+ * Jitter is added on top, never subtracted, so a 429 is not retried early and
+ * several tabs do not line up on the same second.
+ */
+export function retryDelayMs(attempt: number, retryAfterHeader: string | null | undefined, now = Date.now(), random: () => number = Math.random): number {
+  const exponential = Math.min(MAX_BACKOFF_MS, 1_000 * 2 ** Math.max(0, attempt));
   const fromHeader = parseRetryAfterMs(retryAfterHeader, now);
-  if (fromHeader != null) return Math.min(Math.max(fromHeader, 250), MAX_BACKOFF_MS);
-  return Math.min(MAX_BACKOFF_MS, 1_000 * 2 ** Math.max(0, attempt));
+  const floor = fromHeader != null ? Math.min(Math.max(fromHeader, 250), MAX_BACKOFF_MS) : exponential;
+  const spread = Math.min(Math.max(0, MAX_BACKOFF_MS - floor), Math.floor(floor * JITTER_FRACTION));
+  const unit = Math.min(1, Math.max(0, random()));
+  return floor + Math.floor(spread * unit);
+}
+
+/** Axios hides Retry-After behind `.get`. A number or a one-item list still counts. */
+export function readRetryAfterHeader(headers: unknown): string | null {
+  if (!headers || typeof headers !== "object") return null;
+  const bag = headers as { get?: (name: string) => unknown };
+  const fromGet = typeof bag.get === "function" ? bag.get("retry-after") : undefined;
+  const record = headers as Record<string, unknown>;
+  const raw = fromGet ?? record["retry-after"] ?? record["Retry-After"];
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  if (typeof raw === "string" && raw.trim()) return raw;
+  if (Array.isArray(raw)) {
+    const first = raw.find((item) => typeof item === "string" || typeof item === "number");
+    if (typeof first === "number" && Number.isFinite(first)) return String(first);
+    if (typeof first === "string" && first.trim()) return first;
+  }
+  return null;
 }
 
 function parseRetryAfterMs(header: string | null | undefined, now: number): number | null {
@@ -138,6 +161,84 @@ export function shouldRedirectToLogin(input: { accessToken: string | null; recon
   if (input.accessToken) return false;
   if (input.reconnecting) return false;
   return true;
+}
+
+export interface StoredRefreshLock {
+  owner: string;
+  expiresAt: number;
+}
+
+export function parseRefreshLock(raw: string | null): StoredRefreshLock | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { owner?: unknown; expiresAt?: unknown };
+    if (typeof parsed.owner !== "string" || parsed.owner.length === 0) return null;
+    if (typeof parsed.expiresAt !== "number" || !Number.isFinite(parsed.expiresAt)) return null;
+    return { owner: parsed.owner, expiresAt: parsed.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+/** Take the cross-tab claim, or report how long the other tab still holds it. */
+export function refreshLockClaim(input: { now: number; ownerId: string; existing: StoredRefreshLock | null; ttlMs?: number }): { acquired: true; lock: StoredRefreshLock } | { acquired: false; retryAfterMs: number } {
+  const ttlMs = input.ttlMs ?? REFRESH_LOCK_TTL_MS;
+  if (input.existing && input.existing.owner !== input.ownerId && input.existing.expiresAt > input.now) {
+    return { acquired: false, retryAfterMs: Math.max(50, input.existing.expiresAt - input.now) };
+  }
+  return { acquired: true, lock: { owner: input.ownerId, expiresAt: input.now + ttlMs } };
+}
+
+export interface RefreshLockStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/**
+ * One renewal across tabs. A second tab waits, and if `peek` already has the
+ * leader's result it does not call `work`. A lock older than the deadline is
+ * abandoned so a crashed tab cannot block sign-in forever.
+ */
+export async function runWithRefreshLock<T>(options: {
+  storage: RefreshLockStorage;
+  ownerId: string;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  ttlMs?: number;
+  maxWaitMs?: number;
+  peek?: () => T | null;
+  work: () => Promise<T>;
+}): Promise<T> {
+  const now = options.now ?? Date.now;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const ttlMs = options.ttlMs ?? REFRESH_LOCK_TTL_MS;
+  const deadline = now() + (options.maxWaitMs ?? ttlMs);
+
+  while (true) {
+    const peeked = options.peek?.() ?? null;
+    if (peeked != null) return peeked;
+    const existing = parseRefreshLock(options.storage.getItem(REFRESH_LOCK_KEY));
+    const claim = refreshLockClaim({ now: now(), ownerId: options.ownerId, existing, ttlMs });
+    if (!claim.acquired) {
+      if (now() >= deadline) return options.work();
+      await sleep(Math.min(claim.retryAfterMs, 250));
+      continue;
+    }
+    options.storage.setItem(REFRESH_LOCK_KEY, JSON.stringify(claim.lock));
+    const confirmed = parseRefreshLock(options.storage.getItem(REFRESH_LOCK_KEY));
+    if (confirmed?.owner !== options.ownerId) {
+      if (now() >= deadline) return options.work();
+      await sleep(20);
+      continue;
+    }
+    try {
+      return await options.work();
+    } finally {
+      const current = parseRefreshLock(options.storage.getItem(REFRESH_LOCK_KEY));
+      if (current?.owner === options.ownerId) options.storage.removeItem(REFRESH_LOCK_KEY);
+    }
+  }
 }
 
 /** While a renewal is waiting out a 429 or a server error, another caller must not start a new one. */

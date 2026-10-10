@@ -6,9 +6,12 @@ import {
   classifyRefreshFailure,
   createSessionRefresher,
   nextProactiveDelayMs,
+  readRetryAfterHeader,
   refreshDecision,
   refreshWhileBackingOff,
+  runWithRefreshLock,
   settleAfterRefresh,
+  type RefreshLockStorage,
   type RefreshReason,
   type RefreshResult,
 } from "./sessionRefresh";
@@ -37,8 +40,8 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 let lastSuccessAt = 0;
-/** How many load-time checks in a row failed for a reason other than "signed out", so the next wait grows. */
-let bootstrapMisses = 0;
+/** Failures in a row. The next wait doubles. A success starts the count over. */
+let failureCount = 0;
 /** Earliest time another renewal may hit the network after a 429, a 5xx, or a dropped connection. */
 let nextRetryAt = 0;
 let proactiveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -60,8 +63,34 @@ let sharedRefresh: SharedRefresh | null = null;
 let refreshChannel: BroadcastChannel | null = null;
 
 const refresher = createSessionRefresher({
-  attempt: (attempt) => performRefreshAttempt(attempt),
+  attempt: () => performRefreshAttempt(),
 });
+
+const refreshOwnerId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `tab-${Date.now()}`;
+
+let refreshLockStore: RefreshLockStorage | null = null;
+
+function refreshLockStorage(): RefreshLockStorage {
+  if (refreshLockStore) return refreshLockStore;
+  try {
+    const probe = "__accuqual_refresh_lock_probe__";
+    localStorage.setItem(probe, "1");
+    localStorage.removeItem(probe);
+    refreshLockStore = localStorage;
+  } catch {
+    const memory = new Map<string, string>();
+    refreshLockStore = {
+      getItem: (key) => memory.get(key) ?? null,
+      setItem: (key, value) => {
+        memory.set(key, value);
+      },
+      removeItem: (key) => {
+        memory.delete(key);
+      },
+    };
+  }
+  return refreshLockStore;
+}
 
 function endSession() {
   releaseBrowserSessionTab();
@@ -138,13 +167,13 @@ function scheduleProactiveRefresh(token: string | null, delayOverride?: number) 
 
 function settleRefreshResult(result: RefreshResult): RefreshResult {
   if (result.ok) {
-    bootstrapMisses = 0;
+    failureCount = 0;
     nextRetryAt = 0;
     useAuthStore.getState().setReconnecting(false);
     return result;
   }
   if (result.logout) {
-    bootstrapMisses = 0;
+    failureCount = 0;
     nextRetryAt = 0;
     endSession();
   } else {
@@ -155,7 +184,8 @@ function settleRefreshResult(result: RefreshResult): RefreshResult {
   return result;
 }
 
-async function performRefreshAttempt(attempt: number) {
+async function performRefreshAttempt() {
+  const attempt = failureCount;
   try {
     const { data } = await axios.post<RefreshResponse>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
@@ -170,13 +200,14 @@ async function performRefreshAttempt(attempt: number) {
     // Stamp this before setSession. That update schedules the next renewal, and it
     // must see that a renewal just finished or it will fire another one immediately.
     lastSuccessAt = Date.now();
+    failureCount = 0;
     adoptBrowserSession();
     useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
     return { kind: "ok" as const, accessToken: data.accessToken };
   } catch (err) {
+    failureCount += 1;
     if (!axios.isAxiosError(err)) return classifyRefreshFailure(undefined, null, attempt);
-    const header = err.response?.headers?.["retry-after"];
-    return classifyRefreshFailure(err.response?.status, typeof header === "string" ? header : null, attempt);
+    return classifyRefreshFailure(err.response?.status, readRetryAfterHeader(err.response?.headers), attempt);
   }
 }
 
@@ -196,8 +227,9 @@ async function performRefreshAttempt(attempt: number) {
  * was coming back 401, and enough of them together came back 429.
  * A 401 right after a renewal replays with the new token instead of renewing
  * again. A 429, a 5xx, or a dropped connection does not end the session.
- * The page stays put and one retry is scheduled. Only a 401 from this call
- * (expired, revoked, or no cookie) clears the session.
+ * The page stays put and one retry is scheduled, longer each time, and not
+ * before Retry-After. Only a 401 from this call (expired, revoked, or no
+ * cookie) clears the session.
  */
 export function refreshSession(reason: RefreshReason = "proactive"): Promise<RefreshResult> {
   const token = useAuthStore.getState().accessToken;
@@ -226,26 +258,31 @@ export function refreshSession(reason: RefreshReason = "proactive"): Promise<Ref
   return inFlight;
 }
 
-/** One try. The load-time check uses this so a server error does not hold an empty page through the backoff sleeps. */
+/** One try. A server error must not sleep inside this call or the page stays blank. */
 async function refreshOnce(): Promise<RefreshResult> {
-  const outcome = await performRefreshAttempt(bootstrapMisses);
+  const outcome = await performRefreshAttempt();
   if (outcome.kind === "ok") return { ok: true, accessToken: outcome.accessToken };
   if (outcome.kind === "unauthenticated") return { ok: false, logout: true };
-  bootstrapMisses += 1;
   return { ok: false, logout: false, retryAfterMs: outcome.retryAfterMs };
 }
 
 async function coordinatedRefresh(once: boolean): Promise<RefreshResult> {
   listenForOtherTabs();
-  const run = async () => {
-    // Let a renewal message from the tab that just held this lock land before we send another request.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const reused = reuseSharedRefresh();
-    if (reused) return reused;
-    const result = once ? await refreshOnce() : await refresher.refresh();
-    rememberShared(result);
-    return result;
-  };
+  const run = () =>
+    runWithRefreshLock({
+      storage: refreshLockStorage(),
+      ownerId: refreshOwnerId,
+      peek: () => reuseSharedRefresh(),
+      work: async () => {
+        // Let a renewal message from the tab that just held this lock land before we send another request.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const reused = reuseSharedRefresh();
+        if (reused) return reused;
+        const result = once ? await refreshOnce() : await refresher.refresh();
+        rememberShared(result);
+        return result;
+      },
+    });
   if (typeof navigator !== "undefined" && navigator.locks?.request) {
     return navigator.locks.request(REFRESH_LOCK, run);
   }
