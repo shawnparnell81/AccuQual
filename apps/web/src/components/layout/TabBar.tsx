@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Columns2, Pin, AlertTriangle,
   ClipboardCheck,
@@ -21,6 +22,8 @@ import { useTabStore } from "../../store/useTabStore";
 import { TruncatedName } from "../shared/TruncatedName";
 import { useSplitStore } from "../../store/useSplitStore";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
+import { useDialogBehavior } from "../shared/useDialogBehavior";
+import { claimTabClosePrompt, consumeTabUserGesture, releaseTabClosePrompt, resolveTabClose, UNSAVED_TAB_TITLE, unsavedTabMessage } from "../../lib/tabSession";
 
 // Same icon-per-module choices as navConfig.ts, reused here for visual
 // consistency between the top nav and the tab strip.
@@ -61,36 +64,67 @@ export function TabBar() {
   const togglePin = useTabStore((s) => s.togglePin);
   const dirtyPaths = useDirtyPathStore((s) => s.paths);
   const openSplit = useSplitStore((s) => s.openSplit);
+  const [prompt, setPrompt] = useState<{ label: string; resolve: (choice: "discard" | "cancel") => void } | null>(null);
+
+  useEffect(() => () => releaseTabClosePrompt(), []);
 
   // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
   if (tabs.length < 2) return null;
 
   function handleActivate(id: string) {
+    consumeTabUserGesture();
     if (id === activeId) return;
     const path = activateTab(id);
     if (path) navigate(path);
   }
 
-  function handleClose(e: React.MouseEvent, id: string) {
+  function finishPrompt(choice: "discard" | "cancel") {
+    prompt?.resolve(choice);
+    setPrompt(null);
+  }
+
+  async function handleClose(e: React.MouseEvent, id: string) {
+    e.preventDefault();
     e.stopPropagation();
+    const tab = useTabStore.getState().tabs.find((item) => item.id === id);
+    if (!tab) return;
+    const dirty = Boolean(useDirtyPathStore.getState().paths[tab.path]);
+    const plan = resolveTabClose(dirty, null);
+    if (plan === "ask") {
+      if (!claimTabClosePrompt()) return;
+      let choice: "discard" | "cancel";
+      try {
+        choice = await new Promise<"discard" | "cancel">((resolve) => {
+          setPrompt({ label: tab.title, resolve });
+        });
+      } finally {
+        releaseTabClosePrompt();
+      }
+      if (resolveTabClose(true, choice) === "stay") return;
+      useDirtyPathStore.getState().setDirtyPath(tab.path, false);
+    }
+    const wasActive = useTabStore.getState().activeId === id;
     const nextPath = closeTab(id);
-    if (id === activeId && nextPath) navigate(nextPath);
+    if (wasActive && nextPath) navigate(nextPath, { replace: true });
   }
 
   const compress = tabs.length >= 6;
 
   return (
+    <>
     <div className="hidden w-full min-w-0 max-w-full items-center gap-0.5 overflow-hidden border-b border-border bg-card px-2 pt-1 md:flex" role="tablist" aria-label="Open pages">
       {tabs.map((tab) => {
         const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
         const isActive = tab.id === activeId;
         const dirty = Boolean(dirtyPaths[tab.path]);
-        const width = compress && !isActive ? "max-w-[4.5rem]" : "max-w-[14rem]";
+        const compact = compress && !isActive;
+        const titleLimit = compact ? "max-w-[2.5rem]" : "max-w-[9rem]";
         return (
-          <button
+          <div
             key={tab.id}
             role="tab"
             aria-selected={isActive}
+            tabIndex={0}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.setData("text/plain", tab.id);
@@ -106,75 +140,104 @@ export function TabBar() {
               if (fromId) reorderTabs(fromId, tab.id);
             }}
             onClick={() => handleActivate(tab.id)}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key === "Enter" || event.key === " ") handleActivate(tab.id);
+            }}
             title={tab.title}
             className={
               isActive
-                ? `relative flex min-w-0 ${width} shrink cursor-grab items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground active:cursor-grabbing`
-                : `flex min-w-0 ${width} shrink cursor-grab items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary active:cursor-grabbing`
+                ? "relative flex min-w-0 shrink cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground active:cursor-grabbing"
+                : "flex min-w-0 shrink cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary active:cursor-grabbing"
             }
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
             <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
             {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" title="Unsaved changes" aria-label="Unsaved changes" />}
-            <TruncatedName name={tab.title} className="flex-1 text-left" />
-            <span
-              role="button"
-              tabIndex={0}
-              draggable={false}
-              aria-label={tab.pinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
-              title={tab.pinned ? "Unpin tab" : "Pin tab"}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePin(tab.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+            <TruncatedName name={tab.title} className={`text-left ${titleLimit}`} />
+            {!compact && (
+              <button
+                type="button"
+                draggable={false}
+                aria-label={tab.pinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+                title={tab.pinned ? "Unpin tab" : "Pin tab"}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
                   e.stopPropagation();
+                  consumeTabUserGesture();
                   togglePin(tab.id);
-                }
-              }}
-              className={`shrink-0 rounded p-0.5 hover:bg-muted-foreground/20 ${tab.pinned ? "text-accent" : ""}`}
-            >
-              <Pin size={12} className={tab.pinned ? "fill-current" : ""} />
-            </span>
-            <span
-              role="button"
-              tabIndex={0}
-              draggable={false}
-              aria-label={`Open ${tab.title} in right pane`}
-              title="Open in right pane"
-              onClick={(e) => {
-                e.stopPropagation();
-                openSplit(tab.path);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+                }}
+                className={`shrink-0 rounded p-0.5 hover:bg-muted-foreground/20 ${tab.pinned ? "text-accent" : ""}`}
+              >
+                <Pin size={12} className={tab.pinned ? "fill-current" : ""} />
+              </button>
+            )}
+            {!compact && (
+              <button
+                type="button"
+                draggable={false}
+                aria-label={`Open ${tab.title} in right pane`}
+                title="Open in right pane"
+                onClick={(e) => {
                   e.stopPropagation();
+                  consumeTabUserGesture();
                   openSplit(tab.path);
-                }
-              }}
-              className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
-            >
-              <Columns2 size={12} />
-            </span>
-            <span
-              role="button"
-              tabIndex={0}
+                }}
+                className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
+              >
+                <Columns2 size={12} />
+              </button>
+            )}
+            <button
+              type="button"
               draggable={false}
-              onClick={(e) => handleClose(e, tab.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") handleClose(e as unknown as React.MouseEvent, tab.id);
-              }}
+              data-tab-close=""
+              onClick={(e) => void handleClose(e, tab.id)}
               aria-label={`Close ${tab.title}`}
               title={tab.title}
               className="ml-1 shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
             >
               <X size={12} />
-            </span>
-          </button>
+            </button>
+          </div>
         );
       })}
     </div>
+    {prompt && <UnsavedTabDialog label={prompt.label} onDiscard={() => finishPrompt("discard")} onCancel={() => finishPrompt("cancel")} />}
+    </>
+  );
+}
+
+export function UnsavedTabDialog({ label, onDiscard, onCancel }: { label: string; onDiscard: () => void; onCancel: () => void }) {
+  const ref = useDialogBehavior(true, onCancel);
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40" onClick={onCancel} />
+      <div
+        ref={ref}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="unsaved-tab-title"
+        aria-describedby="unsaved-tab-body"
+        tabIndex={-1}
+        data-testid="unsaved-changes-dialog"
+        className="modal-in fixed left-1/2 top-24 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-card p-4 shadow-xl outline-none"
+      >
+        <h2 id="unsaved-tab-title" className="text-sm font-medium">
+          {UNSAVED_TAB_TITLE}
+        </h2>
+        <p id="unsaved-tab-body" className="mt-2 text-sm text-muted-foreground">
+          {unsavedTabMessage(label)}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" data-testid="unsaved-cancel" onClick={onCancel} className="order-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+            Cancel
+          </button>
+          <button type="button" data-testid="unsaved-discard" onClick={onDiscard} className="order-1 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground">
+            Discard and close
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
