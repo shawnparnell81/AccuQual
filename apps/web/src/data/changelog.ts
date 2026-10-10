@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-10",
+    date: "2026-10-10",
+    items: [
+      "Login History stays quiet until the recording start, which defaults to Oct 12, 2026 12:00 AM Eastern. An administrator changes that time on the Login History page. Earlier sign-ins are not stored, and any row from before the start stays off the list.",
+    ],
+  },
+  {
     version: "2026-10-09",
     date: "2026-10-09",
     items: [

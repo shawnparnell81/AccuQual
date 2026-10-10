@@ -207,6 +207,13 @@ export const company = pgTable("company", {
      */
     sessionLengthHours?: number;
     /**
+     * When login history starts being written, as a UTC instant. Unset means
+     * 2026-10-12 12:00 AM Eastern (2026-10-12T04:00:00.000Z). Nothing is stored
+     * before that instant. The profile column already exists, so a missing
+     * key uses this default and no migration is required.
+     */
+    loginHistoryStartsAt?: string;
+    /**
      * Change-request masters (labels and revision). Written only by the
      * change-request structure endpoints. Company Settings spreads this
      * object, so a profile save keeps them. No separate table. Engineering

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { apiClient } from "../../api/client";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -27,6 +27,10 @@ interface LoginHistoryPageData {
   pageSize: number;
   total: number;
   unavailable: boolean;
+  recordingStartsAt: string;
+  recordingStartsAtEastern: string;
+  recording: boolean;
+  recordingNotice: string | null;
 }
 
 const EVENT_OPTIONS = [
@@ -84,6 +88,7 @@ function dash(value: string | null | undefined): string {
 
 export function LoginHistoryPage() {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -91,6 +96,7 @@ export function LoginHistoryPage() {
   const [success, setSuccess] = useState("");
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [startDraft, setStartDraft] = useState<string | null>(null);
 
   const filters = {
     user: user.trim() || undefined,
@@ -111,6 +117,17 @@ export function LoginHistoryPage() {
   const pageSize = query.data?.pageSize ?? 25;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const forbidden = query.isError && axios.isAxiosError(query.error) && query.error.response?.status === 403;
+  const startValue = startDraft ?? query.data?.recordingStartsAtEastern ?? "";
+
+  const saveStart = useMutation({
+    mutationFn: async (startsAt: string) => (await apiClient.patch("/login-history/start", { startsAt })).data,
+    onSuccess: async () => {
+      setStartDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ["login-history"] });
+      toast.success("Login history recording start saved.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the recording start.")),
+  });
 
   async function exportCsv() {
     setExporting(true);
@@ -146,6 +163,7 @@ export function LoginHistoryPage() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Who signed in, when, from where, and on what device. Times on this page use your time zone. The CSV file uses UTC. Records are kept for at least a year.
           </p>
+          {query.data?.recordingNotice ? <p className="mt-2 text-sm font-medium text-foreground">{query.data.recordingNotice}</p> : null}
         </div>
         <button
           type="button"
@@ -199,6 +217,30 @@ export function LoginHistoryPage() {
           </select>
         </label>
       </form>
+
+      {query.data && !forbidden ? (
+        <form
+          className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (startValue) saveStart.mutate(startValue);
+          }}
+        >
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Login history recording starts
+            <input
+              type="datetime-local"
+              value={startValue}
+              onChange={(event) => setStartDraft(event.target.value)}
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            />
+          </label>
+          <button type="submit" disabled={saveStart.isPending || !startValue} className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-60">
+            {saveStart.isPending ? "Saving…" : "Save start"}
+          </button>
+          <p className="text-xs text-muted-foreground">Eastern Time. Nothing is recorded before this.</p>
+        </form>
+      ) : null}
 
       {query.isLoading ? (
         <LoadingPlaceholder />

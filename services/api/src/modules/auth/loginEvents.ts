@@ -5,6 +5,7 @@ import { company } from "../../drizzle/schema/company.js";
 import { loginEvents } from "../../drizzle/schema/loginEvents.js";
 import { logger } from "../../utils/logger.js";
 import { lookupIpLocation } from "./ipLocation.js";
+import { loginHistoryStartsAt, recordingOpen, recordingStartNotice, utcToEasternWall } from "./loginHistoryStart.js";
 import type { SignInClient } from "./signInAudit.js";
 import { deviceLabel, parseUserAgent } from "./userAgent.js";
 
@@ -49,13 +50,21 @@ function clip(value: string | null | undefined, max: number): string | null {
   return trimmed.slice(0, max);
 }
 
+export async function readRecordingStart(database: Db): Promise<Date> {
+  const [row] = await database.select({ profile: company.profile }).from(company).limit(1);
+  return loginHistoryStartsAt(row?.profile);
+}
+
 /**
- * Writes one history row. A missing table (code deployed before the migration)
- * is ignored so sign-in still succeeds. Any other write error is logged and
- * swallowed for the same reason. The password and the token are not arguments.
+ * Writes one history row. Nothing is written before the company's recording
+ * start. A missing table (code deployed before the migration) is ignored so
+ * sign-in still succeeds. Any other write error is logged and swallowed for
+ * the same reason. The password and the token are not arguments.
  */
 export async function recordLoginEvent(input: LoginEventInput): Promise<void> {
   try {
+    const startsAt = await readRecordingStart(db);
+    if (!recordingOpen(startsAt)) return;
     let companyId = input.companyId ?? null;
     if (companyId == null) {
       const [row] = await db.select({ id: company.id }).from(company).limit(1);
@@ -124,10 +133,26 @@ export interface LoginHistoryPage {
   pageSize: number;
   total: number;
   unavailable: boolean;
+  recordingStartsAt: string;
+  /** Eastern wall clock `YYYY-MM-DDTHH:mm` for the start editor. */
+  recordingStartsAtEastern: string;
+  recording: boolean;
+  /** Set until recording has started. */
+  recordingNotice: string | null;
 }
 
-function blankPage(query: LoginHistoryQuery, unavailable: boolean): LoginHistoryPage {
-  return { items: [], page: query.page, pageSize: query.pageSize, total: 0, unavailable };
+function recordingFields(startsAt: Date, now = new Date()): Pick<LoginHistoryPage, "recordingStartsAt" | "recordingStartsAtEastern" | "recording" | "recordingNotice"> {
+  const open = recordingOpen(startsAt, now);
+  return {
+    recordingStartsAt: startsAt.toISOString(),
+    recordingStartsAtEastern: utcToEasternWall(startsAt),
+    recording: open,
+    recordingNotice: open ? null : recordingStartNotice(startsAt),
+  };
+}
+
+function blankPage(query: LoginHistoryQuery, unavailable: boolean, startsAt: Date): LoginHistoryPage {
+  return { items: [], page: query.page, pageSize: query.pageSize, total: 0, unavailable, ...recordingFields(startsAt) };
 }
 
 function present(row: typeof loginEvents.$inferSelect): LoginHistoryItem {
@@ -153,8 +178,10 @@ async function companyIdOf(database: Db): Promise<number | null> {
   return row?.id ?? null;
 }
 
-function filters(companyId: number, query: LoginHistoryQuery): SQL | undefined {
+function filters(companyId: number, query: LoginHistoryQuery, startsAt: Date): SQL | undefined {
   const parts: SQL[] = [eq(loginEvents.companyId, companyId)];
+  const lower = query.from && query.from.getTime() > startsAt.getTime() ? query.from : startsAt;
+  parts.push(gte(loginEvents.occurredAt, lower));
   const needle = query.user?.trim().replace(/[%_\\]/g, "") ?? "";
   if (needle) {
     const pattern = `%${needle}%`;
@@ -163,16 +190,16 @@ function filters(companyId: number, query: LoginHistoryQuery): SQL | undefined {
   }
   if (query.event) parts.push(eq(loginEvents.eventType, query.event));
   if (query.success !== undefined) parts.push(eq(loginEvents.success, query.success));
-  if (query.from) parts.push(gte(loginEvents.occurredAt, query.from));
   if (query.to) parts.push(lte(loginEvents.occurredAt, query.to));
   return and(...parts);
 }
 
 export async function listLoginEvents(database: Db, query: LoginHistoryQuery): Promise<LoginHistoryPage> {
+  const startsAt = await readRecordingStart(database);
   try {
     const companyId = await companyIdOf(database);
-    if (companyId == null) return blankPage(query, false);
-    const where = filters(companyId, query);
+    if (companyId == null) return blankPage(query, false, startsAt);
+    const where = filters(companyId, query, startsAt);
     const [countRow] = await database.select({ total: sql<number>`count(*)::int` }).from(loginEvents).where(where);
     const rows = await database
       .select()
@@ -187,9 +214,10 @@ export async function listLoginEvents(database: Db, query: LoginHistoryQuery): P
       pageSize: query.pageSize,
       total: countRow?.total ?? 0,
       unavailable: false,
+      ...recordingFields(startsAt),
     };
   } catch (err) {
-    if (isUndefinedTable(err)) return blankPage(query, true);
+    if (isUndefinedTable(err)) return blankPage(query, true, startsAt);
     throw err;
   }
 }
