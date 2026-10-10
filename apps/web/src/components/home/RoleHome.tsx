@@ -1,5 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { KpiChartCustomize, KpiPinnedCharts } from "../kpis/KpiBoards";
+import { UpdatedStamp } from "../kpis/UpdatedStamp";
 import { WorkspaceArrange } from "./WorkspaceArrange";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +34,7 @@ function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | 
     queryFn: async () => (await apiClient.get<T[]>(`/${resource}`, { params })).data,
     enabled,
     staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: false,
   });
 }
@@ -226,7 +229,11 @@ export function RoleHome() {
         {firstName ? `, ${firstName}` : ""}. Open work assigned to you is first.
         {sub ? ` ${sub}` : ""}
       </p>
-      <WorkspaceArrange surface="home" labels={homeLabels} allowed={allowed} />
+      {Math.max(ncrs.dataUpdatedAt, capas.dataUpdatedAt, documents.dataUpdatedAt, audits.dataUpdatedAt) > 0 && (
+        <UpdatedStamp at={new Date(Math.max(ncrs.dataUpdatedAt, capas.dataUpdatedAt, documents.dataUpdatedAt, audits.dataUpdatedAt))} />
+      )}
+      <WorkspaceArrange surface="home" labels={homeLabels} allowed={allowed} footer={<KpiChartCustomize surface="home" />} />
+      <KpiPinnedCharts surface="home" />
       {pairSections(shown, sections)}
     </div>
   );

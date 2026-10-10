@@ -19,6 +19,7 @@ import {
   completeNcrDispositionSchema,
 } from "./ncr.validation.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { clearReportingCache } from "../reporting/reporting.service.js";
 import { beginNcrEdit } from "../forms/moduleBeginEdit.js";
 import {
   baseHandlers,
@@ -44,6 +45,12 @@ import {
 export const ncrRouter = Router();
 // Turns on PERMISSION_MATRIX.ncr (quality: edit) — previously unenforced.
 ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr"), presentNcrWorkflow);
+ncrRouter.use((req, res, next) => {
+  res.on("finish", () => {
+    if (req.method !== "GET" && req.method !== "HEAD" && res.statusCode < 400) clearReportingCache();
+  });
+  next();
+});
 
 ncrRouter.get("/", listHandler);
 ncrRouter.get("/process-metrics", processMetricsHandler);

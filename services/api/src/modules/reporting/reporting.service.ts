@@ -39,7 +39,7 @@ export interface DateRange {
 // module's two functions for Redis (already used elsewhere — see
 // lib/eventBus.ts) without touching any caller.
 // ---------------------------------------------------------------------------
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 const cache = new Map<string, { value: unknown; expiresAt: number }>();
 
 async function cached<T>(key: string, compute: () => Promise<T>): Promise<T> {
@@ -74,9 +74,9 @@ export interface NcrMetrics {
   avgClosureDays: number | null;
 }
 
-export async function getNcrMetrics(db: Db, range?: DateRange): Promise<NcrMetrics> {
-  return cached(`ncr:${JSON.stringify(range)}`, async () => {
-    const where = and(eq(ncr.isDeleted, false), ...dateFilter(ncr.createdAt, range));
+export async function getNcrMetrics(db: Db, range?: DateRange, siteId?: number | null): Promise<NcrMetrics> {
+  return cached(`ncr:${siteId ?? "all"}:${JSON.stringify(range)}`, async () => {
+    const where = and(eq(ncr.isDeleted, false), ...(siteId != null ? [eq(ncr.siteId, siteId)] : []), ...dateFilter(ncr.createdAt, range));
 
     const [openRow] = await db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(where, sql`${ncr.status} != 'closed'`));
     const [closedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(where, eq(ncr.status, "closed")));
@@ -133,9 +133,9 @@ export interface CapaMetrics {
   avgClosureDays: number | null;
 }
 
-export async function getCapaMetrics(db: Db, range?: DateRange): Promise<CapaMetrics> {
-  return cached(`capa:${JSON.stringify(range)}`, async () => {
-    const where = and(...dateFilter(capa.createdAt, range));
+export async function getCapaMetrics(db: Db, range?: DateRange, siteId?: number | null): Promise<CapaMetrics> {
+  return cached(`capa:${siteId ?? "all"}:${JSON.stringify(range)}`, async () => {
+    const where = and(...(siteId != null ? [eq(capa.siteId, siteId)] : []), ...dateFilter(capa.createdAt, range));
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(capa).where(where);
     const [closedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(capa).where(and(where, eq(capa.status, "closed")));

@@ -100,6 +100,12 @@ export const users = pgTable("users", {
     home?: { order?: string[]; hidden?: string[] };
     dashboard?: { order?: string[]; hidden?: string[] };
     waitingOnMe?: { sort?: string; group?: string; module?: string; timing?: string };
+    /**
+     * Quality KPI charts this person pinned. Missing `executive` means the
+     * built-in executive charts. An empty list means they removed them all.
+     * Same jsonb as the home arrangement, so no new column.
+     */
+    kpiCharts?: { home?: string[]; executive?: string[] } | null;
   } | null>(),
   // Who to escalate this person's overdue or stuck records to. Null means a quality manager.
   managerId: integer("manager_id"),

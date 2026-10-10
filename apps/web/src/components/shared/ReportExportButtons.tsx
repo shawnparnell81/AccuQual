@@ -9,12 +9,12 @@ const FORMATS = [
 ] as const;
 
 /** Phase 6 "Add Export Options" — one shared control for every report card; each click hits GET /reporting/export/:reportKey?format=... (RBAC-gated the same as the report's own metrics endpoint) and downloads the real file, same blob-download convention as AttachmentsPanel/DocumentHistoryPanel. */
-export function ReportExportButtons({ reportKey, from, to }: { reportKey: string; from?: string; to?: string }) {
+export function ReportExportButtons({ reportKey, from, to, siteId }: { reportKey: string; from?: string; to?: string; siteId?: number | null }) {
   const toast = useToast();
 
   async function exportAs(format: (typeof FORMATS)[number]["format"], ext: string) {
     try {
-      const res = await apiClient.get(`/reporting/export/${reportKey}`, { params: { format, from, to }, responseType: "blob" });
+      const res = await apiClient.get(`/reporting/export/${reportKey}`, { params: { format, from, to, siteId: siteId ?? undefined }, responseType: "blob" });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement("a");
       a.href = url;

@@ -44,7 +44,7 @@ export async function buildReportEmail(db: Db, reportType: ReportType, companyNa
         subject: `${companyName} — CAPA Summary (${today})`,
         body:
           `CAPA Summary as of ${today}\n\n` +
-          `Total: ${m.total}\nClosed: ${m.closed}\nEffectiveness (closure rate): ${m.effectivenessRate}%\n` +
+          `Total: ${m.total}\nClosed: ${m.closed}\nClosure rate: ${m.effectivenessRate}%\n` +
           `Average closure time: ${m.avgClosureDays ?? "n/a"} days\n\n` +
           `By status:\n${m.byStatus.map((s) => `  ${s.status}: ${s.count}`).join("\n")}\n`,
       };

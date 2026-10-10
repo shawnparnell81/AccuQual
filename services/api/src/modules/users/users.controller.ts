@@ -563,6 +563,7 @@ export const updateMyWorkspaceLayout = asyncHandler(async (req: Request, res: Re
     home: body.home ? cleanLayout("home", body.home) : previous.home,
     dashboard: body.dashboard ? cleanLayout("dashboard", body.dashboard) : previous.dashboard,
     waitingOnMe: body.waitingOnMe ?? previous.waitingOnMe,
+    kpiCharts: previous.kpiCharts,
   };
   const [updated] = await req.db!.update(users).set({ workspaceLayout: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ workspaceLayout: users.workspaceLayout });
   res.json(updated?.workspaceLayout ?? next);
@@ -581,8 +582,9 @@ export const resetMyWorkspaceLayout = asyncHandler(async (req: Request, res: Res
     home: surface === "home" ? undefined : previous.home,
     dashboard: surface === "dashboard" ? undefined : previous.dashboard,
     waitingOnMe: previous.waitingOnMe,
+    kpiCharts: previous.kpiCharts,
   };
-  const stored = next.home || next.dashboard || next.waitingOnMe ? next : null;
+  const stored = next.home || next.dashboard || next.waitingOnMe || next.kpiCharts ? next : null;
   await req.db!.update(users).set({ workspaceLayout: stored, updatedAt: new Date() }).where(eq(users.id, req.user!.id));
   res.json(stored);
 });

@@ -303,6 +303,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     children: [
       { key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays },
       { key: "executive", label: "Executive dashboard", path: "/executive", icon: LayoutDashboard },
+      { key: "home-kpis", label: "Quality Objectives & KPIs", path: "/kpis", icon: Gauge },
       { key: "notifications", label: "Notifications", path: "/notifications", icon: Bell },
     ],
   },
@@ -319,6 +320,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     path: "/reporting",
     children: [
       { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
+      { key: "kpis", label: "Quality Objectives & KPIs", path: "/kpis", icon: Gauge },
       { key: "dashboard", label: "Overview", path: "/", icon: LayoutDashboard },
       { key: "imported-data", label: "Imported Data", path: "/reporting/imported-data", icon: Folder },
       { key: "report-import", label: "Import data", path: "/admin/import", icon: Upload },

@@ -21,12 +21,19 @@ function parseRange(req: Request): DateRange {
   return { from: from && !isNaN(from.getTime()) ? from : undefined, to: to && !isNaN(to.getTime()) ? to : undefined };
 }
 
+function parseSiteId(req: Request): number | null {
+  const raw = req.query.siteId;
+  if (raw == null || raw === "" || raw === "all") return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export const ncrMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getNcrMetrics(req.db! as Db, parseRange(req)));
+  res.json(await reportingService.getNcrMetrics(req.db! as Db, parseRange(req), parseSiteId(req)));
 });
 
 export const capaMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getCapaMetrics(req.db! as Db, parseRange(req)));
+  res.json(await reportingService.getCapaMetrics(req.db! as Db, parseRange(req), parseSiteId(req)));
 });
 
 export const supplierPerformanceReportHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -142,12 +149,12 @@ export const recipientPeopleHandler = asyncHandler(async (req: Request, res: Res
 // the same audit-metadata line ("Ensure exports include audit metadata").
 // ---------------------------------------------------------------------------
 const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange, siteId?: number | null) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "companyName">>> = {
-  "ncr-metrics": async (db, range) => {
-    const m = await reportingService.getNcrMetrics(db, range);
+  "ncr-metrics": async (db, range, siteId) => {
+    const m = await reportingService.getNcrMetrics(db, range, siteId);
     return { title: "NCR Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "capa-metrics": async (db, range) => {
-    const m = await reportingService.getCapaMetrics(db, range);
+  "capa-metrics": async (db, range, siteId) => {
+    const m = await reportingService.getCapaMetrics(db, range, siteId);
     return { title: "CAPA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
   "supplier-performance": async (db) => {
@@ -197,7 +204,7 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   const [co] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
-  const siteId = req.allSites ? null : (req.siteId ?? null);
+  const siteId = parseSiteId(req) ?? (req.allSites ? null : (req.siteId ?? null));
   const partial = await builder(db, parseRange(req), siteId);
   const report: ExportableReport = {
     ...partial,

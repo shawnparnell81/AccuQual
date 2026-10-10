@@ -11,6 +11,7 @@ describe("record surfaces", () => {
     assert.deepEqual(recordSurface("/documents/nonconformance-log"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/documents/engineering-request-log"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/calibration/master-list"), { kind: "list", access: "calibration" });
+    assert.deepEqual(recordSurface("/kpis"), { kind: "list", access: "any" });
   });
 
   it("treats filled forms as forms and leaves indexes alone", () => {

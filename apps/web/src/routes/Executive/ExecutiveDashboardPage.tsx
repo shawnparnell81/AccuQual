@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { apiClient } from "../../api/client";
@@ -8,8 +8,14 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { DrillRows } from "./ExecutiveDrillListPage";
+import { ExecutiveDrillPanel, type DrillListRow } from "../../components/executive/ExecutiveDrillPanel";
+import { KpiChartCustomize, KpiPinnedCharts } from "../../components/kpis/KpiBoards";
+import { UpdatedStamp } from "../../components/kpis/UpdatedStamp";
+import { useKpis } from "../../hooks/useKpis";
+import { useSiteStore } from "../../store/siteStore";
+import { defaultPlantView, summaryFor } from "../../lib/kpiView";
 import { canViewModule, drillDetail, drillHeading, drillTooltip, executiveListPath, permissionMessage, tabIconForHref, type DrillTarget } from "../../lib/executiveDrill";
+import type { PlantView } from "../../lib/kpiView";
 
 interface Figure {
   label: string;
@@ -57,20 +63,11 @@ interface DashboardPayload {
   columns: ColumnView[];
 }
 
-interface DrillRow {
-  recordNumber: string;
-  title: string;
-  status: string;
-  ageLabel: string;
-  href: string | null;
-  module: string | null;
-}
-
 interface DrillPayload {
   title: string;
   siteName: string;
   total: number;
-  rows: DrillRow[];
+  rows: DrillListRow[];
 }
 
 interface OpenPanel {
@@ -101,12 +98,13 @@ export function ExecutiveDashboardPage() {
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<DashboardLayout | null>(null);
   const [panel, setPanel] = useState<OpenPanel | null>(null);
+  const [kpiPanel, setKpiPanel] = useState<{ title: string; detail: string | null; total: number; rows: DrillListRow[]; note: string | null; denied: string | null } | null>(null);
   const [openingKey, setOpeningKey] = useState<string | null>(null);
-  const panelTitle = useRef<HTMLHeadingElement>(null);
 
   const dashboard = useQuery({
     queryKey: ["executive"],
     queryFn: async () => (await apiClient.get<DashboardPayload>("/executive")).data,
+    refetchInterval: 60_000,
   });
 
   const layout = draft ?? dashboard.data?.layout ?? null;
@@ -136,16 +134,6 @@ export function ExecutiveDashboardPage() {
   const catalog = dashboard.data?.catalog ?? [];
   const catalogByKind = useMemo(() => new Map(catalog.map((item) => [item.kind, item])), [catalog]);
 
-  useEffect(() => {
-    if (!panel) return;
-    panelTitle.current?.focus();
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setPanel(null);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [panel]);
-
   if (dashboard.isLoading) return <LoadingPlaceholder />;
   if (dashboard.isError && axios.isAxiosError(dashboard.error) && dashboard.error.response?.status === 403) {
     return <p className="rounded-lg border border-border bg-card p-4 text-sm text-foreground">You don't have access to the executive dashboard.</p>;
@@ -167,6 +155,7 @@ export function ExecutiveDashboardPage() {
         dateRange: target.dateRange,
         siteId: target.siteId == null ? "unassigned" : String(target.siteId),
       });
+      setKpiPanel(null);
       const data = (await apiClient.get<DrillPayload>(`/executive/records?${params.toString()}`)).data;
       const only = data.total === 1 ? data.rows[0] : undefined;
       if (only?.href) {
@@ -183,6 +172,20 @@ export function ExecutiveDashboardPage() {
       toast.error(extractErrorMessage(err, "Couldn't open those records."));
     } finally {
       setOpeningKey(null);
+    }
+  }
+
+  async function openKpiRecords(metricId: string, month: string, plant: PlantView) {
+    try {
+      const data = (
+        await apiClient.get<{ title: string; siteName: string; total: number; note: string | null; rows: DrillListRow[] }>("/kpis/records", {
+          params: { metric: metricId, month, siteId: plant === "all" ? "all" : String(plant) },
+        })
+      ).data;
+      setPanel(null);
+      setKpiPanel({ title: data.title, detail: data.siteName, total: data.total, rows: data.rows, note: data.note, denied: null });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't open those records."));
     }
   }
 
@@ -221,7 +224,12 @@ export function ExecutiveDashboardPage() {
       <PageHeader
         crumbs={[{ label: "Home", to: "/" }, { label: "Executive dashboard" }]}
         title="Executive dashboard"
-        description="Greer and Wellman, side by side. Numbers open the matching records."
+        description={
+          <div className="flex flex-col gap-1">
+            <span>Greer and Wellman, side by side. Numbers open the matching records.</span>
+            {dashboard.isSuccess && <UpdatedStamp at={new Date(dashboard.dataUpdatedAt)} />}
+          </div>
+        }
         actions={
           <>
           {customizing ? (
@@ -284,8 +292,14 @@ export function ExecutiveDashboardPage() {
             </select>
           </label>
           <p className="text-xs text-muted-foreground">This layout is saved for you. Reset puts the standard dashboard back.</p>
+          <div className="w-full">
+            <KpiChartCustomize surface="executive" />
+          </div>
         </div>
       )}
+
+      <ObjectivesTile />
+      <KpiPinnedCharts surface="executive" onOpen={(metricId, month, plant) => void openKpiRecords(metricId, month, plant)} />
 
       {columns.length === 0 ? (
         <p className="text-sm text-muted-foreground">No plants are available for this dashboard.</p>
@@ -429,45 +443,49 @@ export function ExecutiveDashboardPage() {
       )}
 
       {panel && (
-        <aside
-          role="dialog"
-          aria-labelledby="executive-drill-title"
-          className="fixed inset-y-0 right-0 z-40 flex w-[min(26rem,100%)] flex-col border-l border-border bg-card shadow-2xl"
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-border p-4">
-            <div className="min-w-0">
-              <h2 id="executive-drill-title" ref={panelTitle} tabIndex={-1} className="text-lg font-semibold text-foreground outline-none">
-                {drillHeading(panel.target)}
-              </h2>
-              <p className="text-xs text-muted-foreground">{drillDetail(panel.target.kind, panel.target.bucket)}</p>
-            </div>
-            <button type="button" className="cursor-pointer rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setPanel(null)}>
-              Close
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
-            <p className="text-sm text-muted-foreground">{panel.data.total} {panel.data.total === 1 ? "record" : "records"}</p>
-            <button
-              type="button"
-              className="cursor-pointer rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => openFullList(panel.target)}
-            >
-              Open full list
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {panel.denied && <p className="mb-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground">{panel.denied}</p>}
-            {panel.data.rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No records in this count.</p>
-            ) : (
-              <DrillRows
-                rows={panel.data.rows}
-                onDenied={(message) => setPanel({ ...panel, denied: message })}
-              />
-            )}
-          </div>
-        </aside>
+        <ExecutiveDrillPanel
+          title={drillHeading(panel.target)}
+          detail={drillDetail(panel.target.kind, panel.target.bucket)}
+          total={panel.data.total}
+          rows={panel.data.rows}
+          denied={panel.denied}
+          onClose={() => setPanel(null)}
+          onDenied={(message) => setPanel({ ...panel, denied: message })}
+          onOpenFullList={() => openFullList(panel.target)}
+        />
+      )}
+      {kpiPanel && (
+        <ExecutiveDrillPanel
+          title={kpiPanel.title}
+          detail={kpiPanel.detail}
+          total={kpiPanel.total}
+          rows={kpiPanel.rows}
+          note={kpiPanel.note}
+          denied={kpiPanel.denied}
+          onClose={() => setKpiPanel(null)}
+          onDenied={(message) => setKpiPanel({ ...kpiPanel, denied: message })}
+        />
       )}
     </div>
+  );
+}
+
+function ObjectivesTile() {
+  const openTab = useOpenTab();
+  const { query } = useKpis();
+  const siteScope = useSiteStore((state) => state.siteScope);
+  const currentSiteId = useSiteStore((state) => state.currentSiteId);
+  const data = query.data;
+  const plant = data ? defaultPlantView(data.plants, siteScope, currentSiteId) : "all";
+  const summary = data ? summaryFor(data.objectives, plant, data.plants) : null;
+  const label = summary ? `Quality Objectives: ${summary.onTarget} of ${summary.active} on target` : "Quality Objectives";
+  return (
+    <button
+      type="button"
+      className="w-full rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-muted"
+      onClick={() => openTab({ path: "/kpis", title: "Quality Objectives & KPIs", icon: "dashboard" })}
+    >
+      {label}
+    </button>
   );
 }
