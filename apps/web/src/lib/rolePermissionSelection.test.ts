@@ -19,6 +19,7 @@ describe("role permission selection", () => {
     const keys = allRolePermissionKeys();
     assert.ok(keys.includes("login_history"));
     assert.ok(keys.includes("executive.dashboard"));
+    assert.ok(keys.includes("roles.manage"));
     const granted = setPermissionKeys(["custom.extra"], keys, true);
     assert.equal(permissionCheckState(granted, keys), "all");
     assert.ok(granted.includes("custom.extra"));

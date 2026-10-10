@@ -59,17 +59,21 @@ describe("admin roles, user removal, and data import", () => {
     expect(at("supplier")).toBeLessThan(at("customer"));
   });
 
-  it("will not delete a built-in role, and reassigns people before deleting a custom one", async () => {
+  it("soft-deletes a built-in role and reassigns people before deleting a custom one", async () => {
     const listed = await request(app).get("/roles").set(auth(adminToken));
-    const owner = (listed.body as { id: number; name: string }[]).find((role) => role.name === "owner");
-    expect((await request(app).delete(`/roles/${owner!.id}`).set(auth(adminToken))).status).toBe(409);
+    const executive = (listed.body as { id: number; name: string }[]).find((role) => role.name === "executive");
+    expect((await request(app).delete(`/roles/${executive!.id}`).set(auth(adminToken))).status).toBe(204);
+    const [kept] = await db.select().from(roles).where(eq(roles.name, "executive"));
+    expect(kept?.id).toBe(executive!.id);
+    const hidden = await request(app).get("/roles").set(auth(adminToken));
+    expect((hidden.body as { name: string }[]).some((role) => role.name === "executive")).toBe(false);
 
     const created = await request(app).post("/roles").set(auth(adminToken)).send({ name: `Floor Helper ${suffix}`, description: "Day shift" });
     expect(created.status).toBe(201);
     const [holder] = await db.insert(users).values({ email: `helper-${suffix}@test.local`, passwordHash: "unused", roleId: created.body.id }).returning();
     const blocked = await request(app).delete(`/roles/${created.body.id}`).set(auth(adminToken));
     expect(blocked.status).toBe(409);
-    expect(blocked.body.message).toMatch(/1 person still has/);
+    expect(blocked.body.message).toMatch(/1 person is assigned to/);
 
     const operator = (listed.body as { id: number; name: string }[]).find((role) => role.name === "operator");
     const removed = await request(app).delete(`/roles/${created.body.id}`).set(auth(adminToken)).send({ replacementRoleId: operator!.id });

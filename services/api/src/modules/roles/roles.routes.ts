@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { createRoleSchema, updateRoleSchema, moveRoleSchema } from "./roles.validation.js";
-import { listRoles, getRole, createRole, updateRole, moveRole, deleteRole } from "./roles.controller.js";
+import { listRoles, listDeletedRoles, getRole, createRole, updateRole, moveRole, deleteRole, restoreRole } from "./roles.controller.js";
 
 export const rolesRouter = Router();
 
@@ -11,8 +11,10 @@ export const rolesRouter = Router();
 rolesRouter.use(requireAuth, rejectSupplierReads);
 
 rolesRouter.get("/", listRoles);
+rolesRouter.get("/deleted", listDeletedRoles);
 rolesRouter.post("/", requireRole("admin"), validate(createRoleSchema), createRole);
 rolesRouter.get("/:id", getRole);
 rolesRouter.post("/:id/move", requireRole("admin"), validate(moveRoleSchema), moveRole);
 rolesRouter.patch("/:id", requireRole("admin"), validate(updateRoleSchema), updateRole);
-rolesRouter.delete("/:id", requireRole("admin"), deleteRole);
+rolesRouter.delete("/:id", deleteRole);
+rolesRouter.post("/:id/restore", restoreRole);

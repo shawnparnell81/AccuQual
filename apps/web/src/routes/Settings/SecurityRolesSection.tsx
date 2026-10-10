@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { RolePermissionFields } from "../../components/admin/RolePermissionFields";
+import { RestoreDeletedRoles, RoleDeleteButton, roleManagesRoles } from "../../components/admin/RoleLifecycle";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -614,17 +615,16 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
 }
 
 function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
+  const currentUser = useCurrentUser();
   const { data: roles = [] } = roleHooks.useList();
   const createRole = roleHooks.useCreate();
   const updateRole = roleHooks.useUpdate();
   const toast = useToast();
-  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
   const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", permissions: [] as string[] });
-  const [replacing, setReplacing] = useState<AppRole | null>(null);
-  const [replacementId, setReplacementId] = useState("");
+  const canManageRoles = roleManagesRoles(roles.find((role) => role.name === currentUser?.roleName));
 
   async function move(role: AppRole, direction: "up" | "down") {
     try {
@@ -632,23 +632,6 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
       void queryClient.invalidateQueries({ queryKey: ["roles"] });
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't change that rank."));
-    }
-  }
-
-  async function removeRole(role: AppRole, replacementRoleId?: number) {
-    try {
-      await apiClient.delete(`/roles/${role.id}`, { data: replacementRoleId ? { replacementRoleId } : {} });
-      toast.success("Role removed.");
-      setReplacing(null);
-      void queryClient.invalidateQueries({ queryKey: ["roles"] });
-      void queryClient.invalidateQueries({ queryKey: ["users"] });
-    } catch (err) {
-      const message = extractErrorMessage(err, "Couldn't remove that role.");
-      if ((role.userCount ?? 0) > 0) {
-        setReplacing(role);
-        setReplacementId("");
-      }
-      toast.error(message);
     }
   }
 
@@ -690,24 +673,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                 >
                   Edit
                 </button>
-                {!r.isProtected && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if ((r.userCount ?? 0) > 0) {
-                        setReplacing(r);
-                        setReplacementId("");
-                        return;
-                      }
-                      void confirm({ title: "Delete this role?", message: `${roleLabel(r)} will be removed. This can't be undone.`, confirmLabel: "Delete" }).then((ok) => {
-                        if (ok) void removeRole(r);
-                      });
-                    }}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    Delete
-                  </button>
-                )}
+                {canManageRoles && <RoleDeleteButton role={r} roles={roles} />}
               </span>
             )}
           </li>
@@ -737,6 +703,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
         </form>
       )}
+      {canManageRoles && <RestoreDeletedRoles />}
 
       <Modal title={editing ? `Edit ${roleLabel(editing)}` : "Edit role"} isOpen={editing !== null} onClose={() => setEditing(null)}>
         <form
@@ -770,34 +737,6 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
           <RolePermissionFields selected={editForm.permissions} onChange={(permissions) => setEditForm({ ...editForm, permissions })} />
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
-          </button>
-        </form>
-      </Modal>
-
-      <Modal title={replacing ? `Delete ${replacing.name}` : "Delete role"} isOpen={replacing !== null} onClose={() => setReplacing(null)}>
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!replacing || !replacementId) return;
-            void removeRole(replacing, Number(replacementId));
-          }}
-        >
-          <p className="text-sm text-muted-foreground">
-            {replacing?.userCount ?? 0} {(replacing?.userCount ?? 0) === 1 ? "person has" : "people have"} this role. Choose another role for them first.
-          </p>
-          <SelectField label="Move them to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
-            <option value="">Choose a role</option>
-            {roles
-              .filter((role) => role.id !== replacing?.id)
-              .map((role) => (
-                <option key={role.id} value={role.id}>
-                  {roleLabel(role)}
-                </option>
-              ))}
-          </SelectField>
-          <button type="submit" disabled={!replacementId} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-            Move people and delete
           </button>
         </form>
       </Modal>

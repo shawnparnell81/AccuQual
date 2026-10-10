@@ -79,6 +79,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Executive dashboard",
         hint: "Opens the executive dashboard after sign-in. Viewing does not grant permission to edit records.",
       },
+      {
+        key: "roles.manage",
+        label: "Can manage roles",
+        hint: "Delete and restore roles, including built-in ones. Owner and Administrator start with this. It is stored on the role.",
+      },
     ],
   },
 ];

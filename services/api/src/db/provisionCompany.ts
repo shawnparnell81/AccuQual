@@ -18,10 +18,14 @@ import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import type { AccessLevel, Department, ResourceKey } from "../middleware/departmentAccess.js";
 import { ROLE_SEEDS } from "../modules/roles/roleHierarchy.js";
+import { deletedRoleNames, systemRolesToInsert } from "../modules/roles/deletedSystemRoles.js";
 
-/** The built-in system roles every installation has. */
+/** The built-in system roles every installation has. A role an administrator removed is not created again. */
 export async function ensureSystemRoles(): Promise<void> {
-  for (const role of ROLE_SEEDS) {
+  const existing = await db.select({ name: roles.name }).from(roles);
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const missing = systemRolesToInsert(ROLE_SEEDS, existing.map((role) => role.name), [...deletedRoleNames(row?.profile?.deletedSystemRoles)]);
+  for (const role of missing) {
     await db.insert(roles).values(role).onConflictDoNothing({ target: roles.name });
   }
 }

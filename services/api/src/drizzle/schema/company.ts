@@ -309,6 +309,13 @@ export const company = pgTable("company", {
      * the list. No new column.
      */
     userDisplayOrder?: number[];
+    /**
+     * Built-in role names an administrator has removed. Seeds and migrations
+     * must not create these again. No new column.
+     */
+    deletedSystemRoles?: { name: string; deletedAt: string; deletedBy: number | null; reason: string | null }[];
+    /** Set once Owner and Administrator have been given roles.manage. Removing it later stays removed. */
+    rolesManageGranted?: boolean;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an
