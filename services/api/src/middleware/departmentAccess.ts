@@ -132,7 +132,7 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   customer_communications: "Customer Communications",
   change: "Change / PCN Control",
   training: "Training",
-  qms_forms: "QMS Forms",
+  qms_forms: "Forms",
   scar: "SCAR (Supplier Corrective Action Request)",
   quarantine: "Quarantine",
   worker_profile: "Worker Profiles",

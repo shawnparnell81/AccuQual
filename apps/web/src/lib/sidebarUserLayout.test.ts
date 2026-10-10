@@ -36,6 +36,7 @@ describe("per-user sidebar layout", () => {
     );
     const links = flattenSidebarLinks(shown);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
+    assert.equal(links.some((link) => link.label === "QMS Forms" || link.key === "qms-forms" || link.path === "/qms-forms"), false);
     assert.equal(links.some((link) => link.label === "First Article" || link.path === "/fai"), false);
     assert.equal(links.some((link) => link.key === "frm-ncr-001"), true);
     assert.equal(links.some((link) => link.key === "folder-explorer"), true);
@@ -80,6 +81,27 @@ describe("per-user sidebar layout", () => {
     assert.equal(links.some((link) => link.key === "pin-fmea" || link.path === "/risk"), false);
     assert.equal(links.some((link) => link.key === "frm-ncr-001"), true);
     assert.equal(links.some((link) => link.key === "8d"), true);
+  });
+
+  it("maps a saved QMS Forms row to Blank Forms and does not show that label", () => {
+    const links = flattenSidebarLinks(
+      resolveUserSidebar(
+        SIDEBAR_FOLDERS,
+        {
+          hidden: ["blank-forms"],
+          pinned: [
+            { key: "pin-qms", label: "QMS Forms", path: "/qms-forms" },
+            { key: "blank:incoming_inspection_record", label: "Incoming Inspection Record", path: "/qms-forms/incoming_inspection_record" },
+          ],
+          groups: [],
+          layout: [{ key: "home" }, { key: "document-control", children: [{ key: "qms-forms" }] }],
+        },
+        allowAll,
+      ),
+    );
+    assert.equal(links.some((link) => link.label === "QMS Forms" || link.key === "qms-forms" || link.path === "/qms-forms"), false);
+    assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
+    assert.equal(links.some((link) => link.path === "/form-folders/incoming_inspection_record" && link.label === "Incoming Inspection Record"), true);
   });
 
   it("keeps a saved Blank Forms row on the Blank Forms page and drops a stale row", () => {

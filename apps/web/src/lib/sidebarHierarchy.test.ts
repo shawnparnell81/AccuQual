@@ -50,7 +50,7 @@ describe("sidebar hierarchy", () => {
     assert.equal(control.path, "/documents");
     assert.deepEqual(
       control.children.map((child) => child.label),
-      ["Folder Explorer", "Folders", "Blank Forms", "Document changes", "Management System", "Drawings", "APQP", "Obsolete / Archive", "SOP", "Controlled lists", "General Uploads", "QMS Forms"],
+      ["Folder Explorer", "Folders", "Blank Forms", "Document changes", "Management System", "Drawings", "APQP", "Obsolete / Archive", "SOP", "Controlled lists", "General Uploads"],
     );
     const folderLinks = flattenSidebarLinks().filter((link) => link.label === "Folders" && link.path === "/form-folders");
     assert.equal(folderLinks.length, 2);

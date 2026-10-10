@@ -59,6 +59,26 @@ describe("sidebar shortcut normalization", () => {
     expect(hidden.layout?.[0]?.key).toBe("home");
   });
 
+  it("maps a saved QMS Forms row onto Blank Forms and drops the catalog pin", () => {
+    const next = normalizeSidebarShortcuts({
+      hidden: ["qms-forms", "blank-forms"],
+      pinned: [
+        { key: "pin-qms", label: "QMS Forms", path: "/qms-forms" },
+        { key: "blank:incoming_inspection_record", label: "Incoming Inspection Record", path: "/qms-forms/incoming_inspection_record" },
+      ],
+      layout: [{ key: "home" }, { key: "document-control", children: [{ key: "qms-forms" }, { key: "blank-forms" }] }],
+      groups: [],
+      offered: ["blank-forms"],
+    });
+    expect(next.hidden).not.toContain("qms-forms");
+    expect(next.hidden).not.toContain("blank-forms");
+    expect(next.layout?.some((node) => node.key === "qms-forms")).toBe(false);
+    const documents = next.layout?.find((node) => node.key === "document-control");
+    expect(documents?.children?.map((child) => child.key)).toEqual(["blank-forms"]);
+    expect(next.pinned.map((pin) => pin.path)).toEqual(["/form-folders/incoming_inspection_record"]);
+    expect(next.pinned.some((pin) => pin.label === "QMS Forms")).toBe(false);
+  });
+
   it("keeps a menu edition and drops one that is not a small number", () => {
     const kept = normalizeSidebarShortcuts({ hidden: [], pinned: [], layout: null, groups: [], menuEdition: 2 });
     expect(kept.menuEdition).toBe(2);

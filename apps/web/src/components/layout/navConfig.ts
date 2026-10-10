@@ -32,7 +32,6 @@ import {
   FileSignature,
   Compass,
   FileEdit,
-  LibraryBig,
   ShieldX,
   UploadCloud,
   Wrench,
@@ -478,21 +477,6 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — new QMS-document revision-control form, distinct from Change Mgmt's product/process change_requests",
-        section: "quality",
-      },
-      {
-        key: "qms_forms",
-        label: "QMS Forms",
-        path: "/qms-forms",
-        icon: LibraryBig,
-        // Backend gate added (Full-System Audit finding C3) — every
-        // department gets edit by default, so this nav entry's own
-        // unconditional visibility (department: null, like Document
-        // Control above) still matches real access for everyone.
-        access: {},
-        kpi: false,
-        priority: 3,
-        notes: "Not in the department sheet — the generic 'ACCUQUAL Forms' batch (22 form types across every department), each also reachable from its own real Document Folders subfolder",
         section: "quality",
       },
       {
