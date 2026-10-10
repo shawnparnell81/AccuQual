@@ -5,7 +5,7 @@ import { apiClient } from "../../api/client";
 import { Modal } from "../modals/Modal";
 import { TextAreaField } from "../forms/Field";
 import { MarkdownLite } from "./MarkdownLite";
-import { useAssistantName } from "../../hooks/useAssistantName";
+import { useAiFeaturesEnabled, useAssistantName } from "../../hooks/useAssistantName";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { AssistantReply } from "../../api/types";
@@ -37,6 +37,7 @@ interface AiFieldAssistantProps {
  */
 export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInsert, insertLabel = "Insert", triggerLabel }: AiFieldAssistantProps) {
   const toast = useToast();
+  const aiOn = useAiFeaturesEnabled();
   const { data: assistantNameRaw } = useAssistantName();
   const assistantName = assistantNameRaw || "AI";
   const [isOpen, setIsOpen] = useState(false);
@@ -75,6 +76,8 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
       toast.error("Couldn't copy — your browser blocked clipboard access.");
     }
   }
+
+  if (!aiOn) return null;
 
   return (
     <>

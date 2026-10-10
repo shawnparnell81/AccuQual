@@ -34,9 +34,18 @@ import {
 } from "./ai.controller.js";
 import { assistantSchema } from "./ai.validation.js";
 import { assistantHandler } from "./ai.assistant.js";
+import { requireAiFeatures } from "./aiFeatures.js";
 
 export const aiRouter = Router();
 aiRouter.use(requireAuth, withDb);
+// History stays readable so Admin → AI Usage can show past calls after AI is turned off.
+aiRouter.use((req, res, next) => {
+  if (req.method === "GET") {
+    next();
+    return;
+  }
+  void requireAiFeatures(req, res, next);
+});
 
 // No department gate — same as every other route on this router already
 // (root-cause/capa/8d/... have never been department-restricted), and

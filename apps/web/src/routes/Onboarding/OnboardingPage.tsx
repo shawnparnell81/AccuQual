@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { AiSuggestion, OnboardingChecklistItem, OnboardingProgressRow } from "../../api/types";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 
 /**
  * No department gate at all — POST /onboarding/ai-generate works for any
@@ -11,6 +12,7 @@ import type { AiSuggestion, OnboardingChecklistItem, OnboardingProgressRow } fro
  * a fabricated "enabled modules" concept — see onboarding.ai.ts.
  */
 export function OnboardingPage() {
+  const aiOn = useAiFeaturesEnabled();
   const toast = useToast();
   const queryClient = useQueryClient();
 
@@ -41,9 +43,11 @@ export function OnboardingPage() {
           <h1 className="text-2xl font-semibold">Onboarding</h1>
           <p className="text-sm text-muted-foreground">A checklist built from the modules your department actually has access to.</p>
         </div>
-        <button onClick={() => generate()} disabled={generating} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
-          {generating ? "Building your checklist…" : checklist.length > 0 ? "Regenerate" : "Get Started"}
-        </button>
+        {aiOn && (
+          <button onClick={() => generate()} disabled={generating} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
+            {generating ? "Building your checklist…" : checklist.length > 0 ? "Regenerate" : "Get Started"}
+          </button>
+        )}
       </div>
 
       {suggestion && rawOutput?.note && (
@@ -53,7 +57,9 @@ export function OnboardingPage() {
       )}
 
       {checklist.length === 0 && !generating && !suggestion && (
-        <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Click "Get Started" to generate your onboarding checklist.</div>
+        <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          {aiOn ? 'Click "Get Started" to generate your onboarding checklist.' : "AI-assisted features are turned off for this company."}
+        </div>
       )}
 
       <div className="flex flex-col gap-3">

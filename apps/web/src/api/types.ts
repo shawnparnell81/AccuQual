@@ -641,6 +641,10 @@ export interface CompanyAiConfig {
   safetyMode: "standard" | "strict";
   /** "ready" when this company's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
   keyStatus: "ready" | "missing";
+  /** Where a provider key exists. "none" means neither a company key nor a server environment key. The key itself is never included. */
+  keySource: "company" | "server" | "both" | "none";
+  /** Company-wide On/Off. Unset on the server is returned as true. */
+  featuresEnabled: boolean;
   // BYOK usage limit — see company.aiMonthlyLimit's schema comment for why
   // enforcement itself is computed live from audit trail history, not a
   // stored counter.
@@ -729,9 +733,10 @@ export interface SystemHealthReport {
   };
 }
 
-/** GET /company/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */
+/** GET /company/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone and every page can hide AI when the company turns it off. */
 export interface AssistantNameResponse {
   assistantName: string | null;
+  featuresEnabled: boolean;
 }
 
 /** POST /ai/assistant response. usage is null when the provider didn't report token counts (including the honest no-API-key stub). */

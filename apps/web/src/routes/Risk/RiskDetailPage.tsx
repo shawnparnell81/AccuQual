@@ -18,6 +18,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { Modal } from "../../components/modals/Modal";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
 import type { RiskAssessment, RiskMitigation, FmeaItem } from "../../api/types";
@@ -56,6 +57,7 @@ export function RiskDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const aiOn = useAiFeaturesEnabled();
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !risk) return <LoadingPlaceholder />;
@@ -83,9 +85,11 @@ export function RiskDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="fmea" entityId={risk.id} title={`${recordHeading("FMEA", risk.recordNumber)} Document`} label="FMEA Document" />
-          <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            AI Risk Analysis
-          </button>
+          {aiOn && (
+            <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              AI Risk Analysis
+            </button>
+          )}
           <ModuleFormLock
             mode={formLock.mode}
             canEdit={permitted}

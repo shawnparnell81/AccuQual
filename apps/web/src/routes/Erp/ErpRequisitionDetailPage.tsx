@@ -12,6 +12,7 @@ import { TextAreaField } from "../../components/forms/Field";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { ErpPurchaseRequisition } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 
 const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
 
@@ -23,6 +24,7 @@ export function ErpRequisitionDetailPage() {
   const { data: record, isLoading, isError } = requisitionHooks.useOne(requisitionId);
   const updateReq = requisitionHooks.useUpdate();
   const canApprove = useCanEditWorkflow("erp"); // purchasing/admin — matches erp.controller.ts's assertDepartment(["purchasing"]) on approve/reject/convert
+  const aiOn = useAiFeaturesEnabled();
 
   const [justificationDraft, setJustificationDraft] = useState("");
   const [editingJustification, setEditingJustification] = useState(false);
@@ -120,7 +122,7 @@ export function ErpRequisitionDetailPage() {
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Justification</h3>
-          {record.status === "draft" && (
+          {record.status === "draft" && aiOn && (
             <button onClick={() => aiJustify.mutate()} disabled={aiJustify.isPending} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
               {aiJustify.isPending ? "Drafting…" : "Draft with AI"}
             </button>

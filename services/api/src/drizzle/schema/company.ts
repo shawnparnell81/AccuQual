@@ -66,6 +66,13 @@ export const company = pgTable("company", {
     assistantName?: string;
     /** Phase 4 AI guardrails: "standard" runs every pipeline as today; "strict" rejects any output that fails its schema check instead of falling back to a raw/degraded save (see ai.guardrails.ts's classifyOutput). Company-configurable, defaults to "standard" when unset. */
     safetyMode?: "standard" | "strict";
+    /**
+     * Company-wide AI on/off. Unset means On, so existing companies keep AI
+     * until an admin turns it off. Stored in this jsonb so it does not need
+     * a new column. When false, AI buttons are hidden and AI routes refuse
+     * the request (see aiFeatures.ts).
+     */
+    featuresEnabled?: boolean;
   }>(),
   /**
    * BYOK usage/limits — real flat columns, not folded into aiConfig above,

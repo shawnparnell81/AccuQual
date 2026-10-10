@@ -5,6 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { listOnboardingProgressHandler, updateOnboardingProgressHandler } from "./onboarding.controller.js";
 import { onboardingAiGenerateHandler } from "./onboarding.ai.js";
+import { requireAiFeatures } from "../ai/aiFeatures.js";
 
 const updateProgressSchema = z.object({ status: z.enum(["not_started", "in_progress", "completed"]) });
 
@@ -15,6 +16,6 @@ export const onboardingRouter = Router();
 // beyond being a real authenticated user of this company.
 onboardingRouter.use(requireAuth, withDb);
 
-onboardingRouter.post("/ai-generate", onboardingAiGenerateHandler);
+onboardingRouter.post("/ai-generate", requireAiFeatures, onboardingAiGenerateHandler);
 onboardingRouter.get("/progress", listOnboardingProgressHandler);
 onboardingRouter.patch("/progress/:moduleKey", validate(updateProgressSchema), updateOnboardingProgressHandler);

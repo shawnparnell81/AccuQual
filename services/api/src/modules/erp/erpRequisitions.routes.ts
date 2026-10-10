@@ -15,6 +15,7 @@ import {
   convertRequisitionToPoHandler,
 } from "./erp.controller.js";
 import { requisitionAiJustifyHandler } from "./requisition.ai.js";
+import { requireAiFeatures } from "../ai/aiFeatures.js";
 
 /**
  * A separate router (not folded into erpRouter) mounted at /erp/requisitions
@@ -33,7 +34,7 @@ erpRequisitionsRouter.get("/", listRequisitionsHandler);
 erpRequisitionsRouter.post("/", validate(createRequisitionSchema), createRequisitionHandler);
 erpRequisitionsRouter.get("/:id", getRequisitionHandler);
 erpRequisitionsRouter.patch("/:id", validate(updateRequisitionSchema), updateRequisitionHandler);
-erpRequisitionsRouter.post("/:id/ai-justify", requisitionAiJustifyHandler);
+erpRequisitionsRouter.post("/:id/ai-justify", requireAiFeatures, requisitionAiJustifyHandler);
 erpRequisitionsRouter.post("/:id/submit", submitRequisitionHandler);
 erpRequisitionsRouter.post("/:id/approve", approveRequisitionHandler);
 erpRequisitionsRouter.post("/:id/reject", rejectRequisitionHandler);

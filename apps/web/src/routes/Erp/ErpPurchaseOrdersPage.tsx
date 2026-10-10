@@ -9,6 +9,7 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DataTable } from "../../components/tables/DataTable";
 import type { ErpPurchaseOrder, AiSuggestion, ErpAutomationSuggestion } from "../../api/types";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 
 const poHooks = createResourceHooks<ErpPurchaseOrder>("erp/purchase-orders");
 
@@ -24,6 +25,7 @@ const SUGGESTION_LABELS: Record<ErpAutomationSuggestion["type"], string> = {
  * never a new write path invented for this panel.
  */
 function ErpAutomationPanel() {
+  const aiOn = useAiFeaturesEnabled();
   const toast = useToast();
   const canEdit = useCanEditWorkflow("erp");
   const [suggestion, setSuggestion] = useState<AiSuggestion | null>(null);
@@ -44,7 +46,7 @@ function ErpAutomationPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't complete that action.")),
   });
 
-  if (!canEdit) return null;
+  if (!canEdit || !aiOn) return null;
 
   const rawOutput = suggestion?.output as { suggestions?: ErpAutomationSuggestion[]; note?: string } | undefined;
   const suggestions = Array.isArray(rawOutput?.suggestions) ? rawOutput!.suggestions! : [];

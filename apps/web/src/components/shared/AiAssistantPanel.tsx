@@ -4,7 +4,7 @@ import { Bot, Copy, Send, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useAssistantContextStore } from "../../store/assistantContextStore";
-import { useAssistantName } from "../../hooks/useAssistantName";
+import { useAiFeaturesEnabled, useAssistantName } from "../../hooks/useAssistantName";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { MarkdownLite } from "./MarkdownLite";
@@ -154,6 +154,7 @@ export function AiAssistantPanel() {
 /** Only renders once a user is signed in — POST /ai/assistant and GET /company/assistant-name both require a signed-in user. */
 export function AiAssistantPanelGate() {
   const signedIn = useAuthStore((s) => s.user != null);
-  if (!signedIn) return null;
+  const aiOn = useAiFeaturesEnabled();
+  if (!signedIn || !aiOn) return null;
   return <AiAssistantPanel />;
 }

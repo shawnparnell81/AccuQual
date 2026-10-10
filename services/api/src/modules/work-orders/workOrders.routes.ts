@@ -31,6 +31,7 @@ import {
 } from "./workOrders.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { workOrderAiPlanHandler } from "./workOrder.ai.js";
+import { requireAiFeatures } from "../ai/aiFeatures.js";
 
 export const workOrdersRouter = Router();
 // Customer Service gets edit; production/material_management/purchasing/
@@ -43,7 +44,7 @@ workOrdersRouter.use(requireAuth, withDb, requireDepartmentAccess("work_orders")
 
 // Fixed literal path before ":id"-shaped ones, same convention used
 // throughout this app.
-workOrdersRouter.post("/ai-plan", workOrderAiPlanHandler);
+workOrdersRouter.post("/ai-plan", requireAiFeatures, workOrderAiPlanHandler);
 
 workOrdersRouter.get("/", listWorkOrdersHandler);
 workOrdersRouter.post("/", validate(createWorkOrderSchema), createWorkOrderHandler);
