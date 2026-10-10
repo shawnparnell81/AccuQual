@@ -112,10 +112,14 @@ describe("top menu", () => {
       ...ncr,
       children: ncr.children.filter((child) => child.key === "ncr"),
     });
-    assert.equal(isFolder(ncrOnly), false);
-    if (!isFolder(ncrOnly)) {
+    assert.equal(isFolder(ncrOnly), true);
+    if (isFolder(ncrOnly)) {
       assert.equal(ncrOnly.label, "NCR & CAPA");
-      assert.equal(ncrOnly.path, "/ncr");
+      assert.equal(ncrOnly.path, undefined);
+      assert.deepEqual(
+        ncrOnly.children.map((child) => child.label),
+        ["NCR"],
+      );
     }
 
     const equipmentOnly = collapseSingleItemMenus({

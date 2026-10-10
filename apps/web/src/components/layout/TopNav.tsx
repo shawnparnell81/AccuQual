@@ -14,6 +14,7 @@ import { useArrangedSidebar } from "./sidebarOrganize";
 import { TopMenuBar } from "./TopMenuBar";
 import { useSiteNavigation } from "../../hooks/useSiteNavigation";
 import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
+import { isEditableFocusTarget } from "../../lib/editableFocus";
 
 /**
  * Header and the menu bar. The left sidebar is gone: the same arranged
@@ -55,8 +56,7 @@ export function TopNav() {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setQuery("");
       if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const tag = (e.target as HTMLElement | null)?.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (isEditableFocusTarget(e.target)) return;
         e.preventDefault();
         document.getElementById("gsearch")?.focus();
       }

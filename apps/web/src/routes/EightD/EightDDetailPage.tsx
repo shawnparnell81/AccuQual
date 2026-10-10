@@ -11,6 +11,7 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
@@ -19,6 +20,9 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { EightDWorkbook } from "./EightDSheets";
 import { blank8dFromData, buildSaveData, previousFields, type Blank8DValues } from "../../lib/blank8d";
+import { classifyStepSaveError, eightDNextLabel, eightDStepIsSaved, missingEightDFields, type StepSaveNotice } from "../../lib/eightDProgress";
+import { readRequiredMap } from "../../components/forms/signatureRequired";
+import { DEFAULT_CERTIFY, SignatureStamp } from "../../components/forms/SignatureStamp";
 import { worksheetsFromReport, type WorksheetKey, type WorksheetValues } from "../../lib/eightDWorksheets";
 
 interface EightDReport {
@@ -124,16 +128,19 @@ export function EightDDetailPage() {
   const { data: report, isLoading, isError } = eightDHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const completeStep = useMutation({
-    mutationFn: async ({ step, data }: { step: number; data: Record<string, unknown> }) =>
-      (await apiClient.post(`/8d/${reportId}/complete-step/${step}`, { data })).data,
+    mutationFn: async ({ step, data, pin }: { step: number; data: Record<string, unknown>; pin?: string }) =>
+      (await apiClient.post(`/8d/${reportId}/complete-step/${step}`, { data, ...(pin ? { pin } : {}) })).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["8d", reportId] }),
   });
   const [values, setValues] = useState<EightDDraft | null>(null);
+  const [saveNotice, setSaveNotice] = useState<StepSaveNotice | null>(null);
+  const [signStep, setSignStep] = useState<number | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const updateReport = eightDHooks.useUpdate();
   const { data: linkedNcr } = ncrHooks.useOne(report?.ncrId ?? undefined);
   const { data: linkedCapas = [] } = capaHooks.useList(report?.ncrId ? { ncrId: report.ncrId } : undefined, { enabled: report?.ncrId != null });
-  const linkedCapa = linkedCapas[0];
+  const attachedCapaId = report && typeof report.data?.attachedCapaId === "number" ? report.data.attachedCapaId : report?.data?.attachedCapaId === null ? null : undefined;
+  const linkedCapa = attachedCapaId === null ? undefined : attachedCapaId != null ? linkedCapas.find((capa) => capa.id === attachedCapaId) : linkedCapas[0];
 
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
@@ -178,8 +185,42 @@ export function EightDDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
   if (isLoading || !report || !values) return <LoadingPlaceholder />;
 
-  const earlier = previousFields(report.data);
-  const nextStep = STEPS[report.currentStep - 1];
+  const loaded = report;
+  const draft = values;
+  const earlier = previousFields(loaded.data).filter((field) => !field.value.trim().startsWith("{") && !field.value.trim().startsWith("["));
+  const nextLabel = eightDNextLabel(loaded.currentStep);
+  const stepText = draft.blank as unknown as Record<string, string>;
+
+  function saveStep(stepNumber: number) {
+    setSaveNotice(null);
+    const empty = missingEightDFields(stepNumber, stepText);
+    if (empty.length > 0) {
+      setSaveNotice({ kind: "validation", summary: `Missing: ${empty.join(", ")}`, fields: empty });
+      return;
+    }
+    const needsSignature = Object.values(readRequiredMap(loaded.data)).includes("yes");
+    if (needsSignature) {
+      setSignStep(stepNumber);
+      setSaveNotice({ kind: "signature", summary: "A signature PIN is required.", fields: [] });
+      return;
+    }
+    void finishStep(stepNumber);
+  }
+
+  async function finishStep(stepNumber: number, pin?: string) {
+    const payload = savePayload(draft);
+    if (!payload) return;
+    try {
+      await updateReport.mutateAsync(payload);
+      await completeStep.mutateAsync({ step: stepNumber, data: stepPayload(stepNumber, draft.blank), pin });
+      setSaveNotice(null);
+      setSignStep(null);
+    } catch (err) {
+      const notice = classifyStepSaveError(extractErrorMessage(err, "This step didn't save."), missingEightDFields(stepNumber, stepText));
+      setSaveNotice(notice);
+      if (notice.kind === "signature") setSignStep(stepNumber);
+    }
+  }
 
   return (
     <div className="eight-d-print flex flex-col gap-4">
@@ -202,7 +243,7 @@ export function EightDDetailPage() {
               onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })}
             />
             <p className="text-sm text-muted-foreground">
-              {nextStep ? `Next: ${nextStep.label}` : "Eight-step writeup"}
+              {nextLabel ? `Next: ${nextLabel}` : "Eight-step writeup"}
               {report.ncrId ? (
                 <>
                   {" "}
@@ -285,24 +326,47 @@ export function EightDDetailPage() {
           <p className="text-sm text-muted-foreground">This report isn't tied to an NCR. Link it from the NCR so the 8D, the CAPA, and the check stay one story.</p>
         )}
         {canEdit && (
-          <div className="flex flex-wrap gap-2">
-            {STEPS.map((step, index) => {
-              const stepNumber = index + 1;
-              const isDone = stepNumber < report.currentStep;
-              return (
-                <button
-                  key={step.key}
-                  onClick={() =>
-                    updateReport.mutate(savePayload(values) ?? { id: reportId }, {
-                      onSuccess: () => completeStep.mutate({ step: stepNumber, data: stepPayload(stepNumber, values.blank) }),
-                    })
-                  }
-                  className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-                >
-                  {isDone ? `${step.label} saved` : `Save ${step.label}`}
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              {STEPS.map((step, index) => {
+                const stepNumber = index + 1;
+                const isDone = eightDStepIsSaved(stepNumber, report.currentStep);
+                return (
+                  <button
+                    key={step.key}
+                    type="button"
+                    onClick={() => saveStep(stepNumber)}
+                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+                  >
+                    {isDone ? `${step.label} saved` : `Save ${step.label}`}
+                  </button>
+                );
+              })}
+            </div>
+            {saveNotice?.kind === "validation" && (
+              <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm" data-testid="step-save-error">
+                <p className="font-medium">This step didn't save.</p>
+                <p>{saveNotice.summary}</p>
+                {saveNotice.fields.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5">
+                    {saveNotice.fields.map((field) => (
+                      <li key={field}>{field}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {signStep != null && (
+              <div className="max-w-md rounded-md border border-border bg-card p-3" data-testid="step-signature">
+                <p className="mb-2 text-sm font-medium">This step needs a signature.</p>
+                <SignatureStamp
+                  certify={DEFAULT_CERTIFY}
+                  onSign={async (pin) => {
+                    await finishStep(signStep, pin);
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Blank8DSheet } from "./Blank8DSheet";
 import type { Blank8DValues } from "../../lib/blank8d";
+import { percentTotalHint } from "../../lib/eightDProgress";
 import {
   GIVEN_ROWS,
   PLAN_ROWS,
@@ -163,7 +164,7 @@ export function EightDWorkbook({ recordId, eightDNo, blank, sheets, readOnly, on
         />
       </div>
       <div className={tab === "help" ? "e8-panel active" : "e8-panel"} role="tabpanel">
-        <InstructionsTab />
+        <InstructionsTab rootCausePercent={blank.rootCausePercentContribution} pcaPercent={blank.pcaPercentEffective} />
       </div>
     </div>
   );
@@ -864,7 +865,9 @@ function PlanPrevention({
   );
 }
 
-function InstructionsTab() {
+function InstructionsTab({ rootCausePercent, pcaPercent }: { rootCausePercent: string; pcaPercent: string }) {
+  const rootHint = percentTotalHint(rootCausePercent);
+  const pcaHint = percentTotalHint(pcaPercent);
   return (
     <section className="e8-sheet e8-help" aria-label="Intructions">
       <h2 className="e8-title">8D Problem Solving</h2>
@@ -875,10 +878,10 @@ function InstructionsTab() {
       <p>How effective is your ICA so the customer does not see the problem?</p>
       <h3>D4 Define and Verify Root Cause(s)</h3>
       <p>Identify all potential causes (due to a change) which could explain why the problem occurred. Isolate and verify the Root Cause by testing each potential cause against the problem description and test data (does it explain the IS,IS/NOT'S in D2?). Identify alternative corrective actions to eliminate root cause.</p>
-      <p>What % of the problem is caused by the root cause(s) (must have 100% total)</p>
+      <p>What % of the problem is caused by the root cause(s){rootHint ? ` ${rootHint}` : ""}</p>
       <h3>D5 Choose and Verify Permenant Corrective Action(s) (PCA)</h3>
       <p>Through pre-production test programs, quantitatively confirm that the selected corrective actions will resolve the problems for the customer and will not cause undesirable side effects. Define contingency action, if necessary based on the risk assessments. This step describes WHAT you will do.</p>
-      <p>How effective is your PCA so the problem is cured not masked? (must have 100% total)</p>
+      <p>How effective is your PCA so the problem is cured not masked?{pcaHint ? ` ${pcaHint}` : ""}</p>
       <h3>D6 Implement and Validate Permentant Corrective Action(s) (PCA)</h3>
       <p>Define and implement the best permanent corrective actions. Include the removal of the ICA. Choose on-going controls to ensure the root cause is eliminated. Once in production, monitor and evaluate the long-term effects and implement contingency actions, if necessary. This step describes HOW you will do it.</p>
       <h3>D7 System Prevention Actions to Prevent Reoccurence</h3>

@@ -1,5 +1,13 @@
-import { Route, Navigate } from "react-router-dom";
+import { type ReactNode } from "react";
+import { Navigate, Route, useParams } from "react-router-dom";
 import { NotFoundPage } from "./NotFoundPage";
+
+/** /capa/new and /8d/new are not records. They show the same 404 as any other unknown address. */
+export function NumericRecord({ children }: { children: ReactNode }) {
+  const { id } = useParams();
+  if (!id || !/^\d+$/.test(id)) return <NotFoundPage />;
+  return children;
+}
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
@@ -147,9 +155,9 @@ export function workspaceRouteElements() {
     <Route key="/ncr" path="/ncr" element={<NcrListPage />} />,
     <Route key="/ncr/:id" path="/ncr/:id" element={<NcrWorkspacePage />} />,
     <Route key="/capa" path="/capa" element={<CapaListPage />} />,
-    <Route key="/capa/:id" path="/capa/:id" element={<CapaDetailPage />} />,
+    <Route key="/capa/:id" path="/capa/:id" element={<NumericRecord><CapaDetailPage /></NumericRecord>} />,
     <Route key="/8d" path="/8d" element={<EightDPage />} />,
-    <Route key="/8d/:id" path="/8d/:id" element={<EightDDetailPage />} />,
+    <Route key="/8d/:id" path="/8d/:id" element={<NumericRecord><EightDDetailPage /></NumericRecord>} />,
     <Route key="/validation-reports/:id" path="/validation-reports/:id" element={<ValidationReportDetailPage />} />,
     <Route key="/iso-forms/record/:id" path="/iso-forms/record/:id" element={<IsoFormDetailPage />} />,
     <Route key="/iso-forms/:formKey" path="/iso-forms/:formKey" element={<IsoFormListPage />} />,

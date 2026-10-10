@@ -17,4 +17,6 @@ test("older problem text fills the problem statement and D1 stays in previous fi
   const earlier = previousFields({ d1_team: "The team", d2_problem: "One defect" });
   assert.equal(earlier.length, 1);
   assert.equal(earlier[0]?.label, "D1 — Establish the Team");
+  const raw = previousFields({ teamMembers: { name: "Ada" }, notes: '{"teamMembers":"Ada"}' });
+  assert.equal(raw.length, 0);
 });

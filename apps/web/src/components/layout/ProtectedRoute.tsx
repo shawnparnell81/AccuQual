@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { shouldRedirectToLogin } from "../../api/sessionRefresh";
+import { shouldRedirectToLogin, showSessionReconnect } from "../../api/sessionRefresh";
+import { isKnownAppPath } from "../../lib/sidebarAccess";
 import { useAuthStore } from "../../store/authStore";
 
 /**
@@ -14,7 +15,7 @@ export function ProtectedRoute() {
   const reconnecting = useAuthStore((s) => s.reconnecting);
   const { pathname } = useLocation();
   if (!bootstrapped) return null;
-  if (reconnecting && !accessToken) {
+  if (showSessionReconnect({ reconnecting, accessToken, knownPath: isKnownAppPath(pathname) })) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
         <p className="text-sm text-muted-foreground">Reconnecting your session…</p>

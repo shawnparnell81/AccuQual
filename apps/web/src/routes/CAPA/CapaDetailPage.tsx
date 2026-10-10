@@ -3,7 +3,7 @@ import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { Capa } from "../../api/types";
+import type { Capa, Ncr } from "../../api/types";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
@@ -18,6 +18,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
+import { capaStepFieldEditable, textStillDirty, type CapaNarrativeField } from "../../lib/capaStep";
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
@@ -27,6 +28,15 @@ import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureBoundText } from "../../components/forms/PictureText";
 
 const capaHooks = createResourceHooks<Capa>("capa");
+const ncrHooks = createResourceHooks<Ncr>("ncr");
+
+function StepNote({ editable }: { editable: boolean }) {
+  return (
+    <p className={`mb-2 text-xs ${editable ? "font-medium text-foreground" : "text-muted-foreground"}`} data-step-editable={editable ? "yes" : "no"}>
+      {editable ? "Type in this box. This step does not need Edit first." : "This box opens when the CAPA reaches its step."}
+    </p>
+  );
+}
 
 interface CapaGeneratedPlan {
   actionPlan: string;
@@ -45,6 +55,7 @@ export function CapaDetailPage() {
   const canEdit = formLock.fieldsEditable;
   const { label, people } = usePersonDirectory();
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
+  const { data: linkedNcr } = ncrHooks.useOne(capa?.ncrId ?? undefined);
   useSetAssistantContext("capa", capaId, capa ? recordHeading("CAPA", capa.recordNumber) : "CAPA");
   const updateCapa = capaHooks.useUpdate();
   const rootCommit = useRef<(() => void) | null>(null);
@@ -68,7 +79,8 @@ export function CapaDetailPage() {
   // Local draft because verify posts to /capa/:id/verify, not a field PATCH.
   // Seed it from the saved note so a verifying or closed CAPA is not a blank box.
   useEffect(() => {
-    if (capa?.verification) setVerification(capa.verification);
+    setVerification(capa?.verification ?? "");
+    setVerificationTouched(false);
   }, [capa?.verification]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this CAPA. Refresh the page and try again.</p>;
@@ -76,6 +88,8 @@ export function CapaDetailPage() {
 
   const owner = label(capa.ownerId);
   const closed = capa.status === "closed";
+  const stepField = (field: CapaNarrativeField) => capaStepFieldEditable(capa.status, field, permitted);
+  const narrativeClass = "w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring";
 
   return (
     <PictureRecordProvider entityType="capa" entityId={capaId}>
@@ -162,11 +176,11 @@ export function CapaDetailPage() {
         }
         trail={<LoopTrail steps={CAPA_LOOP} current={capaLoopIndex(capa.status)} />}
       />
-      <SaveStatus saving={updateCapa.isPending} unsaved={narrativeDirty || (verificationTouched && verification !== (capa.verification ?? ""))} />
+      <SaveStatus saving={updateCapa.isPending} unsaved={narrativeDirty || (verificationTouched && textStillDirty(capa.verification ?? "", verification))} />
       <p className="text-sm text-muted-foreground">
         {capa.ncrId ? (
           <>
-            Opened from <Link to={`/ncr/${capa.ncrId}`} className="text-primary hover:underline">NCR #{capa.ncrId}</Link>.
+            Opened from <Link to={`/ncr/${capa.ncrId}`} className="text-primary hover:underline">{recordHeading("NCR", linkedNcr?.recordNumber)}</Link>.
           </>
         ) : (
           <>This CAPA isn't tied to an NCR yet. Link it from the NCR so containment, the CAPA, and the check stay one story.</>
@@ -191,47 +205,52 @@ export function CapaDetailPage() {
               insertLabel="Insert as Root Cause"
             />}
           </div>
+          <StepNote editable={stepField("rootCause")} />
           <PictureBoundText
             saved={capa.rootCause ?? ""}
-            readOnly={!canEdit}
-            placeholder="Not written yet."
+            readOnly={!stepField("rootCause")}
+            placeholder={stepField("rootCause") ? "Type the cause" : "Not written yet."}
             entityType="capa"
             entityId={capaId}
             rows={4}
             commitRef={rootCommit}
             onPendingChange={noteNarrative("rootCause")}
-            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
-            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, rootCause: value })}
+            className={narrativeClass}
+            onSave={(value) => stepField("rootCause") && updateCapa.mutate({ id: capaId, rootCause: value })}
           />
         </div>
 
         <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">What you'll do</h2>
+          <StepNote editable={stepField("actionPlan")} />
           <PictureBoundText
             saved={capa.actionPlan ?? ""}
-            readOnly={!canEdit}
+            readOnly={!stepField("actionPlan")}
+            placeholder={stepField("actionPlan") ? "Type the fix" : undefined}
             entityType="capa"
             entityId={capaId}
             rows={4}
             commitRef={planCommit}
             onPendingChange={noteNarrative("actionPlan")}
-            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
-            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, actionPlan: value })}
+            className={narrativeClass}
+            onSave={(value) => stepField("actionPlan") && updateCapa.mutate({ id: capaId, actionPlan: value })}
           />
         </div>
 
         <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">How you'll keep it from coming back</h2>
+          <StepNote editable={stepField("preventiveAction")} />
           <PictureBoundText
             saved={capa.preventiveAction ?? ""}
-            readOnly={!canEdit}
+            readOnly={!stepField("preventiveAction")}
+            placeholder={stepField("preventiveAction") ? "Type how you'll keep it from coming back" : undefined}
             entityType="capa"
             entityId={capaId}
             rows={4}
             commitRef={preventCommit}
             onPendingChange={noteNarrative("preventiveAction")}
-            className="w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring"
-            onSave={(value) => canEdit && updateCapa.mutate({ id: capaId, preventiveAction: value })}
+            className={narrativeClass}
+            onSave={(value) => stepField("preventiveAction") && updateCapa.mutate({ id: capaId, preventiveAction: value })}
           />
         </div>
 
@@ -244,7 +263,8 @@ export function CapaDetailPage() {
               {!capa.verification && capa.status === "in_progress" && (
                 <p className="mb-2 text-sm text-muted-foreground">Nothing recorded yet. Write what you checked, then submit it.</p>
               )}
-              <TextAreaField label="" value={verification} onChange={(e) => { setVerificationTouched(true); setVerification(e.target.value); }} readOnly={!canEdit || capa.status !== "in_progress"} />
+              <StepNote editable={stepField("verification")} />
+              <TextAreaField label="Did the fix work?" value={verification} onChange={(e) => { setVerificationTouched(true); setVerification(e.target.value); }} readOnly={!stepField("verification")} placeholder={stepField("verification") ? "Type what you checked" : undefined} />
               <WorkflowActionButton
                 label="Submit the check"
                 navKey="capa"

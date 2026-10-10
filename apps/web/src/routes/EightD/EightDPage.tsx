@@ -1,12 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { Modal } from "../../components/modals/Modal";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../../components/shared/ToastProvider";
-import type { Ncr } from "../../api/types";
+import { useVisibleNcrs } from "../../hooks/useVisibleNcrs";
+import { NcrSearchField } from "../../components/forms/NcrSearchField";
+import type { Capa } from "../../api/types";
 import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 
@@ -15,73 +19,11 @@ interface EightDReport {
   ncrId: number | null;
   currentStep: number;
   recordNumber?: string | null;
+  /** Sent on create only. Stored on the report so the chosen CAPA is the one that shows. */
+  attachedCapaId?: number | null;
 }
 
 const eightDHooks = createResourceHooks<EightDReport>("8d");
-const ncrHooks = createResourceHooks<Ncr>("ncr");
-
-function NcrPicker({ value, onChange }: { value: number | null; onChange: (id: number | null) => void }) {
-  const { data: ncrs = [], isLoading } = ncrHooks.useList();
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const selected = ncrs.find((ncr) => ncr.id === value) ?? null;
-  const matches = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const rows = needle
-      ? ncrs.filter((ncr) => showRecordNumber(ncr.recordNumber).toLowerCase().includes(needle) || ncr.title.toLowerCase().includes(needle))
-      : ncrs;
-    return rows.slice(0, 12);
-  }, [ncrs, query]);
-
-  return (
-    <div className="relative flex flex-col gap-1 text-sm">
-      <span className="text-xs font-semibold text-muted-foreground">Linked NCR (optional)</span>
-      <input
-        aria-label="Search NCRs"
-        aria-expanded={open}
-        aria-controls="ncr-picker-list"
-        role="combobox"
-        placeholder="Search by NCR number or title"
-        value={selected && !open ? `${recordHeading("NCR", selected.recordNumber)} — ${selected.title}` : query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          if (value != null) onChange(null);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        className="rounded-md border border-border bg-background px-3 py-2"
-      />
-      {value != null && (
-        <button type="button" className="self-start text-xs text-muted-foreground hover:underline" onClick={() => { onChange(null); setQuery(""); }}>
-          Clear NCR
-        </button>
-      )}
-      {open && (
-        <ul id="ncr-picker-list" role="listbox" className="mt-1 max-h-52 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
-          {isLoading && <li className="px-2 py-1 text-xs text-muted-foreground">Loading NCRs…</li>}
-          {!isLoading && matches.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No matching NCR</li>}
-          {matches.map((ncr) => (
-            <li key={ncr.id}>
-              <button
-                type="button"
-                role="option"
-                className="w-full truncate rounded px-2 py-1 text-left text-sm hover:bg-muted"
-                onClick={() => {
-                  onChange(ncr.id);
-                  setQuery("");
-                  setOpen(false);
-                }}
-              >
-                {recordHeading("NCR", ncr.recordNumber)} — {ncr.title}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="text-xs text-muted-foreground">Leave this blank to create an 8D that is not tied to an NCR.</p>
-    </div>
-  );
-}
 
 export function EightDPage() {
   const navigate = useNavigate();
@@ -89,19 +31,45 @@ export function EightDPage() {
   const toast = useToast();
   const createReport = eightDHooks.useCreate();
   const [createOpen, setCreateOpen] = useState(false);
+  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs();
   const [ncrId, setNcrId] = useState<number | null>(null);
+  const [capaChoice, setCapaChoice] = useState<number | "none" | "pending">("pending");
   const [recordNumber, setRecordNumber] = useState("");
   const [numberError, setNumberError] = useState<string | null>(null);
+  const selectedNcr = ncrs.find((ncr) => ncr.id === ncrId) ?? null;
+  const capaQuery = useQuery({
+    queryKey: ["capa", "for-8d", ncrId, selectedNcr?.siteId ?? null],
+    enabled: ncrId != null,
+    queryFn: async () =>
+      (
+        await apiClient.get<Capa[]>("/capa", {
+          params: { ncrId },
+          headers: selectedNcr?.siteId ? { "X-AccuQual-Site": String(selectedNcr.siteId) } : undefined,
+        })
+      ).data,
+  });
+  const capas = capaQuery.data ?? [];
+  const resolvedCapaId = ((): number | null => {
+    if (capaChoice === "none") return null;
+    if (typeof capaChoice === "number" && capas.some((capa) => capa.id === capaChoice)) return capaChoice;
+    return capas[0]?.id ?? null;
+  })();
+  const attached = capas.find((capa) => capa.id === resolvedCapaId) ?? null;
+
+  useEffect(() => {
+    setCapaChoice("pending");
+  }, [ncrId]);
 
   function openCreate() {
     setNcrId(null);
+    setCapaChoice("pending");
     setRecordNumber("");
     setNumberError(null);
     setCreateOpen(true);
   }
 
   function create() {
-    createReport.mutate({ ...(ncrId ? { ncrId } : {}), recordNumber: recordNumber.trim() || null }, {
+    createReport.mutate({ ...(ncrId ? { ncrId } : {}), recordNumber: recordNumber.trim() || null, attachedCapaId: ncrId ? resolvedCapaId : null }, {
       onSuccess: (created) => {
         setCreateOpen(false);
         navigate(`/8d/${created.id}`);
@@ -125,7 +93,7 @@ export function EightDPage() {
         columns={[
           { header: "8D No.", accessor: (row) => showRecordNumber(row.recordNumber) },
           { header: "Linked NCR", accessor: (row) => (row.ncrId ? "Linked" : "—") },
-          { header: "Current step", accessor: (row) => `D${row.currentStep}` },
+          { header: "Current step", accessor: (row) => (row.currentStep >= 9 ? "Closed" : `D${row.currentStep}`) },
         ]}
         headerActions={
           canEdit ? (
@@ -138,8 +106,34 @@ export function EightDPage() {
       <Modal title="Create 8D report" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="flex flex-col gap-4">
           <RecordNumberField label="8D No." value={recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setRecordNumber(value); }} />
-          <NcrPicker value={ncrId} onChange={setNcrId} />
-          <button type="button" onClick={create} disabled={createReport.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+          <NcrSearchField ncrs={ncrs} loading={ncrsLoading} value={ncrId} onChange={setNcrId} label="Linked NCR (optional)" />
+          {ncrId != null && (
+            <div className="flex flex-col gap-1 text-sm">
+              <p className="text-xs text-foreground">
+                {capaQuery.isLoading
+                  ? "Looking up CAPAs for this NCR…"
+                  : attached
+                    ? `Will attach ${recordHeading("CAPA", attached.recordNumber)}`
+                    : "No CAPA will be attached."}
+              </p>
+              {capas.length > 0 && (
+                <select
+                  aria-label="CAPA to attach"
+                  value={capaChoice === "none" ? "" : String(resolvedCapaId ?? "")}
+                  onChange={(event) => setCapaChoice(event.target.value ? Number(event.target.value) : "none")}
+                  className="rounded-md border border-border bg-background px-3 py-2"
+                >
+                  <option value="">Don't attach a CAPA</option>
+                  {capas.map((capa) => (
+                    <option key={capa.id} value={capa.id}>
+                      {recordHeading("CAPA", capa.recordNumber)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+          <button type="button" onClick={create} disabled={createReport.isPending || (ncrId != null && capaQuery.isLoading)} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             {createReport.isPending ? "Creating…" : "Create"}
           </button>
         </div>

@@ -26,7 +26,7 @@ export const getKpiCounts = asyncHandler(async (req: Request, res: Response) => 
   const [ncrOpen, capaOpen, eightDOpen, diOpen, complaintsOpen] = await Promise.all([
     db.select({ id: ncr.id }).from(ncr).where(and(ncrSite, ne(ncr.status, "closed"))),
     db.select({ id: capa.id }).from(capa).where(and(capaSite, ne(capa.status, "closed"))),
-    // No status column on 8D — "open" means not yet past D8 (closure).
+    // No status column on 8D — "open" means not yet on D8. A saved D8 stores step 9, which stays out of this count.
     db.select({ id: eightD.id }).from(eightD).where(and(lt(eightD.currentStep, 8))),
     db
       .select({ id: discrepancyInvestigations.id })

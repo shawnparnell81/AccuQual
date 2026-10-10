@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa } from "../../api/types";
 import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
-import { TextField, TextAreaField } from "../../components/forms/Field";
+import { TextAreaField } from "../../components/forms/Field";
+import { NcrSearchField } from "../../components/forms/NcrSearchField";
+import { useVisibleNcrs } from "../../hooks/useVisibleNcrs";
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { duePhrase, statusPhrase } from "../../lib/opsLanguage";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
@@ -26,7 +29,9 @@ export function CapaListPage() {
   const { canEdit, reason } = usePlantWrite("capa");
   const { label } = usePersonDirectory();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { data: capas = [], isLoading, isError } = capaHooks.useList();
+  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs();
   const createCapa = capaHooks.useCreate();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -40,7 +45,7 @@ export function CapaListPage() {
     setParams(next, { replace: true });
   }, [canEdit, params, setParams]);
   const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
-  const [form, setForm] = useState<{ ncrId: string; rootCause: string; recordNumber: string }>({ ncrId: "", rootCause: "", recordNumber: "" });
+  const [form, setForm] = useState<{ ncrId: number | null; rootCause: string; recordNumber: string }>({ ncrId: null, rootCause: "", recordNumber: "" });
   const [numberError, setNumberError] = useState<string | null>(null);
 
   const columns: Column<Capa>[] = [
@@ -102,36 +107,37 @@ export function CapaListPage() {
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            createCapa.mutate(
-              { recordNumber: form.recordNumber.trim() || null, ncrId: form.ncrId ? Number(form.ncrId) : undefined, rootCause: form.rootCause || undefined },
-              {
-                onSuccess: async (created) => {
-                  const files = pendingFiles;
-                  setPendingFiles([]);
-                  setCreateOpen(false);
-                  if (files.length > 0) {
-                    const result = await uploadPendingAttachments("capa", created.id, files);
-                    if (result.failed.length > 0) toast.error(`Fix opened, but these files didn't attach: ${result.failed.join(", ")}. Add them on the fix page.`);
-                  }
-                  navigate(`/capa/${created.id}`);
-                },
-                onError: (err) => {
-                  const message = extractErrorMessage(err, "Couldn't open this fix. Check the issue number and try again.");
-                  setNumberError(duplicateNumberError(message));
-                  toast.error(message);
-                },
+            void (async () => {
+              try {
+                const created = await createCapa.mutateAsync({
+                  recordNumber: form.recordNumber.trim() || null,
+                  ncrId: form.ncrId ?? undefined,
+                  rootCause: form.rootCause || undefined,
+                });
+                setCreateOpen(false);
+                setForm({ ncrId: null, rootCause: "", recordNumber: "" });
+                queryClient.setQueriesData<Capa[]>({ queryKey: ["capa"] }, (current) => {
+                  if (!Array.isArray(current)) return current;
+                  if (current.some((row) => row.id === created.id)) return current;
+                  return [created, ...current];
+                });
+                const files = pendingFiles;
+                setPendingFiles([]);
+                if (files.length > 0) {
+                  const result = await uploadPendingAttachments("capa", created.id, files);
+                  if (result.failed.length > 0) toast.error(`Fix opened, but these files didn't attach: ${result.failed.join(", ")}. Add them on the fix page.`);
+                }
+                navigate(`/capa/${created.id}`);
+              } catch (err) {
+                const message = extractErrorMessage(err, "Couldn't open this fix. Check the NCR and try again.");
+                setNumberError(duplicateNumberError(message));
+                toast.error(message);
               }
-            );
+            })();
           }}
         >
           <RecordNumberField label="CAPA No." value={form.recordNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, recordNumber: value }); }} />
-          <TextField
-            label="Issue number"
-            type="number"
-            value={form.ncrId}
-            onChange={(e) => setForm({ ...form, ncrId: e.target.value })}
-            placeholder="The NCR this fix belongs to"
-          />
+          <NcrSearchField ncrs={ncrs} loading={ncrsLoading} value={form.ncrId} onChange={(ncrId) => setForm({ ...form, ncrId })} />
           <DetailsDisclosure label="Add the cause now">
             <TextAreaField label="Cause" value={form.rootCause} onChange={(e) => setForm({ ...form, rootCause: e.target.value })} />
           </DetailsDisclosure>

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { apiClient } from "../../api/client";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
+import { textStillDirty } from "../../lib/capaStep";
 import { formatPictureToken, parsePictureText, preparePictureFile, type PicturePart } from "./pictureText";
 
 const urls = new Map<number, string>();
@@ -210,23 +211,21 @@ export function PictureText({
         onMouseUp={rememberCaret}
       />
       {canInsert && (
-        <span
-          role="button"
-          tabIndex={0}
-          className="aq-picture-tools no-print cursor-pointer"
+        <button
+          type="button"
+          className="aq-picture-insert no-print"
           onMouseDown={(event) => {
             event.preventDefault();
             rememberCaret();
           }}
-          onClick={() => fileRef.current?.click()}
-          onKeyDown={(event: KeyboardEvent<HTMLSpanElement>) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
+          onClick={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             fileRef.current?.click();
           }}
         >
           Insert Picture
-        </span>
+        </button>
       )}
       {canInsert &&
         typeof document !== "undefined" &&
@@ -414,12 +413,16 @@ export function PictureBoundText({
   }
 
   useEffect(() => {
-    if (saved === previousSaved.current) return;
-    previousSaved.current = saved;
-    if (saved === valueRef.current) return;
-    valueRef.current = saved;
-    setValue(saved);
-  }, [saved]);
+    const caughtUp = !textStillDirty(saved, valueRef.current);
+    if (saved !== previousSaved.current) {
+      previousSaved.current = saved;
+      if (!caughtUp) {
+        valueRef.current = saved;
+        setValue(saved);
+      }
+    }
+    if (caughtUp || readOnly) onPendingChange?.(null);
+  }, [saved, readOnly]);
 
   return (
     <PictureText
@@ -434,11 +437,11 @@ export function PictureBoundText({
       onChange={(next) => {
         valueRef.current = next;
         setValue(next);
-        onPendingChange?.(next === savedRef.current ? null : next);
+        onPendingChange?.(textStillDirty(savedRef.current, next) ? next : null);
         if (next !== savedRef.current && next.includes("[[aq-picture")) onSave(next);
       }}
       onBlur={() => {
-        if (valueRef.current !== savedRef.current) onSave(valueRef.current);
+        if (textStillDirty(savedRef.current, valueRef.current)) onSave(valueRef.current);
         else onPendingChange?.(null);
       }}
     />

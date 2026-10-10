@@ -38,6 +38,37 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   }
 }
 
+/** Shown inside one split pane. It does not use a link, so a broken pane cannot take the other pane down. */
+export function PaneErrorFallback({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="mx-auto flex max-w-lg flex-col gap-3 rounded-lg border border-border bg-card p-6" data-testid="pane-error" role="alert">
+      <h2 className="text-xl font-semibold">This pane hit an unexpected error</h2>
+      <p className="text-sm text-muted-foreground">The other pane is still open. Try this pane again.</p>
+      <button type="button" onClick={onRetry} className="w-fit rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+        Try again
+      </button>
+    </div>
+  );
+}
+
+export class PaneErrorBoundary extends Component<{ children: ReactNode }, State> {
+  override state: State = { error: null };
+
+  static getDerivedStateFromError(error: Error): State {
+    return { error };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Uncaught pane error", error, info.componentStack);
+    reportError(error, { componentStack: info.componentStack });
+  }
+
+  override render() {
+    if (!this.state.error) return this.props.children;
+    return <PaneErrorFallback onRetry={() => this.setState({ error: null })} />;
+  }
+}
+
 /**
  * Catches a crash in one page and leaves the sidebar in place.
  * The boundary around the whole app still covers a crash in the shell itself.

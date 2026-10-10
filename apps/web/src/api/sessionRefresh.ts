@@ -156,6 +156,22 @@ export function bootstrapSessionDecision(result: RefreshResult): "ready" | "sign
   return "retry";
 }
 
+/** A missing page or a missing record is not a dropped session. */
+export function routeNotFoundTriggersReconnect(status: number | undefined): boolean {
+  if (status === 404) return false;
+  return false;
+}
+
+/**
+ * The reconnect screen is only for a known page whose session is still coming back.
+ * An address this app does not have shows the 404 page instead.
+ */
+export function showSessionReconnect(input: { reconnecting: boolean; accessToken: string | null; knownPath: boolean }): boolean {
+  if (input.accessToken) return false;
+  if (!input.reconnecting) return false;
+  return input.knownPath;
+}
+
 /** The sign-in page is only for a session the server refused. A retry stays on the current page. */
 export function shouldRedirectToLogin(input: { accessToken: string | null; reconnecting: boolean }): boolean {
   if (input.accessToken) return false;

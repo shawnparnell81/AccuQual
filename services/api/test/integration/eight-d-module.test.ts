@@ -90,7 +90,7 @@ describe("8D report module (real DB + real HTTP path)", () => {
     const id = await create8D(qualityToken);
     const res = await request(app).post(`/8d/${id}/complete-step/8`).set("Authorization", `Bearer ${qualityToken}`).send({ data: { closureNotes: "Verified effective" } });
     expect(res.status).toBe(200);
-    expect(res.body.currentStep).toBe(8); // clamped — there's no step 9
+    expect(res.body.currentStep).toBe(9);
 
     const trail = await db.select().from(auditTrail).where(eq(auditTrail.entityId, id));
     const closureEntry = trail.find((t) => t.entityType === "8D Report" && (t.changes as { closed?: boolean })?.closed === true);

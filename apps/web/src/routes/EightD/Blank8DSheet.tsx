@@ -1,4 +1,5 @@
 import { BLANK_8D_LABELS, BLANK_8D_TITLE, type Blank8DValues } from "../../lib/blank8d";
+import { percentTotalHint } from "../../lib/eightDProgress";
 import { PictureText } from "../../components/forms/PictureText";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import "./blank8d.css";
@@ -162,15 +163,15 @@ export function Blank8DSheet({ recordId, eightDNo, values, readOnly, onChange }:
         </div>
       </div>
 
-      <div className="b8-cols b8-block d1d2">
-        <div className="b8-head" style={{ gridColumn: "1 / 4" }}>{L.d1}</div>
-        <div className="b8-head" style={{ gridColumn: "4 / 10" }}>{L.d2}</div>
+      <section className="b8-cols b8-block d1d2" aria-label="D1 Team Members">
+        <h2 className="b8-head" style={{ gridColumn: "1 / 4" }}>{L.d1}</h2>
+        <h2 className="b8-head" style={{ gridColumn: "4 / 10" }}>{L.d2}</h2>
         <div className="b8-lab left" style={{ gridColumn: "1" }}>{L.champion}</div>
         <div className="b8-val" style={{ gridColumn: "2 / 4" }}>
           <TextBox label={L.champion} align="left" value={values.champion} readOnly={readOnly} onChange={set("champion")} />
         </div>
         <div className="b8-box problem">
-          <Area recordId={recordId} label={L.d2} value={values.problemStatement} readOnly={readOnly} onChange={set("problemStatement")} />
+          <Area recordId={recordId} label="D2 Problem statement" value={values.problemStatement} readOnly={readOnly} onChange={set("problemStatement")} />
         </div>
         <div className="b8-lab left" style={{ gridColumn: "1" }}>{L.teamLeader}</div>
         <div className="b8-val" style={{ gridColumn: "2 / 4" }}>
@@ -178,83 +179,86 @@ export function Blank8DSheet({ recordId, eightDNo, values, readOnly, onChange }:
         </div>
         <div className="b8-lab left" style={{ gridColumn: "1", alignItems: "flex-start" }}>{L.teamMembers}</div>
         <div className="b8-val" style={{ gridColumn: "2 / 4" }}>
-          <Area recordId={recordId} label={L.teamMembers} value={values.teamMembers} readOnly={readOnly} onChange={set("teamMembers")} />
+          <Area recordId={recordId} label="D1 Team Members" value={values.teamMembers} readOnly={readOnly} onChange={set("teamMembers")} />
         </div>
-      </div>
+      </section>
 
-      <div className="b8-cols b8-block">
-        <div className="b8-head" style={{ gridColumn: "1 / 7" }}>{L.d3}</div>
+      <section className="b8-cols b8-block" aria-label="D3 Interim containment">
+        <h2 className="b8-head" style={{ gridColumn: "1 / 7" }}>{L.d3}</h2>
         <div className="b8-head center" style={{ gridColumn: "7" }}>{L.percentEffective}</div>
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 7" }}>
-          <Area recordId={recordId} label={L.d3} value={values.ica} readOnly={readOnly} onChange={set("ica")} />
+          <Area recordId={recordId} label="D3 Interim containment" value={values.ica} readOnly={readOnly} onChange={set("ica")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "7" }}>
-          <TextBox label={L.percentEffective} value={values.icaPercentEffective} readOnly={readOnly} onChange={set("icaPercentEffective")} />
+          <TextBox label="D3 percent effective" value={values.icaPercentEffective} readOnly={readOnly} onChange={set("icaPercentEffective")} />
+          {percentTotalHint(values.icaPercentEffective) && <span className="b8-hint">{percentTotalHint(values.icaPercentEffective)}</span>}
         </div>
         <div className="b8-val" style={{ gridColumn: "8" }}>
           <TextBox label={L.targetDate} align="left" value={values.icaTargetDate} readOnly={readOnly} onChange={set("icaTargetDate")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "9" }}>
-          <TextBox label={L.actualDate} align="left" value={values.icaActualDate} readOnly={readOnly} onChange={set("icaActualDate")} />
+          <TextBox label="D3 actual date" align="left" value={values.icaActualDate} readOnly={readOnly} onChange={set("icaActualDate")} />
         </div>
-      </div>
+      </section>
 
-      <div className="b8-cols b8-block">
-        <div className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d4}</div>
+      <section className="b8-cols b8-block" aria-label="D4 Root cause">
+        <h2 className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d4}</h2>
         <div className="b8-head center" style={{ gridColumn: "8 / 10" }}>{L.percentContribution}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area recordId={recordId} label={L.d4} value={values.rootCauses} readOnly={readOnly} onChange={set("rootCauses")} />
+          <Area recordId={recordId} label="D4 Root cause" value={values.rootCauses} readOnly={readOnly} onChange={set("rootCauses")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8 / 10" }}>
-          <TextBox label={L.percentContribution} value={values.rootCausePercentContribution} readOnly={readOnly} onChange={set("rootCausePercentContribution")} />
+          <TextBox label="D4 percent contribution" value={values.rootCausePercentContribution} readOnly={readOnly} onChange={set("rootCausePercentContribution")} />
+          {percentTotalHint(values.rootCausePercentContribution) && <span className="b8-hint">{percentTotalHint(values.rootCausePercentContribution)}</span>}
         </div>
-      </div>
+      </section>
 
-      <div className="b8-cols b8-block">
-        <div className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d5}</div>
+      <section className="b8-cols b8-block" aria-label="D5 Permanent corrective action">
+        <h2 className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d5}</h2>
         <div className="b8-head center" style={{ gridColumn: "8 / 10" }}>{L.percentEffective}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area recordId={recordId} label={L.d5} value={values.pca} readOnly={readOnly} onChange={set("pca")} />
+          <Area recordId={recordId} label="D5 Permanent corrective action" value={values.pca} readOnly={readOnly} onChange={set("pca")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8 / 10" }}>
-          <TextBox label={L.percentEffective} value={values.pcaPercentEffective} readOnly={readOnly} onChange={set("pcaPercentEffective")} />
+          <TextBox label="D5 percent effective" value={values.pcaPercentEffective} readOnly={readOnly} onChange={set("pcaPercentEffective")} />
+          {percentTotalHint(values.pcaPercentEffective) && <span className="b8-hint">{percentTotalHint(values.pcaPercentEffective)}</span>}
         </div>
-      </div>
+      </section>
 
-      <div className="b8-cols b8-block">
-        <div className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d6}</div>
+      <section className="b8-cols b8-block" aria-label="D6 Implementation">
+        <h2 className="b8-head" style={{ gridColumn: "1 / 8" }}>{L.d6}</h2>
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area recordId={recordId} label={L.d6} value={values.implementation} readOnly={readOnly} onChange={set("implementation")} />
+          <Area recordId={recordId} label="D6 Implementation" value={values.implementation} readOnly={readOnly} onChange={set("implementation")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8" }}>
-          <TextBox label={L.targetDate} align="left" value={values.implementationTargetDate} readOnly={readOnly} onChange={set("implementationTargetDate")} />
+          <TextBox label="D6 target date" align="left" value={values.implementationTargetDate} readOnly={readOnly} onChange={set("implementationTargetDate")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "9" }}>
-          <TextBox label={L.actualDate} align="left" value={values.implementationActualDate} readOnly={readOnly} onChange={set("implementationActualDate")} />
+          <TextBox label="D6 actual date" align="left" value={values.implementationActualDate} readOnly={readOnly} onChange={set("implementationActualDate")} />
         </div>
-      </div>
+      </section>
 
-      <div className="b8-cols b8-block d7-body">
-        <div className="b8-head d7-split" style={{ gridColumn: "1 / 8" }}>
+      <section className="b8-cols b8-block d7-body" aria-label="D7 Prevention">
+        <h2 className="b8-head d7-split" style={{ gridColumn: "1 / 8" }}>
           <span>{L.d7}</span>
           <span>{L.mistakeProofing}</span>
-        </div>
+        </h2>
         <div className="b8-head center" style={{ gridColumn: "8" }}>{L.targetDate}</div>
         <div className="b8-head center" style={{ gridColumn: "9" }}>{L.actualDate}</div>
         <div className="b8-box" style={{ gridColumn: "1 / 8" }}>
-          <Area recordId={recordId} label={L.d7} value={values.prevention} readOnly={readOnly} onChange={set("prevention")} />
+          <Area recordId={recordId} label="D7 Prevention" value={values.prevention} readOnly={readOnly} onChange={set("prevention")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "8" }}>
           <TextBox label={`${L.d7} ${L.targetDate}`} align="left" value={values.preventionTargetDate} readOnly={readOnly} onChange={set("preventionTargetDate")} />
         </div>
         <div className="b8-val" style={{ gridColumn: "9" }}>
-          <TextBox label={`${L.d7} ${L.actualDate}`} align="left" value={values.preventionActualDate} readOnly={readOnly} onChange={set("preventionActualDate")} />
+          <TextBox label="D7 actual date" align="left" value={values.preventionActualDate} readOnly={readOnly} onChange={set("preventionActualDate")} />
         </div>
-      </div>
+      </section>
 
       <div className="b8-block">
         <div className="b8-head center" style={{ justifyContent: "center" }}>{L.documentsReviewed}</div>
@@ -268,12 +272,12 @@ export function Blank8DSheet({ recordId, eightDNo, values, readOnly, onChange }:
         </div>
       </div>
 
-      <div className="b8-block d8-body">
-        <div className="b8-head">{L.d8}</div>
+      <section className="b8-block d8-body" aria-label="D8 Recognition">
+        <h2 className="b8-head">{L.d8}</h2>
         <div className="b8-box">
-          <Area recordId={recordId} label={L.d8} value={values.recognition} readOnly={readOnly} onChange={set("recognition")} />
+          <Area recordId={recordId} label="D8 Recognition" value={values.recognition} readOnly={readOnly} onChange={set("recognition")} />
         </div>
-      </div>
+      </section>
     </section>
   );
 }
