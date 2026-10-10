@@ -1544,6 +1544,8 @@ export interface WarrantyClaim {
   supplierReviewNotes: string | null;
   dispositionNotes: string | null;
   createdByUserId: number | null;
+  /** Plant stamped at intake. Null when the claim predates plants or was never assigned. */
+  siteId?: number | null;
   createdAt: string;
   updatedAt: string | null;
   // Detail endpoint only.

@@ -19,6 +19,7 @@ import { isFullAccessRole } from "../roles/roleAccess.js";
 import { WARRANTY_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { stampRecordSite } from "../sites/recordSite.js";
+import { optionalRows } from "../sites/optionalSql.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
@@ -114,7 +115,17 @@ export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: 
     .from(warrantyClaims)
     .where(and(...conditions))
     .orderBy(desc(warrantyClaims.createdAt));
-  res.json(rows);
+
+  // site_id arrived in 0118. A database that has not migrated yet still lists claims.
+  const sites =
+    rows.length === 0
+      ? []
+      : await optionalRows<{ id: number; site_id: number | null }>(
+          req.db!,
+          sql`SELECT id, site_id FROM warranty_claims WHERE id IN (${sql.join(rows.map((row) => sql`${row.id}`), sql`, `)})`,
+        );
+  const siteById = new Map((sites ?? []).map((row) => [Number(row.id), row.site_id == null ? null : Number(row.site_id)]));
+  res.json(rows.map((row) => ({ ...row, siteId: siteById.get(row.id) ?? null })));
 });
 
 export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res: Response) => {

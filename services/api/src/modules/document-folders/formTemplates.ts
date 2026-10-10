@@ -91,10 +91,26 @@ function sameKeys(left: string[] | undefined, right: string[]): boolean {
  * Master Document List, Master Equipment List, and Scope of Laboratory Activities
  * are not part of that filing. They keep the older Blank Form Templates drawer.
  */
+/** True when the one-time blank-form filing already finished and every current blank has a template row. */
+async function blankFormsAlreadyFiled(db: Db): Promise<boolean> {
+  const [profileRow] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const profile = profileRow?.profile;
+  if (!profile?.blankFormsTemplatesReady) return false;
+  const placed = new Set(profile.blankFormKeysPlaced ?? []);
+  const fillable = FORM_TEMPLATES.filter((seed) => !keptOutOfBlankFormsTemplates(seed));
+  if (fillable.some((seed) => !placed.has(seed.formKey))) return false;
+  const saved = await db.select({ formKey: controlledFormTemplates.formKey }).from(controlledFormTemplates);
+  const have = new Set(saved.map((row) => row.formKey));
+  return fillable.every((seed) => have.has(seed.formKey));
+}
+
 export async function ensureFormTemplates(db: Db, performedBy?: number): Promise<void> {
   if (RETIRED_FORM_KEYS.length > 0) {
     await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
   }
+  // Form folders and every controlled-list open used to walk this filing pass again.
+  // Once the blanks are placed, reading them is a select, not another serial seed.
+  if (await blankFormsAlreadyFiled(db)) return;
   let all = await db.select().from(documentFolders);
 
   const legacyIso = all.find((folder) => folder.parentId === null && folder.name === PREVIOUS_ISO_ROOT);

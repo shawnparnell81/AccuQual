@@ -14,6 +14,7 @@ import { FileDropZone } from "./FileDropZone";
 import { usePageFileDrop } from "../../hooks/usePageFileDrop";
 import { UploadCloud } from "lucide-react";
 import { LoadingPlaceholder } from "./LoadingPlaceholder";
+import { attachmentParentId } from "../../lib/attachmentParent";
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return "";
@@ -30,25 +31,32 @@ function formatSize(bytes: number | null): string {
  * Feasibility Review, ...); omit both for the shared "General Uploads" bin
  * (a user's own documents not tied to any record).
  */
-export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Attachments" }: { entityType?: string; entityId?: number; title?: string }) {
+export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Attachments" }: { entityType?: string; entityId?: number | string | null; title?: string }) {
   const toast = useToast();
   const user = useCurrentUser();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const parentId = attachmentParentId(entityId);
+  const named = typeof entityType === "string" && entityType.trim().length > 0;
+  // A composite such as "2:0" is not a record id. Asking with it returns 400.
+  // Controlled lists are not an attachment parent either, so that request is skipped.
+  const canAttach = !named || (entityType !== "ControlledList" && parentId != null);
 
-  const queryKey = ["attachments", entityType ?? null, entityId ?? null];
+  const queryKey = ["attachments", entityType ?? null, parentId];
   const { data: files = [], isLoading } = useQuery<Attachment[]>({
     queryKey,
-    queryFn: async () => (await apiClient.get("/attachments", { params: entityType && entityId ? { entityType, entityId } : undefined })).data,
+    enabled: canAttach,
+    queryFn: async () =>
+      (await apiClient.get("/attachments", { params: named && parentId != null ? { entityType, entityId: parentId } : undefined })).data,
   });
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
       const body = new FormData();
       body.append("file", file);
-      if (entityType && entityId) {
+      if (named && parentId != null && entityType !== "ControlledList") {
         body.append("entityType", entityType);
-        body.append("entityId", String(entityId));
+        body.append("entityId", String(parentId));
       }
       return (await apiClient.post("/attachments", body, { headers: { "Content-Type": "multipart/form-data" } })).data;
     },
@@ -61,7 +69,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
 
   // On a record's own page, a file dropped anywhere on the page attaches to that record.
   const { dragging: pageDrag } = usePageFileDrop({
-    enabled: !!entityType && !!entityId,
+    enabled: named && parentId != null && entityType !== "ControlledList",
     onFiles: (dropped) => dropped.forEach((file) => upload.mutate(file)),
   });
 

@@ -740,7 +740,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
       }
       related={
         view ? (
-          <RecordReferences modules={[view.resource === "calibration" ? "calibration" : "documents"]} step={view.title} entityType="ControlledList" entityId={view.id} />
+          <RecordReferences modules={[view.resource === "calibration" ? "calibration" : "documents"]} step={view.title} entityType="ControlledList" entityId={view.id} attachments={false} />
         ) : (
           <p className="text-sm text-muted-foreground">References load with the list.</p>
         )

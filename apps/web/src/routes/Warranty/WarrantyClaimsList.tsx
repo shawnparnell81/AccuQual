@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
+import { useSiteStore } from "../../store/siteStore";
 import { WarrantyClaimCreateForm } from "./WarrantyClaimCreateForm";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 
@@ -29,6 +30,11 @@ export function WarrantyClaimsList() {
     return p;
   }, [status, q, dateFrom, dateTo]);
   const { data: rows = [], isLoading, isError } = claimHooks.useList(params);
+  // Subscribe so a top-bar plant change redraws this list, then read the store.
+  // The hook's server snapshot stays at the first value, so the filter uses getState.
+  const plantKey = useSiteStore((s) => (s.siteScope === "all" ? "all" : s.currentSiteId));
+  const { currentSiteId, siteScope } = useSiteStore.getState();
+  const visible = useMemo(() => claimsForPlant(rows, currentSiteId, siteScope), [rows, currentSiteId, siteScope, plantKey]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,7 +73,7 @@ export function WarrantyClaimsList() {
           { header: "Est. Cost", accessor: (c) => (c.warrantyCostEstimate ? `$${Number(c.warrantyCostEstimate).toFixed(2)}` : "—") },
           { header: "Actual Cost", accessor: (c) => (c.warrantyActualCost ? `$${Number(c.warrantyActualCost).toFixed(2)}` : "—") },
         ]}
-        rows={rows}
+        rows={visible}
         rowKey={(c) => c.id}
         isLoading={isLoading}
         isError={isError}
@@ -78,4 +84,10 @@ export function WarrantyClaimsList() {
       <WarrantyClaimCreateForm isOpen={createOpen} onClose={() => setCreateOpen(false)} onCreated={(created) => navigate(`/warranty/${created.id}`)} />
     </div>
   );
+}
+
+/** The top-bar plant switcher is the filter. "All plants" and a plant that has not loaded yet keep every row. A chosen plant keeps its own claims and claims that were never assigned. */
+export function claimsForPlant(rows: readonly WarrantyClaim[], siteId: number | null, siteScope: "all" | null): WarrantyClaim[] {
+  if (siteScope === "all" || siteId == null) return [...rows];
+  return rows.filter((row) => row.siteId == null || row.siteId === siteId);
 }

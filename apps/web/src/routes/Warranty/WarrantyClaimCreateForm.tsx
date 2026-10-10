@@ -35,9 +35,10 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
   });
   const [numberError, setNumberError] = useState<string | null>(null);
 
-  const reset = () =>
+  const reset = () => {
     setForm({ productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "", claimNumber: "" });
     setNumberError(null);
+  };
 
   return (
     <Modal title="New Warranty Claim" isOpen={isOpen} onClose={onClose}>
