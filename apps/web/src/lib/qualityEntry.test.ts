@@ -10,7 +10,7 @@ describe("default quality entry paths", () => {
     assert.equal(FRM_NCR_PATH, `/iso-forms/${frm?.formKey}`);
     const link = flattenSidebarLinks().find((item) => item.key === "frm-ncr-001");
     assert.deepEqual(link && { label: link.label, path: link.path }, { label: "FRM NCR", path: FRM_NCR_PATH });
-    assert.equal(flattenSidebarLinks().some((item) => item.path === "/ncr"), false);
+    assert.equal(flattenSidebarLinks().some((item) => item.path === "/ncr" && item.label === "NCR"), true);
   });
 
   it("names the quarantine notice blank and keeps CAPA and FRM NCR in place", () => {
@@ -25,6 +25,7 @@ describe("default quality entry paths", () => {
     assert.deepEqual(
       ncrCapa.children.map((child) => ({ label: child.label, path: "path" in child ? child.path : undefined })),
       [
+        { label: "NCR", path: "/ncr" },
         { label: "FRM NCR", path: FRM_NCR_PATH },
         { label: "CAPA", path: "/capa" },
         { label: "8D", path: "/8d" },

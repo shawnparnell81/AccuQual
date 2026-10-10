@@ -18,6 +18,8 @@ export interface SidebarAccess {
 const KEY_RESOURCE: Record<string, SidebarResource> = {
   home: "open",
   calendar: "open",
+  executive: "executive.dashboard",
+  notifications: "open",
   "document-control": "documents",
   "folder-explorer": "documents",
   "saved-form-folders": "documents",
@@ -28,6 +30,13 @@ const KEY_RESOURCE: Record<string, SidebarResource> = {
   apqp: "documents",
   quality: "open",
   "obsolete-archive": "documents",
+  "controlled-lists": "documents",
+  "master-document-list": "documents",
+  "laboratory-scope": "documents",
+  "internal-audit-schedule": "documents",
+  "nonconformance-log": "documents",
+  uploads: "documents",
+  "qms-forms": "qms_forms",
   training: "training",
   workers: "worker_profile",
   inspections: "quality_inspection",
@@ -50,19 +59,44 @@ const KEY_RESOURCE: Record<string, SidebarResource> = {
   supplier_portal: "supplier_portal",
   scar: "scar",
   "ncr-capa": "open",
+  ncr: "ncr",
   "frm-ncr-001": "ncr",
   capa: "capa",
   "8d": "eight_d",
   quarantine: "quarantine",
   "blank-forms": "documents",
   ppap: "ppap",
+  risk: "risk",
   "risk-dashboard": "risk",
   "process-change": "change",
+  crar: "crar",
+  engineering: "open",
+  feasibility: "feasibility",
   "engineering-planner": "open",
+  "engineering-request-log": "documents",
+  ecn: "documents",
+  ecr: "documents",
+  "work-instructions": "documents",
+  "digital-twin": "open",
+  equipment: "open",
   workflow: "workflow",
   "form-builder": "form_builder",
   ai: "open",
   reporting: "open",
+  "admin-users": "admin_console",
+  "admin-import": "admin_console",
+  "admin-plants": "admin_console",
+  "admin-permissions": "admin_console",
+  "admin-login-history": "login_history",
+  "admin-ai": "admin_console",
+  "admin-supplier": "admin_console",
+  "admin-quality": "admin_console",
+  "admin-receiving": "admin_console",
+  "admin-health": "admin_console",
+  "admin-api": "admin_console",
+  "admin-sso": "admin_console",
+  "admin-export": "admin_console",
+  "admin-company": "admin_console",
   pareto: "pareto",
   dashboard: "open",
   "audit-log": "open",
@@ -110,6 +144,7 @@ const PATH_RESOURCES: [string, SidebarResource][] = [
   ["/digital-twin", "open"],
   ["/audit-log", "open"],
   ["/calendar", "open"],
+  ["/executive", "executive.dashboard"],
   ["/home", "open"],
   ["/rma", "rma"],
   ["/work-orders", "work_orders"],
@@ -118,6 +153,7 @@ const PATH_RESOURCES: [string, SidebarResource][] = [
 const ROUTE_PATTERNS = [
   /^\/$/,
   /^\/home$/,
+  /^\/executive$/,
   /^\/calendar$/,
   /^\/audit-log$/,
   /^\/ncr$/,
@@ -136,7 +172,9 @@ const ROUTE_PATTERNS = [
   /^\/folders\/[A-Za-z0-9-]+$/,
   /^\/documents$/,
   /^\/documents\/master-list$/,
+  /^\/documents\/laboratory-scope$/,
   /^\/documents\/internal-audit-schedule$/,
+  /^\/documents\/nonconformance-log$/,
   /^\/documents\/engineering-request-log$/,
   /^\/documents\/development-log$/,
   /^\/documents\/import$/,
@@ -207,17 +245,10 @@ const ROUTE_PATTERNS = [
 ];
 
 /** Pages that are real routes but are not on the default menu. */
+/** Real routes that are still not a default menu row. Settings stays on the bar itself. */
 export const EXTRA_SIDEBAR_PAGES: { key: string; label: string; path: string }[] = [
-  { key: "page-ncr", label: "NCR", path: "/ncr" },
-  { key: "page-feasibility", label: "Feasibility Review", path: "/feasibility" },
-  { key: "page-qms-forms", label: "QMS Forms", path: "/qms-forms" },
-  { key: "page-risk", label: "Risk / FMEA", path: "/risk" },
-  { key: "page-master-list", label: "Master Document List", path: "/documents/master-list" },
-  { key: "page-uploads", label: "General Uploads", path: "/documents/uploads" },
-  { key: "page-notifications", label: "Notifications", path: "/notifications" },
   { key: "page-settings", label: "Settings", path: "/settings" },
-  { key: "page-crar", label: "Customer Return Analysis", path: "/crar" },
-  { key: "page-digital-twin", label: "Digital Twin", path: "/digital-twin" },
+  { key: "page-warranty-dashboard", label: "Warranty dashboard", path: "/warranty/dashboard" },
 ];
 
 export function resourceForPath(path: string | undefined): SidebarResource {
@@ -280,6 +311,7 @@ export function filterSidebarByAccess(nodes: SidebarNode[], access: SidebarAcces
   const out: SidebarNode[] = [];
   for (const node of nodes) {
     if (node.key === "ai" && access.aiFeatures === false) continue;
+    if (node.key === "admin-login-history" && !sidebarAllows("login_history", access)) continue;
     if (isFolder(node)) {
       const children = filterSidebarByAccess(node.children, access);
       const allowed = sidebarAllows(resourceForSidebarNode(node), access);

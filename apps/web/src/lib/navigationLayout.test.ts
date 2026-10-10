@@ -25,10 +25,12 @@ describe("top menu", () => {
     assert.deepEqual(menuLabels(shared), menuLabels(SIDEBAR_FOLDERS));
 
     const wellman = withDevelopment(SIDEBAR_FOLDERS, filterSidebarByAccess([developmentMenu()], allowAll));
-    const dev = wellman.find((node) => node.key === "development");
+    const engineering = wellman.find((node) => node.key === "engineering");
+    assert.ok(engineering && isFolder(engineering));
+    const dev = engineering.children.find((node) => node.key === "development");
     assert.ok(dev && isFolder(dev));
-    assert.equal(wellman.findIndex((node) => node.key === "development") + 1, wellman.findIndex((node) => node.key === "reporting"));
-    const withoutDev = wellman.filter((node) => node.key !== "development");
+    assert.equal(wellman.some((node) => node.key === "development"), false);
+    const withoutDev = withDevelopment(wellman, []);
     assert.deepEqual(menuLabels(withoutDev), menuLabels(SIDEBAR_FOLDERS));
     assert.equal(dev.children.some((child) => child.key === "development-log"), true);
     assert.equal(dev.children.some((child) => "path" in child && child.path === "/iso-forms/frm-dev-001"), true);
@@ -38,7 +40,7 @@ describe("top menu", () => {
 
   it("keeps every current sidebar section, including pages a folder itself opens", () => {
     const labels = menuLabels(SIDEBAR_FOLDERS);
-    for (const required of ["Home", "Documents", "Blank Forms", "Quality", "Folders", "Reports", "Admin", "Calendar", "FRM NCR", "CAPA", "Engineering Planner"]) {
+    for (const required of ["Home", "Documents", "Blank Forms", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin", "Calendar", "Executive dashboard", "NCR", "FRM NCR", "CAPA", "Engineering Planner", "Folder Explorer", "Controlled lists"]) {
       assert.equal(labels.includes(required), true, required);
     }
     assert.equal(PERMANENT_SIDEBAR_LINKS.some((link) => link.label === "Settings" && link.path === "/settings"), true);

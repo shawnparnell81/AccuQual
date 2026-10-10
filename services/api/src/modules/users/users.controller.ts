@@ -283,8 +283,10 @@ export const getMySidebarShortcuts = asyncHandler(async (req: Request, res: Resp
 /** Replaces this person's hidden items and pinned shortcuts. Does not change the company-wide menu arrangement. */
 export const updateMySidebarShortcuts = asyncHandler(async (req: Request, res: Response) => {
   const [existing] = await req.db!.select({ sidebarShortcuts: users.sidebarShortcuts }).from(users).where(eq(users.id, req.user!.id));
-  const offered = existing?.sidebarShortcuts && typeof existing.sidebarShortcuts === "object" ? existing.sidebarShortcuts.offered : undefined;
-  const next = normalizeSidebarShortcuts({ ...req.body, offered });
+  const stored = existing?.sidebarShortcuts && typeof existing.sidebarShortcuts === "object" ? existing.sidebarShortcuts : undefined;
+  const offered = stored?.offered;
+  const menuEdition = req.body.menuEdition ?? stored?.menuEdition;
+  const next = normalizeSidebarShortcuts({ ...req.body, offered, menuEdition });
   const [updated] = await req.db!.update(users).set({ sidebarShortcuts: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ sidebarShortcuts: users.sidebarShortcuts });
   if (!updated) throw AppError.notFound("User");
   await recordAuditTrail(req.db!, {

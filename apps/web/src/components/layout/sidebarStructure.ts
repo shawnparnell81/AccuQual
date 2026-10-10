@@ -17,9 +17,16 @@ import {
   Gauge,
   GitBranch,
   GraduationCap,
+  Bell,
+  Boxes,
+  Cog,
+  Compass,
+  Factory,
   Hammer,
+  History,
   LayoutDashboard,
   PieChart,
+  RotateCcw,
   ScrollText,
   Settings,
   Shield,
@@ -27,9 +34,11 @@ import {
   ShieldCheck,
   Sparkles,
   Truck,
+  Upload,
   UserPlus,
   Users,
   Workflow,
+  Wrench,
 } from "lucide-react";
 
 export interface SidebarLink {
@@ -124,6 +133,18 @@ function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): Sidebar
   return { key, label: page.title, path: `/folders/${key}`, icon };
 }
 
+const CONTROLLED_LISTS: SidebarFolder = {
+  key: "controlled-lists",
+  label: "Controlled lists",
+  icon: ClipboardList,
+  children: [
+    { key: "master-document-list", label: "Master Document List", path: "/documents/master-list", icon: FileText },
+    { key: "laboratory-scope", label: "Laboratory Scope", path: "/documents/laboratory-scope", icon: FileText },
+    { key: "internal-audit-schedule", label: "Internal Audit Schedule", path: "/documents/internal-audit-schedule", icon: ClipboardList },
+    { key: "nonconformance-log", label: "Nonconformance Log", path: "/documents/nonconformance-log", icon: ClipboardList },
+  ],
+};
+
 const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   key: "document-control",
   label: "Documents",
@@ -132,16 +153,142 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   children: [
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
     { key: "saved-form-folders", label: "Folders", path: "/form-folders", icon: Folder },
+    { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: FileText },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
     { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
     doc("drawings", FileText),
     doc("apqp", ClipboardList),
+    doc(OBSOLETE_ARCHIVE_CATEGORY, Archive),
+    {
+      key: "sop",
+      label: "SOP",
+      icon: ScrollText,
+      children: [doc("sop-procedures", FileText), doc("sop-policies", FileText)],
+    },
+    CONTROLLED_LISTS,
+    { key: "uploads", label: "General Uploads", path: "/documents/uploads", icon: Upload },
+    { key: "qms-forms", label: "QMS Forms", path: "/qms-forms", icon: FileSpreadsheet },
+  ],
+};
+
+const QUALITY_FOLDER: SidebarFolder = {
+  key: "quality",
+  label: "Quality",
+  icon: ShieldCheck,
+  children: [
+    { key: "training", label: "Training", path: "/training", icon: GraduationCap },
+    { key: "workers", label: "Workers", path: "/workers", icon: Users },
+    { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
+    doc("product-alerts", FileText),
+    doc("recalls", FileText),
+    { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
+    doc("repairs", Hammer),
+    {
+      key: "audits",
+      label: "Audits",
+      icon: ClipboardCheck,
+      path: "/audits",
+      children: [
+        doc("internal-audits", ClipboardCheck),
+        doc("audit-plan", ClipboardList),
+        doc("audit-schedule", ClipboardList),
+        doc("audit-report", FileText),
+      ],
+    },
+    {
+      key: "ncr-capa",
+      label: "NCR & CAPA",
+      icon: AlertTriangle,
+      children: [
+        { key: "ncr", label: "NCR", path: "/ncr", icon: AlertTriangle },
+        { key: "frm-ncr-001", label: "FRM NCR", path: "/iso-forms/frm-ncr-001", icon: AlertTriangle },
+        { key: "capa", label: "CAPA", path: "/capa", icon: ClipboardCheck },
+        { key: "8d", label: "8D", path: "/8d", icon: FileSearch },
+      ],
+    },
+    { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
+    { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
+    { key: "risk", label: "Risk / FMEA", path: "/risk", icon: ShieldAlert },
+    { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
+    { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
+    { key: "crar", label: "Customer Return Analysis", path: "/crar", icon: RotateCcw },
+    { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow },
+    { key: "form-builder", label: "Form Builder", path: "/form-builder", icon: FileSpreadsheet },
+    { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles },
+  ],
+};
+
+const ENGINEERING_FOLDER: SidebarFolder = {
+  key: "engineering",
+  label: "Engineering",
+  icon: Cog,
+  children: [
+    { key: "feasibility", label: "Feasibility Review", path: "/feasibility", icon: Compass },
+    { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
+    { key: "engineering-request-log", label: "Engineering Request Log", path: "/documents/engineering-request-log", icon: GitBranch },
+    doc("ecn", GitBranch),
+    doc("ecr", GitBranch),
+    doc("work-instructions", ScrollText),
+    { key: "digital-twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes },
+  ],
+};
+
+const EQUIPMENT_FOLDER: SidebarFolder = {
+  key: "equipment",
+  label: "Equipment",
+  icon: Wrench,
+  children: [
+    {
+      key: "calibration",
+      label: "Calibration",
+      icon: Gauge,
+      path: "/calibration",
+      children: [{ key: "master-equipment-list", label: "Master Equipment List", path: "/calibration/master-list", icon: Gauge }],
+    },
+  ],
+};
+
+const SUPPLIERS_FOLDER: SidebarFolder = {
+  key: "suppliers",
+  label: "Suppliers",
+  icon: Truck,
+  path: "/suppliers",
+  children: [
+    { key: "add-supplier", label: "ADD SUPPLIER", path: "/suppliers/new", icon: UserPlus },
+    { key: "supplier_portal", label: "Supplier Portal", path: "/supplier-portal", icon: Building2 },
+    { key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList },
+  ],
+};
+
+const ADMIN_FOLDER: SidebarFolder = {
+  key: "admin",
+  label: "Admin",
+  icon: Shield,
+  path: "/admin",
+  adminOnly: true,
+  children: [
+    { key: "admin-users", label: "Users & Roles", path: "/admin/users", icon: Users, adminOnly: true },
+    { key: "admin-import", label: "Import data", path: "/admin/import", icon: Upload, adminOnly: true },
+    { key: "admin-plants", label: "Plants", path: "/admin/plants", icon: Factory, adminOnly: true },
+    { key: "admin-permissions", label: "Permissions", path: "/admin/roles-permissions", icon: ShieldCheck, adminOnly: true },
+    { key: "admin-login-history", label: "Login History", path: "/admin/login-history", icon: History, adminOnly: true },
+    { key: "admin-ai", label: "AI Settings", path: "/admin/ai-settings", icon: Sparkles, adminOnly: true },
+    { key: "admin-supplier", label: "Supplier Settings", path: "/admin/supplier-settings", icon: Truck, adminOnly: true },
+    { key: "admin-quality", label: "Quality Settings", path: "/admin/quality-settings", icon: ClipboardCheck, adminOnly: true },
+    { key: "admin-receiving", label: "Receiving & Inventory", path: "/admin/receiving-inventory-settings", icon: ClipboardList, adminOnly: true },
+    { key: "admin-health", label: "System Health", path: "/admin/system-health", icon: ShieldCheck, adminOnly: true },
+    { key: "admin-api", label: "API Reference", path: "/admin/api-docs", icon: FileText, adminOnly: true },
+    { key: "admin-sso", label: "Single Sign-On", path: "/admin/sso", icon: Shield, adminOnly: true },
+    { key: "admin-export", label: "Data Export", path: "/admin/data-export", icon: Archive, adminOnly: true },
+    { key: "admin-company", label: "Company Settings", path: "/admin/company-settings", icon: Building2, adminOnly: true },
   ],
 };
 
 /**
- * Home, Documents, Blank Forms, Quality, Folders, Reports, plus Admin for people who already pass the admin check.
- * The Folders door and Documents → Folders both open /form-folders.
+ * ERP groups on the top bar. Every module the previous sidebar could open
+ * stays under one of these groups. Wellman development is added beside
+ * Engineering. Customize menu still reorders and hides rows for one person.
+ * Documents → Folders and the Folders door both open /form-folders.
  * Blank Forms lists the same templates as Folder Explorer → Blank Forms Templates.
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
@@ -150,80 +297,17 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     label: "Home",
     icon: LayoutDashboard,
     path: "/home",
-    children: [{ key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays }],
-  },
-  DOCUMENT_CONTROL_FOLDER,
-  { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: FileText },
-  {
-    key: "quality",
-    label: "Quality",
-    icon: ShieldCheck,
     children: [
-      doc(OBSOLETE_ARCHIVE_CATEGORY, Archive),
-      { key: "training", label: "Training", path: "/training", icon: GraduationCap },
-      { key: "workers", label: "Workers", path: "/workers", icon: Users },
-      { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
-      doc("product-alerts", FileText),
-      doc("recalls", FileText),
-      { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
-      doc("repairs", Hammer),
-      {
-        key: "sop",
-        label: "SOP",
-        icon: ScrollText,
-        children: [doc("sop-procedures", FileText), doc("sop-policies", FileText)],
-      },
-      {
-        key: "calibration",
-        label: "Calibration",
-        icon: Gauge,
-        path: "/calibration",
-        children: [{ key: "master-equipment-list", label: "Master Equipment List", path: "/calibration/master-list", icon: Gauge }],
-      },
-      {
-        key: "audits",
-        label: "Audits",
-        icon: ClipboardCheck,
-        path: "/audits",
-        children: [
-          doc("internal-audits", ClipboardCheck),
-          doc("audit-plan", ClipboardList),
-          doc("audit-schedule", ClipboardList),
-          doc("audit-report", FileText),
-        ],
-      },
-      {
-        key: "suppliers",
-        label: "Suppliers",
-        icon: Truck,
-        path: "/suppliers",
-        children: [
-          { key: "add-supplier", label: "ADD SUPPLIER", path: "/suppliers/new", icon: UserPlus },
-          { key: "supplier_portal", label: "Supplier Portal", path: "/supplier-portal", icon: Building2 },
-          { key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList },
-        ],
-      },
-      {
-        key: "ncr-capa",
-        label: "NCR & CAPA",
-        icon: AlertTriangle,
-        children: [
-          // Spreadsheet blank FRM-NCR-001. The live NCR module stays at /ncr and is not a sidebar item.
-          { key: "frm-ncr-001", label: "FRM NCR", path: "/iso-forms/frm-ncr-001", icon: AlertTriangle },
-          { key: "capa", label: "CAPA", path: "/capa", icon: ClipboardCheck },
-          { key: "8d", label: "8D", path: "/8d", icon: FileSearch },
-        ],
-      },
-      { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
-      { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
-      { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
-      { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
-      { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
-      { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow },
-      { key: "form-builder", label: "Form Builder", path: "/form-builder", icon: FileSpreadsheet },
-      { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles },
+      { key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays },
+      { key: "executive", label: "Executive dashboard", path: "/executive", icon: LayoutDashboard },
+      { key: "notifications", label: "Notifications", path: "/notifications", icon: Bell },
     ],
   },
+  DOCUMENT_CONTROL_FOLDER,
+  QUALITY_FOLDER,
+  ENGINEERING_FOLDER,
+  EQUIPMENT_FOLDER,
+  SUPPLIERS_FOLDER,
   { key: "form-folders", label: "Folders", path: "/form-folders", icon: Folder },
   {
     key: "reporting",
@@ -236,7 +320,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
       { key: "audit-log", label: "Audit log", path: "/audit-log", icon: ScrollText, auditLog: true },
     ],
   },
-  { key: "admin", label: "Admin", path: "/admin", icon: Shield, adminOnly: true },
+  ADMIN_FOLDER,
 ];
 
 /** Drops admin-only entries for everyone else, and folders that would be empty. */
