@@ -1,9 +1,8 @@
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
-import { readAdminNavCollapsed, writeAdminNavCollapsed } from "../../lib/adminNavCollapsed";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, type LucideIcon } from "lucide-react";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 interface ConsoleSection {
@@ -55,80 +54,40 @@ export function useAdminConsoleSections(): ConsoleSection[] {
 }
 
 /**
- * Company admin navigation. Not the old /platform operator page.
- * Sections keep their own access checks (settings.routes.ts). A gate on this layout would block departments that can already write.
+ * Company admin pages. The top bar is the only sidebar. These sections are a
+ * compact strip under that header, and the page itself uses the full width.
+ * Sections keep their own access checks (settings.routes.ts).
  */
-function readCollapsed(): boolean {
-  try {
-    return readAdminNavCollapsed(window.sessionStorage);
-  } catch {
-    return false;
-  }
-}
-
 export function AdminConsoleLayout() {
-  const [collapsed, setCollapsed] = useState(readCollapsed);
   const sections = useAdminConsoleSections();
 
-  function toggleCollapsed() {
-    setCollapsed((current) => {
-      const next = !current;
-      try {
-        writeAdminNavCollapsed(window.sessionStorage, next);
-      } catch {
-        // The menu still opens and closes for this visit.
-      }
-      return next;
-    });
-  }
-
   return (
-    <div className={clsx("flex min-w-0 max-w-full gap-4", collapsed ? "flex-col" : "flex-col lg:flex-row lg:items-start lg:gap-6")}>
-      <div className={clsx("min-w-0 shrink-0", !collapsed && "lg:w-56 lg:border-r lg:border-border lg:pr-4")}>
-        <button
-          type="button"
-          data-testid="admin-nav-toggle"
-          aria-expanded={!collapsed}
-          aria-controls="admin-console-nav"
-          onClick={toggleCollapsed}
-          className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          {collapsed ? "Show admin menu" : "Hide admin menu"}
-        </button>
-        <nav id="admin-console-nav" aria-label="Admin console" hidden={collapsed} className="flex flex-row flex-wrap gap-1 lg:flex-col lg:flex-nowrap">
-          <div className="mb-1 hidden px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 lg:block">Admin Console</div>
-          {sections.map((section) =>
-            section.externalPath ? (
-              <Link
-                key={section.key}
-                to={section.externalPath}
-                className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-                title={section.description}
-              >
-                <section.icon size={16} className="shrink-0" />
-                <span className="min-w-0">{section.label}</span>
-              </Link>
-            ) : (
-              <NavLink
-                key={section.key}
-                to={`/admin/${section.path}`}
-                title={section.description}
-                className={({ isActive }) =>
-                  clsx(
-                    "flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm",
-                    isActive ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted"
-                  )
-                }
-              >
-                <section.icon size={16} className="shrink-0" />
-                <span className="min-w-0">{section.label}</span>
-              </NavLink>
-            )
-          )}
-        </nav>
-      </div>
-      <div className="min-w-0 w-full flex-1">
+    <div className="flex min-w-0 w-full max-w-none flex-col gap-4">
+      <nav id="admin-console-nav" aria-label="Admin" className="flex gap-1 overflow-x-auto border-b border-border pb-2">
+        {sections.map((section) => {
+          const className = ({ isActive }: { isActive: boolean }) =>
+            clsx(
+              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-xs",
+              isActive ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            );
+          const body = (
+            <>
+              <section.icon size={14} className="shrink-0" />
+              <span>{section.label}</span>
+            </>
+          );
+          return section.externalPath ? (
+            <Link key={section.key} to={section.externalPath} title={section.description} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+              {body}
+            </Link>
+          ) : (
+            <NavLink key={section.key} to={`/admin/${section.path}`} title={section.description} className={className}>
+              {body}
+            </NavLink>
+          );
+        })}
+      </nav>
+      <div className="min-w-0 w-full max-w-none">
         <Suspense fallback={<LoadingPlaceholder />}>
           <Outlet />
         </Suspense>

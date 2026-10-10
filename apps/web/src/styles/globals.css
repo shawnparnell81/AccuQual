@@ -1130,12 +1130,14 @@ body.aq-side-resizing .app-main {
   box-shadow: 0 12px 32px hsl(222 47% 4% / 0.28);
 }
 .aq-topnav-fly {
+  position: fixed;
   top: 0;
-  left: calc(100% - 4px);
+  left: 0;
+  z-index: 80;
+  visibility: hidden;
 }
-.aq-topnav-fly[data-flip="1"] {
-  left: auto;
-  right: calc(100% - 4px);
+.aq-topnav-fly[data-placed="1"] {
+  visibility: visible;
 }
 .aq-topnav-branch {
   position: relative;

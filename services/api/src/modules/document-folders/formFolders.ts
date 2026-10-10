@@ -23,7 +23,7 @@ import { folderLocationLabel } from "./mainIsoFolders.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
 import { canonicalOpenPath, filterLiveFilings, repairSavedFormListings } from "./savedFormLinks.js";
 import { FORM_TEMPLATES, auditRecordKept, fileNamePatternFor, moduleRecordKept, savedFillFileName, type FormTemplateSeed } from "./formFiling.js";
-import { listFormTemplates } from "./formTemplates.js";
+import { listFolderTemplates } from "./formTemplates.js";
 
 export { savedFillFileName };
 
@@ -319,7 +319,7 @@ const SHARED_GROUPS: SharedGroup[] = [
 
 async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFolderSummary[]; fills: Map<string, SavedFill[]> }> {
   await repairSavedFormListings(db, performedBy);
-  const { templates } = await listFormTemplates(db);
+  const templates = await listFolderTemplates(db);
   const index = formFolderIndex(templates);
   const fills = new Map<string, SavedFill[]>(index.flatMap((folder) => folder.formKeys.map((key) => [key, [] as SavedFill[]])));
   const templateByKey = new Map(templates.map((template) => [template.formKey, { title: template.title, formId: template.formId }]));

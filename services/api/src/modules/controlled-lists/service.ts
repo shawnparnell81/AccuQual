@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Request } from "express";
-import { calibrations, equipment } from "../../drizzle/schema/calibration.js";
+import { equipment } from "../../drizzle/schema/calibration.js";
 import { company } from "../../drizzle/schema/company.js";
 import { controlledLists } from "../../drizzle/schema/controlledLists.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
@@ -183,13 +183,16 @@ function intervalMonths(days: number, metadata: Record<string, unknown> | null):
 
 async function equipmentAppends(db: Db) {
   const items = await db.select().from(equipment);
-  const events = await db.select({ equipmentId: calibrations.equipmentId, performedAt: calibrations.performedAt }).from(calibrations);
+  const events = await db.execute<{ equipment_id: number; performed_at: Date | string | null }>(sql`
+    SELECT DISTINCT ON (equipment_id) equipment_id, performed_at
+    FROM calibrations
+    WHERE performed_at IS NOT NULL
+    ORDER BY equipment_id, performed_at DESC
+  `);
   const latest = new Map<number, string>();
-  for (const event of events) {
-    if (!event.performedAt) continue;
-    const iso = event.performedAt.toISOString().slice(0, 10);
-    const prev = latest.get(event.equipmentId);
-    if (!prev || iso > prev) latest.set(event.equipmentId, iso);
+  for (const event of events.rows) {
+    if (!event.performed_at) continue;
+    latest.set(event.equipment_id, new Date(event.performed_at).toISOString().slice(0, 10));
   }
   return items.map((item) => {
     const metadata = (item.metadata ?? {}) as Record<string, unknown>;
@@ -337,6 +340,79 @@ async function canEditDocuments(req: Request): Promise<boolean> {
   return (await getUserAccessLevel(req.db, req.user, "documents")) === "edit";
 }
 
+async function listRetireStamp(db: Db): Promise<string> {
+  const result = await db.execute<{ stamp: string }>(sql`
+    SELECT concat_ws('|',
+      (SELECT coalesce(max(id)::text, '0') FROM documents),
+      (SELECT coalesce(max(id)::text, '0') FROM document_folders),
+      (SELECT coalesce(max(id)::text, '0') FROM controlled_form_templates)
+    ) AS stamp
+  `);
+  return String(result.rows[0]?.stamp ?? "");
+}
+
+/** True when an old list upload, blank, or document copy is still in the database. */
+async function supersededListsNeedRetire(db: Db): Promise<boolean> {
+  const found = await db.execute<{ hit: number }>(sql`
+    SELECT 1 AS hit FROM (
+      SELECT 1 FROM controlled_form_templates
+      WHERE form_key IN ('lst-eqp-001', 'lst-gen-001', 'lst-gen-003', 'lst-eng-001', 'lst-gen-002')
+         OR upper(form_id) IN ('LST-EQP-001', 'LST-GEN-001', 'LST-GEN-003', 'LST-DEV-001', 'LST-GEN-002', 'LST-ENG-001')
+         OR lower(regexp_replace(title, '\\.(xlsx|xls|xlsm|pdf|docx)$', '', 'i')) IN (
+           'master equipment list', 'master document list', 'scope of laboratory activities',
+           'lst-dev-001', 'development log', 'development log (register)', 'lst-gen-002', 'internal audit schedule',
+           'lst-eng-001', 'engineering request change log', 'ecr tracker', 'lst-eng-001 - ecr tracker - rev'
+         )
+      UNION ALL
+      SELECT 1 FROM documents
+      WHERE is_deleted = false
+        AND lower(regexp_replace(title, '\\.(xlsx|xls|xlsm|pdf|docx)$', '', 'i')) IN (
+          'master equipment list', 'master document list', 'scope of laboratory activities',
+          'lst-dev-001', 'development log', 'development log (register)', 'internal audit schedule',
+          'engineering request change log', 'ecr tracker'
+        )
+      UNION ALL
+      SELECT 1 FROM document_folders
+      WHERE pdf_path IS NOT NULL
+        AND linked_path IN (
+          '/calibration/master-list', '/documents/master-list', '/documents/laboratory-scope',
+          '/documents/development-log', '/documents/internal-audit-schedule', '/documents/engineering-request-log'
+        )
+      UNION ALL
+      SELECT 1 FROM document_folders
+      WHERE lower(regexp_replace(name, '\\.(xlsx|xls|xlsm|pdf|docx)$', '', 'i')) IN (
+          'master equipment list', 'master document list', 'scope of laboratory activities',
+          'lst-dev-001', 'development log', 'development log (register)', 'lst-gen-002', 'internal audit schedule',
+          'lst-eng-001', 'engineering request change log', 'ecr tracker', 'lst-eng-001 - ecr tracker - rev'
+        )
+        AND coalesce(linked_path, '') NOT IN (
+          '/calibration/master-list', '/documents/master-list', '/documents/laboratory-scope',
+          '/documents/development-log', '/documents/internal-audit-schedule', '/documents/engineering-request-log',
+          '/documents/nonconformance-log'
+        )
+        AND (pdf_path IS NOT NULL OR document_id IS NOT NULL OR linked_path IS NULL OR linked_path !~ '/[0-9]+$')
+    ) hits
+    LIMIT 1
+  `);
+  return (found.rows ?? []).length > 0;
+}
+
+async function rememberListRetireStamp(db: Db, stamp: string): Promise<void> {
+  const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+  if (!row || row.profile?.supersededListsRetiredStamp === stamp) return;
+  await db.update(company).set({ profile: { ...(row.profile ?? {}), supersededListsRetiredStamp: stamp } }).where(eq(company.id, row.id));
+}
+
+/** True when this open can skip the full document and folder scan. */
+async function skipSupersededListRetire(db: Db): Promise<boolean> {
+  const stamp = await listRetireStamp(db);
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  if (row?.profile?.supersededListsRetiredStamp === stamp) return true;
+  if (await supersededListsNeedRetire(db)) return false;
+  await rememberListRetireStamp(db, stamp);
+  return true;
+}
+
 /** Remove the uploaded Quality Manual copies and any blank form with these titles. Safe to run again. */
 export async function retireSupersededLists(req: Request): Promise<void> {
   if (!req.db || !req.user) return;
@@ -443,7 +519,7 @@ export async function ensureLivingControlledLists(req: Request): Promise<void> {
   await fileLivingNodes(req.db, req.user.id);
   // Filing recreates any missing seed drawer, including the empty "8D" folder.
   // The blank-form pass removes that numbered placeholder. Run it last so it stays gone.
-  await ensureFormTemplates(req.db);
+  await ensureFormTemplates(req.db, undefined, { forcePrune: true });
 }
 
 async function requireLevel(req: Request, key: ListKey, level: "read" | "edit") {
@@ -470,7 +546,12 @@ export async function openControlledList(req: Request, key: ListKey): Promise<Co
   // Old Quality Manual copies are still retired here. Opening the list is what removes them.
   if (existing) {
     const refreshed = await refreshOpenedList(req, key, existing);
-    await retireSupersededLists(req);
+    if (!(await skipSupersededListRetire(req.db!))) {
+      if (await canEditDocuments(req)) {
+        await retireSupersededLists(req);
+        await rememberListRetireStamp(req.db!, await listRetireStamp(req.db!));
+      }
+    }
     return present(req, key, refreshed);
   }
   await ensureLivingControlledLists(req);
