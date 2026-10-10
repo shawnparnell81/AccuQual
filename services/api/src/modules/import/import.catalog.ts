@@ -1,5 +1,6 @@
 import { IMPORT_ENTITIES, type AnyImportEntity } from "./import.entities.js";
 import { QUALITY_IMPORT_ENTITIES } from "./import.quality.js";
+import { RETAILER_IMPORTS, retailerReportEntity } from "./import.retailer.js";
 
 export interface ImportCatalogEntry {
   key: string;
@@ -8,6 +9,8 @@ export interface ImportCatalogEntry {
   entity: AnyImportEntity;
   /** People can be emailed a one-time password. Off unless the admin asks. */
   supportsInvites?: boolean;
+  /** Keep the file and parsed rows. Do not write suppliers, parts, or other records. */
+  archiveOnly?: boolean;
 }
 
 /** Record types an administrator can load from a spreadsheet. Only tables that already exist. */
@@ -21,6 +24,7 @@ export const IMPORT_CATALOG: ImportCatalogEntry[] = [
   { key: "lots", label: "Lots and batches", description: QUALITY_IMPORT_ENTITIES.lots.description, entity: QUALITY_IMPORT_ENTITIES.lots },
   { key: "equipment", label: "Calibration equipment", description: QUALITY_IMPORT_ENTITIES.equipment.description, entity: QUALITY_IMPORT_ENTITIES.equipment },
   { key: "users", label: "Users", description: "User accounts. Nobody is emailed unless you tick that option. Owner and Administrator accounts can't be created this way.", entity: IMPORT_ENTITIES.people, supportsInvites: true },
+  ...RETAILER_IMPORTS.map((entry) => ({ ...entry, entity: retailerReportEntity, archiveOnly: true })),
 ];
 
 export function getCatalogEntry(key: string): ImportCatalogEntry | undefined {

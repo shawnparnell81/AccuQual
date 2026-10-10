@@ -121,11 +121,23 @@ describe("admin roles, user removal, and data import", () => {
     expect(checked.body.createdCount).toBe(1);
     expect(await db.select().from(suppliers)).toHaveLength(0);
 
+    const destination = await request(app).get("/admin/imports/destination").set(auth(adminToken));
+    expect(destination.status).toBe(200);
+    const save = { displayName: `Suppliers ${suffix}`, folderId: destination.body.folderId as number };
+    const missingSave = await request(app).post(`/admin/imports/${uploaded.body.id}/run`).set(auth(adminToken)).send({
+      mapping: uploaded.body.mapping,
+      badRowMode: "skip",
+      duplicateMode: "create_only",
+      sendInvites: false,
+    });
+    expect(missingSave.status).toBe(400);
+
     const ran = await request(app).post(`/admin/imports/${uploaded.body.id}/run`).set(auth(adminToken)).send({
       mapping: uploaded.body.mapping,
       badRowMode: "skip",
       duplicateMode: "create_only",
       sendInvites: false,
+      ...save,
     });
     expect(ran.status).toBe(200);
     expect(ran.body).toMatchObject({ status: "completed", createdCount: 1, failedCount: 1 });
@@ -139,6 +151,8 @@ describe("admin roles, user removal, and data import", () => {
       badRowMode: "fail",
       duplicateMode: "update",
       sendInvites: false,
+      displayName: `Suppliers update ${suffix}`,
+      folderId: destination.body.folderId,
     });
     expect(updated.body).toMatchObject({ status: "completed", updatedCount: 1, createdCount: 0 });
     const [row] = await db.select().from(suppliers).where(eq(suppliers.name, "Import Co"));
@@ -151,6 +165,8 @@ describe("admin roles, user removal, and data import", () => {
       badRowMode: "skip",
       duplicateMode: "skip",
       sendInvites: false,
+      displayName: `Customers ${suffix}`,
+      folderId: destination.body.folderId,
     });
     expect(contactRun.body.createdCount).toBe(1);
     const [customer] = await db.select().from(customers);

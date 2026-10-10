@@ -6,7 +6,8 @@ import { capa } from "../../drizzle/schema/capa.js";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
-import { isFullAccessRole } from "../roles/roleAccess.js";
+import { roles } from "../../drizzle/schema/roles.js";
+import { isFullAccessRole, roleHasImportPermission } from "../roles/roleAccess.js";
 import { AppError } from "../../utils/appError.js";
 
 /**
@@ -115,7 +116,14 @@ export async function visibleEntityTypes(db: Db, user: Viewer): Promise<Set<stri
   for (const [entityType, resource] of Object.entries(ENTITY_TYPE_TO_RESOURCE)) {
     if (allowed.has(resource)) types.add(entityType);
   }
+  if (await viewerCanImport(db, user)) types.add("DataImport");
   return types;
+}
+
+async function viewerCanImport(db: Db, user: Viewer): Promise<boolean> {
+  if (!user.roleName) return false;
+  const [role] = await db.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, user.roleName));
+  return roleHasImportPermission(user.roleName, role?.permissions);
 }
 
 /** Company activity list. Another person's sign-in and account rows stay with an owner or administrator. */
@@ -248,6 +256,10 @@ export async function assertCanReadEntityHistory(
   if (entityType === "User" && entityId === user.id) return;
   if (ACCOUNT_ENTITY_TYPES.has(entityType)) {
     throw AppError.forbidden("Sign-in and account history is limited to an Owner or Administrator.");
+  }
+  if (entityType === "DataImport") {
+    if (!(await viewerCanImport(db, user))) throw AppError.forbidden("Import history is limited to people who can import data.");
+    return;
   }
   if (entityType === "BuiltFormFill") {
     const documents = await getUserAccessLevel(db, user, "documents");

@@ -44,7 +44,7 @@ auditTrailRouter.get(
     const entityType = req.params.entityType!;
     const entityId = Number(req.params.entityId);
 
-    if (!ENTITY_TYPE_TO_RESOURCE[entityType] && !ACCOUNT_ENTITY_TYPES.has(entityType)) {
+    if (!ENTITY_TYPE_TO_RESOURCE[entityType] && !ACCOUNT_ENTITY_TYPES.has(entityType) && entityType !== "DataImport") {
       throw AppError.badRequest(`Unknown record type "${entityType}"`);
     }
 

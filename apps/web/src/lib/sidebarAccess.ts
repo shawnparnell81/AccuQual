@@ -100,6 +100,8 @@ const KEY_RESOURCE: Record<string, SidebarResource> = {
   "admin-company": "admin_console",
   pareto: "pareto",
   dashboard: "open",
+  "imported-data": "import_data",
+  "report-import": "import_data",
   "audit-log": "open",
   admin: "admin_console",
 };
@@ -242,6 +244,8 @@ const ROUTE_PATTERNS = [
   /^\/admin$/,
   /^\/admin\/[a-z0-9-]+$/,
   /^\/reporting$/,
+  /^\/reporting\/imported-data$/,
+  /^\/reporting\/imported-data\/\d+$/,
   /^\/notifications$/,
   /^\/pareto$/,
   /^\/management-system$/,

@@ -92,6 +92,8 @@ import {
   QualityInspectionReportsPage,
   QuarantineDetailPage,
   QuarantinePage,
+  ImportedDataDetailPage,
+  ImportedDataPage,
   ReportingHubPage,
   VerifyExportPage,
   RetiredModulePage,
@@ -277,6 +279,8 @@ export function workspaceRouteElements() {
       <Route path="*" element={<NotFoundPage />} />
     </Route>,
     <Route key="/reporting" path="/reporting" element={<ReportingHubPage />} />,
+    <Route key="/reporting/imported-data" path="/reporting/imported-data" element={<ImportedDataPage />} />,
+    <Route key="/reporting/imported-data/:id" path="/reporting/imported-data/:id" element={<ImportedDataDetailPage />} />,
     <Route key="/verify/:exportId" path="/verify/:exportId" element={<VerifyExportPage />} />,
     <Route key="/reports" path="/reports" element={<Navigate to="/reporting" replace />} />,
     <Route key="/notifications" path="/notifications" element={<NotificationsPage />} />,
