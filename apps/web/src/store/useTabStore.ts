@@ -29,9 +29,9 @@ interface TabState {
    */
   openTab: (tab: { path: string; title: string; icon: string }) => string;
   /**
-   * Called on every route change. A different section opens or focuses its
-   * own tab. A sub-page of the section already showing (Admin, Settings)
-   * rewrites that same tab, including its pin.
+   * Called on every route change. A different nav section opens or focuses
+   * its own tab. A sub-page of the section already showing rewrites that
+   * same tab, including its pin.
    */
   syncActiveTabLocation: (path: string, title: string, icon: string) => void;
   /** Sets the active tab and returns its path so the caller can navigate() to it. */

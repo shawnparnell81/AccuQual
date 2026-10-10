@@ -109,6 +109,13 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/settings\/erp\/presets\/[^/]+$/,
 ];
 
+/** A nav section can mark its sub-pages live without this file importing the section catalog. */
+let sectionPathIsLive: ((pathname: string) => boolean) | null = null;
+
+export function registerSectionTabPaths(isLive: (pathname: string) => boolean) {
+  sectionPathIsLive = isLive;
+}
+
 export function normalizeTabPath(path: string): string {
   const pathname = path.split("?")[0]?.split("#")[0] ?? "";
   if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
@@ -119,7 +126,8 @@ export function normalizeTabPath(path: string): string {
 export function isLiveTabPath(path: string): boolean {
   const pathname = normalizeTabPath(path);
   if (EXACT.has(pathname)) return true;
-  return ONE_SEGMENT.some((pattern) => pattern.test(pathname));
+  if (ONE_SEGMENT.some((pattern) => pattern.test(pathname))) return true;
+  return sectionPathIsLive?.(pathname) ?? false;
 }
 
 export function selectRestoredTabs<T extends SavedTab>(tabs: T[], activeId: string | null): { tabs: T[]; activeId: string | null } {

@@ -1,37 +1,51 @@
-import { normalizeTabPath } from "./tabPaths";
+import {
+  isExternalHref,
+  isFolder,
+  pathMatches,
+  PERMANENT_SIDEBAR_LINKS,
+  SIDEBAR_FOLDERS,
+  type SidebarNode,
+} from "../components/layout/sidebarStructure";
+import { developmentMenu, withDevelopment } from "./navigationLayout";
+import { normalizeTabPath, registerSectionTabPaths } from "./tabPaths";
 
 /**
- * A section whose own strip (Admin, Settings, and the same kind of in-page
- * tabs) changes the URL without being a new workspace page. Those paths
- * share one workspace tab. A record, a list, and a different module stay
- * separate tabs.
+ * One workspace tab per nav section that has sub-pages (Admin, Settings,
+ * Reports, Quality, Engineering, Documents, and every other folder in the
+ * sidebar that works the same way). The section is the top-level folder, or
+ * a permanent footer link such as Settings. Which path belongs where comes
+ * from that nav config: the longest matching link wins, and a section that
+ * has its own path also keeps unlisted routes under that path (for example
+ * /admin/company-branding). The app root stays the Dashboard tab.
  */
-const SECTION_PREFIXES = [
-  { id: "admin", prefix: "/admin" },
-  { id: "settings", prefix: "/settings" },
-] as const;
 
-const ADMIN_PAGES: Record<string, string> = {
-  users: "Users & Roles",
-  import: "Import data",
-  plants: "Plants",
-  "roles-permissions": "Permissions",
-  "login-history": "Login History",
-  "ai-settings": "AI Settings",
-  "supplier-settings": "Supplier Settings",
-  "quality-settings": "Quality Settings",
-  "receiving-inventory-settings": "Receiving & Inventory",
-  "system-health": "System Health",
-  "api-docs": "API Reference",
-  sso: "Single Sign-On",
-  "data-export": "Data Export",
-  "company-settings": "Company Settings",
-  "company-branding": "Branding",
-  "company-templates": "Templates",
-  "digital-twin": "Digital Twin",
-  "company-ai": "Company AI",
-  "ai-usage": "AI Usage",
+export interface WorkspaceSectionLink {
+  path: string;
+  label: string;
+}
+
+export interface WorkspaceSection {
+  id: string;
+  label: string;
+  /** Set when the section itself opens a page. Routes under it stay on this tab. */
+  root: string | null;
+  links: WorkspaceSectionLink[];
+}
+
+const SECTION_ICONS: Record<string, string> = {
+  home: "dashboard",
+  "document-control": "documents",
+  quality: "quality",
+  engineering: "default",
+  equipment: "calibration",
+  suppliers: "supplier",
+  reporting: "default",
+  admin: "admin",
+  settings: "settings",
 };
+
+/** First URL segment words that are abbreviations, so a route slug stays readable. */
+const SLUG_ACRONYMS = new Set(["ai", "api", "apqp", "capa", "crar", "ecn", "ecr", "erp", "fai", "ncr", "ppap", "qms", "rma", "scar", "sop", "sso"]);
 
 export interface WorkspaceTabFields {
   id: string;
@@ -41,13 +55,88 @@ export interface WorkspaceTabFields {
   pinned?: boolean;
 }
 
-export function workspaceSectionId(path: string): string | null {
-  const pathname = normalizeTabPath(path);
-  for (const section of SECTION_PREFIXES) {
-    if (pathname === section.prefix || pathname.startsWith(`${section.prefix}/`)) return section.id;
-  }
-  return null;
+function rememberLink(links: WorkspaceSectionLink[], path: string | undefined, label: string) {
+  if (!path || path === "/" || isExternalHref(path)) return;
+  if (links.some((link) => link.path === path)) return;
+  links.push({ path, label });
 }
+
+function collectLinks(node: SidebarNode, links: WorkspaceSectionLink[]) {
+  if (isFolder(node)) {
+    rememberLink(links, node.path, node.label);
+    for (const child of node.children) collectLinks(child, links);
+    return;
+  }
+  rememberLink(links, node.path, node.label);
+}
+
+function buildWorkspaceSections(): WorkspaceSection[] {
+  const sections: WorkspaceSection[] = [];
+  const menu = withDevelopment(SIDEBAR_FOLDERS, [developmentMenu()]);
+  for (const node of menu) {
+    if (!isFolder(node)) continue;
+    const links: WorkspaceSectionLink[] = [];
+    collectLinks(node, links);
+    if (!links.some((link) => link.path !== node.path)) continue;
+    sections.push({ id: node.key, label: node.label, root: node.path && node.path !== "/" ? node.path : null, links });
+  }
+  for (const link of PERMANENT_SIDEBAR_LINKS) {
+    if (!link.path || link.path === "/" || isExternalHref(link.path)) continue;
+    sections.push({
+      id: link.key,
+      label: link.label,
+      root: link.path,
+      links: [{ path: link.path, label: link.label }],
+    });
+  }
+  return sections;
+}
+
+let cachedSections: WorkspaceSection[] | null = null;
+
+/** Every nav section whose sub-pages share one workspace tab. */
+export function workspaceSections(): WorkspaceSection[] {
+  if (!cachedSections) cachedSections = buildWorkspaceSections();
+  return cachedSections;
+}
+
+interface SectionMatch {
+  section: WorkspaceSection;
+  path: string;
+  label: string;
+  /** True when the match is the section's own path, not a named sub-page. */
+  root: boolean;
+}
+
+function bestMatch(pathname: string): SectionMatch | null {
+  let best: SectionMatch | null = null;
+  for (const section of workspaceSections()) {
+    for (const link of section.links) {
+      if (!pathMatches(pathname, link.path)) continue;
+      const root = section.root != null && link.path === section.root;
+      const longer = best != null && link.path.length > best.path.length;
+      const sameLengthPrefersNamedPage = best != null && link.path.length === best.path.length && !root && best.root;
+      if (!best || longer || sameLengthPrefersNamedPage) {
+        best = { section, path: link.path, label: link.label, root };
+      }
+    }
+  }
+  return best;
+}
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((word) => (SLUG_ACRONYMS.has(word) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
+export function workspaceSectionId(path: string): string | null {
+  return bestMatch(normalizeTabPath(path))?.section.id ?? null;
+}
+
+registerSectionTabPaths((pathname) => workspaceSectionId(pathname) != null);
 
 /** Identity of the workspace tab this path belongs to. Sub-pages of one section share it. */
 export function workspaceTabKey(path: string): string {
@@ -56,23 +145,23 @@ export function workspaceTabKey(path: string): string {
   return section ? `section:${section}` : pathname;
 }
 
-/** Title for a shared section, including the sub-page when it has a name. */
+export function workspaceSectionIcon(path: string): string | null {
+  const match = bestMatch(normalizeTabPath(path));
+  if (!match) return null;
+  return SECTION_ICONS[match.section.id] ?? "default";
+}
+
+/** Title for a shared section, including the sub-page when the nav names it. */
 export function workspaceSectionTitle(path: string): string | null {
   const pathname = normalizeTabPath(path);
-  const section = workspaceSectionId(pathname);
-  if (section === "admin") {
-    if (pathname === "/admin") return "Admin";
-    const slug = pathname.slice("/admin/".length).split("/")[0] ?? "";
-    const label = ADMIN_PAGES[slug];
-    return label ? `Admin · ${label}` : "Admin";
-  }
-  if (section === "settings") {
-    if (pathname === "/settings") return "Settings";
-    if (pathname.startsWith("/settings/navigation")) return "Settings · Navigation";
-    if (pathname.startsWith("/settings/erp")) return "Settings · ERP / NetSuite";
-    return "Settings";
-  }
-  return null;
+  const match = bestMatch(pathname);
+  if (!match) return null;
+  if (match.root && pathname === match.section.root) return match.section.label;
+  if (!match.root) return `${match.section.label} · ${match.label}`;
+  const slug = match.section.root ? pathname.slice(match.section.root.length).split("/").filter(Boolean)[0] : undefined;
+  if (!slug || /^\d+$/.test(slug)) return match.section.label;
+  const label = humanizeSlug(slug);
+  return label ? `${match.section.label} · ${label}` : match.section.label;
 }
 
 /**

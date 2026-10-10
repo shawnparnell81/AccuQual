@@ -117,8 +117,7 @@ export function AppLayout() {
     loadTabsForUser(String(userId));
   }, [isSupplierPortal, userId, loadWindowsForUser, loadTabsForUser]);
 
-  // A click opens a page on purpose. The tab's X is not one of those clicks:
-  // closing must not count as asking for that page back.
+  // A click opens a page on purpose. The tab's close control is not one of those clicks.
   useEffect(() => {
     if (isSupplierPortal) return;
     const onClick = (event: MouseEvent) => {
@@ -131,8 +130,8 @@ export function AppLayout() {
     return () => document.removeEventListener("click", onClick, true);
   }, [isSupplierPortal]);
 
-  // Keeps the open tabs in line with the address bar. A path the user just
-  // closed is not created again; the strip's neighbor replaces that URL.
+  // Sub-pages of the current section rewrite that tab. A closed section is not
+  // created again; the strip's neighbor replaces that URL.
   useEffect(() => {
     if (isSupplierPortal) return;
     const { title, icon } = deriveTabMeta(location.pathname);
