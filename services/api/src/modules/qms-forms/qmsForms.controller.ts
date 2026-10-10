@@ -16,7 +16,8 @@ import { cellLabel, scalarEdits, showAuditValue, type FormEdit } from "../forms/
 import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
-import { stampRecordSite } from "../sites/recordSite.js";
+import { readRecordSite, stampRecordSite } from "../sites/recordSite.js";
+import { ncrsForPath, openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
 
 async function loadForm(req: Request, id: number) {
   const [row] = await req.db!.select().from(qmsForms).where(and(eq(qmsForms.id, id)));
@@ -266,6 +267,7 @@ function qmsRowEdits(
 }
 
 export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  const started = Date.now();
   const formId = Number(req.params.id);
   const rowId = Number(req.params.rowId);
   // Hold the row until this request commits, so overlapping cell saves merge instead of replacing each other.
@@ -300,15 +302,18 @@ export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
   }
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
   const rowEdits = qmsRowEdits(section, rowNumber, before, data, Object.keys(incoming));
-  await recordAuditTrail(req.db!, {
-    entityType: "QmsForm",
-    entityId: record.id,
-    action: "update",
-    changes: rowEdits.length ? { event: "form_saved", subAction: "row_updated", rowId: row.id, edits: rowEdits } : { subAction: "row_updated", rowId: row.id },
-    performedBy: req.user?.id,
-  });
+  if (rowEdits.length > 0) {
+    await recordAuditTrail(req.db!, {
+      entityType: "QmsForm",
+      entityId: record.id,
+      action: "update",
+      changes: { event: "form_saved", subAction: "row_updated", rowId: row.id, edits: rowEdits },
+      performedBy: req.user?.id,
+    });
+  }
   await fileOnFirstSave(req.db!, "/qms-forms", record, record as unknown as Record<string, unknown>, incoming, req.user?.id);
   await req.db!.update(qmsForms).set({ updatedAt: new Date() }).where(eq(qmsForms.id, record.id));
+  res.setHeader("Server-Timing", `qms-row;dur=${Date.now() - started}`);
   res.json(updated);
 });
 
@@ -340,4 +345,67 @@ export const deleteQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
   await req.db!.delete(qmsFormRows).where(eq(qmsFormRows.id, row.id));
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: { subAction: "row_removed", rowId: row.id }, performedBy: req.user?.id });
   res.status(204).send();
+});
+
+const QMS_INSPECTION = new Set(["incoming_inspection_record", "in_process_inspection", "final_inspection_release", "first_article_inspection"]);
+const QMS_FAIL = /^(fail|failed|reject|rejected|hold|rework)/i;
+
+function qmsText(data: Record<string, string>, key: string): string {
+  const value = data[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** POST /qms-forms/:id/ncr — optional on an inspection form. Nothing opens an NCR when a row fails. */
+export const createQmsNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Record is required");
+  await requireNcrEdit(req.db!, { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null });
+  const record = await loadForm(req, id);
+  if (!QMS_INSPECTION.has(record.formType)) throw AppError.badRequest("Create NCR is only on an inspection form.");
+  const path = `/qms-forms/${record.formType}/${id}`;
+  const existing = await ncrsForPath(req.db!, path);
+  if (existing[0]) {
+    res.status(200).json({ id: existing[0].id, recordNumber: existing[0].recordNumber, existing: true });
+    return;
+  }
+  const definition = getQmsFormDefinition(record.formType);
+  const tableRows = await req.db!.select().from(qmsFormRows).where(eq(qmsFormRows.formId, id)).orderBy(asc(qmsFormRows.sortOrder), asc(qmsFormRows.id));
+  const failed = tableRows.filter((row) => ["result", "status", "overallResult", "releaseHoldReject", "faiStatus", "finalStatus"].some((key) => QMS_FAIL.test(qmsText(row.data ?? {}, key))));
+  const measurements = failed.map((row) => {
+    const data = row.data ?? {};
+    return {
+      measurement: qmsText(data, "characteristic") || qmsText(data, "requirement") || qmsText(data, "characteristicNo") || qmsText(data, "requirementCharacteristic") || "Inspection row",
+      spec: qmsText(data, "specification") || qmsText(data, "requirement") || "(blank)",
+      actual: qmsText(data, "measuredObserved") || qmsText(data, "actual") || qmsText(data, "resultEvidence") || qmsText(data, "result") || qmsText(data, "status") || "(blank)",
+    };
+  });
+  if (measurements.length === 0) throw AppError.badRequest("There is no failed measurement to put on an NCR.");
+  const partRow = tableRows.find((row) => row.sectionKey === "receipt" || row.sectionKey === "part_information" || row.sectionKey === "production_details" || row.sectionKey === "order_product");
+  const partData = partRow?.data ?? {};
+  const part = qmsText(partData, "partMaterial") || qmsText(partData, "partNo") || qmsText(partData, "partProduct") || qmsText(partData, "product");
+  const siteId = (await readRecordSite(req.db!, "qms_form", id)).siteId;
+  const created = await openInspectionNcr(
+    req.db!,
+    {
+      formTitle: definition?.title ?? "Inspection form",
+      part,
+      path,
+      formType: record.formType,
+      sourceId: id,
+      kind: "qms",
+      siteId,
+      fallbackSiteId: req.siteId,
+      rows: measurements,
+      sourceAudit: { entityType: "QmsForm", entityId: id },
+    },
+    req.user?.id,
+  );
+  for (const row of failed) {
+    const source = row.data ?? {};
+    const data: Record<string, string> = { ...source, linkedNcrId: String(created.id) };
+    if (Object.hasOwn(source, "ncrNo") && (source.ncrNo ?? "").trim() === "") data.ncrNo = String(created.id);
+    if (Object.hasOwn(source, "deviationsNcrs") && (source.deviationsNcrs ?? "").trim() === "") data.deviationsNcrs = String(created.id);
+    await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id));
+  }
+  res.status(201).json({ id: created.id, recordNumber: created.recordNumber, title: created.title, existing: false });
 });

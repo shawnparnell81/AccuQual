@@ -20,7 +20,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { shouldRepairFiledLink } from "../forms/formEditAudit.js";
 import { FILEABLE_FORM_KEYS, ISO_TYPE_TO_FORM_KEY, recordLinkedPath, validationFormKeyFor } from "./editableForms.js";
-import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, auditRecordKept, blankFormKeyForCreate, fileNamePatternFor, moduleRecordKept, savedFillFileName } from "./formFiling.js";
+import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, auditRecordKept, blankFormKeyForCreate, explicitFileFormKeys, fileNamePatternFor, moduleRecordKept, savedFillFileName } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { rememberSavedListingStamp, skipSavedListingRepair } from "./listingRepairGate.js";
 
@@ -443,11 +443,21 @@ async function releaseUnsavedFolderNodes(db: Db, performedBy?: number): Promise<
 
 /** Put a saved record back into its per-form folder when the filing or the file node is missing. */
 async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<void> {
-  const copies = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
-  if (copies.length === 0) return;
+  const saved = (await collectSavedCopies(db)).filter((copy) => copy.userSaved);
+  if (saved.length === 0) return;
   const existing = await db
     .select({ formKey: formFilings.formKey, recordId: formFilings.recordId, folderNodeId: formFilings.folderNodeId })
     .from(formFilings);
+  const explicit = explicitFileFormKeys();
+  const remembered = explicit.size > 0 ? await rememberedFileNames(db) : new Map<string, string>();
+  const filedKeys = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
+  const copies = saved.filter((copy) => {
+    if (!explicit.has(copy.formKey)) return true;
+    if (filedKeys.has(`${copy.formKey}:${copy.recordId}`)) return true;
+    const path = canonicalOpenPath(copy.formKey, copy.recordId);
+    return remembered.has(path);
+  });
+  if (copies.length === 0) return;
   const have = new Set(existing.map((row) => `${row.formKey}:${row.recordId}`));
   const placedFolderIds = new Set((await db.select({ id: documentFolders.id }).from(documentFolders)).map((folder) => folder.id));
   // A live file already stored under any key for this record stays where it is. Repair does not add a second copy.

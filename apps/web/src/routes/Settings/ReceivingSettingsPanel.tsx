@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { DEFECT_CATEGORIES } from "../../api/types";
 import type { ReceivingSettings } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -37,40 +36,13 @@ export function ReceivingSettingsPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save Receiving settings.")),
   });
 
-  function toggleCategory(category: string) {
-    const current = form.autoCreateNcrDefectCategories ?? [];
-    setForm({ ...form, autoCreateNcrDefectCategories: current.includes(category) ? current.filter((c) => c !== category) : [...current, category] });
-  }
-
   if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-1 text-sm font-medium">NCR Auto-Trigger</h3>
-        <p className="mb-3 text-xs text-muted-foreground">When a receiving inspection's disposition moves to rejected or quarantined, automatically create an NCR linked to that receiving event and supplier.</p>
-        <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.autoCreateNcrOnRejection ?? false} onChange={(e) => setForm({ ...form, autoCreateNcrOnRejection: e.target.checked })} className="h-4 w-4 rounded border-form-field" />
-            <span>Auto-create NCR on rejection</span>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.autoCreateNcrOnQuarantine ?? false} onChange={(e) => setForm({ ...form, autoCreateNcrOnQuarantine: e.target.checked })} className="h-4 w-4 rounded border-form-field" />
-            <span>Auto-create NCR on quarantine</span>
-          </label>
-        </div>
-
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Limit to defect categories (optional — leave all unchecked to qualify on any category)</p>
-          <div className="flex flex-wrap gap-2">
-            {DEFECT_CATEGORIES.map((c) => (
-              <label key={c} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs capitalize">
-                <input type="checkbox" checked={(form.autoCreateNcrDefectCategories ?? []).includes(c)} onChange={() => toggleCategory(c)} className="h-3.5 w-3.5 rounded border-form-field" />
-                {c.replace(/_/g, " ")}
-              </label>
-            ))}
-          </div>
-        </div>
+        <h3 className="mb-1 text-sm font-medium">Nonconformance</h3>
+        <p className="text-xs text-muted-foreground">A rejected or quarantined receiving line does not open an NCR. Use Create NCR on that line when you want one. The NCR number stays blank until you type it.</p>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">

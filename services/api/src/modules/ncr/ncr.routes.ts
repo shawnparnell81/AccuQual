@@ -17,6 +17,7 @@ import {
   bulkUpdateNcrSchema,
   addNcrQuarantineItemSchema,
   completeNcrDispositionSchema,
+  linkNcrSourceSchema,
 } from "./ncr.validation.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { beginNcrEdit } from "../forms/moduleBeginEdit.js";
@@ -40,6 +41,8 @@ import {
   completeNcrDispositionHandler,
   setNcrStepDocumentsHandler,
 } from "./ncr.controller.js";
+import { linkNcrSourceHandler, searchNcrSourcesHandler } from "./ncr.sourceLink.js";
+import { createFromInspectionHandler, fromInspectionSchema } from "./inspectionNcr.js";
 
 export const ncrRouter = Router();
 // Turns on PERMISSION_MATRIX.ncr (quality: edit) — previously unenforced.
@@ -47,7 +50,9 @@ ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr
 
 ncrRouter.get("/", listHandler);
 ncrRouter.get("/process-metrics", processMetricsHandler);
+ncrRouter.get("/source-records", searchNcrSourcesHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
+ncrRouter.post("/from-inspection", validate(fromInspectionSchema), createFromInspectionHandler);
 // Bulk actions pilot (see crudFactory.ts's bulkUpdate) — "bulk" must be registered before the ":id" param route
 // below, or a request to PATCH /ncr/bulk would be read as :id="bulk" instead of reaching this handler.
 ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), rejectLockedNcr, rejectCloseWhileQuarantineOnHold, baseHandlers.bulkUpdate);
@@ -68,3 +73,4 @@ ncrRouter.post("/:id/close", rejectLockedNcr, closeHandler);
 ncrRouter.get("/:id/quarantine-items", listNcrQuarantineItemsHandler);
 ncrRouter.post("/:id/quarantine-items", rejectLockedNcr, validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);
 ncrRouter.post("/:id/disposition", rejectLockedNcr, validate(completeNcrDispositionSchema), completeNcrDispositionHandler);
+ncrRouter.post("/:id/source-link", rejectLockedNcr, validate(linkNcrSourceSchema), linkNcrSourceHandler);

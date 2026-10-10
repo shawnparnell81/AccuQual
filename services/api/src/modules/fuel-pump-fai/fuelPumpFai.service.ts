@@ -30,6 +30,7 @@ import {
   type FpmState,
 } from "./fuelPumpFai.logic.js";
 import { persistFpm } from "./fuelPumpFai.persist.js";
+import { openInspectionNcr } from "../ncr/inspectionNcr.js";
 import { FUEL_PUMP_FAI_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, showRecordNumber } from "../records/userRecordNumber.js";
 import { requirePlantId } from "../sites/siteAccess.js";
@@ -355,6 +356,55 @@ export async function saveFuelPumpResults(db: Db, id: number, branch: string, en
   await db.update(workflowRuns).set({ context }).where(eq(workflowRuns.id, run.id));
   await persistFpm(db, applied.state);
   return present(await loadRow(db, id), applied.state);
+}
+
+/** POST /fai/fuel-pump/:id/ncr — optional. A failed fuel pump does not open an NCR on its own. */
+export async function createFuelPumpNcr(db: Db, id: number, userId: number, fallbackSiteId: number | null) {
+  const row = await loadRow(db, id);
+  let state = readFpm((row.packet ?? {}) as Record<string, unknown>);
+  let context: Record<string, unknown> | null = null;
+  if (row.workflowRunId) {
+    const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, row.workflowRunId));
+    if (run?.context) {
+      context = { ...(run.context as Record<string, unknown>) };
+      state = readFpm(context);
+    }
+  }
+  if (state.ncrId) return { id: state.ncrId, recordNumber: null, title: "", existing: true };
+  const failed = [...state.history, state.attempt].flatMap((attempt) => attempt.results.filter((result) => result.result === "Fail"));
+  const rows = failed.map((result) => ({
+    measurement: result.label || result.key,
+    spec: result.specifiedLimits || "(blank)",
+    actual: result.actual ? `${result.actual}${result.units ? ` ${result.units}` : ""}` : "(blank)",
+  }));
+  const failedRecord = state.failureDetected === "Yes" || state.overallResult === "Failed" || state.status === "Failed" || state.status === "Rejected";
+  if (rows.length === 0 && failedRecord) rows.push({ measurement: "Overall result", spec: "Pass", actual: state.overallResult || state.status || "Fail" });
+  if (rows.length === 0) throw AppError.badRequest("There is no failed measurement to put on an NCR.");
+  const created = await openInspectionNcr(
+    db,
+    {
+      formTitle: "Fuel pump first article",
+      part: state.partNumber,
+      path: `/fai/fuel-pump/${id}`,
+      formType: "fuel_pump_fai",
+      sourceId: id,
+      kind: "fuel_pump_fai",
+      siteId: state.siteId,
+      fallbackSiteId,
+      supplierId: state.supplierId,
+      severity: failed.some((result) => result.critical) ? "critical" : null,
+      rows,
+      sourceAudit: { entityType: "FuelPumpFai", entityId: id },
+    },
+    userId,
+  );
+  const linked = { ...state, ncrId: created.id, ncrRequired: "Yes" as const, ncrStatus: "ncr_created" };
+  if (context && row.workflowRunId) {
+    writeFpm(context, linked);
+    await db.update(workflowRuns).set({ context }).where(eq(workflowRuns.id, row.workflowRunId));
+  }
+  await persistFpm(db, linked);
+  return { id: created.id, recordNumber: created.recordNumber, title: created.title, existing: false };
 }
 
 export function fuelPumpDefinition(): WorkflowDefinition {

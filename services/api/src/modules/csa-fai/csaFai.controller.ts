@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { copyCsa, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa, updateCsaNumber } from "./csaFai.service.js";
+import { copyCsa, createCsaNcr, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa, updateCsaNumber } from "./csaFai.service.js";
+import { requireNcrEdit } from "../ncr/inspectionNcr.js";
 import { renderCsaPdf } from "./csaFai.pdf.js";
 import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
 import { emptyFrame } from "../forms/controlledPdf.js";
@@ -31,6 +32,14 @@ export const submitCsaHandler = asyncHandler(async (req: Request, res: Response)
 
 export const getCsaHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await getCsa(req.db!, Number(req.params.id)));
+});
+
+export const createCsaNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a CSA first article.");
+  await requireNcrEdit(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null });
+  const created = await createCsaNcr(req.db!, id, req.user!.id, req.siteId ?? null);
+  res.status(created.existing ? 200 : 201).json(created);
 });
 
 export const updateCsaNumberHandler = asyncHandler(async (req: Request, res: Response) => {

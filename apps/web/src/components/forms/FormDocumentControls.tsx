@@ -132,10 +132,10 @@ function useCanControlDocuments() {
   return role === "admin" || role === "owner" || role === "quality_manager" || effective?.documents === "edit";
 }
 
-export function useFormFiling(formKey: string | null, recordId: number) {
+export function useFormFiling(formKey: string | null, recordId: number, moduleCopy = false) {
   return useQuery({
     queryKey: ["form-filing", formKey, recordId],
-    enabled: !!formKey && FILEABLE_FORM_KEYS.has(formKey) && recordId > 0,
+    enabled: !!formKey && (FILEABLE_FORM_KEYS.has(formKey) || moduleCopy) && recordId > 0,
     queryFn: async () =>
       (await apiClient.get<FormFilingView>("/document-folders/form-filings", { params: { formKey, recordId } })).data,
   });
@@ -208,7 +208,20 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
 }
 
 /** Pick any Documents folder for this filled copy. The subject folder starts selected. */
-export function RecordFolderField({ formKey, recordId, prepare }: { formKey: string; recordId: number; prepare?: () => Promise<unknown> | unknown }) {
+export function RecordFolderField({
+  formKey,
+  recordId,
+  prepare,
+  onFiled,
+  moduleCopy = false,
+}: {
+  formKey: string;
+  recordId: number;
+  prepare?: () => Promise<unknown> | unknown;
+  onFiled?: (folder: string) => void;
+  /** QMS copies file into their own form folder. They are not Documents-folder forms. */
+  moduleCopy?: boolean;
+}) {
   const canEdit = useCanControlDocuments();
   const queryClient = useQueryClient();
   const filing = useFormFiling(formKey, recordId);
@@ -241,7 +254,7 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
   const file = useMutation({
     mutationFn: async (body: { folderId?: number; formFolderKey?: string; partNumber?: string }) =>
       (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, ...body })).data,
-    onSuccess: async (saved) => {
+    onSuccess: (saved) => {
       setMessage(null);
       setPickerOpen(false);
       const parent = saved.parentId;
@@ -251,9 +264,12 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
       } else {
         setSelected("");
       }
-      await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
-      await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
-      await queryClient.invalidateQueries({ queryKey: ["form-folders"] });
+      queryClient.setQueryData(["form-filing", formKey, recordId], saved);
+      const place = locationOf(saved, formKey);
+      onFiled?.(place?.path ?? saved.parentPath.filter((name) => name !== SAVED_FORM_FOLDERS_ROOT && name !== ISO_DOCUMENTS_FOLDER).join(" / "));
+      void queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
+      void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+      void queryClient.invalidateQueries({ queryKey: ["form-folders"] });
     },
     onError: () => setMessage("Couldn't file this record."),
   });
@@ -271,7 +287,23 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
     }
   }
 
-  if (!FILEABLE_FORM_KEYS.has(formKey)) return null;
+  if (!FILEABLE_FORM_KEYS.has(formKey)) {
+    if (!moduleCopy) return null;
+    return (
+      <div className="no-print flex flex-col gap-1" data-testid="folder-destination">
+        <button
+          type="button"
+          data-testid="save-as"
+          disabled={preparing || file.isPending}
+          onClick={() => void saveCopy({ formFolderKey: formKey })}
+          className="w-fit rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-60"
+        >
+          {preparing || file.isPending ? "Saving…" : "Save as"}
+        </button>
+        {message === "Couldn't file this record." && <p className="text-xs text-destructive">{message}</p>}
+      </div>
+    );
+  }
 
   const filed = (filing.data?.parentPath.length ?? 0) > 0;
   const tree = (folders.data ?? []).map((folder) => ({ ...folder, sortOrder: folder.sortOrder ?? 0 }));
@@ -295,7 +327,6 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
   return (
     <div className="no-print flex flex-col gap-1" data-testid="folder-destination">
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Save as
         {canEdit ? (
           <button type="button" data-testid="save-as" onClick={() => setPickerOpen(true)} className="w-fit rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted">
             Save as

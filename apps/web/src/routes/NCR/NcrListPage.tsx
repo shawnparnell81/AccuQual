@@ -16,6 +16,7 @@ import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel, peopleForAssignment 
 import { NCR_ALL_STATES, ncrMatchesStateFilter } from "../../lib/ncrSearch";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { ncrLogFailure } from "../../lib/ncrCreateError";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
 import { FilterBar, PageHeader, SummaryCards } from "../../components/layout/PageHeader";
@@ -97,6 +98,7 @@ export function NcrListPage() {
     recordNumber: "",
   });
   const [numberError, setNumberError] = useState<string | null>(null);
+  const [logError, setLogError] = useState<{ message: string; retry: boolean } | null>(null);
   const [quarantineRows, setQuarantineRows] = useState([{ partNumber: "", quantity: "", serialNumber: "" }]);
 
   const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
@@ -287,6 +289,7 @@ export function NcrListPage() {
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
+            setLogError(null);
             createNcr.mutate(
               {
                 recordNumber: form.recordNumber.trim() || null,
@@ -315,9 +318,10 @@ export function NcrListPage() {
                 navigate(`/ncr/${created.id}`);
               },
               onError: (err) => {
-                const message = extractErrorMessage(err, "Couldn't log this issue. Check the title and try again.");
-                setNumberError(duplicateNumberError(message));
-                toast.error(message);
+                const failure = ncrLogFailure(err);
+                setLogError(failure);
+                setNumberError(failure.retry ? null : duplicateNumberError(failure.message));
+                toast.error(failure.message);
               },
               },
             );
@@ -395,8 +399,18 @@ export function NcrListPage() {
           </DetailsDisclosure>
           <QuarantineDraftFields rows={quarantineRows} onChange={setQuarantineRows} />
           <PendingFilesField files={pendingFiles} onChange={setPendingFiles} />
-          <button type="submit" className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground">
-            Log NCR
+          {logError && (
+            <div className="flex flex-col gap-2" data-testid="ncr-log-error">
+              <p className="text-sm text-destructive">{logError.message}</p>
+              {logError.retry && (
+                <button type="submit" disabled={createNcr.isPending} className="w-fit rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60">
+                  {createNcr.isPending ? "Trying…" : "Retry"}
+                </button>
+              )}
+            </div>
+          )}
+          <button type="submit" disabled={createNcr.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+            {createNcr.isPending ? "Logging…" : "Log NCR"}
           </button>
         </form>
       </Modal>

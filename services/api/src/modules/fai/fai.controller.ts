@@ -84,6 +84,11 @@ export const rejectRecordHandler = asyncHandler(async (req: Request, res: Respon
   res.json(await fai.rejectRecord(req, idOf(req.params.id, "first article")));
 });
 
+export const createRecordNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const created = await fai.createRecordNcr(req, idOf(req.params.id, "first article"));
+  res.status(created.existing ? 200 : 201).json(created);
+});
+
 export const pdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const file = await fai.recordPdf(req.db!, idOf(req.params.id, "first article"), req.user?.id);
   res.setHeader("Content-Type", "application/pdf");

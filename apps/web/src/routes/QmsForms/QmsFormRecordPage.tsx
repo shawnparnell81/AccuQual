@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -23,7 +23,12 @@ import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { groupDrafts } from "../../lib/formDrafts";
 import { RecordSiteField } from "../../components/records/RecordSiteField";
-
+import { RecordFolderField } from "../../components/forms/FormDocumentControls";
+import { useFormFiling } from "../../components/forms/FormDocumentControls";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
+import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
+import { readBlankDraft } from "../../lib/blankDraft";
+import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
 
@@ -33,13 +38,13 @@ function httpStatus(error: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
-/** One retry. A gateway 502 on begin-edit was leaving the form locked. */
-async function postBeginEdit(formId: number): Promise<void> {
+/** One retry on a gateway 502. Either way the request times out instead of staying on Opening. */
+async function postQmsBeginEdit(formId: number): Promise<void> {
   try {
-    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+    await postBeginEdit(`/qms-forms/${formId}/begin-edit`);
   } catch (error) {
     if (httpStatus(error) !== 502) throw error;
-    await apiClient.post(`/qms-forms/${formId}/begin-edit`);
+    await postBeginEdit(`/qms-forms/${formId}/begin-edit`);
   }
 }
 
@@ -54,6 +59,12 @@ async function postBeginEdit(formId: number): Promise<void> {
  * scheme of the app" instruction.
  */
 export function QmsFormRecordPage() {
+  const params = useParams();
+  if (params.id === "new") return <QmsUnsavedDraft formType={params.formType ?? ""} />;
+  return <QmsSavedForm />;
+}
+
+function QmsSavedForm() {
   const { formType, id } = useParams();
   const formId = Number(id);
   const navigate = useNavigate();
@@ -74,7 +85,7 @@ export function QmsFormRecordPage() {
     }
     let cancelled = false;
     setArmed(false);
-    void postBeginEdit(formId).finally(() => {
+    void postQmsBeginEdit(formId).finally(() => {
       if (!cancelled) setArmed(true);
     });
     return () => {
@@ -124,6 +135,11 @@ export function QmsFormRecordPage() {
       (await apiClient.post(`/qms-forms/${formId}/rows/${rowId}/sign`, { pin, certified: true })).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] }),
   });
+
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templates = useFormTemplates();
+  const folderKey = templates.data?.find((row) => row.start?.createPath === "/qms-forms" && row.start.body.formType === formType)?.formKey ?? null;
+  const filing = useFormFiling(folderKey, formId, Boolean(folderKey));
 
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this form" />;
@@ -198,15 +214,29 @@ export function QmsFormRecordPage() {
     setDirty(drafts.current.size > 0);
   }
 
+  const filed = (filing.data?.parentId ?? null) != null;
+
   function commitDrafts() {
     return enqueue(() => flushDrafts()).catch(() => undefined);
   }
 
-  async function saveAndLock() {
+  function scheduleCommit() {
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(() => {
+      commitTimer.current = null;
+      void commitDrafts();
+    }, 350);
+  }
+
+  async function saveAndLock(lock: boolean) {
+    if (commitTimer.current) {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = null;
+    }
     setSaving(true);
     try {
       await enqueue(() => flushDrafts());
-      formLock.lock();
+      if (lock || saveShouldLock(filed)) formLock.lock();
     } catch {
       // The mutation already reports the failure.
     } finally {
@@ -220,9 +250,13 @@ export function QmsFormRecordPage() {
 
   async function startEdit() {
     if (!canEdit) return;
-    await postBeginEdit(formId);
-    formLock.unlock();
-    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
+    try {
+      await postQmsBeginEdit(formId);
+      formLock.unlock();
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history", "qms_forms", formId] });
+    } catch {
+      toast.error(BEGIN_EDIT_ERROR);
+    }
   }
 
   async function cancelEdit() {
@@ -237,6 +271,9 @@ export function QmsFormRecordPage() {
   }
 
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);
+  const inspectionForm = formType === "incoming_inspection_record" || formType === "in_process_inspection" || formType === "final_inspection_release" || formType === "first_article_inspection";
+  const linkedNcrIds = [...new Set((record.rows ?? []).map((row) => Number(row.data?.linkedNcrId)).filter((value) => Number.isInteger(value) && value > 0))];
+  const qmsFailed = (record.rows ?? []).some((row) => ["result", "status", "overallResult", "releaseHoldReject", "faiStatus", "finalStatus"].some((key) => /^(fail|failed|reject|rejected|hold|rework)/i.test(String(row.data?.[key] ?? ""))));
   const retired = isRetiredQmsFormType(formType);
   const backTo = retired ? "/documents/master-list" : formType === "first_article_inspection" ? "/blank-forms" : `/form-folders/${formType}`;
 
@@ -253,10 +290,30 @@ export function QmsFormRecordPage() {
             canEdit={canEdit}
             pending={saving}
             onEdit={() => startEdit()}
-            onSave={() => void saveAndLock()}
+            onSave={() => void saveAndLock(false)}
             onCancel={() => void cancelEdit()}
-            onDone={() => void saveAndLock()}
+            onDone={() => void saveAndLock(true)}
           />
+          {linkedNcrIds.map((ncrId) => (
+            <button key={ncrId} type="button" className="text-sm text-primary hover:underline" onClick={() => navigate(`/ncr/${ncrId}`)}>
+              NCR {ncrId}
+            </button>
+          ))}
+          {inspectionForm && linkedNcrIds.length === 0 && qmsFailed && (
+            <button
+              type="button"
+              className="rounded-md border border-border px-2 py-1 text-sm"
+              data-testid="create-ncr"
+              onClick={() => {
+                void apiClient.post<{ id: number }>(`/qms-forms/${formId}/ncr`).then((response) => {
+                  toast.success("NCR created. Type the NCR number on that record.");
+                  navigate(`/ncr/${response.data.id}`);
+                }).catch((err) => toast.error(extractErrorMessage(err, "Couldn't create the NCR.")));
+              }}
+            >
+              Create NCR
+            </button>
+          )}
           <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} number={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} allowed={canEdit} assignedOnly />
         </div>
       </div>
@@ -277,12 +334,24 @@ export function QmsFormRecordPage() {
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <HeaderField field="formNo" label="Form No." value={record.formNo} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("formNo", value, saveHeader("formNo"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="formNo" label="Form No." value={record.formNo} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("formNo", value, saveHeader("formNo"))} onCommit={() => scheduleCommit()} />
           <RecordSiteField entity="qms_form" id={formId} canEdit={fieldsEditable} />
+          {folderKey && (
+            <RecordFolderField
+              formKey={folderKey}
+              recordId={formId}
+              moduleCopy
+              prepare={() => saveAndLock(false)}
+              onFiled={(folder) => {
+                formLock.lock();
+                toast.success(filedToast(folder));
+              }}
+            />
+          )}
           <HeaderField label="Revision" value={record.revision || "A"} readOnly />
-          <HeaderField field="effectiveDate" label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("effectiveDate", value, saveHeader("effectiveDate"))} onCommit={() => void commitDrafts()} />
-          <HeaderField field="preparedBy" label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("preparedBy", value, saveHeader("preparedBy"))} onCommit={() => void commitDrafts()} />
-          <HeaderField field="approvedBy" label="Approved By" value={record.approvedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("approvedBy", value, saveHeader("approvedBy"))} onCommit={() => void commitDrafts()} />
+          <HeaderField field="effectiveDate" label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("effectiveDate", value, saveHeader("effectiveDate"))} onCommit={() => scheduleCommit()} />
+          <HeaderField field="preparedBy" label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("preparedBy", value, saveHeader("preparedBy"))} onCommit={() => scheduleCommit()} />
+          <HeaderField field="approvedBy" label="Approved By" value={record.approvedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("approvedBy", value, saveHeader("approvedBy"))} onCommit={() => scheduleCommit()} />
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Status</span>
             <div className="flex flex-wrap gap-3 pt-1">
@@ -329,7 +398,7 @@ export function QmsFormRecordPage() {
                       readOnly={!fieldsEditable}
                       showRequired={section.columns.some((column) => column.key === "signature") && rowsBySection(section.key).length > 1}
                       onDraft={(column, value) => noteDraft(`row:${row.id}:${column}`, value)}
-                      onCommit={() => void commitDrafts()}
+                      onCommit={() => scheduleCommit()}
                       onPatch={(data) => patchRow.mutate({ rowId: row.id, data })}
                       onDelete={() => deleteRow.mutate(row.id)}
                       onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })}
@@ -487,5 +556,73 @@ function QmsRow({
         )}
       </td>
     </tr>
+  );
+}
+
+function QmsUnsavedDraft({ formType }: { formType: string }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const draft = readBlankDraft(location.state, "/qms-forms");
+  const definition = getQmsFormDefinition(formType);
+  const [formNo, setFormNo] = useState("");
+  const [preparedBy, setPreparedBy] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [pending, setPending] = useState(false);
+  if (!draft || draft.body.formType !== formType) {
+    return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
+  }
+  if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
+
+  async function save() {
+    setPending(true);
+    try {
+      const created = (
+        await apiClient.post<{ id: number }>("/qms-forms", {
+          formType,
+          ...(formNo.trim() ? { formNo: formNo.trim() } : {}),
+          ...(preparedBy.trim() ? { preparedBy: preparedBy.trim() } : {}),
+          ...(approvedBy.trim() ? { approvedBy: approvedBy.trim() } : {}),
+          ...(effectiveDate ? { effectiveDate } : {}),
+        })
+      ).data;
+      navigate(`/qms-forms/${formType}/${created.id}`, { replace: true, state: { freshForm: true } });
+    } catch {
+      toast.error("Couldn't save this form.");
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4" data-testid="qms-unsaved-draft">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Nothing is saved until you press Save.</p>
+        <button type="button" disabled={pending} onClick={() => void save()} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60">
+          {pending ? "Saving…" : "Save"}
+        </button>
+      </div>
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h1 className="text-xl font-semibold uppercase tracking-wide">{definition.title}</h1>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="text-xs text-muted-foreground">
+            Form No.
+            <input value={formNo} onChange={(event) => setFormNo(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Effective Date
+            <input type="date" value={effectiveDate} onChange={(event) => setEffectiveDate(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Prepared By
+            <input value={preparedBy} onChange={(event) => setPreparedBy(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Approved By
+            <input value={approvedBy} onChange={(event) => setApprovedBy(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+          </label>
+        </div>
+      </div>
+    </div>
   );
 }

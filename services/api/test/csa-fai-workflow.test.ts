@@ -89,7 +89,8 @@ describe("CSA first article workflow", () => {
     expect(state.productionRelease).toBe("No");
     expect(state.failureDetected).toBe("Yes");
     expect(state.overallResult).toBe("Failed");
-    expect(state.ncrRequired).toBe("Yes");
+    expect(state.ncrRequired).toBe("No");
+    expect(state.ncrId).toBeNull();
     const kinds = (execution.context.steps as { kind: string }[]).map((step) => step.kind);
     expect(kinds).toContain("csa_create_ncr");
     expect(kinds).not.toContain("csa_release");

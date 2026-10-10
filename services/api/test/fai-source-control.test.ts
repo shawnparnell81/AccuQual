@@ -182,7 +182,7 @@ describe("first article notices", () => {
     expect(notices[0]).toBe("FAI-2026-000184 is ready for result entry. It is assigned to Priya Shah.");
     expect(notices[1]).toBe("FAI-2026-000184 has been submitted for Quality review.");
     expect(notices[2]).toBe("FAI-2026-000184 was approved. 4400-12 from Northline Metals is approved. The next inspection is due April 3, 2027.");
-    expect(notices[3]).toBe("FAI-2026-000184 was not approved. A nonconformance was opened. 4400-12 from Northline Metals is not approved.");
+    expect(notices[3]).toBe("FAI-2026-000184 was not approved. 4400-12 from Northline Metals is not approved.");
     expect(notices[4]).toBe("Inspection for 4400-12 from Northline Metals is due on April 3, 2027.");
     expect(notices[5]).toBe("Inspection for 4400-12 from Northline Metals is overdue.");
     expect(notices[6]).toBe("Priya Shah has been assigned the annual pull for 4400-12.");

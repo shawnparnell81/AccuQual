@@ -141,43 +141,14 @@ registerActionHandler("notify_supplier", async (node, context, dryRun) => {
   recordActionRun(context, "notify_supplier", { supplierId, subject, status });
 });
 
-registerActionHandler("create_ncr", async (node, context, dryRun) => {
-  const config = node.config as { title?: string; description?: string; severity?: string };
-  const title = render(config.title ?? "NCR auto-created by workflow", context);
-  const description = render(config.description ?? "", context);
-
+registerActionHandler("create_ncr", async (_node, context, dryRun) => {
+  const config = _node.config as { title?: string; description?: string; severity?: string };
+  const title = render(config.title ?? "NCR", context);
   if (dryRun) {
-    recordActionRun(context, "create_ncr", { simulated: true, title, severity: config.severity ?? null });
+    recordActionRun(context, "create_ncr", { simulated: true, created: false, title, severity: config.severity ?? null });
     return;
   }
-  const db = context.__db as Db | undefined;
-  if (!db) {
-    recordActionRun(context, "create_ncr", { skipped: true, reason: "no database context available" });
-    return;
-  }
-
-  const [created] = await db
-    .insert(ncr)
-    .values({
-      title,
-      description,
-      status: "ncr_created",
-      severity: config.severity,
-      supplierId: toNumber(context.supplierId),
-      receivingLineItemId: toNumber(context.receivingLineItemId),
-      createdBy: context.__performedBy as number | undefined,
-    })
-    .returning();
-
-  await recordAuditTrail(db, {
-    entityType: "NCR",
-    entityId: created!.id,
-    action: "create",
-    changes: { message: "NCR auto-created by workflow action", workflowNode: node.id },
-    performedBy: context.__performedBy as number | undefined,
-  });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: created!.id });
-  recordActionRun(context, "create_ncr", { ncrId: created!.id, title });
+  recordActionRun(context, "create_ncr", { skipped: true, created: false, title, reason: "An NCR is created only when someone chooses Create NCR on the failed record." });
 });
 
 registerActionHandler("escalate_capa", async (node, context, dryRun) => {

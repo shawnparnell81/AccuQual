@@ -27,9 +27,7 @@ import { formatUserLabel } from "../users/userDisplay.js";
 import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 import { notifyRecipients } from "../notifications/notification.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
-import { mapSeverityToClassification, ncrIsoDate, syncNcrFormData } from "../ncr/ncr.formSync.js";
-import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
-import { requirePlantId } from "../sites/siteAccess.js";
+import { openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
 import { calendarDay, safeTimeZone } from "../quality-automation/logic.js";
 import { renderFaiPdf } from "./fai.pdf.js";
 import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
@@ -745,8 +743,6 @@ export async function rejectRecord(req: Request, id: number) {
   if (!canApproveFai(actor)) throw AppError.forbidden("Only Quality can reject a first article.");
   const record = await loadRecord(db, id);
   if (record.status !== "submitted") throw AppError.badRequest("Submit the first article before Quality rejects it.");
-  const lines = await recordLines(db, id);
-  const failed = lines.filter((line) => line.result === "Fail").map((line) => line.name);
   const text = noticeRejected(record.number, record.partNumber, record.supplierName);
   const stamp = await requireSignatureStamp(req, {
     pin: req.body.pin,
@@ -756,39 +752,6 @@ export async function rejectRecord(req: Request, id: number) {
     field: "qualitySignature",
     description: text,
   });
-  const description = [
-    text,
-    failed.length > 0 ? `Characteristics outside limits: ${failed.join(", ")}.` : "Quality did not approve the recorded results.",
-    record.comments ? `Comments: ${record.comments}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const siteId = requirePlantId(req.siteId);
-  const [createdNcr] = await db
-    .insert(ncr)
-    .values({
-      title: `${showRecordNumber(record.number) || "First article"} was not approved — ${record.partNumber}`.slice(0, 200),
-      description,
-      severity: "medium",
-      status: "ncr_created",
-      supplierId: record.supplierId,
-      createdBy: actor.id,
-      siteId,
-    })
-    .returning();
-  await recordAuditTrail(db, { entityType: "NCR", entityId: createdNcr!.id, action: "create", changes: { fromFaiId: id, faiNumber: record.number }, performedBy: actor.id });
-  await syncNcrFormData(
-    db,
-    createdNcr!.id,
-    {
-      dateIssued: ncrIsoDate(createdNcr!.createdAt ?? new Date()),
-      documentStatus: "Active",
-      nonconformanceDescription: description,
-      ncrClassification: mapSeverityToClassification("medium"),
-    },
-    actor.id,
-  );
-  await noteRepeatNcr(db, createdNcr!.id);
   const source = await sourceFor(db, record);
   const next = rejectSource({
     status: source.status === "failed" || source.status === "approved" || source.status === "pending" ? source.status : "pending",
@@ -802,10 +765,10 @@ export async function rejectRecord(req: Request, id: number) {
     .where(eq(faiSourceApprovals.id, source.id));
   const [updated] = await db
     .update(faiRecords)
-    .set({ status: "rejected", outcome: "rejected", ncrId: createdNcr!.id, decidedBy: actor.id, decidedAt: stamp.signedAt, qualitySignature: stamp.stamp, updatedAt: new Date() })
+    .set({ status: "rejected", outcome: "rejected", decidedBy: actor.id, decidedAt: stamp.signedAt, qualitySignature: stamp.stamp, updatedAt: new Date() })
     .where(eq(faiRecords.id, id))
     .returning();
-  await writeAudit(db, "FaiRecord", id, "status_change", stamp.displayName, "Rejected", `${text} An NCR was opened.`, actor.id);
+  await writeAudit(db, "FaiRecord", id, "status_change", stamp.displayName, "Rejected", text, actor.id);
   await writeAudit(db, "FaiSourceApproval", source.id, "status_change", stamp.displayName, "Source not approved", text, actor.id);
   const recipients = [...(await qualityEmails(db)), ...(await activeEmails(db, [record.openedBy, record.assignedTo].filter((value): value is number => value != null)))];
   await sendNotice(db, recipients, text, "FaiRecord", id);
@@ -854,6 +817,51 @@ export async function recordPdf(db: Db, id: number, actorId?: number) {
   }), chrome);
   await persistPdfExport(db, bytes, frame, { entityType: "fai", entityId: id, actorId });
   return { filename: `${showRecordNumber(record.number) || "first-article"}.pdf`, bytes, exportId: chrome.exportId };
+}
+
+function lineSpec(line: FaiResultLine): string {
+  if (line.nominal) {
+    const tolerance = [line.plusTolerance, line.minusTolerance].filter(Boolean).join(" / ");
+    return tolerance ? `${line.nominal} (${tolerance})` : line.nominal;
+  }
+  if (line.limitLow || line.limitHigh) return `${line.limitLow ?? ""} to ${line.limitHigh ?? ""}`.trim();
+  return "(blank)";
+}
+
+/** POST /fai/records/:id/ncr — optional. Rejecting a first article does not open one. */
+export async function createRecordNcr(req: Request, id: number) {
+  const db = req.db!;
+  const actor = actorFrom(req);
+  await requireNcrEdit(db, { id: actor.id, roleName: actor.roleName ?? null, department: actor.department ?? null });
+  const record = await loadRecord(db, id);
+  if (record.ncrId) {
+    const [existing] = await db.select({ recordNumber: ncr.recordNumber, title: ncr.title }).from(ncr).where(eq(ncr.id, record.ncrId));
+    return { id: record.ncrId, recordNumber: existing?.recordNumber ?? null, title: existing?.title ?? "", existing: true };
+  }
+  const lines = await recordLines(db, id);
+  const rows = lines
+    .filter((line) => line.result === "Fail")
+    .map((line) => ({ measurement: line.name, spec: lineSpec(line), actual: line.actual || line.attributeResult || "(blank)" }));
+  if (rows.length === 0 && record.status === "rejected") rows.push({ measurement: "Quality decision", spec: "Approved", actual: "Not approved" });
+  if (rows.length === 0) throw AppError.badRequest("There is no failed measurement to put on an NCR.");
+  const created = await openInspectionNcr(
+    db,
+    {
+      formTitle: "First article inspection",
+      part: record.partNumber,
+      path: `/fai/records/${id}`,
+      formType: "first_article",
+      sourceId: id,
+      kind: "fai",
+      supplierId: record.supplierId,
+      fallbackSiteId: req.siteId,
+      rows,
+      sourceAudit: { entityType: "FaiRecord", entityId: id },
+    },
+    actor.id,
+  );
+  await db.update(faiRecords).set({ ncrId: created.id, updatedAt: new Date() }).where(eq(faiRecords.id, id));
+  return { id: created.id, recordNumber: created.recordNumber, title: created.title, existing: false };
 }
 
 export async function listSources(db: Db) {

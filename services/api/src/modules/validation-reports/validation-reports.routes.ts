@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
 import { beginFormEditHandler } from "../forms/formEditAudit.js";
 import { baseHandlers, copyValidationHandler, listPreviousValidation, signValidationReport, validationPdfHandler } from "./validation-reports.controller.js";
+import { createValidationNcr, validationNcrSchema } from "./validationNcr.js";
 import { z } from "zod";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 
@@ -24,6 +25,7 @@ validationReportsRouter.get("/:id/pdf", validationPdfHandler);
 validationReportsRouter.get("/:id", baseHandlers.getOne);
 validationReportsRouter.patch("/:id", validate(updateValidationReportSchema), baseHandlers.update);
 validationReportsRouter.post("/:id/sign", validate(signValidationReportSchema), signValidationReport);
+validationReportsRouter.post("/:id/ncr", validate(validationNcrSchema), createValidationNcr);
 validationReportsRouter.post(
   "/:id/begin-edit",
   beginFormEditHandler("Validation Report", async (db, id) => {

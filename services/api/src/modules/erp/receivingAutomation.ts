@@ -1,10 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { erpReceivingLineItems, erpReceivingDocuments, erpPoLineItems, erpPurchaseOrders, type ErpReceivingLineItem } from "../../drizzle/schema/erp.js";
-import { ncr, type Ncr } from "../../drizzle/schema/ncr.js";
+import { type Ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
-import { inventoryItems } from "../../drizzle/schema/inventory.js";
-import { suppliers } from "../../drizzle/schema/supplier.js";
 import { loadCompanyForSettings } from "../settings/settings.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
@@ -14,63 +12,19 @@ const DEFAULT_CAPA_THRESHOLD = 3;
 const DEFAULT_CAPA_WINDOW_DAYS = 90;
 
 /**
- * "rejected receiving inspection can auto-create NCR."
- * Reads Settings → Receiving (companies.receivingSettings) to decide whether
- * this specific disposition qualifies: the rejection/quarantine toggle for
- * that disposition must be on, AND (if the company configured a defect
- * category allow-list) the inspection's defectCategory must be in it.
- * Returns the created NCR (or null if settings say not to create one) so
- * the caller can chain it into checkCapaEscalation below without a second
- * lookup.
+ * A rejected or quarantined receiving line does not open an NCR.
+ * Create NCR on that line is the only path. The settings flags are ignored.
  */
 export async function maybeAutoCreateNcr(
-  db: Db,
-  line: ErpReceivingLineItem,
-  disposition: "rejected" | "quarantined",
-  supplierId: number | null,
-  defectCategory: string | undefined,
-  performedBy: number | undefined,
-  siteId?: number | null
+  _db: Db,
+  _line: ErpReceivingLineItem,
+  _disposition: "rejected" | "quarantined",
+  _supplierId: number | null,
+  _defectCategory: string | undefined,
+  _performedBy: number | undefined,
+  _siteId?: number | null,
 ): Promise<Ncr | null> {
-  const co = await loadCompanyForSettings(db);
-  const settings = co.receivingSettings ?? {};
-  const enabled = disposition === "rejected" ? settings.autoCreateNcrOnRejection : settings.autoCreateNcrOnQuarantine;
-  if (!enabled) return null;
-
-  const categoryFilter = settings.autoCreateNcrDefectCategories ?? [];
-  if (categoryFilter.length > 0 && (!defectCategory || !categoryFilter.includes(defectCategory))) return null;
-
-  const [poLine] = await db.select().from(erpPoLineItems).where(eq(erpPoLineItems.id, line.poLineItemId));
-  const [item] = poLine ? await db.select({ sku: inventoryItems.sku, description: inventoryItems.description }).from(inventoryItems).where(eq(inventoryItems.id, poLine.itemId)) : [];
-  const [supplier] = supplierId ? await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, supplierId)) : [];
-
-  const title = `Receiving ${disposition}: ${item?.sku ?? `Item #${poLine?.itemId}`}${supplier ? ` from ${supplier.name}` : ""}`;
-  const description = `Auto-created from a ${disposition} receiving inspection (Receiving Line Item #${line.id}, qty ${line.quantityReceived}${item?.description ? `, ${item.description}` : ""}).`;
-
-  const [created] = await db
-    .insert(ncr)
-    .values({
-      title,
-      description,
-      status: "ncr_created",
-      severity: disposition === "rejected" ? "high" : "medium",
-      supplierId: supplierId ?? undefined,
-      receivingLineItemId: line.id,
-      createdBy: performedBy,
-      ...(siteId ? { siteId } : {}),
-    })
-    .returning();
-
-  await recordAuditTrail(db, {
-    entityType: "NCR",
-    entityId: created!.id,
-    action: "create",
-    changes: { message: "NCR auto-created from Receiving", receivingLineItemId: line.id, disposition, supplierId },
-    performedBy,
-  });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "auto_created_from_receiving", step: "NCR Created", entityId: created!.id });
-
-  return created!;
+  return null;
 }
 
 /**

@@ -1,9 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { ncr } from "../../drizzle/schema/ncr.js";
+import { formData } from "../../drizzle/schema/forms.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncNcrFormData, ncrIsoDate } from "./ncr.formSync.js";
+import { closureRoleLabel, closureSignatureBlocks, dispositionAdvances, missingClosureSignatures, stageColumnPatch } from "./ncr.document.js";
+import { signatureRequired } from "../signatures/signatureRequired.js";
 import type { Db } from "../../lib/requestDb.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { ncrQuarantineIsOnHold, onHoldBlockMessage } from "../quarantine/quarantine.service.js";
@@ -66,7 +69,7 @@ async function patchNcr(
     },
     performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: action, step: toLabel, entityId: id });
+  void publishEvent(WORKFLOW_STREAM, { module: "ncr", event: action, step: toLabel, entityId: id });
   return updated;
 }
 
@@ -123,7 +126,7 @@ export const setDispositionStep = async (db: Db, id: number, note: string | unde
   if (!text) throw requiredMoveError(["Disposition"]);
   const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
   if (!current) throw AppError.notFound("NCR");
-  return patchNcr(
+  const updated = await patchNcr(
     db,
     id,
     { status: "disposition", processData: withProcessText(current.processData, "dispositionNote", text) },
@@ -133,6 +136,32 @@ export const setDispositionStep = async (db: Db, id: number, note: string | unde
     allowedSiteIds,
     { note: text },
   );
+  await syncNcrFormData(db, id, { dispositionNote: text }, performedBy);
+  return updated;
+};
+
+/**
+ * Completing quarantine disposition is one action: the material decision and the workflow step.
+ * A record already at Disposition or later stays there.
+ */
+export const advanceToDisposition = async (db: Db, id: number, note: string, performedBy?: number, allowedSiteIds?: number[]) => {
+  const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
+  if (!current) throw AppError.notFound("NCR");
+  assertRecordOnAllowedSite(current.siteId, allowedSiteIds, "NCR");
+  const text = note.trim();
+  if (!dispositionAdvances(current.status, true)) return { row: current, advanced: false };
+  const updated = await patchNcr(
+    db,
+    id,
+    { status: "disposition", processData: withProcessText(current.processData, "dispositionNote", text) },
+    "disposition",
+    performedBy,
+    undefined,
+    allowedSiteIds,
+    { note: text, event: "quarantine_disposition" },
+  );
+  await syncNcrFormData(db, id, { dispositionNote: text }, performedBy);
+  return { row: updated, advanced: true };
 };
 
 export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
@@ -158,7 +187,7 @@ export const setVerify = async (db: Db, id: number, verification: string, perfor
   const text = verification.trim();
   const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
   if (!current) throw AppError.notFound("NCR");
-  return patchNcr(
+  const updated = await patchNcr(
     db,
     id,
     { status: "verify", processData: withProcessText(current.processData, "verification", text) },
@@ -168,6 +197,8 @@ export const setVerify = async (db: Db, id: number, verification: string, perfor
     allowedSiteIds,
     { verification: text, note: text },
   );
+  await syncNcrFormData(db, id, { verificationText: text }, performedBy);
+  return updated;
 };
 
 export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
@@ -183,7 +214,36 @@ export const close = async (db: Db, id: number, performedBy?: number, allowedSit
     });
     if (missing.length > 0) throw requiredMoveError(missing);
   }
-  const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["verify"], allowedSiteIds);
+  const [form] = await db
+    .select({ data: formData.data })
+    .from(formData)
+    .where(and(eq(formData.formType, "ncr"), eq(formData.entityId, id)));
+  const document = (form?.data ?? {}) as Record<string, unknown>;
+  const blocks = closureSignatureBlocks();
+  const unsigned = missingClosureSignatures(document);
+  if (unsigned.length > 0) {
+    throw AppError.badRequest(`Sign these before closing: ${unsigned.map((item) => item.label).join(", ")}`);
+  }
+  const signedRoles = blocks.filter((block) => signatureRequired(document, block.path, blocks)).map((block) => closureRoleLabel(block.label));
+  const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["verify"], allowedSiteIds, {
+    closureSignatures: signedRoles,
+  });
   await syncNcrFormData(db, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
   return updated;
 };
+
+/** A save of the NCR document writes the shared stage fields back onto the record. Status stays on the workflow actions. */
+export async function syncDocumentToRecord(db: Db, id: number, document: Record<string, unknown>, performedBy?: number): Promise<void> {
+  const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
+  if (!current) return;
+  const patch = stageColumnPatch(current, document);
+  if (!patch) return;
+  await db.update(ncr).set({ ...patch, updatedAt: new Date() }).where(eq(ncr.id, id));
+  await recordAuditTrail(db, {
+    entityType: "NCR",
+    entityId: id,
+    action: "update",
+    changes: { event: "document_sync", ...patch },
+    performedBy,
+  });
+}

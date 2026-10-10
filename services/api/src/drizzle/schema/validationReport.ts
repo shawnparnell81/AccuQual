@@ -26,6 +26,8 @@ export const validationReports = pgTable("validation_reports", {
       cells?: Record<string, string | number | boolean | null>;
       authorizedSignature?: string;
       furtherSignature?: string;
+      /** NCRs opened from a failed validation. The NCR number stays blank until someone types it. */
+      linkedNcrs?: { id: number }[];
     }>()
     .default({}),
   createdAt: timestamp("created_at").defaultNow(),

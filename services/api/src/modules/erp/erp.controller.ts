@@ -22,7 +22,8 @@ import {
   type LineItemInput,
 } from "./erp.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { transitionReceivingLineItem } from "./receivingWorkflow.js";
+import { getSupplierIdForReceivingLineItem, transitionReceivingLineItem } from "./receivingWorkflow.js";
+import { openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
 import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
@@ -225,6 +226,47 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
     siteId: req.siteId,
   });
   res.json(updated);
+});
+
+/** POST /erp/receiving-line-items/:id/ncr — optional after reject or quarantine. */
+export const createReceivingNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a receiving line.");
+  await requireNcrEdit(req.db!, { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null });
+  const [line] = await req.db!.select().from(erpReceivingLineItems).where(eq(erpReceivingLineItems.id, id));
+  if (!line) throw AppError.notFound("Receiving line");
+  if (line.status !== "rejected" && line.status !== "quarantined") throw AppError.badRequest("Create NCR is available after the line is rejected or quarantined.");
+  const [existing] = await req.db!
+    .select({ id: ncr.id, recordNumber: ncr.recordNumber, title: ncr.title })
+    .from(ncr)
+    .where(and(eq(ncr.isDeleted, false), eq(ncr.receivingLineItemId, id)))
+    .limit(1);
+  if (existing) {
+    res.status(200).json({ id: existing.id, recordNumber: existing.recordNumber, title: existing.title, existing: true });
+    return;
+  }
+  const [poLine] = await req.db!.select().from(erpPoLineItems).where(eq(erpPoLineItems.id, line.poLineItemId));
+  const [item] = poLine ? await req.db!.select({ sku: inventoryItems.sku, description: inventoryItems.description }).from(inventoryItems).where(eq(inventoryItems.id, poLine.itemId)) : [];
+  const supplierId = await getSupplierIdForReceivingLineItem(req.db!, id);
+  const created = await openInspectionNcr(
+    req.db!,
+    {
+      formTitle: "Receiving inspection",
+      part: item?.sku ?? "",
+      path: `/erp/receiving-line-items/${id}`,
+      formType: "receiving",
+      sourceId: id,
+      kind: "receiving",
+      supplierId,
+      fallbackSiteId: req.siteId,
+      receivingLineItemId: id,
+      severity: line.status === "rejected" ? "high" : "medium",
+      rows: [{ measurement: item?.description?.trim() || item?.sku || `Receiving line ${id}`, spec: "Accepted", actual: line.status === "rejected" ? "Rejected" : "Quarantined" }],
+      sourceAudit: { entityType: "ErpReceivingLineItem", entityId: id },
+    },
+    req.user?.id,
+  );
+  res.status(201).json({ id: created.id, recordNumber: created.recordNumber, title: created.title, existing: false });
 });
 
 /** GET /erp/overview — real counts + recent activity, for the Dashboard's ERP Overview section. */

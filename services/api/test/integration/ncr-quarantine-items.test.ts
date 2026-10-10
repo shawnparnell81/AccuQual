@@ -85,6 +85,8 @@ describe("NCR quarantined items", () => {
     const releasedEarly = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap" });
     expect(releasedEarly.status).toBe(200);
     expect(releasedEarly.body.items).toHaveLength(2);
+    expect(releasedEarly.body.advanced).toBe(true);
+    expect(releasedEarly.body.ncr.status).toBe("disposition");
 
     const stillActive = await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(stillActive.body).toEqual([]);
@@ -140,6 +142,21 @@ describe("NCR quarantined items", () => {
     }
   });
 
+  const closureWaived = Object.fromEntries(
+    ["closureApprovals.0.signature", "closureApprovals.1.signature", "closureApprovals.2.signature", "closureApprovals.3.signature"].map((path) => [path, "no"]),
+  );
+
+  async function waiveClosureSignatures(ncrId: number) {
+    const form = await request(app).get(`/forms/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(form.status).toBe(200);
+    const data = (form.body?.data ?? {}) as Record<string, unknown>;
+    const saved = await request(app)
+      .post(`/forms/ncr/${ncrId}/save`)
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ data: { ...data, _signatureRequired: closureWaived } });
+    expect(saved.status).toBe(200);
+  }
+
   async function advanceToFix(ncrId: number) {
     expect((await request(app).post(`/ncr/${ncrId}/containment`).set("Authorization", `Bearer ${qualityToken}`).send({ containment: "Held the parts" })).status).toBe(200);
     expect((await request(app).post(`/ncr/${ncrId}/root-cause`).set("Authorization", `Bearer ${qualityToken}`).send({ rootCause: "Fixture wear" })).status).toBe(200);
@@ -159,6 +176,7 @@ describe("NCR quarantined items", () => {
     const held = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "on_hold" });
     expect(held.status).toBe(200);
     expect(held.body.released).toBe(false);
+    expect(held.body.advanced).toBe(false);
     expect(held.body.disposition).toBe("on_hold");
     expect(held.body.items).toHaveLength(1);
     expect(held.body.items[0].disposition).toBe("on_hold");
@@ -214,8 +232,13 @@ describe("NCR quarantined items", () => {
     const released = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap" });
     expect(released.status).toBe(200);
     expect(released.body.released).toBe(true);
+    expect(released.body.advanced).toBe(false);
     expect((await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body).toEqual([]);
 
+    const unsigned = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(unsigned.status).toBe(400);
+    expect(unsigned.body.message).toMatch(/Sign these before closing/);
+    await waiveClosureSignatures(ncrId);
     const nowClosed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(nowClosed.status).toBe(200);
     expect(nowClosed.body.status).toBe("closed");
@@ -230,6 +253,7 @@ describe("NCR quarantined items", () => {
     expect((await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`)).status).toBe(400);
 
     expect((await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "rework", release: false })).status).toBe(200);
+    await waiveClosureSignatures(ncrId);
     const closed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(closed.status).toBe(200);
     expect(closed.body.status).toBe("closed");

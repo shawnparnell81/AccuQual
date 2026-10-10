@@ -1756,8 +1756,11 @@ function DocPill({
       title={doc.pdfPath ? "Has an attached file — click the file icon to view/download it" : "No file attached yet"}
     >
       {doc.linkedPath ? (
-        <Link to={doc.linkedPath} draggable={false} className={`text-primary hover:underline ${fill ? "min-w-0 flex-1 truncate" : ""}`} title={doc.name}>
-          {doc.name}
+        <Link to={doc.linkedPath} draggable={false} className={`text-primary hover:underline ${fill ? "min-w-0 flex-1 truncate" : ""}`} title={`${doc.name}. Opens the live filed record.`}>
+          <span className="block truncate">{doc.name}</span>
+          {/^\/(validation-reports|iso-forms\/record|qms-forms)\//.test(doc.linkedPath) && (
+            <span className="block text-[10px] font-normal text-muted-foreground">Opens the live filed record{doc.name.match(/\d{4}-\d{2}-\d{2}/) ? ` · ${doc.name.match(/\d{4}-\d{2}-\d{2}/)?.[0]}` : ""}</span>
+          )}
         </Link>
       ) : (
         <span className={fill ? "min-w-0 flex-1 truncate" : undefined} title={doc.name}>{doc.name}</span>

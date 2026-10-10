@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { refreshSession } from "../../api/client";
 import { shouldRedirectToLogin, showSessionReconnect } from "../../api/sessionRefresh";
 import { isKnownAppPath } from "../../lib/sidebarAccess";
 import { useAuthStore } from "../../store/authStore";
@@ -16,11 +18,7 @@ export function ProtectedRoute() {
   const { pathname } = useLocation();
   if (!bootstrapped) return null;
   if (showSessionReconnect({ reconnecting, accessToken, knownPath: isKnownAppPath(pathname) })) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
-        <p className="text-sm text-muted-foreground">Reconnecting your session…</p>
-      </div>
-    );
+    return <SessionReconnect />;
   }
   if (shouldRedirectToLogin({ accessToken, reconnecting })) {
     if (pathname === "/") {
@@ -31,4 +29,25 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
   return <Outlet />;
+}
+
+/** Shown only when this tab has no access token and the refresh cookie could not be renewed. A 5xx on any other API call does not land here. */
+function SessionReconnect() {
+  const [pending, setPending] = useState(false);
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-4 text-foreground">
+      <p className="text-sm text-muted-foreground">Reconnecting your session…</p>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          setPending(true);
+          void refreshSession("bootstrap").finally(() => setPending(false));
+        }}
+        className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
+      >
+        {pending ? "Trying…" : "Retry"}
+      </button>
+    </div>
+  );
 }

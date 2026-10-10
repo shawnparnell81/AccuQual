@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { z } from "zod";
-import { copyCsaHandler, csaPdfHandler, getCsaHandler, listCsaHandler, listPreviousCsaHandler, saveCsaResultsHandler, submitCsaHandler, updateCsaNumberHandler } from "./csaFai.controller.js";
+import { copyCsaHandler, createCsaNcrHandler, csaPdfHandler, getCsaHandler, listCsaHandler, listPreviousCsaHandler, saveCsaResultsHandler, submitCsaHandler, updateCsaNumberHandler } from "./csaFai.controller.js";
 
 const submitSchema = z.object({
   partNumber: z.string().min(1),
@@ -43,5 +43,6 @@ csaFaiRouter.post("/copy", copyCsaHandler);
 csaFaiRouter.post("/", validate(submitSchema), submitCsaHandler);
 csaFaiRouter.get("/:id/pdf", csaPdfHandler);
 csaFaiRouter.get("/:id", getCsaHandler);
+csaFaiRouter.post("/:id/ncr", createCsaNcrHandler);
 csaFaiRouter.patch("/:id", validate(z.object({ number: z.string().trim().max(120).nullable().optional() })), updateCsaNumberHandler);
 csaFaiRouter.put("/:id/results", validate(resultsSchema), saveCsaResultsHandler);

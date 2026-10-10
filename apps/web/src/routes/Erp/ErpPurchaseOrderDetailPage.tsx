@@ -219,6 +219,21 @@ function ReceivingLineItemRow({ lineItem, po }: { lineItem: ErpReceivingLineItem
             </button>
           );
         })}
+        {(lineItem.status === "rejected" || lineItem.status === "quarantined") && (
+          <button
+            type="button"
+            data-testid="create-ncr"
+            onClick={() => {
+              void apiClient.post<{ id: number }>(`/erp/receiving-line-items/${lineItem.id}/ncr`).then((response) => {
+                toast.success("NCR created. Type the NCR number on that record.");
+                navigate(`/ncr/${response.data.id}`);
+              }).catch((err) => toast.error(extractErrorMessage(err, "Couldn't create the NCR.")));
+            }}
+            className="rounded-md border border-border bg-background px-2 py-1 hover:bg-muted"
+          >
+            Create NCR
+          </button>
+        )}
         {isQuality && (lineItem.status === "pending_inspection" || lineItem.status === "inspected") && (
           <button onClick={() => createInspection.mutate()} disabled={createInspection.isPending} className="rounded-md bg-primary px-2 py-1 font-medium text-primary-foreground disabled:opacity-50">
             {createInspection.isPending ? "Creating…" : "Create Inspection Report"}

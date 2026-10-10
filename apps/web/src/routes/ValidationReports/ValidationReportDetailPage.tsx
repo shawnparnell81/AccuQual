@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
-import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { validationReportsCrumb } from "../../lib/folderBrowse";
@@ -18,12 +19,12 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
 import { revisionToken } from "../../lib/printDocument";
-import { cellsFromBatch, isBatch3, overallBatch } from "../../lib/batch3Reports";
-import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
-import { authorizedSignatureOf, cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
-import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
-import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, furtherSignatureOf, overallBrake, overallInjector } from "../../lib/partInspection";
-import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { cellsFromBatch, isBatch3 } from "../../lib/batch3Reports";
+import { cellsFromData as springCellsFromData } from "../../lib/airSpringReport";
+import { authorizedSignatureOf, cellsFromData as airCellsFromData } from "../../lib/airStrutReport";
+import { cellsFromData as fuelCellsFromData } from "../../lib/fuelPumpReport";
+import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, furtherSignatureOf } from "../../lib/partInspection";
+import { cellsFromData as csaCellsFromData, formTypeOf, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { AirSpringSheet } from "./AirSpringSheet";
 import { AirStrutSheet } from "./AirStrutSheet";
 import { FuelPumpSheet } from "./FuelPumpSheet";
@@ -32,7 +33,7 @@ import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
-import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordNumberEditor, RecordNumberField } from "../../components/forms/RecordNumberField";
 import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
@@ -40,6 +41,13 @@ import { savedFieldsEditable } from "../../lib/savedFormLock";
 import { sheetIsDirty, sheetSnap } from "../../lib/sheetDirty";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
+import { useToast } from "../../components/shared/ToastProvider";
+import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
+import { readBlankDraft } from "../../lib/blankDraft";
+import { headerStatusFor } from "../../lib/headerStatus";
+import { useFormFiling } from "../../components/forms/FormDocumentControls";
+import { filedToast, saveShouldLock } from "../../lib/saveFiling";
+import { failedValidationRows } from "../../lib/validationFailures";
 
 interface ValidationReport {
   id: number;
@@ -61,27 +69,29 @@ function loadCells(formType: ValidationFormType, data: unknown): Record<string, 
   return csaCellsFromData(data);
 }
 
-function loadOverall(formType: ValidationFormType, cells: Record<string, CellValue>): string {
-  if (formType === "fuel_pump") return fuelOverall(cells);
-  if (formType === "air_strut") return airOverall(cells);
-  if (formType === "air_spring") return springOverall(cells);
-  if (formType === "fuel_injector") return overallInjector(cells);
-  if (formType === "brake_wear") return overallBrake(cells);
-  if (isBatch3(formType)) return overallBatch(formType, cells);
-  return csaOverall(cells);
-}
-
 export function ValidationReportDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const blank = useMemo(() => (id === "new" ? readBlankDraft(location.state, "/validation-reports") : null), [id, location.state]);
   const reportId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.documents === "edit";
   const queryClient = useQueryClient();
-  const { data: report, isLoading, isError, error } = hooks.useOne(reportId);
+  const loaded = hooks.useOne(blank ? undefined : reportId);
+  const draftReport = useMemo(() => {
+    if (!blank) return null;
+    const data = blank.body.data && typeof blank.body.data === "object" ? (blank.body.data as ValidationReport["data"]) : { formType: "csa" as const, cells: {} };
+    return { id: 0, data, recordNumber: null } satisfies ValidationReport;
+  }, [blank]);
+  const report = loaded.data ?? draftReport;
+  const isLoading = blank ? false : loaded.isLoading;
+  const isError = blank ? false : loaded.isError;
+  const error = loaded.error;
   const updateReport = hooks.useUpdate();
   const signReport = hooks.useAction("sign");
-  const beginEdit = hooks.useAction("begin-edit");
   const formLock = useSavedFormMode(reportId, Boolean(canEdit));
   const mode = formLock.mode;
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
@@ -91,6 +101,10 @@ export function ValidationReportDetailPage() {
   const [pending, setPending] = useState(false);
   const openingRef = useRef(false);
   const [opening, setOpening] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const draftNumber = useRef("");
+  const [draftNumberText, setDraftNumberText] = useState("");
+  const filing = useFormFiling(report ? VALIDATION_FORMS[formTypeOf(report.data)].formKey : null, reportId);
 
   const formType: ValidationFormType = formTypeOf(report?.data);
   const meta = VALIDATION_FORMS[formType];
@@ -99,7 +113,7 @@ export function ValidationReportDetailPage() {
   const documentNumber = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
 
   useEffect(() => {
-    if (!report) return;
+    if (!report || report.id === 0) return;
     const formTitle = VALIDATION_FORMS[formTypeOf(report.data)].title;
     rememberRecord({ path: `/validation-reports/${report.id}`, title: recordHeading(formTitle, report.recordNumber), type: "Validation" }, user?.id);
   }, [report, user?.id]);
@@ -116,15 +130,18 @@ export function ValidationReportDetailPage() {
   const dirty = report == null || cells == null ? false : sheetIsDirty(report.id, liveSnap, savedSnap);
   useReportTabDirty(dirty);
 
+  if (id === "new" && !blank) return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this validation report. Refresh the page and try again." noun="this validation form" />;
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
   const fieldsEditable = savedFieldsEditable(mode, canEdit);
   const filled = cells;
-  const result = loadOverall(formType, filled);
-  const passed = result === "Pass" || result === "Passed" || result === "PASS";
-  const failed = result === "Fail" || result === "Failed" || result === "FAIL";
+  const result = headerStatusFor(formType, filled);
+  const passed = result === "Pass";
+  const failed = result === "Fail";
   const badge = passed ? meta.pass : failed ? "#FF0000" : "transparent";
+  const failures = failedValidationRows(formType, filled);
+  const filed = (filing.data?.parentId ?? null) != null;
   const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
   const title = recordHeading(meta.title, report.recordNumber);
@@ -136,44 +153,58 @@ export function ValidationReportDetailPage() {
     setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
   }
 
-  /** Write the sheet, clear the dirty flag, and lock. Folder filing stays with the caller. */
+  /** Write the sheet. Filing and locking stay with the caller. */
   async function persistRecord() {
-    await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } });
+    const data = { formType, cells: filled };
+    if (savedReport.id === 0) {
+      const created = (await apiClient.post<ValidationReport>("/validation-reports", { data, recordNumber: draftNumber.current.trim() || null })).data;
+      navigate(`/validation-reports/${created.id}`, { replace: true, state: { freshForm: true } });
+      return;
+    }
+    const saved = (await apiClient.patch<ValidationReport>(`/validation-reports/${reportId}`, { data })).data;
+    queryClient.setQueryData(["validation-reports", reportId], saved);
     setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
-    formLock.lock();
-    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
+    void queryClient.invalidateQueries({ queryKey: ["validation-reports"] });
+    void queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
   }
 
-  async function saveRecord() {
+  async function saveRecord(lock: boolean) {
     setPending(true);
     setSaveNote(null);
     try {
       await persistRecord();
+      if (savedReport.id !== 0 && (lock || saveShouldLock(filed))) formLock.lock();
+      if (savedReport.id !== 0) setSaveNote(filed ? "saved" : "unfiled");
     } catch {
       setSaveNote("error");
-      setPending(false);
-      return;
-    }
-    try {
-      const filed = await fileChosenFolder(queryClient, formKey, reportId);
-      setSaveNote(filed ?? "unfiled");
-    } catch {
-      setSaveNote("file-error");
     } finally {
       setPending(false);
     }
   }
 
+  async function createNcr(rows = failures) {
+    if (savedReport.id === 0 || rows.length === 0) return;
+    try {
+      const created = (await apiClient.post<{ id: number }>(`/validation-reports/${savedReport.id}/ncr`, { rows })).data;
+      toast.success("NCR created. Type the NCR number on that record.");
+      void queryClient.invalidateQueries({ queryKey: ["validation-reports", savedReport.id] });
+      navigate(`/ncr/${created.id}`);
+    } catch {
+      toast.error("Couldn't create the NCR.");
+    }
+  }
+
   async function startEdit() {
-    if (!canEdit || openingRef.current || mode === "editing") return;
+    if (!canEdit || openingRef.current || mode === "editing" || savedReport.id === 0) return;
     openingRef.current = true;
     setOpening(true);
+    setEditError(null);
     try {
-      await beginEdit.mutateAsync({ id: reportId });
+      await postBeginEdit(`/validation-reports/${reportId}/begin-edit`);
       formLock.unlock();
-      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
     } catch {
-      setSaveNote("error");
+      setEditError(BEGIN_EDIT_ERROR);
     } finally {
       openingRef.current = false;
       setOpening(false);
@@ -202,8 +233,20 @@ export function ValidationReportDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
-            <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={fieldsEditable} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
-            <RecordSiteField entity="validation_report" id={reportId} canEdit={fieldsEditable} />
+            {report.id === 0 ? (
+              <RecordNumberField
+                label="Report No."
+                value={draftNumberText}
+                disabled={!fieldsEditable}
+                onChange={(next) => {
+                  draftNumber.current = next;
+                  setDraftNumberText(next);
+                }}
+              />
+            ) : (
+              <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={fieldsEditable} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
+            )}
+            {report.id > 0 && <RecordSiteField entity="validation_report" id={reportId} canEdit={fieldsEditable} />}
             <FormNumberEditor formKey={formKey} compact />
             <p className="text-sm text-muted-foreground">
               {doc}
@@ -213,7 +256,23 @@ export function ValidationReportDetailPage() {
                 {validationReportsCrumb().label}
               </Link>
             </p>
-            <RecordFolderField formKey={formKey} recordId={reportId} prepare={() => persistRecord()} />
+            {report.id > 0 && (
+              <RecordFolderField
+                formKey={formKey}
+                recordId={reportId}
+                prepare={() => persistRecord()}
+                onFiled={(folder) => {
+                  formLock.lock();
+                  toast.success(filedToast(folder));
+                }}
+              />
+            )}
+            {Array.isArray((report.data as { linkedNcrs?: { id: number }[] }).linkedNcrs) &&
+              (report.data as { linkedNcrs: { id: number }[] }).linkedNcrs.map((link) => (
+                <Link key={link.id} to={`/ncr/${link.id}`} className="text-xs text-primary hover:underline">
+                  NCR {link.id}
+                </Link>
+              ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DeleteRecordButton
@@ -229,6 +288,11 @@ export function ValidationReportDetailPage() {
             <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: passed || failed ? "#111" : undefined }} data-testid="validation-overall">
               {result}
             </span>
+            {failures.length > 0 && report.id > 0 && (
+              <button type="button" className="rounded-md border border-border px-2 py-1 text-sm" data-testid="create-ncr" onClick={() => void createNcr()}>
+                Create NCR
+              </button>
+            )}
             <SaveStatus saving={updateReport.isPending || pending} unsaved={dirty && !updateReport.isPending && !pending} />
             <SavedFormLockBar
               mode={mode}
@@ -236,14 +300,19 @@ export function ValidationReportDetailPage() {
               pending={updateReport.isPending || pending}
               opening={opening}
               onEdit={() => startEdit()}
-              onSave={() => void saveRecord()}
+              onSave={() => void saveRecord(false)}
               onCancel={cancelEdit}
               onDone={() => {
-                if (dirty) void saveRecord();
+                if (dirty) void saveRecord(true);
                 else formLock.lock();
               }}
             />
             <SaveResult result={saveNote} />
+            {editError && (
+              <p className="text-xs text-destructive" data-testid="edit-error">
+                {editError}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -262,6 +331,8 @@ export function ValidationReportDetailPage() {
           <FuelPumpSheet
             cells={cells}
             readOnly={!fieldsEditable}
+            failedAddrs={failures.map((row) => row.addr)}
+            onCreateNcr={(addr) => void createNcr(failures.filter((row) => row.addr === addr))}
             documentNumber={documentNumber}
             revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
@@ -340,6 +411,8 @@ export function ValidationReportDetailPage() {
           <ValidationReportSheet
             cells={cells}
             readOnly={!fieldsEditable}
+            failedAddrs={failures.map((row) => row.addr)}
+            onCreateNcr={(addr) => void createNcr(failures.filter((row) => row.addr === addr))}
             documentNumber={documentNumber}
             revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}

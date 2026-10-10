@@ -869,6 +869,13 @@
       "when": 1794697200000,
       "tag": "0125_warranty_product_number",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1794783600000,
+      "tag": "0126_validation_site_repair",
+      "breakpoints": true
     }
   ]
 }
