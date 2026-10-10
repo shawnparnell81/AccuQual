@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dragScrollDelta, paneScrollDelta } from "./dragAutoScroll.ts";
+import { dragScrollDelta, paneScrollDelta, windowEdgeScrollDelta } from "./dragAutoScroll.ts";
 
 describe("drag auto-scroll", () => {
   it("scrolls up near the top edge and down near the bottom edge", () => {
@@ -19,6 +19,13 @@ describe("drag auto-scroll", () => {
     const near = Math.abs(dragScrollDelta(0, 0, 400));
     const far = Math.abs(dragScrollDelta(50, 0, 400));
     assert.ok(near > far);
+  });
+
+  it("scrolls the window when a drag is near the viewport edge", () => {
+    assert.ok(windowEdgeScrollDelta(8, 800) < 0);
+    assert.ok(windowEdgeScrollDelta(790, 800) > 0);
+    assert.equal(windowEdgeScrollDelta(400, 800), 0);
+    assert.equal(windowEdgeScrollDelta(-40, 800), 0);
   });
 
   it("scrolls only the pane the pointer is over", () => {

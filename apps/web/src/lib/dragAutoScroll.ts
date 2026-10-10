@@ -1,3 +1,5 @@
+import { paneOverflowScrolls } from "./folderExplorerLayout";
+
 /** How close to a pane edge, in pixels, before a drag starts scrolling. */
 export const DRAG_SCROLL_EDGE_PX = 56;
 /** Pointer travel just outside the pane that still scrolls that edge. */
@@ -31,7 +33,51 @@ export function dragScrollDelta(
 }
 
 export function paneCanScroll(overflowY: string, scrollHeight: number, clientHeight: number): boolean {
-  return (overflowY === "auto" || overflowY === "scroll") && scrollHeight > clientHeight + 1;
+  return paneOverflowScrolls(overflowY) && scrollHeight > clientHeight + 1;
+}
+
+/** Signed scroll step for a pointer near the top or bottom of the window. */
+export function windowEdgeScrollDelta(clientY: number, viewportHeight: number): number {
+  return dragScrollDelta(clientY, 0, viewportHeight);
+}
+
+function isWindowScroller(scroller: HTMLElement): boolean {
+  return scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body;
+}
+
+/** The page scroller above this node, or the document when the window itself scrolls. */
+export function findPageScroller(start: HTMLElement | null): HTMLElement {
+  let node = start?.parentElement ?? null;
+  while (node && node !== document.documentElement) {
+    if (paneOverflowScrolls(getComputedStyle(node).overflowY)) return node;
+    node = node.parentElement;
+  }
+  const scrolling = document.scrollingElement;
+  return scrolling instanceof HTMLElement ? scrolling : document.documentElement;
+}
+
+export function pageScrollerViewport(scroller: HTMLElement): number {
+  return isWindowScroller(scroller) ? window.innerHeight : scroller.clientHeight;
+}
+
+/** Scroll step for a drag near the top or bottom edge of the page window. */
+export function pageEdgeScroll(clientY: number, scroller: HTMLElement): number {
+  if (isWindowScroller(scroller)) return windowEdgeScrollDelta(clientY, window.innerHeight);
+  const rect = scroller.getBoundingClientRect();
+  return dragScrollDelta(clientY, rect.top, rect.bottom);
+}
+
+/** Moves the page window. Returns false when that window is already at the edge. */
+export function applyPageScroll(scroller: HTMLElement, delta: number): boolean {
+  if (delta === 0) return false;
+  if (isWindowScroller(scroller)) {
+    const before = window.scrollY;
+    window.scrollBy(0, delta);
+    return window.scrollY !== before;
+  }
+  const before = scroller.scrollTop;
+  scroller.scrollTop += delta;
+  return scroller.scrollTop !== before;
 }
 
 /** Vertical scroll step for the pane under the pointer. Zero for a pane that does not scroll. */

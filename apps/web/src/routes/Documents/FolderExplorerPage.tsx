@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
@@ -15,7 +15,8 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
-import { paneScrollDelta } from "../../lib/dragAutoScroll";
+import { applyPageScroll, findPageScroller, pageEdgeScroll, pageScrollerViewport } from "../../lib/dragAutoScroll";
+import { treeShouldStick } from "../../lib/folderExplorerLayout";
 import { applyFolderPlacements, folderMoveIsBlocked, libraryPoolDeleteConfirm, planNest, planSiblingGap, planSiblingReorder, unlistFromLibraryPool, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
@@ -400,31 +401,20 @@ function FolderTreeBranch({
   );
 }
 
-function useDragAutoScroll(panes: Array<RefObject<HTMLElement | null>>, dragKindRef: RefObject<DragKind | null>) {
-  const panesRef = useRef(panes);
-  panesRef.current = panes;
+function useDragAutoScroll(anchor: HTMLElement | null, dragKindRef: RefObject<DragKind | null>) {
   useEffect(() => {
+    if (!anchor) return;
     let frame = 0;
-    let x = 0;
     let y = 0;
     const tick = () => {
       frame = 0;
       if (!dragKindRef.current) return;
-      let moving = false;
-      for (const pane of panesRef.current) {
-        const el = pane.current;
-        if (!el) continue;
-        const delta = paneScrollDelta(x, y, el.getBoundingClientRect(), getComputedStyle(el).overflowY, el.scrollHeight, el.clientHeight);
-        if (delta !== 0) {
-          el.scrollTop += delta;
-          moving = true;
-        }
-      }
-      if (moving) frame = requestAnimationFrame(tick);
+      const scroller = findPageScroller(anchor);
+      const delta = pageEdgeScroll(y, scroller);
+      if (applyPageScroll(scroller, delta)) frame = requestAnimationFrame(tick);
     };
     const onDragOver = (event: globalThis.DragEvent) => {
       if (!dragKindRef.current) return;
-      x = event.clientX;
       y = event.clientY;
       if (!frame) frame = requestAnimationFrame(tick);
     };
@@ -441,7 +431,31 @@ function useDragAutoScroll(panes: Array<RefObject<HTMLElement | null>>, dragKind
       window.removeEventListener("dragend", stop, true);
       window.removeEventListener("drop", stop, true);
     };
-  }, [dragKindRef]);
+  }, [anchor, dragKindRef]);
+}
+
+function useTreeSticky(tree: HTMLElement | null, toolbar: HTMLElement | null) {
+  useLayoutEffect(() => {
+    if (!tree) return;
+    const apply = () => {
+      const stickyTop = toolbar?.offsetHeight ?? 0;
+      tree.style.setProperty("--explorer-sticky-top", `${stickyTop}px`);
+      const viewport = pageScrollerViewport(findPageScroller(tree));
+      tree.classList.toggle("is-sticky", treeShouldStick(tree.offsetHeight, viewport, stickyTop));
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(tree);
+    if (toolbar) observer.observe(toolbar);
+    const scroller = findPageScroller(tree);
+    if (scroller !== document.documentElement && scroller !== document.body && scroller !== document.scrollingElement) observer.observe(scroller);
+    window.addEventListener("resize", apply);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", apply);
+      tree.classList.remove("is-sticky");
+    };
+  }, [tree, toolbar]);
 }
 
 function useDocumentFolders() {
@@ -623,9 +637,9 @@ export function FolderExplorerPage() {
   const [search, setSearch] = useState("");
   const dragRef = useRef<{ id: number; kind: DragKind } | null>(null);
   const dragKindRef = useRef<DragKind | null>(null);
-  const treePaneRef = useRef<HTMLElement>(null);
-  const listPaneRef = useRef<HTMLDivElement>(null);
-  const boardPaneRef = useRef<HTMLDivElement>(null);
+  const [explorerEl, setExplorerEl] = useState<HTMLElement | null>(null);
+  const [treeEl, setTreeEl] = useState<HTMLElement | null>(null);
+  const [toolbarEl, setToolbarEl] = useState<HTMLElement | null>(null);
   const [dropHoverId, setDropHoverId] = useState<number | null>(null);
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -733,7 +747,8 @@ export function FolderExplorerPage() {
     setGapHint(null);
     setPoolHover(false);
   }
-  useDragAutoScroll([treePaneRef, listPaneRef, boardPaneRef], dragKindRef);
+  useDragAutoScroll(explorerEl, dragKindRef);
+  useTreeSticky(treeEl, toolbarEl);
   function hintClass(id: number) {
     if (dropHoverId === id) return "ring-2 ring-primary";
     if (dropHint?.id === id) return reorderDropClass(dropHint.position);
@@ -1099,7 +1114,7 @@ export function FolderExplorerPage() {
 
   if (isLoading) {
     return (
-      <div className="folder-explorer" aria-busy="true" aria-label="Loading folders">
+      <div ref={setExplorerEl} className="folder-explorer" aria-busy="true" aria-label="Loading folders">
         <div className="skeleton h-8 w-64" />
         <div className="skeleton h-4 w-full max-w-xl" />
         {Array.from({ length: 7 }, (_, index) => (
@@ -1108,7 +1123,7 @@ export function FolderExplorerPage() {
       </div>
     );
   }
-  if (!activeDept) return <p className="folder-explorer text-sm text-muted-foreground">No departments found.</p>;
+  if (!activeDept) return <p ref={setExplorerEl} className="folder-explorer text-sm text-muted-foreground">No departments found.</p>;
   const deptChain = folderChain(visibleFolders, activeDept.id);
   const deptPath = folderNodePath(visibleFolders, activeDept.id);
   const deptParent = deptChain.length > 1 ? deptChain[deptChain.length - 2] : undefined;
@@ -1129,7 +1144,7 @@ export function FolderExplorerPage() {
   const fileTotal = visibleFolders.length - folderTotal;
 
   return (
-    <div className="folder-explorer">
+    <div ref={setExplorerEl} className="folder-explorer">
       <input
         ref={uploadDocInputRef}
         type="file"
@@ -1155,11 +1170,11 @@ export function FolderExplorerPage() {
         }}
       />
 
-      <div className="flex shrink-0 flex-col gap-4">
+      <div className="folder-explorer-intro flex flex-col gap-2">
       <PageHeader
         crumbs={[{ label: "Home", to: "/" }, { label: "Documents", to: "/documents" }, { label: "Folder Explorer" }]}
         title="Folder Explorer"
-        description="Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank templates are in Blank Forms Templates."
+        description="Expand a folder to see what is saved in it. Drag a row onto a folder, or use Move to…. Blank templates are in Blank Forms Templates."
       />
       <SummaryCards
         items={[
@@ -1179,7 +1194,7 @@ export function FolderExplorerPage() {
       </FilterBar>
       </div>
 
-      <div data-testid="explorer-toolbar" className="flex shrink-0 flex-col gap-2">
+      <div ref={setToolbarEl} data-testid="explorer-toolbar" className="folder-explorer-toolbar flex shrink-0 flex-col gap-2">
         <ExplorerPathBar
           crumbs={explorerCrumbs(toolbarChain)}
           canBack={canGoBack(history)}
@@ -1260,8 +1275,8 @@ export function FolderExplorerPage() {
         {openFolder ? <FolderPathBar path={openPath} /> : <FolderPathBar path={deptPath} />}
       </div>
 
-      <div ref={boardPaneRef} className="folder-explorer-board">
-        <nav ref={treePaneRef} className="folder-explorer-pane flex flex-col gap-2 rounded-lg border border-border bg-card p-3" aria-label="Document folders">
+      <div className="folder-explorer-board">
+        <nav ref={setTreeEl} data-testid="folder-tree-pane" className="folder-explorer-pane folder-explorer-tree flex flex-col gap-2 rounded-lg border border-border bg-card p-3" aria-label="Document folders">
           <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
           <ul data-testid="folder-tree">
             {treeRoots.map((folder) => (
@@ -1318,9 +1333,9 @@ export function FolderExplorerPage() {
           }}
           disabled={!canManageFolders || currentFolder == null}
           label={currentFolder ? `Drop files to add them to ${currentFolder.name}` : "Drop files to add"}
-          className="folder-explorer-pane folder-explorer-drop flex min-h-0 min-w-0 flex-col"
+          className="folder-explorer-pane folder-explorer-drop flex min-w-0 flex-col"
         >
-          <div ref={listPaneRef} className="folder-explorer-drop-scroll flex flex-col gap-3 px-1 py-1">
+          <div data-testid="folder-list-pane" className="folder-explorer-drop-scroll flex flex-col gap-3 px-1 py-1">
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
@@ -1443,8 +1458,7 @@ export function FolderExplorerPage() {
       </div>
 
       {/* In normal flow under the folder library, so the shelf stays on screen
-          without covering Forms & Templates or any other folder card. The
-          folder column scrolls on its own. */}
+          without covering Forms & Templates or any other folder card. */}
       {poolFolder && (dragKind != null || poolItems.length > 0) && (
         <div
           data-testid="library-pool"
