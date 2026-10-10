@@ -1297,17 +1297,19 @@ export function FolderExplorerPage() {
             ))}
           </ul>
 
-          <div
-            data-testid="folder-drop-root"
-            onDragOver={(e) => {
-              if (allowDrop(e, shelfParentId)) setDropHoverId(-1);
-            }}
-            onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
-            onDrop={(e) => dropOnParent(e, shelfParentId)}
-            className={`mt-1 rounded-md border border-dashed px-3 py-2.5 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
-          >
-            Top level
-          </div>
+          {dragKind != null && (
+            <div
+              data-testid="folder-drop-root"
+              onDragOver={(e) => {
+                if (allowDrop(e, shelfParentId)) setDropHoverId(-1);
+              }}
+              onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
+              onDrop={(e) => dropOnParent(e, shelfParentId)}
+              className={`mt-1 rounded-md border border-dashed px-3 py-2.5 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
+            >
+              Top level
+            </div>
+          )}
         </nav>
 
         <FileDropZone

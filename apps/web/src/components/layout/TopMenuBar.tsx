@@ -14,7 +14,7 @@ import {
   type SidebarNode,
 } from "./sidebarStructure";
 import { placeMenuFlyout } from "../../lib/menuFlyout";
-import { folderMenuEntries } from "../../lib/navigationLayout";
+import { collapseSingleItemMenus, folderMenuEntries } from "../../lib/navigationLayout";
 import { prefetchRoute } from "../../routes/pages";
 
 function focusItem(item: HTMLElement | undefined) {
@@ -281,6 +281,7 @@ export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: 
   const barRef = useRef<HTMLDivElement>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [rootIndex, setRootIndex] = useState(0);
+  const menu = nodes.map(collapseSingleItemMenus);
 
   useEffect(() => {
     setOpenKey(null);
@@ -299,7 +300,7 @@ export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: 
       const next = (index + 1) % items.length;
       setRootIndex(next);
       if (openKey) {
-        const node = nodes[next];
+        const node = menu[next];
         setOpenKey(node && isFolder(node) ? node.key : null);
       }
       focusItem(items[next]);
@@ -308,7 +309,7 @@ export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: 
       const next = (index - 1 + items.length) % items.length;
       setRootIndex(next);
       if (openKey) {
-        const node = nodes[next];
+        const node = menu[next];
         setOpenKey(node && isFolder(node) ? node.key : null);
       }
       focusItem(items[next]);
@@ -328,7 +329,7 @@ export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: 
   return (
     <div className="aq-topnav-wrap">
       <div ref={barRef} className="aq-topnav" role="menubar" aria-label="Main navigation" onKeyDown={onBarKeyDown}>
-        {nodes.map((node, index) => (
+        {menu.map((node, index) => (
           <RootItem
             key={node.key}
             node={node}
@@ -347,9 +348,9 @@ export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: 
             role="menuitem"
             to={link.path}
             title={link.label}
-            tabIndex={nodes.length === rootIndex ? 0 : -1}
+            tabIndex={menu.length === rootIndex ? 0 : -1}
             className={({ isActive }) => clsx("aq-topnav-root", isActive && "active")}
-            onFocus={() => setRootIndex(nodes.length)}
+            onFocus={() => setRootIndex(menu.length)}
             onMouseEnter={() => {
               setOpenKey(null);
               prefetchRoute(link.path);
