@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useState } from "react";
-import { Outlet, useLocation, Navigate } from "react-router-dom";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Outlet, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { NavigationShell } from "./NavigationShell";
 import { SplitWorkspace } from "./SplitWorkspace";
 import { TabBar } from "./TabBar";
@@ -14,6 +14,8 @@ import { useLogout } from "../../hooks/useAuth";
 import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 import { useThemeSync } from "../../hooks/useThemeSync";
 import { deriveTabMeta } from "../../lib/tabMeta";
+import { noteTabUserGesture } from "../../lib/tabSession";
+import { normalizeTabPath } from "../../lib/tabPaths";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
@@ -66,7 +68,10 @@ export function AppLayout() {
   const loadWindowsForUser = useWindowStore((s) => s.loadForUser);
   const loadTabsForUser = useTabStore((s) => s.loadForUser);
   const syncActiveTabLocation = useTabStore((s) => s.syncActiveTabLocation);
+  const tabOwnerId = useTabStore((s) => s.ownerId);
   const location = useLocation();
+  const navigate = useNavigate();
+  const redirectGuard = useRef<string | null>(null);
   const isSupplierPortal = roleName === "supplier";
   useThemeSync();
 
@@ -112,16 +117,36 @@ export function AppLayout() {
     loadTabsForUser(String(userId));
   }, [isSupplierPortal, userId, loadWindowsForUser, loadTabsForUser]);
 
-  // Keeps the *active* tab's own path/title in sync with normal navigation
-  // (existing nav links, back/forward) — see syncActiveTabLocation's own
-  // comment for why this never opens a new tab by itself; only explicit
-  // entry points (useOpenTab — global search results today) do that.
+  // A click opens a page on purpose. The tab's X is not one of those clicks:
+  // closing must not count as asking for that page back.
+  useEffect(() => {
+    if (isSupplierPortal) return;
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest("[data-tab-close]")) return;
+      noteTabUserGesture();
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [isSupplierPortal]);
+
+  // Keeps the open tabs in line with the address bar. A path the user just
+  // closed is not created again; the strip's neighbor replaces that URL.
   useEffect(() => {
     if (isSupplierPortal) return;
     const { title, icon } = deriveTabMeta(location.pathname);
-    syncActiveTabLocation(location.pathname, title, icon);
+    const redirectTo = syncActiveTabLocation(location.pathname, title, icon);
     document.title = title && title !== location.pathname ? `${title} · AccuQual` : "AccuQual";
-  }, [isSupplierPortal, location.pathname, syncActiveTabLocation]);
+    if (!redirectTo || normalizeTabPath(redirectTo) === normalizeTabPath(location.pathname)) {
+      redirectGuard.current = null;
+      return;
+    }
+    const hop = `${location.pathname}->${redirectTo}`;
+    if (redirectGuard.current === hop) return;
+    redirectGuard.current = hop;
+    navigate(redirectTo, { replace: true });
+  }, [isSupplierPortal, location.pathname, navigate, syncActiveTabLocation, tabOwnerId]);
 
   if (isSupplierPortal) {
     return location.pathname === "/supplier-portal" ? <SupplierPortalShell /> : <Navigate to="/supplier-portal" replace />;
