@@ -848,6 +848,13 @@
       "when": 1794438000000,
       "tag": "0122_labor_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1794524400000,
+      "tag": "0123_user_profile",
+      "breakpoints": true
     }
   ]
 }

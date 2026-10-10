@@ -25,6 +25,8 @@ import {
   AdminSystemHealthPage,
   AdminImportPage,
   AdminUsersRolesPage,
+  NewTeamMemberPage,
+  UserProfilePage,
   AiInsightsPage,
   AuditDetailPage,
   AuditsPage,
@@ -253,6 +255,8 @@ export function workspaceRouteElements() {
     <Route key="/admin/ai-usage" path="/admin/ai-usage" element={<AdminAiUsagePage />} />,
     <Route key="/admin" path="/admin" element={<AdminConsoleLayout />}>
       <Route index element={<AdminConsoleHomePage />} />
+      <Route path="users/new" element={<NewTeamMemberPage />} />
+      <Route path="users/:id" element={<UserProfilePage />} />
       <Route path="users" element={<AdminUsersRolesPage />} />
       <Route path="import" element={<AdminImportPage />} />
       <Route path="plants" element={<AdminPlantsPage />} />

@@ -6,6 +6,49 @@ import { VISIBLE_DEPARTMENTS } from "../../middleware/departmentAccess.js";
 // existing users; it is not a choice for new assignments.
 export const departmentSchema = z.enum(VISIBLE_DEPARTMENTS as [string, ...string[]]);
 
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((value) => (value ? value : value === "" ? null : value));
+
+const hireDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a hire date like 2026-04-02.")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year!, month! - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day;
+  }, "That hire date isn't a real calendar day.")
+  .nullable()
+  .optional();
+
+export const EMPLOYMENT_TYPES = ["full_time", "part_time", "contractor", "temporary"] as const;
+export const SHIFTS = ["day", "evening", "night", "rotating"] as const;
+
+/** Fields the new-team-member wizard adds. All optional so the original create call still works. */
+export const teamMemberFields = {
+  preferredName: optionalText(80),
+  jobTitle: optionalText(120),
+  phone: optionalText(40),
+  employeeId: optionalText(40),
+  hireDate,
+  employmentType: z.enum(EMPLOYMENT_TYPES).nullable().optional(),
+  shift: z.enum(SHIFTS).nullable().optional(),
+  siteLocation: optionalText(120),
+  bio: optionalText(500),
+  avatarAttachmentId: z.number().int().positive().nullable().optional(),
+  requireMfa: z.boolean().optional(),
+  siteIds: z.array(z.number().int().positive()).max(50).optional(),
+  allSites: z.boolean().optional(),
+  trainingCourseIds: z.array(z.number().int().positive()).max(100).optional(),
+  documentIds: z.array(z.number().int().positive()).max(100).optional(),
+  permissionRoleIds: z.array(z.number().int().positive()).max(20).optional(),
+};
+
 export const createUserSchema = z.object({
   email: z
     .string()
@@ -22,6 +65,7 @@ export const createUserSchema = z.object({
   roleId: z.number().int().optional(),
   department: departmentSchema.nullable().optional(),
   managerId: z.number().int().positive().nullable().optional(),
+  ...teamMemberFields,
 });
 
 export const temporaryPasswordSchema = z.object({
@@ -40,6 +84,16 @@ export const updateUserSchema = z.object({
   department: departmentSchema.nullable().optional(),
   isActive: z.boolean().optional(),
   managerId: z.number().int().positive().nullable().optional(),
+  ...teamMemberFields,
+});
+
+/** Photo and contact details a person may change on their own profile. */
+export const updateMyProfileSchema = z.object({
+  preferredName: optionalText(80),
+  phone: optionalText(40),
+  siteLocation: optionalText(120),
+  bio: optionalText(500),
+  avatarAttachmentId: z.number().int().positive().nullable().optional(),
 });
 
 /** The full account list in display order. movedUserId is the person the administrator moved. */

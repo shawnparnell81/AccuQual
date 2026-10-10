@@ -8,6 +8,7 @@ import { users } from "../../drizzle/schema/users.js";
 import * as schema from "../../drizzle/schema/index.js";
 import { logger } from "../../utils/logger.js";
 import { formatUserLabel } from "../users/userDisplay.js";
+import { avatarUrlFor, readUserProfiles } from "../users/userProfile.js";
 
 interface RecordAuditTrailInput {
   entityType: string;
@@ -127,9 +128,14 @@ export async function resolveUserNames(db: Db, userIds: (number | null | undefin
  * CAPA stub-data repair script), rendered as "System" by every caller,
  * matching the convention the frontend already used for a missing actor.
  */
-export async function withResolvedActors<T extends { performedBy: number | null }>(db: Db, rows: T[]): Promise<(T & { performedByName: string | null })[]> {
+export async function withResolvedActors<T extends { performedBy: number | null }>(db: Db, rows: T[]): Promise<(T & { performedByName: string | null; performedByAvatarUrl: string | null })[]> {
   const names = await resolveUserNames(db, rows.map((r) => r.performedBy));
-  return rows.map((r) => ({ ...r, performedByName: r.performedBy === null ? null : (names.get(r.performedBy) ?? null) }));
+  const profiles = await readUserProfiles(db, rows.map((row) => row.performedBy).filter((id): id is number => id != null));
+  return rows.map((r) => ({
+    ...r,
+    performedByName: r.performedBy === null ? null : (names.get(r.performedBy) ?? null),
+    performedByAvatarUrl: r.performedBy === null || profiles == null ? null : avatarUrlFor(r.performedBy, profiles.get(r.performedBy)?.avatarAttachmentId),
+  }));
 }
 
 /** audit_trail.entityType -> the table whose row it describes, so a history entry only shows ITS row's field changes. Unlisted types fall back to matching on row id alone within the same transaction. */

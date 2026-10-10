@@ -3,8 +3,9 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireFullAccess, requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withDb } from "../../lib/requestDb.js";
-import { createUserSchema, updateUserSchema, updateUserDisplayOrderSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema, updateMyWorkspaceLayoutSchema } from "./users.validation.js";
+import { createUserSchema, updateUserSchema, updateUserDisplayOrderSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema, updateMyWorkspaceLayoutSchema, updateMyProfileSchema } from "./users.validation.js";
 import { listUsers, updateUserDisplayOrder, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts, getMyWorkspaceLayout, updateMyWorkspaceLayout, resetMyWorkspaceLayout } from "./users.controller.js";
+import { accessPreviewHandler, getUserAvatar, onboardingCatalogHandler, updateMyProfile } from "./teamMember.controller.js";
 
 export const usersRouter = Router();
 
@@ -16,6 +17,11 @@ usersRouter.post("/", requireRole("admin"), validate(createUserSchema), createUs
 
 // Any authenticated user, own row only — see getMyTheme/updateMyTheme's own
 // comment. Two path segments, so this never collides with GET/PATCH /:id.
+usersRouter.get("/onboarding-catalog", requireRole("admin"), onboardingCatalogHandler);
+usersRouter.get("/access-preview", requireRole("admin"), accessPreviewHandler);
+usersRouter.patch("/me/profile", validate(updateMyProfileSchema), updateMyProfile);
+usersRouter.get("/:id/avatar", getUserAvatar);
+
 usersRouter.get("/me/theme", getMyTheme);
 usersRouter.patch("/me/theme", validate(updateMyThemeSchema), updateMyTheme);
 usersRouter.get("/me/changelog-seen", getMyChangelogSeen);

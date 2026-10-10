@@ -13,6 +13,13 @@ export interface AppUser {
   /** Set while the account is locked out after repeated failed sign-ins. */
   lockedUntil?: string | null;
   createdAt: string;
+  preferredName?: string | null;
+  jobTitle?: string | null;
+  avatarUrl?: string | null;
+  phone?: string | null;
+  employeeId?: string | null;
+  requireMfa?: boolean;
+  profileStored?: boolean;
 }
 
 /** GET/POST/PATCH /roles — platform-wide constants, not company-scoped (see roles.controller.ts). */

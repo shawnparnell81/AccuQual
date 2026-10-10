@@ -31,8 +31,14 @@ export function mfaRequiredFor(roleName: string | null, companyPolicy: string | 
   return roleName !== null && ADMIN_ROLES.has(roleName); // "admins" — also the default for an unknown value, failing toward safer
 }
 
-export function evaluateMfa(user: { mfaEnabled: boolean; mfaRequiredSince: Date | null }, roleName: string | null, companyPolicy: string | null | undefined, now: Date = new Date()): MfaEvaluation {
-  const required = mfaRequiredFor(roleName, companyPolicy);
+export function evaluateMfa(
+  user: { mfaEnabled: boolean; mfaRequiredSince: Date | null },
+  roleName: string | null,
+  companyPolicy: string | null | undefined,
+  now: Date = new Date(),
+  personallyRequired = false,
+): MfaEvaluation {
+  const required = personallyRequired || mfaRequiredFor(roleName, companyPolicy);
   if (user.mfaEnabled) return { enabled: true, required, state: "ok", graceEndsAt: null };
   if (!required) return { enabled: false, required: false, state: "ok", graceEndsAt: null };
   if (env.MFA_ENROLLMENT_GRACE_DAYS === 0) return { enabled: false, required: true, state: "blocked", graceEndsAt: null };
