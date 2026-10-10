@@ -67,6 +67,10 @@ describe("top menu", () => {
     assert.equal(flattenSidebarLinks(staff).some((link) => link.key === "admin" || link.path === "/admin"), false);
     assert.equal(acceptSidebarPath("/documents/development-log"), "/documents/development-log");
     assert.equal(acceptSidebarPath("/iso-forms/frm-dev-001"), "/iso-forms/frm-dev-001");
+    assert.equal(acceptSidebarPath("/qms-forms"), "/blank-forms");
+    assert.equal(acceptSidebarPath("/qms-forms/incoming_inspection_record"), "/form-folders/incoming_inspection_record");
+    assert.equal(acceptSidebarPath("/qms-forms/incoming_inspection_record/4"), "/qms-forms/incoming_inspection_record/4");
+    assert.equal(acceptSidebarPath("/qms-forms/master_document_register"), "/documents/master-list");
   });
 
   it("turns a one-item submenu into a direct link and keeps real groups", () => {

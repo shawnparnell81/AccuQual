@@ -31,8 +31,60 @@ function isLockedSidebarKey(key: string): boolean {
   return (LOCKED_SIDEBAR_KEYS as readonly string[]).includes(key);
 }
 
-function cleanPin(pin: { key: string; label: string; path: string }): { key: string; label: string; path: string } {
-  return pin;
+function trimPath(path: string): string {
+  const trimmed = path.trim();
+  return trimmed.length > 1 ? trimmed.replace(/\/+$/, "") : trimmed;
+}
+
+/**
+ * A saved QMS Forms shortcut opens Blank Forms, or the saved-copy folder for one form.
+ * The catalog pin is dropped because Blank Forms is already a menu row.
+ */
+function cleanPin(pin: { key: string; label: string; path: string }): { key: string; label: string; path: string } | null {
+  if (pin.key === "blank:master_document_register") return null;
+  const raw = trimPath(pin.path);
+  if (raw === "/qms-forms/master_document_register") return null;
+  let path = raw;
+  let label = pin.label;
+  const wasCatalog = pin.key === "qms-forms" || label === "QMS Forms" || raw === "/qms-forms";
+  if (raw === "/qms-forms" || pin.key === "qms-forms") {
+    path = "/blank-forms";
+    label = "Blank Forms";
+  } else {
+    const typeOnly = raw.match(/^\/qms-forms\/([A-Za-z0-9_-]+)$/);
+    if (typeOnly) {
+      const formType = typeOnly[1] ?? "";
+      path = formType === "first_article_inspection" ? "/blank-forms" : `/form-folders/${formType}`;
+      if (label === "QMS Forms") label = path === "/blank-forms" ? "Blank Forms" : label;
+    }
+  }
+  if (wasCatalog && path === "/blank-forms") return null;
+  if (label === "QMS Forms") label = path.startsWith("/form-folders/") ? "Saved forms" : "Blank Forms";
+  return { ...pin, path, label };
+}
+
+function layoutContainsKey(nodes: { key?: string; children?: unknown }[] | null | undefined, key: string): boolean {
+  for (const node of nodes ?? []) {
+    if (node?.key === key) return true;
+    if (Array.isArray(node?.children) && layoutContainsKey(node.children as { key?: string; children?: unknown }[], key)) return true;
+  }
+  return false;
+}
+
+function mapQmsFormsPlacement(nodes: SidebarPlacementInput[]): SidebarPlacementInput[] {
+  const seen = new Set<string>();
+  function walk(items: SidebarPlacementInput[]): SidebarPlacementInput[] {
+    const out: SidebarPlacementInput[] = [];
+    for (const node of items) {
+      const key = node.key === "qms-forms" ? BLANK_FORMS_SIDEBAR_KEY : node.key;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const children = node.children ? walk(node.children) : undefined;
+      out.push(children && children.length > 0 ? { key, children } : { key });
+    }
+    return out;
+  }
+  return walk(nodes);
 }
 
 function cleanSidebarLayout(nodes: { key: string; children?: unknown }[] | null | undefined): SidebarPlacementInput[] | null {
@@ -102,11 +154,16 @@ function normalizeSidebarShortcuts(raw: {
   menuEdition?: number;
 } | null | undefined): SidebarShortcutPrefs {
   const alreadyOffered = (raw?.offered ?? []).includes(BLANK_FORMS_SIDEBAR_KEY);
+  const sawQmsForms =
+    layoutContainsKey(raw?.layout, "qms-forms") ||
+    (raw?.pinned ?? []).some((pin) => pin?.key === "qms-forms" || pin?.label === "QMS Forms" || trimPath(pin?.path ?? "") === "/qms-forms");
   const hidden = [
     ...new Set(
-      (raw?.hidden ?? []).filter(
-        (key) => typeof key === "string" && key.length > 0 && !isLockedSidebarKey(key) && (alreadyOffered || key !== BLANK_FORMS_SIDEBAR_KEY),
-      ),
+      (raw?.hidden ?? []).filter((key) => {
+        if (typeof key !== "string" || key.length === 0 || isLockedSidebarKey(key) || key === "qms-forms") return false;
+        if (key === BLANK_FORMS_SIDEBAR_KEY && (!alreadyOffered || sawQmsForms)) return false;
+        return true;
+      }),
     ),
   ];
   const hiddenSet = new Set(hidden);
@@ -115,11 +172,12 @@ function normalizeSidebarShortcuts(raw: {
   for (const pin of raw?.pinned ?? []) {
     if (!pin) continue;
     const next = cleanPin(pin);
-    if (hiddenSet.has(next.key) || seen.has(next.key)) continue;
+    if (!next || hiddenSet.has(next.key) || seen.has(next.key)) continue;
     seen.add(next.key);
     pinned.push(next);
   }
-  let layout = hoistLockedLayout(cleanSidebarLayout(raw?.layout));
+  const cleanedLayout = cleanSidebarLayout(raw?.layout);
+  let layout = hoistLockedLayout(cleanedLayout ? mapQmsFormsPlacement(cleanedLayout) : null);
   const layoutKeys = new Set<string>();
   function collect(nodes: { key: string; children?: { key: string }[] }[] | null | undefined) {
     for (const node of nodes ?? []) {

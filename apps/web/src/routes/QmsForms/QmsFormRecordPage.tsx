@@ -238,13 +238,13 @@ export function QmsFormRecordPage() {
 
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);
   const retired = isRetiredQmsFormType(formType);
-  const backTo = retired ? "/documents/master-list" : `/qms-forms/${formType}`;
+  const backTo = retired ? "/documents/master-list" : formType === "first_article_inspection" ? "/blank-forms" : `/form-folders/${formType}`;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between print:hidden">
         <button onClick={() => navigate(backTo)} className="text-sm text-muted-foreground hover:text-foreground">
-          {retired ? "← Master Document List" : "← Back to list"}
+          {retired ? "← Master Document List" : formType === "first_article_inspection" ? "← Blank Forms" : "← Saved copies"}
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <SaveStatus saving={saving || patchHeader.isPending || patchRow.isPending} unsaved={dirty && !saving && !patchHeader.isPending && !patchRow.isPending} />

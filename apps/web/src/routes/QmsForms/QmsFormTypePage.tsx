@@ -1,70 +1,14 @@
-import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { createResourceHooks } from "../../api/resourceHooks";
-import type { QmsForm, QmsFormStatus } from "../../api/types";
-import { DataTable, type Column } from "../../components/tables/DataTable";
-import { StatusBadge } from "../../components/tables/StatusBadge";
-import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
+import { Navigate, useParams } from "react-router-dom";
 import { getQmsFormDefinition, isRetiredQmsFormType } from "./qmsFormDefinitions";
 
-const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
-const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
-
+/**
+ * Old form-type list. Saved copies of that form are in its folder.
+ * The retired register opens the live Master Document List.
+ * First Article blanks open from Blank Forms; that folder was retired.
+ */
 export function QmsFormTypePage() {
-  const { formType } = useParams();
-  const navigate = useNavigate();
-  const definition = getQmsFormDefinition(formType!);
-  const { data: rows = [], isLoading, isError } = qmsFormHooks.useList({ formType }, { enabled: !isRetiredQmsFormType(formType) });
-  const createForm = qmsFormHooks.useCreate();
-  const [statusFilter, setStatusFilter] = useState("");
-
-  const filtered = useMemo(() => rows.filter((r) => !statusFilter || r.status === statusFilter), [rows, statusFilter]);
-
+  const { formType = "" } = useParams();
   if (isRetiredQmsFormType(formType)) return <Navigate to="/documents/master-list" replace />;
-  if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
-
-  const columns: Column<QmsForm>[] = [
-    { header: "Form No.", accessor: (r) => r.formNo?.trim() || "" },
-    { header: "Revision", accessor: (r) => r.revision ?? "A" },
-    { header: "Prepared By", accessor: (r) => r.preparedBy ?? "—" },
-    { header: "Approved By", accessor: (r) => r.approvedBy ?? "—" },
-    { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
-  ];
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <button onClick={() => navigate("/qms-forms")} className="text-sm text-muted-foreground hover:text-foreground">
-            ← All QMS Forms
-          </button>
-          <h1 className="text-2xl font-semibold">{definition.title}</h1>
-          <p className="text-sm text-muted-foreground">{definition.subtitle}</p>
-        </div>
-        <NumberedCreateButton
-          label={`+ New ${definition.title}`}
-          numberLabel="Form No."
-          dialogTitle={`New ${definition.title}`}
-          pending={createForm.isPending}
-          onCreate={async (recordNumber) => {
-            const created = await createForm.mutateAsync({ formType, formNo: recordNumber.trim() || null } as never);
-            navigate(`/qms-forms/${formType}/${created.id}`);
-          }}
-        />
-      </div>
-
-      <div className="flex gap-3">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/qms-forms/${formType}/${r.id}`)} />
-    </div>
-  );
+  if (formType === "first_article_inspection" || !getQmsFormDefinition(formType)) return <Navigate to="/blank-forms" replace />;
+  return <Navigate to={`/form-folders/${encodeURIComponent(formType)}`} replace />;
 }

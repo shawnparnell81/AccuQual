@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTemplatesQuery";
 import { ExplorerCatalog } from "../../components/documents/ExplorerCatalog";
 import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
+import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { blankTemplateTopic, templatesOnBlankShelf } from "../../lib/blankFormsList";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { useExplorerView } from "../../hooks/useExplorerView";
@@ -65,6 +66,7 @@ export function BlankFormsListPage() {
               { key: "formId", label: "Form ID", render: (form) => form.formId || "—" },
               { key: "topic", label: "Topic", render: () => topic },
             ]}
+            trailing={(form) => <FormNumberEditor formKey={form.formKey} compact />}
           />
         </div>
       ))}

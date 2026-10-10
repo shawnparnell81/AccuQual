@@ -10,7 +10,7 @@ Documents is the in-app filing cabinet.
 - Folders can be nested. A department is a top-level folder. You can add folders under it.
 - A filled form is filed as **one** row in the folder you choose. Moving it later moves that same row. It is not copied into a second folder.
 - Opening that row opens the same record you saved (the validation sheet, the quality form, and so on). It does not download a separate copy.
-- Blank templates stay on Blank Forms and QMS Forms. Folder Explorer lists a folder's name and the copies that were saved into it. A filled copy is a different row, in the folder you pick.
+- Blank templates stay on Blank Forms. Folder Explorer lists a folder's name and the copies that were saved into it. A filled copy is a different row, in the folder you pick.
 - Uploaded files can sit in the same folders. Drag a folder onto another folder to move it and everything inside it. Drag a file onto a folder to move that file. Administrators can still rearrange the sidebar by drag and drop; that layout is separate from these folders.
 
 NCR, CAPA, and 8D keep their own pages. They are not reorganized by this filing cabinet.

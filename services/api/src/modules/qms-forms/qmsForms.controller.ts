@@ -20,7 +20,7 @@ import { stampRecordSite } from "../sites/recordSite.js";
 
 async function loadForm(req: Request, id: number) {
   const [row] = await req.db!.select().from(qmsForms).where(and(eq(qmsForms.id, id)));
-  if (!row) throw AppError.notFound("QMS form");
+  if (!row) throw AppError.notFound("Form");
   return row;
 }
 

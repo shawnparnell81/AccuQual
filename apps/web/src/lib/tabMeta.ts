@@ -1,3 +1,5 @@
+import { getQmsFormDefinition } from "../routes/QmsForms/qmsFormDefinitions";
+
 /**
  * Derives a tab's title/icon purely from its route — no extra fetch, so
  * every normal navigation (existing links, back button) can update the
@@ -29,7 +31,9 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/documents\/folders\/?$/, icon: "documents", title: () => "Folder Explorer" },
   { test: /^\/scar-forms/, icon: "default", title: () => "SCAR" },
   { test: /^\/document-change-requests/, icon: "default", title: () => "Document changes" },
-  { test: /^\/qms-forms/, icon: "default", title: () => "QMS Forms" },
+  { test: /^\/qms-forms\/([^/]+)\/\d+$/, icon: "documents", title: (match) => getQmsFormDefinition(match[1] ?? "")?.title ?? "Form" },
+  { test: /^\/qms-forms\/[^/]+$/, icon: "documents", title: () => "Saved forms" },
+  { test: /^\/qms-forms\/?$/, icon: "documents", title: () => "Blank Forms" },
   { test: /^\/blank-forms\/start\/[^/]+$/, icon: "documents", title: () => "Starting a blank" },
   { test: /^\/blank-forms\/?$/, icon: "documents", title: () => "Blank Forms" },
   { test: /^\/form-folders\/[^/]+\/?$/, icon: "documents", title: () => "Saved forms" },

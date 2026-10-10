@@ -110,9 +110,13 @@ function ensureGroupsPlaced(layout: SidebarPlacement[], groups: SidebarGroupPref
 
 export function normalizePin(pin: PinnedShortcut): PinnedShortcut | null {
   if (!pin?.key || isRetiredShortcut(pin)) return null;
+  const rawPath = pin.path?.trim().replace(/\/+$/, "") || "";
+  const wasCatalog = pin.key === "qms-forms" || rawPath === "/qms-forms" || (pin.label === "QMS Forms" && (rawPath === "/qms-forms" || rawPath === ""));
   const path = acceptSidebarPath(pin.path);
   if (!path) return null;
-  return { ...pin, path };
+  if (wasCatalog && path === "/blank-forms") return null;
+  const label = pin.label === "QMS Forms" ? (path.startsWith("/form-folders/") ? "Saved forms" : "Blank Forms") : pin.label;
+  return { ...pin, path, label };
 }
 
 function rewriteBlankPlacements(nodes: SidebarPlacement[]): SidebarPlacement[] {
@@ -202,6 +206,32 @@ function readMenuEdition(value: number | undefined): number {
   return Math.max(0, Math.floor(value));
 }
 
+function layoutContainsKey(nodes: { key: string; children?: { key: string; children?: unknown }[] }[] | null | undefined, key: string): boolean {
+  for (const node of nodes ?? []) {
+    if (node.key === key) return true;
+    if (layoutContainsKey(node.children as { key: string; children?: { key: string }[] }[] | undefined, key)) return true;
+  }
+  return false;
+}
+
+/** A saved QMS Forms row becomes Blank Forms. A second copy of that key is dropped. */
+function mapQmsFormsPlacement(nodes: SidebarPlacement[]): SidebarPlacement[] {
+  const seen = new Set<string>();
+  function walk(items: SidebarPlacement[]): SidebarPlacement[] {
+    const out: SidebarPlacement[] = [];
+    for (const node of items) {
+      if (!node?.key) continue;
+      const key = node.key === "qms-forms" ? "blank-forms" : node.key;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const children = node.children ? walk(node.children) : undefined;
+      out.push(children && children.length > 0 ? { key, children } : { key });
+    }
+    return out;
+  }
+  return walk(nodes);
+}
+
 /** Pulls locked rows out of whatever section they were saved in and puts them first. A missing Home is inserted. */
 export function hoistLockedPlacements(layout: SidebarPlacement[]): SidebarPlacement[] {
   const found = new Map<string, SidebarPlacement>();
@@ -261,6 +291,11 @@ function hoistLockedNodes(nodes: SidebarNode[]): SidebarNode[] {
 export function normalizeSidebarPrefs(prefs: SidebarShortcutPrefs | null | undefined): SidebarShortcutPrefs {
   const edition = readMenuEdition(prefs?.menuEdition);
   let hidden = withoutLockedHidden(prefs?.hidden ?? []);
+  const sawQmsForms =
+    layoutContainsKey(prefs?.layout, "qms-forms") ||
+    (prefs?.pinned ?? []).some((pin) => pin?.key === "qms-forms" || pin?.label === "QMS Forms" || pin?.path?.replace(/\/+$/, "") === "/qms-forms");
+  if (sawQmsForms) hidden = hidden.filter((key) => key !== "blank-forms");
+  hidden = hidden.filter((key) => key !== "qms-forms");
   if (edition < 2) {
     const folders = catalogFolderKeys(SIDEBAR_FOLDERS);
     hidden = hidden.filter((key) => !folders.has(key));
@@ -271,7 +306,7 @@ export function normalizeSidebarPrefs(prefs: SidebarShortcutPrefs | null | undef
   }
   const pinned = prefs?.pinned ?? [];
   const groups = prefs?.groups ?? [];
-  const layout = prefs?.layout ? hoistLockedPlacements(prefs.layout) : (prefs?.layout ?? null);
+  const layout = prefs?.layout ? hoistLockedPlacements(mapQmsFormsPlacement(prefs.layout)) : (prefs?.layout ?? null);
   return { hidden, pinned, layout, groups, menuEdition: Math.max(edition, MENU_EDITION) };
 }
 

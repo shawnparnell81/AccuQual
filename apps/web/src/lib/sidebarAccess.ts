@@ -320,6 +320,14 @@ export function acceptSidebarPath(path: string): string | null {
   const queryAt = next.indexOf("?");
   const pathname = queryAt === -1 ? next : next.slice(0, queryAt);
   const query = queryAt === -1 ? "" : next.slice(queryAt + 1);
+  if (pathname === "/qms-forms") return "/blank-forms";
+  const qmsType = pathname.match(/^\/qms-forms\/([A-Za-z0-9_-]+)$/);
+  if (qmsType) {
+    const formType = qmsType[1] ?? "";
+    if (formType === "master_document_register") return "/documents/master-list";
+    if (formType === "first_article_inspection") return "/blank-forms";
+    return `/form-folders/${formType}`;
+  }
   if (query.includes("?")) return null;
   if (!routeExists(pathname)) return null;
   if (!query) return pathname;

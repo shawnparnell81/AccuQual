@@ -168,7 +168,6 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
     },
     CONTROLLED_LISTS,
     { key: "uploads", label: "General Uploads", path: "/documents/uploads", icon: Upload },
-    { key: "qms-forms", label: "QMS Forms", path: "/qms-forms", icon: FileSpreadsheet },
   ],
 };
 

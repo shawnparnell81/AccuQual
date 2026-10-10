@@ -88,7 +88,7 @@ describe("Quality document folders", () => {
   it("keeps the shared menu free of form dumps and duplicate lists", () => {
     const links = flattenSidebarLinks();
     const labels = links.map((link) => link.label);
-    assert.equal(labels.includes("QMS Forms"), true);
+    assert.equal(labels.includes("QMS Forms"), false);
     assert.equal(labels.filter((label) => label === "Master Document List").length, 1);
     assert.equal(labels.includes("Master Tool List"), false);
     assert.equal(labels.includes("Audit Checklist"), false);

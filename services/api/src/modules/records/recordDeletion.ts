@@ -721,7 +721,7 @@ const specs: Record<RecordKind, KindSpec> = {
   },
   qms: {
     entityType: "QmsForm",
-    label: "QMS form",
+    label: "Form",
     attachmentTypes: ["qms_form", "qms"],
     formKeys: ["qms", "qms_form"],
     numberFields: ["formNo"],
