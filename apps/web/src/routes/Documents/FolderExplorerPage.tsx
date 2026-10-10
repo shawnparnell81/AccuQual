@@ -27,6 +27,7 @@ import { DeleteFolderDialog, FolderActionButtons, RenameFolderDialog } from "../
 import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
 import { documentFolderHasContents, folderPathLabel } from "../../lib/folderActions";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import "./folderExplorer.css";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
@@ -1098,7 +1099,7 @@ export function FolderExplorerPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading folders">
+      <div className="folder-explorer" aria-busy="true" aria-label="Loading folders">
         <div className="skeleton h-8 w-64" />
         <div className="skeleton h-4 w-full max-w-xl" />
         {Array.from({ length: 7 }, (_, index) => (
@@ -1107,7 +1108,7 @@ export function FolderExplorerPage() {
       </div>
     );
   }
-  if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
+  if (!activeDept) return <p className="folder-explorer text-sm text-muted-foreground">No departments found.</p>;
   const deptChain = folderChain(visibleFolders, activeDept.id);
   const deptPath = folderNodePath(visibleFolders, activeDept.id);
   const deptParent = deptChain.length > 1 ? deptChain[deptChain.length - 2] : undefined;
@@ -1118,7 +1119,7 @@ export function FolderExplorerPage() {
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="folder-explorer">
       <input
         ref={uploadDocInputRef}
         type="file"
@@ -1156,8 +1157,8 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      <div ref={boardPaneRef} className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(240px,22rem)_minmax(0,1fr)] md:overflow-hidden">
-        <nav ref={treePaneRef} className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto" aria-label="Document folders">
+      <div ref={boardPaneRef} className="folder-explorer-board">
+        <nav ref={treePaneRef} className="folder-explorer-pane flex flex-col gap-1 rounded-lg border border-border bg-card p-2" aria-label="Document folders">
           <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
           <ul data-testid="folder-tree">
             {treeRoots.map((folder) => (
@@ -1223,7 +1224,7 @@ export function FolderExplorerPage() {
           )}
         </nav>
 
-        <div ref={listPaneRef} className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
+        <div ref={listPaneRef} className="folder-explorer-pane flex min-w-0 flex-col gap-2">
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
@@ -1340,7 +1341,7 @@ export function FolderExplorerPage() {
           <FileDropZone
             onFiles={(dropped) => void uploadFiles(activeDept.id, dropped)}
             overlay={false}
-            className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+            className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-2 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
           >
             <span className="inline-flex items-center gap-2">
               <UploadCloud size={14} /> Drag files from your computer onto {activeDept.name}, or onto any folder below, to add them as documents
@@ -1449,7 +1450,7 @@ export function FolderExplorerPage() {
             setPoolHover(false);
             dropOnParent(e, poolFolder.id);
           }}
-          className={`shrink-0 rounded-lg border bg-card transition-colors ${
+          className={`folder-explorer-pool rounded-lg border bg-card transition-colors ${
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
           }`}
         >
@@ -1482,6 +1483,9 @@ export function FolderExplorerPage() {
                 </div>
               )}
             </div>
+            {detailItems(poolFolder.id).length === 0 ? (
+              <p className="px-4 pb-3 text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</p>
+            ) : (
             <FolderContentsList
               items={detailItems(poolFolder.id)}
               testId="library-pool-details"
@@ -1517,6 +1521,7 @@ export function FolderExplorerPage() {
                 className: hintClass(item.node.id),
               })}
             />
+            )}
           </div>
         </div>
       )}
@@ -1752,7 +1757,7 @@ function DocPill({
 
 function EmptyFolder({ filtered }: { filtered: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-3 py-6 text-center" data-testid="folder-empty">
+    <div className="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-3 py-3 text-center" data-testid="folder-empty">
       <Folder size={18} className="text-muted-foreground" />
       <p className="text-sm text-muted-foreground">{filtered ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>
       {!filtered && <p className="text-xs text-muted-foreground">Blank templates are in Blank Forms Templates. A form shows up here after it is saved into this folder.</p>}
@@ -1908,7 +1913,7 @@ function FolderBrowser({
   const canRename = canManage && folder.name !== LIBRARY_POOL_NAME;
 
   return (
-    <div className="flex flex-col gap-3" data-testid="folder-browser">
+    <div className="flex flex-col gap-2" data-testid="folder-browser">
       <ExplorerPathBar
         crumbs={explorerCrumbs(chain)}
         canBack={canBack}
@@ -2004,7 +2009,7 @@ function FolderBrowser({
       <FileDropZone
         onFiles={(dropped) => void onUploadFiles(folder.id, dropped)}
         overlay={false}
-        className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+        className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-2 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
       >
         <span className="inline-flex items-center gap-2">
           <UploadCloud size={14} /> Drag files from your computer onto {folder.name} to add them as documents
