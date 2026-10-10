@@ -8,7 +8,7 @@ import { useOnboardingChecklist } from "../../hooks/useOnboardingChecklist";
 const CHECKLIST_ITEMS = [
   { key: "invite_users", label: "Invite your team", description: "Add the people who'll use AccuQual — Admin Console > Users." },
   { key: "review_departments", label: "Review departments", description: "Confirm who's in which department — that's what controls who sees what." },
-  { key: "review_nav", label: "Review your menu", description: "A few advanced tools (Workflow Builder, AI Insights, Digital Twin) are hidden by default — turn any of them on from Settings > Navigation." },
+  { key: "review_nav", label: "Review your menu", description: "A few advanced tools (Workflow Builder, AI Insights) are hidden by default — turn any of them on from Settings > Navigation." },
   { key: "open_a_form", label: "Open a QMS form", description: "Browse the QMS Forms catalog to see your form library." },
 ] as const;
 

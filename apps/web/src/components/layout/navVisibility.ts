@@ -3,6 +3,8 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
+import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
+import { hideDigitalTwinTarget } from "../../lib/digitalTwinFlag";
 import { ALL_MODULE_LEAVES, NAV_STRUCTURE, type AccessLevel, type Department, type NavGroup, type NavLeaf } from "./navConfig";
 
 /**
@@ -58,15 +60,16 @@ export function useNavVisibility() {
 
   const hiddenScopes = useHiddenNavScopes();
   const hidden = useMemo(() => new Set(hiddenScopes), [hiddenScopes]);
+  const { enabled: digitalTwin } = useDigitalTwinEnabled();
 
   const visibleGroups = useMemo(() => {
     return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || g.department === userDept)
       .filter((g) => !hidden.has(departmentScope(g.department ?? "system")))
       .map((g) => ({
         ...g,
-        items: g.items.filter((item) => !hidden.has(itemScope(g.department ?? "system", item.key))),
+        items: g.items.filter((item) => !hideDigitalTwinTarget(digitalTwin, item) && !hidden.has(itemScope(g.department ?? "system", item.key))),
       }));
-  }, [isAdmin, userDept, hidden]);
+  }, [isAdmin, userDept, hidden, digitalTwin]);
 
   const allVisibleLeaves = useMemo(() => {
     const seen = new Set<string>();

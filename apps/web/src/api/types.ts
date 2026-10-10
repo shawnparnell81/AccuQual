@@ -709,6 +709,8 @@ export interface CompanyProfile {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  /** False unless this company has turned Digital Twin on. Unset on the server reads back as false. */
+  digitalTwinEnabled: boolean;
 }
 
 /** GET /system-health (admin only) — Phase 10's consolidated Admin Console dashboard. Each check's shape varies by domain; `status`/`detail` are the two fields every check always has. */

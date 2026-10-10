@@ -296,6 +296,21 @@ describe("per-user sidebar layout", () => {
     assert.equal(links.some((link) => link.path === "/ncr"), true);
   });
 
+  it("hides Digital Twin unless the company turns it on, even when a saved menu includes it", () => {
+    const saved = {
+      hidden: [] as string[],
+      pinned: [{ key: "pin-twin", label: "Digital Twin", path: "/digital-twin" }],
+      groups: [],
+      layout: [{ key: "engineering", children: [{ key: "digital-twin" }, { key: "feasibility" }] }],
+      menuEdition: 3,
+    };
+    const off = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, saved, allowAll));
+    assert.equal(off.some((link) => link.key === "digital-twin" || link.path === "/digital-twin" || link.key === "pin-twin"), false);
+    assert.equal(off.some((link) => link.path === "/feasibility"), true);
+    const on = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, saved, { ...allowAll, digitalTwin: true }));
+    assert.equal(on.some((link) => link.key === "digital-twin" && link.path === "/digital-twin"), true);
+  });
+
   it("hides AI Insights when the company turns AI-assisted features off", () => {
     const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, { ...allowAll, aiFeatures: false }));
     assert.equal(links.some((link) => link.key === "ai" || link.path === "/ai"), false);

@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, Upload, History, Boxes, type LucideIcon } from "lucide-react";
+import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { isFullAccessRole } from "../../lib/fullAccess";
@@ -27,6 +28,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "permissions", label: "Permissions", icon: ShieldCheck, path: "roles-permissions", description: "System roles, department access, and who is assigned" },
   { key: "login_history", label: "Login History", icon: History, path: "login-history", description: "Who signed in, when, from where, and on what device", permission: "login_history" },
   { key: "workflows", label: "Workflows", icon: Workflow, externalPath: "/workflow", description: "Edit workflow states, transitions, conditions, and actions" },
+  { key: "digital_twin", label: "Digital Twin Setup", icon: Boxes, path: "digital-twin", description: "Models, machines, and device keys for a production line" },
   { key: "ai", label: "AI Settings", icon: Bot, path: "ai-settings", description: "LLM provider, model, safety mode, and usage" },
   { key: "supplier", label: "Supplier Settings", icon: Truck, path: "supplier-settings", description: "Supplier quality risk score weighting" },
   { key: "quality", label: "Quality Settings", icon: ClipboardCheck, path: "quality-settings", description: "Due reminders, repeat NCRs, and receiving escalation" },
@@ -54,7 +56,9 @@ export function useAdminConsoleSections(): ConsoleSection[] {
   const user = useCurrentUser();
   const admin = isFullAccessRole(user?.roleName);
   const { effective, isLoading } = useEffectivePermissions();
+  const { enabled: digitalTwin } = useDigitalTwinEnabled();
   return SECTIONS.filter((section) => {
+    if (section.key === "digital_twin" && !digitalTwin) return false;
     if (section.key === "import") {
       if (admin) return true;
       if (isLoading || !effective) return false;
