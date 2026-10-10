@@ -1,15 +1,17 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { eq, and, gte, inArray, sql } from "drizzle-orm";
+import { eq, and, gte, inArray, sql, desc } from "drizzle-orm";
 import { company } from "../../drizzle/schema/company.js";
 import { users } from "../../drizzle/schema/users.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { encryptSecret, decryptSecret, maskSecret } from "./crypto.js";
+import { encryptSecret, maskSecret, tryDecryptSecret } from "./crypto.js";
+import { aiConfigAssignment, ignorableApiKey, KEY_UNREADABLE_MESSAGE, keyColumnDrops, keyOnFileSentence } from "./aiConfigKey.js";
 import { validateApiKey } from "../ai/llm-gateway.js";
 import { aiFeaturesEnabled, aiKeySource } from "../ai/aiFeatures.js";
+import { formatUserLabel } from "../users/userDisplay.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
@@ -46,19 +48,6 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
   res.json(updated!.branding);
 });
 
-/**
- * Never returns the real key — a masked display string + whether one is set
- * at all, same convention as a password field showing dots.
- *
- * `keyStatus` is Phase 4's "prepare for external LLM key" tri-state: "ready"
- * (this co, or the platform default, has a key — real calls will be
- * made), "missing" (neither does — every AI feature runs in stub mode).
- * There is no third "invalid" value to report here: updateAiConfigHandler
- * below makes a real validation call to the provider before a key is ever
- * encrypted/stored, so an invalid key can never actually be saved — the
- * rejection happens at save time (a 400 on that request), not as a
- * lingering stored state to warn about later.
- */
 /**
  * GET/PATCH /co/profile — Admin Console "Company Settings" (Phase 10):
  * name, logo, timezone, contact info as one consolidated section, per the
@@ -112,7 +101,32 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   });
 });
 
-function aiConfigView(config: NonNullable<typeof company.$inferSelect.aiConfig>, co: { aiMonthlyLimit: number | null; aiLimitEnforced: boolean }) {
+type AiConfigRow = NonNullable<(typeof company.$inferSelect)["aiConfig"]>;
+
+function noStore(res: Response) {
+  res.setHeader("Cache-Control", "private, no-store");
+}
+
+/**
+ * Never returns the real key. keyStatus is "ready" when this company or the
+ * platform default has a usable key, "missing" when neither does, and
+ * "unreadable" when ciphertext is stored but this server's encryption key
+ * cannot open it. A failed decrypt used to throw, the settings page treated
+ * that error as an empty form, and the key looked like it had been deleted.
+ */
+async function aiConfigView(req: Request, config: AiConfigRow, co: { aiMonthlyLimit: number | null; aiLimitEnforced: boolean }) {
+  const stored = config.apiKeyEncrypted;
+  let plaintext: string | null = null;
+  let keyError: string | null = null;
+  if (stored) {
+    const decoded = tryDecryptSecret(stored);
+    if (decoded.ok) plaintext = decoded.plaintext;
+    else keyError = KEY_UNREADABLE_MESSAGE;
+  }
+  const last4 = plaintext ? plaintext.slice(-4) : null;
+  const provenance = last4 ? await keyProvenance(req, config) : { name: null as string | null, at: null as string | null };
+  const platformKey = !!(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+  const keyStatus: "ready" | "missing" | "unreadable" = keyError ? "unreadable" : stored || platformKey ? "ready" : "missing";
   const keySource = aiKeySource(config, { anthropic: env.ANTHROPIC_API_KEY, openai: env.OPENAI_API_KEY });
   return {
     provider: config.provider ?? null,
@@ -121,9 +135,14 @@ function aiConfigView(config: NonNullable<typeof company.$inferSelect.aiConfig>,
     maxTokens: config.maxTokens ?? null,
     assistantName: config.assistantName ?? null,
     safetyMode: config.safetyMode ?? "standard",
-    hasApiKey: !!config.apiKeyEncrypted,
-    maskedApiKey: config.apiKeyEncrypted ? maskSecret(decryptSecret(config.apiKeyEncrypted)) : null,
-    keyStatus: keySource === "none" ? ("missing" as const) : ("ready" as const),
+    hasApiKey: !!stored,
+    maskedApiKey: plaintext ? maskSecret(plaintext) : null,
+    keyLast4: last4,
+    keySetByName: provenance.name,
+    keySetAt: provenance.at,
+    keyError,
+    keyOnFileLabel: last4 ? keyOnFileSentence(last4, provenance.name, provenance.at ? new Date(provenance.at) : null) : null,
+    keyStatus,
     keySource,
     featuresEnabled: aiFeaturesEnabled(config),
     monthlyLimit: co.aiMonthlyLimit,
@@ -131,16 +150,47 @@ function aiConfigView(config: NonNullable<typeof company.$inferSelect.aiConfig>,
   };
 }
 
+/** Name and time for a key saved before apiKeySetByName existed: the audit row, never the key. */
+async function keyProvenance(req: Request, config: AiConfigRow): Promise<{ name: string | null; at: string | null }> {
+  if (config.apiKeySetByName && config.apiKeySetAt) return { name: config.apiKeySetByName, at: config.apiKeySetAt };
+  const [hit] = await req
+    .db!.select({ createdAt: auditTrail.createdAt, performedBy: auditTrail.performedBy })
+    .from(auditTrail)
+    .where(
+      and(
+        eq(auditTrail.entityType, "Company"),
+        sql`(${auditTrail.changes}->>'action' = 'ai_api_key_set' OR (${auditTrail.changes}->>'action' = 'update_ai_config' AND ${auditTrail.changes}->>'apiKeyChanged' = 'true'))`,
+      ),
+    )
+    .orderBy(desc(auditTrail.id))
+    .limit(1);
+  if (!hit?.createdAt) return { name: config.apiKeySetByName ?? null, at: config.apiKeySetAt ?? null };
+  let name = config.apiKeySetByName ?? null;
+  if (!name && hit.performedBy) {
+    const [actor] = await req.db!.select({ name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, hit.performedBy));
+    name = formatUserLabel(actor, hit.performedBy);
+  }
+  return { name, at: config.apiKeySetAt ?? hit.createdAt.toISOString() };
+}
+
+async function actorLabel(req: Request): Promise<string> {
+  if (!req.user) return "an administrator";
+  const [actor] = await req.db!.select({ name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, req.user.id));
+  return formatUserLabel(actor, req.user.id);
+}
+
 export const getAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  res.json(aiConfigView(co.aiConfig ?? {}, co));
+  noStore(res);
+  res.json(await aiConfigView(req, co.aiConfig ?? {}, co));
 });
 
 export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  const { provider, apiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced, featuresEnabled } = req.body as {
-    provider?: string;
+  const { provider, apiKey, removeApiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced, featuresEnabled } = req.body as {
+    provider?: "anthropic" | "openai";
     apiKey?: string;
+    removeApiKey?: boolean;
     modelName?: string;
     temperature?: number;
     maxTokens?: number;
@@ -152,53 +202,89 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   };
 
   const featuresBefore = aiFeaturesEnabled(co.aiConfig);
-  const merged = { ...co.aiConfig };
-  if (provider !== undefined) merged.provider = provider as "anthropic" | "openai";
-  if (modelName !== undefined) merged.modelName = modelName;
-  if (temperature !== undefined) merged.temperature = temperature;
-  if (maxTokens !== undefined) merged.maxTokens = maxTokens;
-  if (assistantName !== undefined) merged.assistantName = assistantName || undefined;
-  if (safetyMode !== undefined) merged.safetyMode = safetyMode;
-  if (featuresEnabled !== undefined) merged.featuresEnabled = featuresEnabled;
+  // Other fields merge onto the row's current JSON inside the UPDATE. The
+  // ciphertext is not copied from this request's earlier SELECT, so a stale
+  // read cannot write it away. featuresEnabled belongs in this patch too:
+  // replacing the whole object would drop the key. A blank or masked apiKey
+  // is not a new key.
+  const patch: Record<string, unknown> = {};
+  const drop: string[] = [];
+  if (provider !== undefined) patch.provider = provider;
+  if (modelName !== undefined) patch.modelName = modelName;
+  if (temperature !== undefined) patch.temperature = temperature;
+  if (maxTokens !== undefined) patch.maxTokens = maxTokens;
+  if (safetyMode !== undefined) patch.safetyMode = safetyMode;
+  if (featuresEnabled !== undefined) patch.featuresEnabled = featuresEnabled;
+  if (assistantName !== undefined) {
+    const trimmed = assistantName.trim();
+    if (!trimmed) drop.push("assistantName");
+    else patch.assistantName = trimmed;
+  }
 
-  if (apiKey !== undefined) {
-    // A real, minimal call to the provider — see validateApiKey's own
-    // comment. Tests against whatever provider/model this save ends up
-    // with (the merged values, so changing provider+key in the same
-    // request validates against the NEW provider, not the stale one).
-    const testProvider = merged.provider ?? "anthropic";
-    const testModel = merged.modelName ?? env.LLM_MODEL;
-    const isValid = await validateApiKey(testProvider, apiKey, testModel);
+  let keyAction: "set" | "remove" | null = null;
+  if (removeApiKey === true) {
+    drop.push(...keyColumnDrops());
+    keyAction = "remove";
+  } else if (!ignorableApiKey(apiKey)) {
+    const trimmed = apiKey!.trim();
+    const testProvider = provider ?? co.aiConfig?.provider ?? "anthropic";
+    const testModel = (typeof modelName === "string" && modelName.trim()) || co.aiConfig?.modelName || env.LLM_MODEL;
+    const isValid = await validateApiKey(testProvider, trimmed, testModel);
     if (!isValid) throw AppError.badRequest("Couldn't validate this API key with the provider — check the key, provider, and model, then try again.");
-    merged.apiKeyEncrypted = encryptSecret(apiKey);
+    const savedBy = await actorLabel(req);
+    patch.apiKeyEncrypted = encryptSecret(trimmed);
+    patch.apiKeySetAt = new Date().toISOString();
+    patch.apiKeySetByName = savedBy;
+    patch.apiKeySetByUserId = req.user?.id ?? null;
+    keyAction = "set";
   }
 
   const flatPatch: { aiMonthlyLimit?: number | null; aiLimitEnforced?: boolean } = {};
   if (monthlyLimit !== undefined) flatPatch.aiMonthlyLimit = monthlyLimit;
   if (limitEnforced !== undefined) flatPatch.aiLimitEnforced = limitEnforced;
 
-  const [updated] = await req.db!.update(company).set({ aiConfig: merged, ...flatPatch }).returning();
+  const writesConfig = Object.keys(patch).length > 0 || drop.length > 0;
+  let saved = co;
+  if (writesConfig || Object.keys(flatPatch).length > 0) {
+    const [updated] = await req.db!.update(company)
+      .set({ ...(writesConfig ? { aiConfig: aiConfigAssignment(patch, drop) } : {}), ...flatPatch })
+      .where(eq(company.id, co.id))
+      .returning();
+    saved = updated ?? co;
+  }
 
-  // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
-  await recordAuditTrail(req.db!, {
-    entityType: "Company",
-    entityId: 1,
-    action: "update",
-    changes: {
-      action: "update_ai_config",
-      fieldsChanged: Object.keys(req.body),
-      provider: merged.provider,
-      modelName: merged.modelName,
-      assistantName: merged.assistantName,
-      apiKeyChanged: apiKey !== undefined,
-      monthlyLimit: updated!.aiMonthlyLimit,
-      limitEnforced: updated!.aiLimitEnforced,
-      featuresEnabled: { from: featuresBefore, to: aiFeaturesEnabled(merged) },
-    },
-    performedBy: req.user?.id,
-  });
+  const otherFields = Object.keys(req.body).filter((key) => key !== "apiKey" && key !== "removeApiKey");
+  if (otherFields.length > 0) {
+    await recordAuditTrail(req.db!, {
+      entityType: "Company",
+      entityId: co.id,
+      action: "update",
+      changes: {
+        action: "update_ai_config",
+        fieldsChanged: otherFields,
+        provider: saved.aiConfig?.provider,
+        modelName: saved.aiConfig?.modelName,
+        assistantName: saved.aiConfig?.assistantName,
+        monthlyLimit: saved.aiMonthlyLimit,
+        limitEnforced: saved.aiLimitEnforced,
+        featuresEnabled: { from: featuresBefore, to: aiFeaturesEnabled(saved.aiConfig) },
+      },
+      performedBy: req.user?.id,
+    });
+  }
+  // The key itself is never written here — not plaintext, not ciphertext.
+  if (keyAction) {
+    await recordAuditTrail(req.db!, {
+      entityType: "Company",
+      entityId: co.id,
+      action: "update",
+      changes: { action: keyAction === "set" ? "ai_api_key_set" : "ai_api_key_removed" },
+      performedBy: req.user?.id,
+    });
+  }
 
-  res.json(aiConfigView(merged, updated!));
+  noStore(res);
+  res.json(await aiConfigView(req, saved.aiConfig ?? {}, saved));
 });
 
 /**

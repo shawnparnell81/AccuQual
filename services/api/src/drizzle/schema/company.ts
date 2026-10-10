@@ -60,6 +60,10 @@ export const company = pgTable("company", {
   aiConfig: jsonb("ai_config").$type<{
     provider?: "anthropic" | "openai";
     apiKeyEncrypted?: string;
+    /** Who last saved the provider key, and when. Not a secret. Absent on keys saved before this was recorded. */
+    apiKeySetAt?: string;
+    apiKeySetByName?: string;
+    apiKeySetByUserId?: number;
     modelName?: string;
     temperature?: number;
     maxTokens?: number;

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
@@ -30,8 +31,9 @@ function AiProviderStatus({ source, featuresEnabled }: { source: CompanyAiConfig
 
 function AiConfigForm() {
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const { data: config, isLoading } = useAiConfig();
+  const { data: config, isLoading, isError } = useAiConfig();
   const [provider, setProvider] = useState<string>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [modelName, setModelName] = useState("");
@@ -58,13 +60,15 @@ function AiConfigForm() {
   }, [config]);
 
   const save = useMutation({
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      const trimmedKey = apiKey.trim();
+      return (
         await apiClient.patch("/company/ai-config", {
           provider,
-          apiKey: apiKey || undefined, // blank = leave the stored key untouched
+          // Omitted when blank. The server also ignores a masked or redacted echo.
+          ...(trimmedKey ? { apiKey: trimmedKey } : {}),
           modelName: modelName || undefined,
-          temperature: temperature ? Number(temperature) : undefined,
+          temperature: temperature === "" ? undefined : Number(temperature),
           maxTokens: maxTokens ? Number(maxTokens) : undefined,
           assistantName, // "" clears it back to the default label — see updateAiConfigHandler
           safetyMode,
@@ -72,7 +76,8 @@ function AiConfigForm() {
           limitEnforced,
           featuresEnabled,
         })
-      ).data,
+      ).data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company/ai-config"] });
       queryClient.invalidateQueries({ queryKey: ["company/assistant-name"] });
@@ -82,7 +87,18 @@ function AiConfigForm() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save AI configuration.")),
   });
 
+  const removeKey = useMutation({
+    mutationFn: async () => (await apiClient.patch("/company/ai-config", { removeApiKey: true })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company/ai-config"] });
+      setApiKey("");
+      toast.success("API key removed.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove the API key.")),
+  });
+
   if (isLoading) return <LoadingPlaceholder />;
+  if (isError || !config) return <p className="text-sm text-warning">Couldn't load AI settings. Refresh the page and try again.</p>;
 
   return (
     <form
@@ -115,6 +131,15 @@ function AiConfigForm() {
         own provider account is billed for this usage, not AccuQual's.
       </p>
 
+      {config.keyError ? (
+        <p className="text-sm font-medium text-warning" role="status" data-testid="ai-key-error">
+          {config.keyError}
+        </p>
+      ) : config.keyOnFileLabel ? (
+        <p className="text-sm font-medium text-foreground" role="status" data-testid="ai-key-on-file">
+          {config.keyOnFileLabel}
+        </p>
+      ) : null}
       <TextField
         label="Assistant Name"
         value={assistantName}
@@ -133,12 +158,32 @@ function AiConfigForm() {
 
       <div>
         <TextField
-          label={config?.hasApiKey ? "API Key — one is already saved. Leave blank to keep it" : "API Key"}
+          label="API Key"
           type="password"
-          placeholder={config?.hasApiKey ? "Leave blank to keep the current key" : "sk-…"}
+          name="accuqual-company-ai-key"
+          autoComplete="new-password"
+          placeholder={config.hasApiKey ? "Leave blank to keep the current key" : "sk-…"}
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
+        {config.hasApiKey && (
+          <button
+            type="button"
+            className="mt-2 text-sm text-warning hover:underline disabled:opacity-60"
+            disabled={removeKey.isPending}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Remove the API key?",
+                message: "AI features will stop using this company's key. You can paste a new one later. This is the only way to clear a saved key.",
+                confirmLabel: "Remove key",
+                tone: "danger",
+              });
+              if (ok) removeKey.mutate();
+            }}
+          >
+            {removeKey.isPending ? "Removing…" : "Remove key"}
+          </button>
+        )}
         {apiKey && (
           <p className="mt-1 text-xs text-muted-foreground">
             Saving will make one small real request to {provider} to confirm this key works before it's stored — a genuine (tiny)
