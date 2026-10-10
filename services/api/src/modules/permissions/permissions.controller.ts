@@ -23,6 +23,7 @@ import { EXECUTIVE_DASHBOARD_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENA
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { departmentCellsThatChange } from "./departmentPermissionBulk.js";
 import type { Db } from "../../lib/requestDb.js";
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,43 @@ export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Reques
     performedBy: req.user?.id,
   });
   res.json(row);
+});
+
+/** PATCH /permissions/department-permissions/bulk — set many cells and write one audit row listing each change. */
+export const bulkUpsertDepartmentPermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const cells = req.body.cells as { departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[];
+  const seen = new Set<string>();
+  for (const cell of cells) {
+    const key = `${cell.departmentName}:${cell.moduleName}`;
+    if (seen.has(key)) throw AppError.badRequest("Each department and module can appear once.");
+    seen.add(key);
+  }
+  const rows = await req.db!.select().from(departmentPermissions);
+  const changes = departmentCellsThatChange(rows, cells);
+  if (changes.length === 0) {
+    res.json({ updated: 0, cells: [] });
+    return;
+  }
+  let firstId = 0;
+  for (const change of changes) {
+    const [row] = await req
+      .db!.insert(departmentPermissions)
+      .values({ departmentName: change.departmentName, moduleName: change.moduleName, accessLevel: change.to })
+      .onConflictDoUpdate({
+        target: [departmentPermissions.departmentName, departmentPermissions.moduleName],
+        set: { accessLevel: change.to, updatedAt: new Date() },
+      })
+      .returning();
+    if (!firstId && row) firstId = row.id;
+  }
+  await recordAuditTrail(req.db!, {
+    entityType: "DepartmentPermission",
+    entityId: firstId,
+    action: "update",
+    changes: { bulk: true, cells: changes },
+    performedBy: req.user?.id,
+  });
+  res.json({ updated: changes.length, cells: changes });
 });
 
 /** DELETE /permissions/department-permissions — remove an explicit override, reverting that cell back to the shipped default. Body: {departmentName, moduleName}. */

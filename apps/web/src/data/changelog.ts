@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-10.3",
+    date: "2026-10-10",
+    items: [
+      "Roles & Permissions can select every permission at once, or every permission in a section. Department Access can set a whole column or row to None, View, or Edit. Granting every permission asks you to continue. The change is written once, listing what changed.",
+    ],
+  },
+  {
     version: "2026-10-10.2",
     date: "2026-10-10",
     items: [

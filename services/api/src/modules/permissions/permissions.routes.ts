@@ -5,6 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
   upsertDepartmentPermissionSchema,
+  bulkDepartmentPermissionSchema,
   deleteDepartmentPermissionSchema,
   createPermissionRoleSchema,
   updatePermissionRoleSchema,
@@ -17,6 +18,7 @@ import {
   getMyEffectivePermissionsHandler,
   listDepartmentPermissionsHandler,
   upsertDepartmentPermissionHandler,
+  bulkUpsertDepartmentPermissionsHandler,
   deleteDepartmentPermissionHandler,
   listPermissionRolesHandler,
   createPermissionRoleHandler,
@@ -45,6 +47,7 @@ permissionsRouter.get("/effective", getMyEffectivePermissionsHandler);
 permissionsRouter.use(requireRole("admin"));
 
 permissionsRouter.get("/department-permissions", listDepartmentPermissionsHandler);
+permissionsRouter.patch("/department-permissions/bulk", validate(bulkDepartmentPermissionSchema), bulkUpsertDepartmentPermissionsHandler);
 permissionsRouter.patch("/department-permissions", validate(upsertDepartmentPermissionSchema), upsertDepartmentPermissionHandler);
 permissionsRouter.delete("/department-permissions", validate(deleteDepartmentPermissionSchema), deleteDepartmentPermissionHandler);
 

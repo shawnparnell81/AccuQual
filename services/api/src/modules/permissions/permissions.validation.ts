@@ -17,6 +17,19 @@ export const deleteDepartmentPermissionSchema = z.object({
   moduleName: moduleNameSchema,
 });
 
+export const bulkDepartmentPermissionSchema = z.object({
+  cells: z
+    .array(
+      z.object({
+        departmentName: departmentNameSchema,
+        moduleName: moduleNameSchema,
+        accessLevel: accessLevelSchema,
+      }),
+    )
+    .min(1)
+    .max(400),
+});
+
 export const createPermissionRoleSchema = z.object({
   roleName: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
