@@ -28,6 +28,7 @@ const HISTORY: Record<string, string> = {
   "/document-change-requests": "document_change_requests",
   "/training": "training_courses",
   "/change": "change",
+  "/complaints": "complaints",
 };
 
 function auth(token: string) {
@@ -58,7 +59,7 @@ function editBody(createPath: string, body: Record<string, unknown>): { patch: R
   if (createPath === "/8d") return { patch: { problemDescriptionD2: { D2: "LOCKED-EDIT" } }, marker: "LOCKED-EDIT" };
   if (createPath === "/audits") return { patch: { name: `${String(body.name ?? "Audit")} edited` }, marker: "edited" };
   if (createPath === "/equipment") return { patch: { location: "Edited lab" }, marker: "Edited lab" };
-  if (createPath === "/ncr" || createPath === "/risk" || createPath === "/change" || createPath === "/training") {
+  if (createPath === "/ncr" || createPath === "/risk" || createPath === "/change" || createPath === "/training" || createPath === "/complaints") {
     return { patch: { description: "LOCKED-EDIT" }, marker: "LOCKED-EDIT" };
   }
   const title = typeof body.title === "string" ? `${body.title} edited` : "Record edited";

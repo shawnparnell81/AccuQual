@@ -5,12 +5,18 @@ import { equipment } from "../../drizzle/schema/calibration.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
 import { documentChangeRequests } from "../../drizzle/schema/documentChangeRequests.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
+import { complaints } from "../../drizzle/schema/complaints.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { quarantineRecords } from "../../drizzle/schema/quarantine.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { scarForms } from "../../drizzle/schema/scarForms.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { beginFormEditHandler } from "./formEditAudit.js";
+
+export const beginComplaintEdit = beginFormEditHandler("Complaint", async (db, id) => {
+  const [row] = await db.select({ id: complaints.id }).from(complaints).where(eq(complaints.id, id));
+  return row;
+});
 
 export const beginNcrEdit = beginFormEditHandler("NCR", async (db, id) => {
   const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, id), eq(ncr.isDeleted, false)));

@@ -5,6 +5,7 @@ import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createComplaintSchema, updateComplaintSchema, resolveComplaintSchema } from "./complaints.validation.js";
+import { beginComplaintEdit } from "../forms/moduleBeginEdit.js";
 import { baseHandlers, verifyReferences, updateHandler, investigateHandler, resolveHandler, closeHandler, escalateToNcrHandler } from "./complaints.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 
@@ -26,6 +27,7 @@ complaintsRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAcce
 complaintsRouter.get("/", baseHandlers.list);
 complaintsRouter.post("/", validate(createComplaintSchema), verifyReferences, baseHandlers.create);
 complaintsRouter.get("/:id", baseHandlers.getOne);
+complaintsRouter.post("/:id/begin-edit", beginComplaintEdit);
 complaintsRouter.patch("/:id", validate(updateComplaintSchema), verifyReferences, updateHandler);
 complaintsRouter.delete("/:id", deleteRecordHandler("complaint"));
 complaintsRouter.post("/:id/investigate", investigateHandler);

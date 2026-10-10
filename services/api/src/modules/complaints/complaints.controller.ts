@@ -14,11 +14,13 @@ import { syncComplaintRecordToForm } from "./complaints.formSync.js";
 import { COMPLAINT_NUMBER } from "../records/recordNumberSpecs.js";
 import { stampRecordSite } from "../sites/recordSite.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
+import { fileOnFirstSave, patchIsNumberOnly } from "../document-folders/defaultFormFiling.js";
 
 export const baseHandlers = crudFactory(complaints, {
   entityName: "Complaint",
   idColumn: "id",
   recordNumber: COMPLAINT_NUMBER,
+  blankCreatePath: "/complaints",
   afterCreate: async (created, req) => {
     await syncComplaintRecordToForm(req.db!, created as unknown as Complaint, req.user?.id);
     if (req.db) await stampRecordSite(req.db, "complaints", Number(created.id), req.siteId);
@@ -52,11 +54,12 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
   const numberChange = await applyRecordNumber(req.db!, body, COMPLAINT_NUMBER, { id: current.id, current: current.recordNumber, row: current });
   const [updated] = await req
     .db!.update(complaints)
-    .set({ ...body, updatedAt: new Date() })
+    .set(patchIsNumberOnly(body) ? body : { ...body, updatedAt: new Date() })
     .where(and(eq(complaints.id, current.id)))
     .returning();
   await recordAuditTrail(req.db!, { entityType: "Complaint", entityId: current.id, action: "update", changes: changesWithNumberEdit(req.body, numberChange), performedBy: req.user?.id });
   await syncComplaintRecordToForm(req.db!, updated!, req.user?.id);
+  await fileOnFirstSave(req.db!, "/complaints", current, updated as Record<string, unknown>, body, req.user?.id);
   res.json(updated);
 });
 

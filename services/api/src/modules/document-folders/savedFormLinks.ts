@@ -340,6 +340,12 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   const eightSaved = await formSavedIds(db, ["eight_d"]);
   const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt, updatedAt: eightD.updatedAt }).from(eightD);
   for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || eightSaved.has(row.id), { updatedAt: row.updatedAt });
+  const complaintRows = await db
+    .select({ id: complaints.id, recordNumber: complaints.recordNumber, createdAt: complaints.createdAt, updatedAt: complaints.updatedAt })
+    .from(complaints);
+  for (const row of complaintRows) {
+    pushCopy(copies, "complaint", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber), { updatedAt: row.updatedAt });
+  }
   const dcrRows = await db
     .select({
       id: documentChangeRequests.id,
