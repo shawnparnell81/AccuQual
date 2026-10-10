@@ -27,8 +27,8 @@ export function RolesPermissionsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Roles &amp; Permissions</h1>
           <p className="text-sm text-muted-foreground">
-            Configure which departments can access each module, define custom roles with their own module grants, and assign users to
-            departments and roles — no code change or deploy required.
+            System roles, including Executive, are listed on the Roles tab with the permissions an administrator has assigned. The same
+            tab also holds custom roles that add module access on top of a department. Nothing here is granted by a role name alone.
           </p>
         </div>
 

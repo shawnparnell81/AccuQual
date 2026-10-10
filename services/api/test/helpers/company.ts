@@ -18,8 +18,8 @@ async function wipeDatabase(): Promise<void> {
     await client.query("DELETE FROM roles WHERE name NOT IN ('owner', 'admin', 'executive', 'president', 'vice_president', 'director', 'quality_manager', 'lead', 'operator', 'staff', 'read_only', 'auditor', 'supplier', 'customer')");
     await client.query(`
       INSERT INTO roles (name, description, hierarchy_level, is_protected, permissions) VALUES
-        ('owner', 'Owner — full access to everything', 10, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history"]'::jsonb),
-        ('admin', 'Administrator — full access', 15, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history"]'::jsonb),
+        ('owner', 'Owner — full access to everything', 10, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history", "sites.view_all", "executive.dashboard"]'::jsonb),
+        ('admin', 'Administrator — full access', 15, true, '["import_data", "restore_archived_documents", "plants.delete", "login_history", "sites.view_all", "executive.dashboard"]'::jsonb),
         ('executive', 'Executive — view every site and the executive dashboard. Does not grant editing.', 18, true, '["sites.view_all", "executive.dashboard"]'::jsonb),
         ('president', 'President — can view the quality system and approve work', 20, true, '[]'::jsonb),
         ('vice_president', 'Vice President — can view the quality system and approve work', 30, true, '[]'::jsonb),
