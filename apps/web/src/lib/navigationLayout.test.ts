@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder, PERMANENT_SIDEBAR_LINKS } from "../components/layout/sidebarStructure.ts";
 import { acceptSidebarPath, filterSidebarByAccess, type SidebarAccess } from "./sidebarAccess.ts";
-import { developmentMenu, folderMenuEntries, menuLabels, navigationLayoutFromProfile, siteShowsDevelopment, withDevelopment } from "./navigationLayout.ts";
+import { developmentMenu, folderMenuEntries, menuLabels, siteShowsDevelopment, withDevelopment } from "./navigationLayout.ts";
 
 const allowAll: SidebarAccess = {
   levels: new Proxy({} as Record<string, string>, { get: () => "edit" }),
@@ -12,15 +12,7 @@ function levels(map: Record<string, string>): SidebarAccess {
   return { levels: new Proxy({} as Record<string, string>, { get: (_target, prop) => map[String(prop)] ?? "none" }) };
 }
 
-describe("navigation layout", () => {
-  it("defaults to the sidebar", () => {
-    assert.equal(navigationLayoutFromProfile(undefined), "sidebar");
-    assert.equal(navigationLayoutFromProfile(null), "sidebar");
-    assert.equal(navigationLayoutFromProfile("sidebar"), "sidebar");
-    assert.equal(navigationLayoutFromProfile("left"), "sidebar");
-    assert.equal(navigationLayoutFromProfile("top"), "top");
-  });
-
+describe("top menu", () => {
   it("shows development for Wellman and All sites, and the same menu otherwise", () => {
     assert.equal(siteShowsDevelopment("Greer", null), false);
     assert.equal(siteShowsDevelopment("Wellman", null), true);

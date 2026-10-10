@@ -59,18 +59,6 @@ export function AdminCompanySettingsPage() {
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the policy.")),
   });
-  const [navigationLayout, setNavigationLayout] = useState<"sidebar" | "top">("sidebar");
-  useEffect(() => {
-    setNavigationLayout(profile?.navigationLayout === "top" ? "top" : "sidebar");
-  }, [profile?.navigationLayout]);
-  const saveNavigationLayout = useMutation({
-    mutationFn: async (next: "sidebar" | "top") => (await apiClient.patch("/company/profile", { navigationLayout: next })).data,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["company/profile"] });
-      toast.success("Navigation layout saved.");
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the navigation layout.")),
-  });
   const saveSessionLength = useMutation({
     mutationFn: async (sessionLengthHours: number) => (await apiClient.patch("/company/security", { sessionLengthHours })).data,
     onSuccess: () => {
@@ -126,25 +114,6 @@ export function AdminCompanySettingsPage() {
               {save.isPending ? "Saving…" : "Save Company Settings"}
             </button>
           </form>
-
-          <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-            <h2 className="text-sm font-medium">Navigation layout</h2>
-            <SelectField label="Navigation layout: Sidebar / Top bar" value={navigationLayout} onChange={(e) => setNavigationLayout(e.target.value === "top" ? "top" : "sidebar")} disabled={saveNavigationLayout.isPending}>
-              <option value="sidebar">Sidebar</option>
-              <option value="top">Top bar</option>
-            </SelectField>
-            <p className="text-xs text-muted-foreground">
-              Sidebar keeps the menu on the left. Top bar moves the same menu across the top, including Blank Forms, Folders, Settings, and Admin, and lets each page use the full width. Sidebar is the default.
-            </p>
-            <button
-              type="button"
-              disabled={saveNavigationLayout.isPending}
-              onClick={() => saveNavigationLayout.mutate(navigationLayout)}
-              className="w-fit rounded-md bg-button px-4 py-2 text-sm font-medium text-button-foreground disabled:opacity-60"
-            >
-              {saveNavigationLayout.isPending ? "Saving…" : "Save navigation layout"}
-            </button>
-          </div>
 
           <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
             <h2 className="text-sm font-medium">Sign-in security</h2>

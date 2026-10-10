@@ -256,7 +256,7 @@ function RootItem({
   );
 }
 
-/** The sidebar tree as dropdowns. Settings and Customize sidebar stay on the bar. */
+/** The arranged menu as dropdowns. Settings and Customize menu stay on the bar. */
 export function TopMenuBar({ nodes, catalog }: { nodes: SidebarNode[]; catalog: SidebarNode[] }) {
   const location = useLocation();
   const barRef = useRef<HTMLDivElement>(null);

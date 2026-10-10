@@ -2,13 +2,6 @@ import { ClipboardList, FileText, FlaskConical } from "lucide-react";
 import { ISO_FORMS } from "./isoFormCatalog";
 import { isFolder, type SidebarFolder, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
 
-export type NavigationLayout = "sidebar" | "top";
-
-/** Unset stays on the sidebar so a company that has not chosen keeps the left menu. */
-export function navigationLayoutFromProfile(value: unknown): NavigationLayout {
-  return value === "top" ? "top" : "sidebar";
-}
-
 /**
  * Greer and Wellman share one menu. Wellman, and All sites, also carry
  * development. A single named site other than Wellman does not.

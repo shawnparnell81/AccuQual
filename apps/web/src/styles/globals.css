@@ -98,7 +98,7 @@
   --fh: "Montserrat", system-ui, sans-serif;
   --fb: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --fm: "JetBrains Mono", ui-monospace, Consolas, monospace;
-  --side-w: 252px;
+  --side-w: 0px;
   --top-h: 62px;
   --r: 14px;
 }
@@ -1680,7 +1680,7 @@ body.side-collapsed .aq-nav-folder-link {
     --side-w: 0px;
   }
   .aq-menu-btn {
-    display: inline-grid;
+    display: none;
   }
   .aq-sidebar {
     /* Drawer width follows the saved size. --side-w stays 0 so the page is not pushed. */

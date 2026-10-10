@@ -50,11 +50,11 @@ export function SidebarShortcutsButton({ catalog, placement = "sidebar" }: { cat
         className={sidebar ? "aq-side-shortcuts" : menu ? "aq-topnav-root" : "inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"}
         data-testid="customize-sidebar"
         role={menu ? "menuitem" : undefined}
-        title="Customize sidebar"
+        title="Customize menu"
         onClick={() => setOpen(true)}
       >
         <SlidersHorizontal size={menu ? 14 : 16} />
-        <span>Customize sidebar</span>
+        <span>Customize menu</span>
       </button>
       <SidebarShortcutsDialog catalog={catalog} open={open} onClose={() => setOpen(false)} />
     </>
@@ -170,7 +170,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   }
 
   return (
-    <Modal title="Customize sidebar" isOpen={open} onClose={onClose} expanded>
+    <Modal title="Customize menu" isOpen={open} onClose={onClose} expanded>
       <div className="flex flex-col gap-4 text-sm" data-testid="customize-sidebar-dialog">
         <p className="text-muted-foreground">Choose what shows, the order, and your own sections. Home stays pinned at the top. Settings stays at the bottom. This is your menu only. Reset puts the original menu back.</p>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -337,7 +337,7 @@ function LockedMenuRow({ row }: { row: { key: string; label: string; depth: numb
       className="aq-side-locked flex items-center gap-2 border-b border-border px-2 py-1.5 last:border-b-0"
       style={{ paddingLeft: 8 + row.depth * 14 }}
       data-testid="customize-sidebar-locked"
-      title={`${row.label} stays at the top of the sidebar`}
+      title={`${row.label} stays first on the menu`}
     >
       <Lock size={14} className="aq-side-locked-mark shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1 whitespace-normal break-words font-medium" title={row.label}>{row.label}</span>

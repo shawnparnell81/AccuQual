@@ -207,13 +207,6 @@ export const company = pgTable("company", {
      */
     sessionLengthHours?: number;
     /**
-     * Sidebar keeps the menu on the left. Top bar moves that same menu
-     * across the top. Unset means sidebar, so the left menu stays until an
-     * admin saves the other choice. No new column: this jsonb already exists,
-     * so a deploy before any migration still reads the default.
-     */
-    navigationLayout?: "sidebar" | "top";
-    /**
      * Change-request masters (labels and revision). Written only by the
      * change-request structure endpoints. Company Settings spreads this
      * object, so a profile save keeps them. No separate table. Engineering
