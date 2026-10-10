@@ -253,9 +253,9 @@ async function presentPlan(db: Db, plan: FaiInspectionPlan, revisionNumber?: num
 export async function listLookups(db: Db) {
   const supplierRows = await db.select({ id: suppliers.id, name: suppliers.name, status: suppliers.status }).from(suppliers).orderBy(asc(suppliers.name));
   const peopleRows = await db
-    .select({ id: users.id, name: users.name, email: users.email, department: users.department })
+    .select({ id: users.id, name: users.name, email: users.email, department: users.department, isActive: users.isActive })
     .from(users)
-    .where(and(eq(users.isActive, true), inArray(users.department, ["quality", "engineering"])));
+    .where(inArray(users.department, ["quality", "engineering"]));
   const people = await sortByDisplayOrder(db, peopleRows, (person) => person.id, (person) => displayName(person.name, person.email));
   const plans = await db
     .select({

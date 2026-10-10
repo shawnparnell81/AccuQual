@@ -126,6 +126,21 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   const [removeBusy, setRemoveBusy] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [orderBusy, setOrderBusy] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
+  const visibleUsers = showInactive ? users : users.filter((person) => person.isActive);
+
+  function managerChoices(currentId: number | null | undefined, exceptId?: number) {
+    return users.filter((person) => person.id !== exceptId && (person.isActive || person.id === currentId));
+  }
+
+  function moveBeside(id: number, anchorId: number, place: "before" | "after") {
+    const next = users.map((person) => person.id).filter((userId) => userId !== id);
+    let index = next.indexOf(anchorId);
+    if (index < 0) return;
+    if (place === "after") index += 1;
+    next.splice(index, 0, id);
+    void saveOrder(next, id);
+  }
 
   async function saveOrder(nextIds: number[], movedUserId: number) {
     setOrderBusy(true);
@@ -144,24 +159,18 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   }
 
   function movePerson(id: number, direction: "up" | "down") {
-    const index = users.findIndex((person) => person.id === id);
-    const other = direction === "up" ? index - 1 : index + 1;
-    if (index < 0 || other < 0 || other >= users.length) return;
-    const next = users.map((person) => person.id);
-    const [moved] = next.splice(index, 1);
-    next.splice(other, 0, moved!);
-    void saveOrder(next, id);
+    const index = visibleUsers.findIndex((person) => person.id === id);
+    const other = visibleUsers[direction === "up" ? index - 1 : index + 1];
+    if (!other) return;
+    moveBeside(id, other.id, direction === "up" ? "before" : "after");
   }
 
   function dropOn(targetId: number) {
     if (draggingId == null || draggingId === targetId) return;
-    const next = users.map((person) => person.id);
-    const from = next.indexOf(draggingId);
-    const to = next.indexOf(targetId);
+    const from = users.findIndex((person) => person.id === draggingId);
+    const to = users.findIndex((person) => person.id === targetId);
     if (from < 0 || to < 0) return;
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved!);
-    void saveOrder(next, draggingId);
+    moveBeside(draggingId, targetId, from < to ? "after" : "before");
   }
 
   async function finishRemove(person: AppUser, replacementUserId?: number, reason?: string) {
@@ -198,7 +207,11 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <h3 className={`text-sm font-medium ${isAdmin ? "mb-1" : "mb-3"}`}>Users</h3>
-      {isAdmin && <p className="mb-3 text-xs text-muted-foreground">Company order. Move a person up or down, or drag the handle. Anyone not yet placed follows, by role then name.</p>}
+      {isAdmin && <p className="mb-2 text-xs text-muted-foreground">Company order. Move a person up or down, or drag the handle. Anyone not yet placed follows, by role then name.</p>}
+      <label className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />
+        Show inactive users
+      </label>
       <table className="aq-fit-table mb-4 text-sm">
         <colgroup>
           <col style={{ width: isAdmin ? "18%" : "16%" }} />
@@ -221,10 +234,17 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           </tr>
         </thead>
         <tbody>
-          {users.map((u, index) => (
+          {visibleUsers.length === 0 && (
+            <tr>
+              <td colSpan={isAdmin ? 7 : 6} className="py-3 text-sm text-muted-foreground">
+                No active users.
+              </td>
+            </tr>
+          )}
+          {visibleUsers.map((u, index) => (
             <Fragment key={u.id}>
             <tr
-              className="border-t border-border"
+              className={`border-t border-border ${u.isActive ? "" : "text-muted-foreground"}`}
               onDragOver={(event) => {
                 if (isAdmin && draggingId != null) event.preventDefault();
               }}
@@ -257,13 +277,13 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                         <button type="button" aria-label={`Move ${personOptionLabel(u)} up`} disabled={orderBusy || index === 0} onClick={() => movePerson(u.id, "up")} className="text-left text-[10px] text-primary hover:underline disabled:opacity-40">
                           Up
                         </button>
-                        <button type="button" aria-label={`Move ${personOptionLabel(u)} down`} disabled={orderBusy || index === users.length - 1} onClick={() => movePerson(u.id, "down")} className="text-left text-[10px] text-primary hover:underline disabled:opacity-40">
+                        <button type="button" aria-label={`Move ${personOptionLabel(u)} down`} disabled={orderBusy || index === visibleUsers.length - 1} onClick={() => movePerson(u.id, "down")} className="text-left text-[10px] text-primary hover:underline disabled:opacity-40">
                           Down
                         </button>
                       </span>
                     </span>
                   )}
-                  <span>{personOptionLabel(u)}</span>
+                  <span>{u.name?.trim() || u.email}</span>
                 </div>
               </td>
               <td className="py-1.5 pr-2 text-muted-foreground">{u.email}</td>
@@ -298,9 +318,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                     onChange={(e) => updateUser.mutate({ id: u.id, managerId: e.target.value ? Number(e.target.value) : null } as Partial<AppUser> & { id: number })}
                   >
                     <option value="">None</option>
-                    {users
-                      .filter((person) => person.id !== u.id)
-                      .map((person) => (
+                    {managerChoices(u.managerId, u.id).map((person) => (
                         <option key={person.id} value={person.id}>
                           {personOptionLabel(person)}
                         </option>
@@ -319,7 +337,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
               {isAdmin && <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>}
             </tr>
             {isAdmin && (
-              <tr>
+              <tr className={u.isActive ? undefined : "text-muted-foreground"}>
                 <td colSpan={7} className="pb-2 pt-0">
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
                     {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
@@ -497,9 +515,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           </SelectField>
           <SelectField label="Manager" value={editForm.managerId} onChange={(e) => setEditForm({ ...editForm, managerId: e.target.value })}>
             <option value="">None</option>
-            {users
-              .filter((person) => person.id !== editing?.id)
-              .map((person) => (
+            {managerChoices(editing?.managerId, editing?.id).map((person) => (
                 <option key={person.id} value={person.id}>
                   {personOptionLabel(person)}
                 </option>

@@ -29,7 +29,7 @@ import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { RecordFrame } from "../../components/records/RecordFrame";
 import { NcrStepDocuments } from "../../components/records/NcrStepDocuments";
-import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, statusPhrase } from "../../lib/opsLanguage";
+import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
@@ -188,7 +188,7 @@ export function NcrWorkspacePage() {
               className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
             >
               {!ncr.assignedTo && <option value="">Unassigned</option>}
-              {people.map((person) => (
+              {peopleForAssignment(people, ncr.assignedTo).map((person) => (
                 <option key={person.id} value={person.id}>
                   {formatPerson(person)}
                 </option>

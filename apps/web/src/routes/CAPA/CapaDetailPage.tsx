@@ -18,7 +18,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
-import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
@@ -114,7 +114,7 @@ export function CapaDetailPage() {
               className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
             >
               {!capa.ownerId && <option value="">Unassigned</option>}
-              {people.map((person) => (
+              {peopleForAssignment(people, capa.ownerId).map((person) => (
                 <option key={person.id} value={person.id}>
                   {formatPerson(person)}
                 </option>

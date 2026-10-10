@@ -141,8 +141,9 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     managerId?: number | null;
   };
   if (managerId != null) {
-    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, managerId));
+    const [manager] = await req.db!.select({ id: users.id, isActive: users.isActive }).from(users).where(eq(users.id, managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
+    if (!manager.isActive) throw AppError.badRequest("Choose an active person.");
   }
   // Said together so one submit explains every problem. A duplicate used to hit the unique-email rule and come back as a server error.
   const problems: string[] = [];
@@ -182,7 +183,7 @@ async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<numb
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const [before] = await req
-    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email })
+    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email, managerId: users.managerId })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
     .where(eq(users.id, id));
@@ -192,8 +193,9 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   if (body.isActive === false && id === req.user?.id) throw new AppError("You can't turn off your own account.", 409);
   if (body.managerId != null) {
     if (body.managerId === id) throw AppError.badRequest("A person can't be their own manager.");
-    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, body.managerId));
+    const [manager] = await req.db!.select({ id: users.id, isActive: users.isActive }).from(users).where(eq(users.id, body.managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
+    if (!manager.isActive && body.managerId !== before.managerId) throw AppError.badRequest("Choose an active person.");
   }
   if (body.email !== undefined) {
     const email = body.email.trim().toLowerCase();

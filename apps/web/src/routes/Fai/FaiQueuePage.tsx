@@ -6,7 +6,7 @@ import { useFaiLookups, useFaiQueue, useFaiRecords, useInvalidateFai, type FaiRe
 import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { personLabel } from "../../lib/opsLanguage";
+import { peopleForAssignment, personLabel } from "../../lib/opsLanguage";
 import { RecordNumberField } from "../../components/forms/RecordNumberField";
 import { showRecordNumber } from "../../lib/userRecordNumber";
 import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
@@ -140,7 +140,7 @@ export function FaiQueuePage() {
             Assign result entry
             <select className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
               <option value="">Unassigned</option>
-              {lookups.data?.people.map((row) => (
+              {peopleForAssignment(lookups.data?.people ?? []).map((row) => (
                 <option key={row.id} value={row.id}>{row.name?.trim() || row.email}</option>
               ))}
             </select>

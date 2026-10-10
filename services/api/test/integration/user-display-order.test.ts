@@ -134,6 +134,21 @@ describe("user display order", () => {
     expect(partial.status).toBe(400);
   });
 
+  it("refuses a deactivated person as a new manager and keeps one already on the account", async () => {
+    const kept = await request(app).patch(`/users/${earlyDirectorId}`).set("Authorization", `Bearer ${ownerToken}`).send({ managerId: earlyStaffId });
+    expect(kept.status).toBe(200);
+    const turnedOff = await request(app).patch(`/users/${earlyStaffId}`).set("Authorization", `Bearer ${ownerToken}`).send({ isActive: false });
+    expect(turnedOff.status).toBe(200);
+    const sameManager = await request(app).patch(`/users/${earlyDirectorId}`).set("Authorization", `Bearer ${ownerToken}`).send({ managerId: earlyStaffId });
+    expect(sameManager.status).toBe(200);
+    expect(sameManager.body.managerId).toBe(earlyStaffId);
+    const newly = await request(app).patch(`/users/${ownerId}`).set("Authorization", `Bearer ${ownerToken}`).send({ managerId: earlyStaffId });
+    expect(newly.status).toBe(400);
+    expect(newly.body.message).toBe("Choose an active person.");
+    const listed = await request(app).get("/users").set("Authorization", `Bearer ${ownerToken}`);
+    expect(listed.body.find((row: { id: number }) => row.id === earlyStaffId)?.isActive).toBe(false);
+  });
+
   it("keeps the order when company settings are saved", async () => {
     const [before] = await db.select({ profile: company.profile }).from(company);
     const order = before?.profile?.userDisplayOrder;

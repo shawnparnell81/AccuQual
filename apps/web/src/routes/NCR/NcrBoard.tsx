@@ -10,7 +10,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
-import { duePhrase, formatPerson, isPastDue, ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, isPastDue, ncrStepKey, ncrStepLabel, peopleForAssignment } from "../../lib/opsLanguage";
 
 const COLUMNS: BoardColumn[] = [
   { key: "ncr_created", label: "NCR Created", tone: "danger" },
@@ -79,7 +79,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
             ? `NCRs move one step at a time. ${recordHeading("NCR", n.recordNumber)} goes from ${ncrStepLabel(n.status)} to ${ncrStepLabel(next)} first — drop it there.`
             : `${recordHeading("NCR", n.recordNumber)} is closed and can't move (${ncrStepLabel(to)}).`;
         }}
-        people={people.map((person) => ({ id: person.id, name: formatPerson(person) }))}
+        people={peopleForAssignment(people).map((person) => ({ id: person.id, name: formatPerson(person) }))}
         assignedTo={(n) => n.assignedTo}
         onAssign={(n, personId, personName) => {
           apiClient

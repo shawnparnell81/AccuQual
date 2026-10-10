@@ -12,7 +12,7 @@ import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { formatDate } from "../../lib/dates";
-import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel, peopleForAssignment } from "../../lib/opsLanguage";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
@@ -384,7 +384,7 @@ export function NcrListPage() {
           {people.length > 0 && (
             <SelectField label="Owner" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
               <option value="">Unassigned</option>
-              {people.map((person) => (
+              {peopleForAssignment(people).map((person) => (
                 <option key={person.id} value={person.id}>
                   {formatPerson(person)}
                 </option>

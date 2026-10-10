@@ -24,7 +24,7 @@ import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStruct
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { isFullAccessRole } from "../../lib/fullAccess";
 import { documentControlStandard, revisionCodeFieldHint, revisionCodeFieldLabel, showingVersionLabel } from "../../lib/documentRevision";
-import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
 import { RevisionSideBySide } from "../../components/documents/RevisionSideBySide";
@@ -282,7 +282,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
               className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
             >
               <option value="">Unassigned</option>
-              {people.map((person) => (
+              {peopleForAssignment(people, doc.ownerId).map((person) => (
                 <option key={person.id} value={person.id}>
                   {formatPerson(person)}
                 </option>

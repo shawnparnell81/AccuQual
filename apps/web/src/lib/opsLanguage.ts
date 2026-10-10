@@ -155,6 +155,11 @@ export function statusPhrase(value: string | null | undefined): string {
   return STATUS_PHRASE[value] ?? value.replace(/_/g, " ");
 }
 
+/** Choices for a new manager or assignee. A deactivated account is included only when this record already names them. */
+export function peopleForAssignment<T extends { id: number; isActive?: boolean }>(people: readonly T[], currentId?: number | null): T[] {
+  return people.filter((person) => person.isActive !== false || (currentId != null && person.id === currentId));
+}
+
 export function formatPerson(person: { name: string | null; email: string; isActive?: boolean }): string {
   const base = person.name?.trim() || person.email;
   return person.isActive === false ? `${base} (inactive)` : base;
