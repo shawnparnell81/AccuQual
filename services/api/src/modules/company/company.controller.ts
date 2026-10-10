@@ -15,6 +15,7 @@ import { formatUserLabel } from "../users/userDisplay.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
+import { digitalTwinEnabled } from "./digitalTwinFlag.js";
 
 /**
  * Self-service settings for the company
@@ -56,27 +57,37 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * convenience view over fields that already exist plus the two genuinely
  * new ones (timezone, contact), not a new source of truth for name/logo.
  */
-export const getProfileHandler = asyncHandler(async (req: Request, res: Response) => {
-  const co = await loadCompany(req);
-  res.json({
+function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean } | null }) {
+  return {
     name: co.name,
     logoUrl: co.branding?.logoUrl ?? null,
     timezone: co.profile?.timezone ?? null,
     contactName: co.profile?.contactName ?? null,
     contactEmail: co.profile?.contactEmail ?? null,
     contactPhone: co.profile?.contactPhone ?? null,
-  });
+    digitalTwinEnabled: digitalTwinEnabled(co.profile),
+  };
+}
+
+export const getProfileHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  res.json(profileView(co));
 });
 
 export const updateProfileHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  const { name, logoUrl, ...profileFields } = req.body as { name?: string; logoUrl?: string } & Record<string, string | undefined>;
+  const { name, logoUrl, digitalTwinEnabled: twinFlag, ...profileFields } = req.body as {
+    name?: string;
+    logoUrl?: string;
+    digitalTwinEnabled?: boolean;
+  } & Record<string, string | undefined>;
 
   const patch: { name?: string; branding?: typeof co.branding; profile?: typeof co.profile } = {};
   if (name !== undefined) patch.name = name;
   if (logoUrl !== undefined) patch.branding = { ...co.branding, logoUrl: logoUrl === "" ? undefined : logoUrl };
 
   const mergedProfile = { ...co.profile };
+  if (twinFlag !== undefined) mergedProfile.digitalTwinEnabled = twinFlag;
   for (const [key, value] of Object.entries(profileFields)) {
     if (value !== undefined) (mergedProfile as Record<string, string | undefined>)[key] = value === "" ? undefined : value;
   }
@@ -91,14 +102,7 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
     performedBy: req.user?.id,
   });
 
-  res.json({
-    name: updated!.name,
-    logoUrl: updated!.branding?.logoUrl ?? null,
-    timezone: updated!.profile?.timezone ?? null,
-    contactName: updated!.profile?.contactName ?? null,
-    contactEmail: updated!.profile?.contactEmail ?? null,
-    contactPhone: updated!.profile?.contactPhone ?? null,
-  });
+  res.json(profileView(updated!));
 });
 
 type AiConfigRow = NonNullable<(typeof company.$inferSelect)["aiConfig"]>;

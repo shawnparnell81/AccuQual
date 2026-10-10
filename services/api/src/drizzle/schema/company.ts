@@ -218,6 +218,14 @@ export const company = pgTable("company", {
      */
     sessionLengthHours?: number;
     /**
+     * Digital Twin (process simulation and device ingest) for companies that
+     * run a production line. Unset means off, so the menus, command palette,
+     * and admin setup tab stay hidden. Set true to show them again. The
+     * profile column already exists, so a missing key uses this default and
+     * no migration is required.
+     */
+    digitalTwinEnabled?: boolean;
+    /**
      * When login history starts being written, as a UTC instant. Unset means
      * 2026-10-12 12:00 AM Eastern (2026-10-12T04:00:00.000Z). Nothing is stored
      * before that instant. The profile column already exists, so a missing

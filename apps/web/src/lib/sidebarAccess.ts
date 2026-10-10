@@ -1,3 +1,4 @@
+import { hideDigitalTwinTarget } from "./digitalTwinFlag";
 import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 import { FRM_NCR_PATH } from "./qualityEntry";
 import { ENGINEERING_PLANNER_URL, isExternalHref, isFolder, type SidebarNode } from "../components/layout/sidebarStructure";
@@ -13,6 +14,8 @@ export interface SidebarAccess {
   levels: Record<string, string> | null;
   /** False hides AI Insights. Omitted means the company still has AI on. */
   aiFeatures?: boolean;
+  /** True shows Digital Twin. Omitted or false hides it, including a saved menu row. */
+  digitalTwin?: boolean;
 }
 
 const KEY_RESOURCE: Record<string, SidebarResource> = {
@@ -328,6 +331,7 @@ export function acceptSidebarPath(path: string): string | null {
 export function filterSidebarByAccess(nodes: SidebarNode[], access: SidebarAccess): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
+    if (hideDigitalTwinTarget(access.digitalTwin, node)) continue;
     if (node.key === "ai" && access.aiFeatures === false) continue;
     if (node.key === "admin-login-history" && !sidebarAllows("login_history", access)) continue;
     if (isFolder(node)) {

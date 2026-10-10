@@ -232,6 +232,7 @@ const ENGINEERING_FOLDER: SidebarFolder = {
     doc("ecn", GitBranch),
     doc("ecr", GitBranch),
     doc("work-instructions", ScrollText),
+    // Stays in the catalog. filterSidebarByAccess drops it unless the company flag is on.
     { key: "digital-twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes },
   ],
 };

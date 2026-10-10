@@ -67,6 +67,8 @@ export const updateCompanyProfileSchema = z.object({
   contactName: z.string().max(200).optional().or(z.literal("")),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().max(50).optional().or(z.literal("")),
+  /** Company-wide Digital Twin on/off. Omitted leaves the stored value alone. Unset in the database means off. */
+  digitalTwinEnabled: z.boolean().optional(),
 });
 
 export const updateCompanySecuritySchema = z

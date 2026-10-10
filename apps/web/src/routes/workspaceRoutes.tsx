@@ -8,6 +8,7 @@ export function NumericRecord({ children }: { children: ReactNode }) {
   if (!id || !/^\d+$/.test(id)) return <NotFoundPage />;
   return children;
 }
+import { DigitalTwinGate } from "./DigitalTwin/DigitalTwinGate";
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
@@ -258,7 +259,7 @@ export function workspaceRouteElements() {
     <Route key="/workflow" path="/workflow" element={<WorkflowBuilderPage />} />,
     <Route key="/workflow/:id" path="/workflow/:id" element={<WorkflowCanvasPage />} />,
     <Route key="/ai" path="/ai" element={<AiInsightsPage />} />,
-    <Route key="/digital-twin" path="/digital-twin" element={<DigitalTwinPage />} />,
+    <Route key="/digital-twin" path="/digital-twin" element={<DigitalTwinGate><DigitalTwinPage /></DigitalTwinGate>} />,
     <Route key="/settings" path="/settings" element={<SettingsPage />} />,
     <Route key="/settings/erp/presets" path="/settings/erp/presets" element={<ErpPresetsListPage />} />,
     <Route key="/settings/erp/presets/:id" path="/settings/erp/presets/:id" element={<ErpPresetEditorPage />} />,
@@ -286,7 +287,7 @@ export function workspaceRouteElements() {
       <Route path="data-export" element={<AdminDataExportPage />} />
       <Route path="company-branding" element={<AdminCompanyBrandingPage />} />
       <Route path="company-templates" element={<AdminCompanyTemplatesPage />} />
-      <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
+      <Route path="digital-twin" element={<DigitalTwinGate><AdminDigitalTwinSetupPage /></DigitalTwinGate>} />
       <Route path="*" element={<NotFoundPage />} />
     </Route>,
     <Route key="/reporting" path="/reporting" element={<ReportingHubPage />} />,

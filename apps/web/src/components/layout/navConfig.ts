@@ -563,7 +563,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         access: {},
         kpi: false,
         priority: 3,
-        notes: "Not in the department sheet — unchanged access. Real simulation/results/AI-interpretation code, but no in-app way to create a model yet (\"create one via the API/DB seed\") — a dead end for a real company, hidden until that exists.",
+        notes: "Kept in this list so a company with profile.digitalTwinEnabled can show it again. Hidden for everyone else by digitalTwinFlag.ts, including a saved menu that still names it.",
         section: "advanced",
       },
       {
