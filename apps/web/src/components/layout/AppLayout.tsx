@@ -14,7 +14,6 @@ import { useLogout } from "../../hooks/useAuth";
 import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 import { useThemeSync } from "../../hooks/useThemeSync";
 import { deriveTabMeta } from "../../lib/tabMeta";
-import { noteTabUserGesture } from "../../lib/tabSession";
 import { normalizeTabPath } from "../../lib/tabPaths";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
@@ -23,6 +22,7 @@ import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 import { GridClipboard } from "../shared/GridClipboard";
 import { isSectionPathCommitted, subscribeCommittedPath } from "../../lib/sectionKeepAlive";
+import { noteTabUserGesture } from "../../lib/workspaceTab";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
 
 /**
@@ -73,6 +73,7 @@ export function AppLayout() {
   const tabOwnerId = useTabStore((s) => s.ownerId);
   const location = useLocation();
   const navigate = useNavigate();
+  const syncedPath = useRef<string | null>(null);
   const redirectGuard = useRef<string | null>(null);
   const isSupplierPortal = roleName === "supplier";
   useThemeSync();
@@ -151,10 +152,14 @@ export function AppLayout() {
 
   useEffect(() => {
     if (isSupplierPortal) return;
-    if (!isSectionPathCommitted(location.pathname)) return;
+    const pathChanged = syncedPath.current !== location.pathname;
+    const allowCreate = isSectionPathCommitted(location.pathname);
     const { title, icon } = deriveTabMeta(location.pathname);
-    const redirectTo = syncActiveTabLocation(location.pathname, title, icon);
     document.title = title && title !== location.pathname ? `${title} · AccuQual` : "AccuQual";
+    const redirectTo = syncActiveTabLocation(location.pathname, title, icon, { pathChanged, allowCreate });
+    // A leave dialog is still open. Keep this visit pending so confirming it can open the page.
+    if (!allowCreate && !redirectTo) return;
+    syncedPath.current = location.pathname;
     if (!redirectTo || normalizeTabPath(redirectTo) === normalizeTabPath(location.pathname)) {
       redirectGuard.current = null;
       return;

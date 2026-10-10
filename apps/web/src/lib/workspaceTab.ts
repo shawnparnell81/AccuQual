@@ -108,17 +108,28 @@ interface SectionMatch {
   root: boolean;
 }
 
+function ownsPath(section: WorkspaceSection, pathname: string): boolean {
+  if (!section.root) return false;
+  return pathname === section.root || pathname.startsWith(`${section.root}/`);
+}
+
+/** Longer link wins. A tie stays with the section whose own URL contains the page, so a shortcut in another menu does not steal it. */
+function prefers(pathname: string, candidate: SectionMatch, best: SectionMatch): boolean {
+  if (candidate.path.length !== best.path.length) return candidate.path.length > best.path.length;
+  const candidateOwns = ownsPath(candidate.section, pathname);
+  const bestOwns = ownsPath(best.section, pathname);
+  if (candidateOwns !== bestOwns) return candidateOwns;
+  return !candidate.root && best.root;
+}
+
 function bestMatch(pathname: string): SectionMatch | null {
   let best: SectionMatch | null = null;
   for (const section of workspaceSections()) {
     for (const link of section.links) {
       if (!pathMatches(pathname, link.path)) continue;
       const root = section.root != null && link.path === section.root;
-      const longer = best != null && link.path.length > best.path.length;
-      const sameLengthPrefersNamedPage = best != null && link.path.length === best.path.length && !root && best.root;
-      if (!best || longer || sameLengthPrefersNamedPage) {
-        best = { section, path: link.path, label: link.label, root };
-      }
+      const candidate: SectionMatch = { section, path: link.path, label: link.label, root };
+      if (!best || prefers(pathname, candidate, best)) best = candidate;
     }
   }
   return best;
@@ -228,4 +239,121 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
 
   const created = { id: createId(), path: next.path, title: next.title, icon: next.icon } as T;
   return { tabs: [...tabs, created], activeId: created.id };
+}
+
+const SUPPRESSED_LIMIT = 40;
+
+/** A click that is not the tab's close control. Route sync may reopen a closed section only after one of these. */
+let tabUserGesture = false;
+
+export function noteTabUserGesture(): void {
+  tabUserGesture = true;
+}
+
+export function peekTabUserGesture(): boolean {
+  return tabUserGesture;
+}
+
+export function consumeTabUserGesture(): boolean {
+  const value = tabUserGesture;
+  tabUserGesture = false;
+  return value;
+}
+
+export function resetTabUserGesture(): void {
+  tabUserGesture = false;
+}
+
+/** Closed section keys (or a lone page) that the address bar must not recreate. */
+export function uniqueSuppressed(keys: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const key of keys) {
+    if (typeof key !== "string" || key === "") continue;
+    const normalized = key.startsWith("section:") ? key : workspaceTabKey(key);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  const limited = next.slice(-SUPPRESSED_LIMIT);
+  if (limited.length === keys.length && limited.every((key, index) => key === keys[index])) return keys as string[];
+  return limited;
+}
+
+export function rememberSuppressed(keys: readonly string[], path: string): string[] {
+  return uniqueSuppressed([...keys, workspaceTabKey(path)]);
+}
+
+export function forgetSuppressed(keys: readonly string[], path: string): string[] {
+  const key = workspaceTabKey(path);
+  if (!keys.includes(key)) return keys as string[];
+  return keys.filter((entry) => entry !== key);
+}
+
+export function dropSuppressedTabs<T extends { id: string; path: string }>(
+  tabs: T[],
+  activeId: string | null,
+  suppressed: readonly string[],
+): { tabs: T[]; activeId: string | null } {
+  const blocked = new Set(suppressed);
+  const kept = tabs.filter((tab) => typeof tab?.path === "string" && !blocked.has(workspaceTabKey(tab.path)));
+  const active = kept.some((tab) => tab.id === activeId) ? activeId : (kept[0]?.id ?? null);
+  return { tabs: kept, activeId: active };
+}
+
+/**
+ * Remove one workspace tab. The neighbor becomes active when the closed tab
+ * was showing, and its section stays closed until the user opens it again.
+ */
+export function closeWorkspaceTab<T extends { id: string; path: string }>(
+  tabs: T[],
+  activeId: string | null,
+  suppressed: readonly string[],
+  id: string,
+): { tabs: T[]; activeId: string | null; suppressed: string[]; navigateTo: string | null } {
+  const index = tabs.findIndex((tab) => tab.id === id);
+  if (index < 0) {
+    const current = tabs.find((tab) => tab.id === activeId);
+    return { tabs, activeId, suppressed: uniqueSuppressed(suppressed), navigateTo: current?.path ?? null };
+  }
+  const closed = tabs[index]!;
+  const nextTabs = tabs.filter((tab) => tab.id !== id);
+  let nextActive = activeId;
+  let navigateTo: string | null = null;
+  if (activeId === id) {
+    const neighbor = nextTabs[index - 1] ?? nextTabs[index] ?? null;
+    nextActive = neighbor?.id ?? null;
+    navigateTo = neighbor?.path ?? null;
+  }
+  return {
+    tabs: nextTabs,
+    activeId: nextActive,
+    suppressed: rememberSuppressed(suppressed, closed.path),
+    navigateTo,
+  };
+}
+
+/**
+ * Apply the address bar. A closed section is not recreated, and `redirectTo`
+ * is the neighbor the strip is actually showing. `reopen` is an explicit
+ * visit (a click, or Open in a new tab).
+ */
+export function syncClosedWorkspace<T extends WorkspaceTabFields>(
+  tabs: T[],
+  activeId: string | null,
+  suppressed: readonly string[],
+  next: { path: string; title: string; icon: string },
+  createId: () => string,
+  reopen: boolean,
+): { tabs: T[]; activeId: string | null; suppressed: string[]; redirectTo: string | null } {
+  const key = workspaceTabKey(next.path);
+  const open = tabs.some((tab) => workspaceTabKey(tab.path) === key);
+  if (suppressed.includes(key) && !reopen && !open) {
+    const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0] ?? null;
+    const redirectTo = active && workspaceTabKey(active.path) !== key ? active.path : null;
+    return { tabs, activeId, suppressed: uniqueSuppressed(suppressed), redirectTo };
+  }
+  const followed = followWorkspacePath(tabs, activeId, next, createId);
+  const nextSuppressed = forgetSuppressed(suppressed, next.path);
+  return { tabs: followed.tabs, activeId: followed.activeId, suppressed: nextSuppressed, redirectTo: null };
 }

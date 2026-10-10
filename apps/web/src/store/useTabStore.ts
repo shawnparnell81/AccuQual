@@ -1,7 +1,16 @@
 import { create } from "zustand";
 import { isLiveTabPath, selectRestoredTabs } from "../lib/tabPaths";
 import { moveTab, setTabPinned, withPinsLeft } from "../lib/tabLayout";
-import { dedupeWorkspaceTabs, followWorkspacePath } from "../lib/workspaceTab";
+import {
+  closeWorkspaceTab,
+  consumeTabUserGesture,
+  dedupeWorkspaceTabs,
+  dropSuppressedTabs,
+  peekTabUserGesture,
+  syncClosedWorkspace,
+  uniqueSuppressed,
+  workspaceTabKey,
+} from "../lib/workspaceTab";
 
 export interface TabInstance {
   id: string;
@@ -17,6 +26,8 @@ interface TabState {
   ownerId: string | null;
   tabs: TabInstance[];
   activeId: string | null;
+  /** Section keys the address bar must not recreate until the user opens them. */
+  suppressedKeys: string[];
   /** Called once on login/app load — restores only this company's own tabs, same isolation guarantee as the existing window-manager (useWindowStore). */
   loadForUser: (ownerId: string) => void;
   /** Called on logout — tab leakage must be impossible. */
@@ -32,8 +43,15 @@ interface TabState {
    * Called on every route change. A different nav section opens or focuses
    * its own tab. A sub-page of the section already showing rewrites that
    * same tab, including its pin.
+   * Returns the neighbor path when this URL is a section the user just
+   * closed, so the caller can replace it instead of recreating the tab.
    */
-  syncActiveTabLocation: (path: string, title: string, icon: string) => void;
+  syncActiveTabLocation: (
+    path: string,
+    title: string,
+    icon: string,
+    options?: { pathChanged?: boolean; allowCreate?: boolean },
+  ) => string | null;
   /** Sets the active tab and returns its path so the caller can navigate() to it. */
   activateTab: (id: string) => string | null;
   /** Removes a tab; if it was active, returns the new active tab's path (or null if none remain) so the caller can navigate there. */
@@ -47,24 +65,27 @@ function storageKey(ownerId: string) {
   return `accuqual_tabs_${ownerId}`;
 }
 
-function persist(ownerId: string | null, tabs: TabInstance[], activeId: string | null) {
+function persist(ownerId: string | null, tabs: TabInstance[], activeId: string | null, suppressedKeys: string[]) {
   if (!ownerId) return;
   try {
-    localStorage.setItem(storageKey(ownerId), JSON.stringify({ tabs, activeId }));
+    localStorage.setItem(storageKey(ownerId), JSON.stringify({ tabs, activeId, suppressedKeys }));
   } catch {
     // localStorage unavailable (private mode, quota, ...) — tabs just won't survive a refresh.
   }
 }
 
-function restore(ownerId: string): { tabs: TabInstance[]; activeId: string | null } {
+function restore(ownerId: string): { tabs: TabInstance[]; activeId: string | null; suppressedKeys: string[] } {
   try {
     const raw = localStorage.getItem(storageKey(ownerId));
-    if (!raw) return { tabs: [], activeId: null };
-    const parsed = JSON.parse(raw) as { tabs: TabInstance[]; activeId: string | null };
+    if (!raw) return { tabs: [], activeId: null, suppressedKeys: [] };
+    const parsed = JSON.parse(raw) as { tabs?: TabInstance[]; activeId?: string | null; suppressedKeys?: string[] };
     const selected = selectRestoredTabs(parsed.tabs ?? [], parsed.activeId ?? null);
-    return dedupeWorkspaceTabs(selected.tabs, selected.activeId);
+    const deduped = dedupeWorkspaceTabs(selected.tabs, selected.activeId ?? null);
+    const suppressedKeys = uniqueSuppressed(parsed.suppressedKeys ?? []);
+    const dropped = dropSuppressedTabs(deduped.tabs, deduped.activeId, suppressedKeys);
+    return { tabs: dropped.tabs, activeId: dropped.activeId, suppressedKeys };
   } catch {
-    return { tabs: [], activeId: null };
+    return { tabs: [], activeId: null, suppressedKeys: [] };
   }
 }
 
@@ -77,76 +98,81 @@ export const useTabStore = create<TabState>((set, get) => ({
   ownerId: null,
   tabs: [],
   activeId: null,
+  suppressedKeys: [],
 
   loadForUser: (ownerId) => {
     const restored = restore(ownerId);
     const tabs = withPinsLeft(restored.tabs);
     const activeId = restored.activeId;
-    set({ ownerId, tabs, activeId });
+    const suppressedKeys = restored.suppressedKeys;
+    set({ ownerId, tabs, activeId, suppressedKeys });
     // Write the filtered list back so a removed page (ERP, requisitions, …) is not opened again next time.
-    persist(ownerId, tabs, activeId);
+    persist(ownerId, tabs, activeId, suppressedKeys);
   },
 
-  clear: () => set({ ownerId: null, tabs: [], activeId: null }),
+  clear: () => set({ ownerId: null, tabs: [], activeId: null, suppressedKeys: [] }),
 
   openTab: ({ path, title, icon }) => {
     if (!isLiveTabPath(path)) return get().activeId ?? "";
-    const { ownerId, tabs, activeId } = get();
-    const result = followWorkspacePath(tabs, activeId, { path, title, icon }, newTabId);
+    const { ownerId, tabs, activeId, suppressedKeys } = get();
+    const result = syncClosedWorkspace(tabs, activeId, suppressedKeys, { path, title, icon }, newTabId, true);
     const nextTabs = withPinsLeft(result.tabs);
-    persist(ownerId, nextTabs, result.activeId);
-    set({ tabs: nextTabs, activeId: result.activeId });
-    return result.activeId;
+    persist(ownerId, nextTabs, result.activeId, result.suppressed);
+    set({ tabs: nextTabs, activeId: result.activeId, suppressedKeys: result.suppressed });
+    return result.activeId ?? "";
   },
 
-  syncActiveTabLocation: (path, title, icon) => {
-    if (!isLiveTabPath(path)) return;
-    const { ownerId, tabs, activeId } = get();
-    const result = followWorkspacePath(tabs, activeId, { path, title, icon }, newTabId);
-    if (result.tabs === tabs && result.activeId === activeId) return;
+  syncActiveTabLocation: (path, title, icon, options) => {
+    const pathChanged = options?.pathChanged ?? true;
+    const gesture = peekTabUserGesture();
+    const reopen = pathChanged && gesture;
+    if (!isLiveTabPath(path)) {
+      if (pathChanged) consumeTabUserGesture();
+      return null;
+    }
+    const { ownerId, tabs, activeId, suppressedKeys } = get();
+    const blocked = suppressedKeys.includes(workspaceTabKey(path)) && !reopen && !tabs.some((tab) => workspaceTabKey(tab.path) === path);
+    if (!blocked && options?.allowCreate === false) return null;
+    if (pathChanged || !blocked) consumeTabUserGesture();
+    const result = syncClosedWorkspace(tabs, activeId, suppressedKeys, { path, title, icon }, newTabId, reopen);
+    if (result.tabs === tabs && result.activeId === activeId && result.suppressed === suppressedKeys) return result.redirectTo;
     const nextTabs = withPinsLeft(result.tabs);
-    persist(ownerId, nextTabs, result.activeId);
-    set({ tabs: nextTabs, activeId: result.activeId });
+    persist(ownerId, nextTabs, result.activeId, result.suppressed);
+    set({ tabs: nextTabs, activeId: result.activeId, suppressedKeys: result.suppressed });
+    return result.redirectTo;
   },
 
   activateTab: (id) => {
-    const { ownerId, tabs } = get();
+    const { ownerId, tabs, suppressedKeys } = get();
     const tab = tabs.find((t) => t.id === id);
     if (!tab) return null;
-    persist(ownerId, tabs, id);
+    persist(ownerId, tabs, id, suppressedKeys);
     set({ activeId: id });
     return tab.path;
   },
 
   closeTab: (id) => {
-    const { ownerId, tabs, activeId } = get();
-    const idx = tabs.findIndex((t) => t.id === id);
-    if (idx === -1) return activeId ? (tabs.find((t) => t.id === activeId)?.path ?? null) : null;
-
-    const nextTabs = tabs.filter((t) => t.id !== id);
-    let nextActiveId = activeId;
-    if (activeId === id) {
-      const neighbor = nextTabs[idx - 1] ?? nextTabs[idx] ?? null;
-      nextActiveId = neighbor?.id ?? null;
-    }
-    persist(ownerId, nextTabs, nextActiveId);
-    set({ tabs: nextTabs, activeId: nextActiveId });
-    return nextTabs.find((t) => t.id === nextActiveId)?.path ?? null;
+    const { ownerId, tabs, activeId, suppressedKeys } = get();
+    const result = closeWorkspaceTab(tabs, activeId, suppressedKeys, id);
+    const nextTabs = withPinsLeft(result.tabs);
+    persist(ownerId, nextTabs, result.activeId, result.suppressed);
+    set({ tabs: nextTabs, activeId: result.activeId, suppressedKeys: result.suppressed });
+    return result.navigateTo;
   },
 
   reorderTabs: (fromId, toId) => {
-    const { ownerId, tabs, activeId } = get();
+    const { ownerId, tabs, activeId, suppressedKeys } = get();
     const nextTabs = moveTab(tabs, fromId, toId);
-    persist(ownerId, nextTabs, activeId);
+    persist(ownerId, nextTabs, activeId, suppressedKeys);
     set({ tabs: nextTabs });
   },
 
   togglePin: (id) => {
-    const { ownerId, tabs, activeId } = get();
+    const { ownerId, tabs, activeId, suppressedKeys } = get();
     const current = tabs.find((tab) => tab.id === id);
     if (!current) return;
     const nextTabs = setTabPinned(tabs, id, !current.pinned);
-    persist(ownerId, nextTabs, activeId);
+    persist(ownerId, nextTabs, activeId, suppressedKeys);
     set({ tabs: nextTabs });
   },
 }));

@@ -12,7 +12,6 @@ import {
   dirtyKeysInSection,
   dirtySubtabs,
   draftKey,
-  hrefFromTo,
   planSectionVisit,
   sameKept,
   takeSkipLeaveWarning,

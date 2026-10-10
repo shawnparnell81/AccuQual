@@ -24,7 +24,8 @@ import { useDirtyPathStore } from "../../store/dirtyPathStore";
 import { dirtyKeysInSection, dirtySubtabs, shouldWarnOnClose, shouldWarnOnNavigate, skipNextLeaveWarning } from "../../lib/sectionKeepAlive";
 import { canSaveDirtySection, saveDirtySection, useAskUnsavedChanges } from "./unsavedChanges";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
-import { consumeTabUserGesture, UNSAVED_TAB_TITLE, unsavedTabMessage } from "../../lib/tabSession";
+import { consumeTabUserGesture } from "../../lib/workspaceTab";
+import { UNSAVED_TAB_TITLE, unsavedTabMessage } from "../../lib/tabSession";
 
 // Same icon-per-module choices as navConfig.ts, reused here for visual
 // consistency between the top nav and the tab strip.
@@ -109,7 +110,7 @@ export function TabBar() {
       if (id === activeId) skipNextLeaveWarning();
     }
     const nextPath = closeTab(id);
-    if (id === activeId && nextPath) navigate(nextPath);
+    if (id === activeId && nextPath) navigate(nextPath, { replace: true });
   }
 
   const compress = tabs.length >= 6;

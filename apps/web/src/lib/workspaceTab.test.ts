@@ -14,8 +14,11 @@ import { developmentMenu, withDevelopment } from "./navigationLayout.ts";
 import { deriveTabMeta } from "./tabMeta.ts";
 import { isLiveTabPath } from "./tabPaths.ts";
 import {
+  closeWorkspaceTab,
   dedupeWorkspaceTabs,
+  dropSuppressedTabs,
   followWorkspacePath,
+  syncClosedWorkspace,
   workspaceSectionId,
   workspaceSections,
   workspaceTabKey,
@@ -66,15 +69,14 @@ describe("workspace section tabs", () => {
 
     const keys = new Map<string, string>();
     for (const section of sections) {
-      const paths = section.links.map((link) => link.path);
-      if (section.root) paths.push(`${section.root}/not-a-listed-page`);
-      const shared = new Set(paths.map((path) => workspaceTabKey(path)));
+      const owned = section.links.filter((link) => workspaceSectionId(link.path) === section.id).map((link) => link.path);
+      if (section.root) owned.push(`${section.root}/not-a-listed-page`);
+      const shared = new Set(owned.map((path) => workspaceTabKey(path)));
       assert.equal(shared.size, 1, `${section.id} split into ${[...shared].join(", ")}`);
-      for (const path of section.links.map((link) => link.path)) {
-        assert.equal(workspaceSectionId(path), section.id, path);
-      }
+      for (const link of section.links) assert.ok(workspaceSectionId(link.path), link.path);
       if (section.root) assert.equal(workspaceSectionId(`${section.root}/not-a-listed-page`), section.id);
       keys.set(section.id, [...shared][0]!);
+      const paths = owned;
       if (paths.length < 2) continue;
       const opened = followWorkspacePath([], null, { path: paths[0]!, title: "A", icon: "default" }, () => `${section.id}-tab`);
       const moved = followWorkspacePath(opened.tabs, opened.activeId, { path: paths[1]!, title: "B", icon: "default" }, () => "extra");
@@ -94,6 +96,7 @@ describe("workspace section tabs", () => {
     assert.equal(workspaceTabKey("/calibration/master-list"), workspaceTabKey("/calibration/12"));
     assert.equal(workspaceTabKey("/suppliers/new"), workspaceTabKey("/supplier-portal"));
     assert.equal(workspaceTabKey("/admin/users"), workspaceTabKey("/admin/company-branding"));
+    assert.equal(workspaceSectionId("/admin/import"), "admin");
     assert.equal(workspaceTabKey("/admin/company-ai"), workspaceTabKey("/admin/ai-usage"));
     assert.equal(workspaceTabKey("/settings/navigation"), workspaceTabKey("/settings/erp/presets/4"));
     assert.equal(workspaceSectionId("/documents/engineering-request-log"), "engineering");
@@ -183,6 +186,53 @@ describe("workspace section tabs", () => {
     );
     assert.equal(restored.activeId, "c");
     assert.match(store, /dedupeWorkspaceTabs/);
-    assert.match(store, /followWorkspacePath/);
+    assert.match(store, /syncClosedWorkspace/);
+    assert.match(store, /closeWorkspaceTab/);
+  });
+
+  it("closes the NCR section onto its neighbor and does not open it again", () => {
+    assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/ncr/11"));
+    assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/capa"));
+    assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/8d"));
+    const open = [
+      tab("home", "/", { title: "Dashboard" }),
+      tab("quality", "/ncr", { title: "Quality · NCR" }),
+      tab("admin", "/admin/users", { title: "Admin" }),
+    ];
+    const closed = closeWorkspaceTab(open, "quality", [], "quality");
+    assert.equal(closed.navigateTo, "/");
+    assert.equal(closed.activeId, "home");
+    assert.equal(closed.tabs.some((row) => row.path === "/ncr"), false);
+    assert.ok(closed.suppressed.includes(workspaceTabKey("/ncr")));
+
+    let session = closed;
+    for (const path of ["/ncr", "/ncr/11", "/capa", "/8d/2"]) {
+      const synced = syncClosedWorkspace(session.tabs, session.activeId, session.suppressed, { path, title: path, icon: "quality" }, () => "again", false);
+      assert.equal(synced.tabs.some((row) => workspaceTabKey(row.path) === workspaceTabKey("/ncr")), false, path);
+      assert.equal(synced.redirectTo, "/", path);
+      assert.equal(synced.activeId, "home", path);
+      session = { ...session, tabs: synced.tabs, activeId: synced.activeId, suppressed: synced.suppressed, navigateTo: synced.redirectTo };
+    }
+
+    const reopened = syncClosedWorkspace(session.tabs, session.activeId, session.suppressed, { path: "/ncr", title: "Quality · NCR", icon: "quality" }, () => "quality-2", true);
+    assert.equal(reopened.redirectTo, null);
+    assert.equal(reopened.activeId, "quality-2");
+    assert.equal(reopened.tabs.find((row) => row.id === "quality-2")?.path, "/ncr");
+    assert.equal(reopened.suppressed.includes(workspaceTabKey("/ncr")), false);
+  });
+
+  it("drops a closed section when saved tabs are loaded again", () => {
+    const closed = closeWorkspaceTab(
+      [tab("home", "/"), tab("quality", "/ncr/11"), tab("docs", "/documents")],
+      "quality",
+      [],
+      "quality",
+    );
+    const loaded = dropSuppressedTabs(closed.tabs, closed.activeId, closed.suppressed);
+    assert.equal(loaded.tabs.some((row) => workspaceTabKey(row.path) === workspaceTabKey("/ncr")), false);
+    assert.equal(loaded.activeId, "home");
+    const bounced = syncClosedWorkspace(loaded.tabs, loaded.activeId, closed.suppressed, { path: "/capa", title: "Quality · CAPA", icon: "quality" }, () => "nope", false);
+    assert.equal(bounced.redirectTo, "/");
+    assert.equal(bounced.tabs.length, loaded.tabs.length);
   });
 });
