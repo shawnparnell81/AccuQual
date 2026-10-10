@@ -22,7 +22,7 @@ import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 import { GridClipboard } from "../shared/GridClipboard";
-import { isSectionPathCommitted } from "../../lib/sectionKeepAlive";
+import { isSectionPathCommitted, subscribeCommittedPath } from "../../lib/sectionKeepAlive";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
 
 /**
@@ -146,6 +146,9 @@ export function AppLayout() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isSupplierPortal]);
 
+  const [commitTick, setCommitTick] = useState(0);
+  useEffect(() => subscribeCommittedPath(() => setCommitTick((tick) => tick + 1)), []);
+
   useEffect(() => {
     if (isSupplierPortal) return;
     if (!isSectionPathCommitted(location.pathname)) return;
@@ -160,7 +163,7 @@ export function AppLayout() {
     if (redirectGuard.current === hop) return;
     redirectGuard.current = hop;
     navigate(redirectTo, { replace: true });
-  }, [isSupplierPortal, location.pathname, navigate, syncActiveTabLocation, tabOwnerId]);
+  }, [commitTick, isSupplierPortal, location.pathname, navigate, syncActiveTabLocation, tabOwnerId]);
 
   if (isSupplierPortal) {
     return location.pathname === "/supplier-portal" ? <SupplierPortalShell /> : <Navigate to="/supplier-portal" replace />;

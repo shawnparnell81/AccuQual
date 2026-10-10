@@ -1,6 +1,6 @@
 import type { To } from "react-router-dom";
 import { normalizeTabPath } from "./tabPaths";
-import { workspaceTabKey } from "./workspaceTab";
+import { workspaceSectionTitle, workspaceTabKey } from "./workspaceTab";
 
 /**
  * Visited sub-pages of one workspace section stay mounted so form fields,
@@ -15,14 +15,19 @@ export interface KeptPage {
   hash: string;
 }
 
-export const LEAVE_SECTION_MESSAGE = "This section has unsaved changes. Leave without saving?";
-export const CLOSE_TAB_MESSAGE = "Close this tab? Unsaved changes in this section will be lost.";
+export const UNSAVED_CHANGES_TITLE = "Unsaved changes";
+
+/** Body of the in-app dialog. `labels` are the sub-tabs that still have edits. */
+export function unsavedChangesBody(labels: string[]): string {
+  return `Changes have not been saved on: ${labels.join(", ")}. Do you want to continue without saving?`;
+}
 
 const SAVE_LABEL = /^(save|save changes|save settings|save draft|apply|update)$/i;
 const SAVE_PHRASE = /^save\b/i;
 
 let skipNextLeave = false;
 let committedPath = "";
+const commitListeners = new Set<() => void>();
 
 /** The next section change was already confirmed (tab close or tab switch). */
 export function skipNextLeaveWarning() {
@@ -37,7 +42,17 @@ export function takeSkipLeaveWarning(): boolean {
 
 /** The sub-page the user is actually on. A cancelled leave never commits the other section. */
 export function commitSectionPath(path: string) {
-  committedPath = normalizeTabPath(path);
+  const next = normalizeTabPath(path);
+  if (next === committedPath) return;
+  committedPath = next;
+  for (const listener of commitListeners) listener();
+}
+
+export function subscribeCommittedPath(listener: () => void) {
+  commitListeners.add(listener);
+  return () => {
+    commitListeners.delete(listener);
+  };
 }
 
 export function isSectionPathCommitted(path: string): boolean {
@@ -86,13 +101,65 @@ export function shouldWarnOnClose(paths: Record<string, boolean>, tabPath: strin
   return sectionHasUnsaved(paths, tabPath);
 }
 
-export function isSaveControl(label: string, type?: string): boolean {
-  if (type === "submit") return true;
+/** A button that writes the sub-page. A plain submit control, such as a search or "Change password", does not. */
+export function isCommitSaveControl(label: string): boolean {
   const text = label.replace(/\s+/g, " ").trim();
   if (SAVE_LABEL.test(text)) return true;
   // "Save assignments" commits the page. "Save view" only bookmarks a list filter.
   if (SAVE_PHRASE.test(text) && !/^save view$/i.test(text) && !/^save as\b/i.test(text)) return true;
   return false;
+}
+
+export function isSaveControl(label: string, type?: string): boolean {
+  if (type === "submit") return true;
+  return isCommitSaveControl(label);
+}
+
+function subtabName(raw: string): string {
+  const text = raw.trim();
+  if (/[A-Z]/.test(text) || /\s/.test(text)) return text;
+  return text
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function routeSubtabLabel(path: string): string {
+  const title = workspaceSectionTitle(path);
+  if (title) {
+    const parts = title.split(" · ");
+    if (parts.length > 1) return parts.slice(1).join(" · ");
+    return parts[0] ?? title;
+  }
+  const slug = normalizeTabPath(path).split("/").filter(Boolean).pop() ?? path;
+  return subtabName(slug);
+}
+
+export interface DirtySubtab {
+  /** Draft key: a route, or a route plus an in-page tab id. */
+  key: string;
+  label: string;
+}
+
+/**
+ * Sub-tabs in this section that still have edits. An in-page tab replaces the
+ * parent route in the list, so one settings edit is "Security", not both.
+ */
+export function dirtySubtabs(paths: Record<string, boolean>, sectionPath: string): DirtySubtab[] {
+  const keys = dirtyKeysInSection(paths, sectionPath);
+  const withSubtab = new Set(keys.filter((key) => key.includes("#")).map((key) => key.split("#")[0] ?? key));
+  const labels: DirtySubtab[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const hashAt = key.indexOf("#");
+    if (hashAt < 0 && withSubtab.has(key)) continue;
+    const label = hashAt >= 0 ? subtabName(key.slice(hashAt + 1)) : routeSubtabLabel(key);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    labels.push({ key, label });
+  }
+  return labels;
 }
 
 export function isEditField(tag: string, type?: string, role?: string): boolean {

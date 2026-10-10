@@ -10,14 +10,15 @@ import { workspaceRouteElements } from "../../routes/workspaceRoutes";
 import {
   commitSectionPath,
   dirtyKeysInSection,
+  dirtySubtabs,
   draftKey,
   hrefFromTo,
-  LEAVE_SECTION_MESSAGE,
   planSectionVisit,
   sameKept,
   takeSkipLeaveWarning,
   type KeptPage,
 } from "../../lib/sectionKeepAlive";
+import { canSaveDirtySection, saveDirtySection, useAskUnsavedChanges } from "./unsavedChanges";
 import { normalizeTabPath } from "../../lib/tabPaths";
 import { workspaceTabKey } from "../../lib/workspaceTab";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
@@ -102,6 +103,8 @@ export function KeptSectionStack({
   const navigateRef = useRef(onNavigate);
   const hostRef = useRef<HTMLDivElement>(null);
   const scrolls = useRef<Record<string, number>>({});
+  const askingRef = useRef(false);
+  const askUnsaved = useAskUnsavedChanges();
   keptRef.current = kept;
   activeRef.current = active;
   navigateRef.current = onNavigate;
@@ -131,27 +134,38 @@ export function KeptSectionStack({
       setActive(nextActive);
     };
     if (plan.action === "ask") {
-      const leave = window.confirm(LEAVE_SECTION_MESSAGE);
-      if (!leave) {
-        const current = keptRef.current.find((entry) => entry.pathname === from);
-        navigateRef.current(`${from}${current?.search ?? ""}${current?.hash ?? ""}`, { replace: true });
-        return;
-      }
-      for (const key of dirtyKeysInSection(useDirtyPathStore.getState().paths, from)) setDirtyPath(key, false);
-      const left = planSectionVisit({
-        kept: keptRef.current,
-        from,
-        toPath: normalized,
-        toSearch: search,
-        toHash: hash,
-        dirty: useDirtyPathStore.getState().paths,
-        confirmedLeave: true,
+      if (askingRef.current) return;
+      askingRef.current = true;
+      const labels = dirtySubtabs(dirty, from).map((item) => item.label);
+      void askUnsaved({
+        labels,
+        canSave: canSaveDirtySection(from),
+        save: () => saveDirtySection(from),
+      }).then((choice) => {
+        askingRef.current = false;
+        if (choice === "cancel") {
+          const current = keptRef.current.find((entry) => entry.pathname === from);
+          navigateRef.current(`${from}${current?.search ?? ""}${current?.hash ?? ""}`, { replace: true });
+          return;
+        }
+        if (choice === "discard") {
+          for (const key of dirtyKeysInSection(useDirtyPathStore.getState().paths, from)) setDirtyPath(key, false);
+        }
+        const left = planSectionVisit({
+          kept: keptRef.current,
+          from,
+          toPath: normalized,
+          toSearch: search,
+          toHash: hash,
+          dirty: useDirtyPathStore.getState().paths,
+          confirmedLeave: true,
+        });
+        apply(left.kept, left.active);
       });
-      apply(left.kept, left.active);
       return;
     }
     apply(plan.kept, plan.active);
-  }, [hash, normalized, search, setDirtyPath]);
+  }, [askUnsaved, hash, normalized, search, setDirtyPath]);
 
   const ordered = [...kept.filter((entry) => entry.pathname === active), ...kept.filter((entry) => entry.pathname !== active)];
 

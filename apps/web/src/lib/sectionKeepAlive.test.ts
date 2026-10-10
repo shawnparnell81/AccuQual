@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  CLOSE_TAB_MESSAGE,
-  LEAVE_SECTION_MESSAGE,
+  UNSAVED_CHANGES_TITLE,
   commitSectionPath,
   dirtyKeysInSection,
+  dirtySubtabs,
   draftKey,
   hrefFromTo,
+  isCommitSaveControl,
   isEditField,
   isSaveControl,
   isSectionPathCommitted,
@@ -18,6 +19,7 @@ import {
   subrouteHasUnsaved,
   subtabHasUnsaved,
   takeSkipLeaveWarning,
+  unsavedChangesBody,
   type KeptPage,
 } from "./sectionKeepAlive.ts";
 
@@ -108,8 +110,11 @@ describe("section keep-alive", () => {
       left.kept.map((page) => page.pathname),
       ["/documents/folders"],
     );
-    assert.match(LEAVE_SECTION_MESSAGE, /unsaved changes/i);
-    assert.match(CLOSE_TAB_MESSAGE, /unsaved changes/i);
+    assert.equal(UNSAVED_CHANGES_TITLE, "Unsaved changes");
+    assert.equal(
+      unsavedChangesBody(["Plants", "Security"]),
+      "Changes have not been saved on: Plants, Security. Do you want to continue without saving?",
+    );
   });
 
   it("shows a dot per dirty sub-page and clears only the one that was saved", () => {
@@ -127,9 +132,18 @@ describe("section keep-alive", () => {
     assert.equal(subrouteHasUnsaved(saved, "/admin/plants"), true);
     assert.deepEqual(dirtyKeysInSection(saved, "/admin"), ["/admin/plants"]);
     assert.equal(draftKey("/settings/", "Security"), "/settings#Security");
+    assert.deepEqual(
+      dirtySubtabs({ "/admin/plants": true, "/admin/users": true, "/settings": true, "/settings#Security": true }, "/admin/plants").map((item) => item.label),
+      ["Plants", "Users & Roles"],
+    );
+    assert.deepEqual(dirtySubtabs({ "/settings": true, "/settings#Security": true, "/settings#Theme": true }, "/settings").map((item) => item.label), ["Security", "Theme"]);
+    assert.deepEqual(dirtySubtabs({ "/ncr": true, "/capa": true }, "/capa").map((item) => item.label), ["NCR", "CAPA"]);
   });
 
   it("treats an in-page save control and a real field as draft signals", () => {
+    assert.equal(isCommitSaveControl("Save assignments"), true);
+    assert.equal(isCommitSaveControl("Change password"), false);
+    assert.equal(isCommitSaveControl("Continue"), false);
     assert.equal(isSaveControl("Save"), true);
     assert.equal(isSaveControl("Save changes"), true);
     assert.equal(isSaveControl("Save assignments"), true);

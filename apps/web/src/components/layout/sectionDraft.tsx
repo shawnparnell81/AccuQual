@@ -85,7 +85,7 @@ export function KeptPanes({ active, panes }: { active: string; panes: { id: stri
 function KeptPane({ id, active, pathname, children }: { id: string; active: string; pathname: string; children: ReactNode }) {
   const handlers = useDraftHandlers(draftKey(pathname, id));
   return (
-    <div hidden={id !== active} {...handlers}>
+    <div hidden={id !== active} data-draft-key={draftKey(pathname, id)} {...handlers}>
       {children}
     </div>
   );
