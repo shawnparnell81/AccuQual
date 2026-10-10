@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { folderContents, savedItemRemoval, type FolderDetailItem, type FolderDetailNode } from "../../lib/folderDetails";
 import { folderNodePath, joinFolderPath } from "../../lib/folderPath";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
-import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, FolderPlus, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -23,7 +23,7 @@ import { FolderPathBar, copyFolderPath } from "../../components/documents/Folder
 import { FolderContentsList, type FolderRowAction } from "../../components/documents/FolderContentsList";
 import { RemoveSavedFileDialog } from "../../components/documents/RemoveSavedFileDialog";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
-import { DeleteFolderDialog, FolderActionButtons, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
+import { DeleteFolderDialog, FolderActionButtons, NewFolderDialog, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
 import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
 import { documentFolderHasContents, folderPathLabel } from "../../lib/folderActions";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -240,7 +240,7 @@ function FolderTreeBranch({
         />
       )}
       <div
-        className={`group flex min-h-8 items-center rounded-md border-l-2 pr-1 text-sm transition-colors ${
+        className={`group flex min-h-9 items-center rounded-md border-l-2 pr-1 text-sm transition-colors ${
           selected ? "border-primary bg-primary/15 font-medium text-foreground" : "border-transparent text-foreground hover:bg-muted"
         } ${hintClass(folder.id)}`}
         style={{ paddingLeft: 4 + depth * 14 }}
@@ -274,7 +274,7 @@ function FolderTreeBranch({
         ) : (
           <span className="h-7 w-6 shrink-0" aria-hidden />
         )}
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left" aria-current={selected ? "page" : undefined} title={folder.name} onClick={() => onSelect(folder)}>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left" aria-current={selected ? "page" : undefined} title={folder.name} onClick={() => onSelect(folder)}>
           <Icon size={16} className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} />
           <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-snug">{folder.name}</span>
         </button>
@@ -627,8 +627,7 @@ export function FolderExplorerPage() {
   const boardPaneRef = useRef<HTMLDivElement>(null);
   const [dropHoverId, setDropHoverId] = useState<number | null>(null);
   const [poolHover, setPoolHover] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [movingId, setMovingId] = useState<number | null>(null);
   const [movePending, setMovePending] = useState(false);
   const moveLock = useRef(false);
@@ -1112,6 +1111,13 @@ export function FolderExplorerPage() {
   const deptChain = folderChain(visibleFolders, activeDept.id);
   const deptPath = folderNodePath(visibleFolders, activeDept.id);
   const deptParent = deptChain.length > 1 ? deptChain[deptChain.length - 2] : undefined;
+  const folderMissing = requestedFolderId != null && !openFolder;
+  const currentFolder = folderMissing ? undefined : (openFolder ?? activeDept);
+  const toolbarChain = openFolder ? folderChain(visibleFolders, openFolder.id) : deptChain;
+  const toolbarParent = toolbarChain.length > 1 ? toolbarChain[toolbarChain.length - 2] : undefined;
+  const openPath = openFolder ? folderNodePath(visibleFolders, openFolder.id) : "";
+  const siblingNames = currentFolder == null ? [] : folders.filter((folder) => folder.parentId === currentFolder.id).map((folder) => folder.name);
+  const showCurrentFolderActions = currentFolder != null && currentFolder.name !== LIBRARY_POOL_NAME && currentFolder.name !== "ISO Compliance Documents";
   const movingFolder = movingId == null ? undefined : folders.find((folder) => folder.id === movingId);
 
   const treeRoots = (isoRoot ? [isoRoot, ...departments.filter((dept) => dept.parentId !== isoRoot.id)] : departments)
@@ -1157,8 +1163,89 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
+      <div data-testid="explorer-toolbar" className="flex shrink-0 flex-col gap-2">
+        <ExplorerPathBar
+          crumbs={explorerCrumbs(toolbarChain)}
+          canBack={canGoBack(history)}
+          canForward={canGoForward(history)}
+          canUp={openFolder ? toolbarParent != null || toolbarChain.length > 0 : deptParent != null}
+          onBack={() => goHistory(-1)}
+          onForward={() => goHistory(1)}
+          onUp={() => {
+            if (openFolder) {
+              if (toolbarParent) showFolder(toolbarParent.id);
+              else showDepartmentList();
+              return;
+            }
+            if (deptParent) selectTreeFolder(deptParent);
+          }}
+          onCrumb={(id) => {
+            if (openFolder) {
+              if (id == null) showDepartmentList();
+              else showFolder(id);
+              return;
+            }
+            if (id == null) return;
+            const target = visibleFolders.find((row) => row.id === id);
+            if (target) selectTreeFolder(target);
+          }}
+          actions={
+            <>
+              {canManageFolders && (
+                <button
+                  type="button"
+                  data-testid="new-folder"
+                  disabled={currentFolder == null || createFolder.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  onClick={() => setNewFolderOpen(true)}
+                >
+                  <FolderPlus size={15} />
+                  New folder
+                </button>
+              )}
+              {canManageFolders && (
+                <button
+                  type="button"
+                  data-testid="upload-files"
+                  disabled={currentFolder == null}
+                  title={currentFolder ? `Upload files into ${currentFolder.name}` : undefined}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
+                  onClick={() => {
+                    if (currentFolder) requestDocumentUpload(currentFolder.id);
+                  }}
+                >
+                  <UploadCloud size={15} />
+                  Upload files
+                </button>
+              )}
+              {canManageFolders && currentFolder != null && currentFolder.name !== LIBRARY_POOL_NAME && (
+                <button
+                  type="button"
+                  data-testid="move-to"
+                  className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+                  onClick={() => openMove(currentFolder.id)}
+                >
+                  Move to…
+                </button>
+              )}
+              {showCurrentFolderActions && (
+                <FolderActionButtons
+                  size="toolbar"
+                  canRename={canRenameFolders}
+                  canDelete={canDeleteFolders}
+                  pending={updateFolder.isPending || retireFolder.isPending}
+                  onEdit={() => currentFolder && setNameEdit(currentFolder)}
+                  onDelete={() => currentFolder && setRetireTarget(currentFolder)}
+                />
+              )}
+            </>
+          }
+        />
+        {openFolder ? <FolderPathBar path={openPath} /> : <FolderPathBar path={deptPath} />}
+      </div>
+
       <div ref={boardPaneRef} className="folder-explorer-board">
-        <nav ref={treePaneRef} className="folder-explorer-pane flex flex-col gap-1 rounded-lg border border-border bg-card p-2" aria-label="Document folders">
+        <nav ref={treePaneRef} className="folder-explorer-pane flex flex-col gap-2 rounded-lg border border-border bg-card p-3" aria-label="Document folders">
           <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
           <ul data-testid="folder-tree">
             {treeRoots.map((folder) => (
@@ -1201,30 +1288,21 @@ export function FolderExplorerPage() {
             }}
             onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
             onDrop={(e) => dropOnParent(e, shelfParentId)}
-            className={`rounded-md border border-dashed px-3 py-2 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
+            className={`mt-1 rounded-md border border-dashed px-3 py-2.5 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
           >
             Top level
           </div>
-
-          {canManageFolders && (
-          <form
-            className="mt-1 flex flex-col gap-1 border-t border-border pt-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!newDepartmentName.trim()) return;
-              createFolder.mutate(isoRoot ? { name: newDepartmentName.trim(), parentId: isoRoot.id } : { name: newDepartmentName.trim() });
-              setNewDepartmentName("");
-            }}
-          >
-            <TextField label="" placeholder="New department…" value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} />
-            <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
-              + Add department
-            </button>
-          </form>
-          )}
         </nav>
 
-        <div ref={listPaneRef} className="folder-explorer-pane flex min-w-0 flex-col gap-2">
+        <FileDropZone
+          onFiles={(dropped) => {
+            if (currentFolder) void uploadFiles(currentFolder.id, dropped);
+          }}
+          disabled={!canManageFolders || currentFolder == null}
+          label={currentFolder ? `Drop files to add them to ${currentFolder.name}` : "Drop files to add"}
+          className="folder-explorer-pane folder-explorer-drop flex min-h-0 min-w-0 flex-col"
+        >
+          <div ref={listPaneRef} className="folder-explorer-drop-scroll flex flex-col gap-3 px-1 py-1">
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
@@ -1254,11 +1332,6 @@ export function FolderExplorerPage() {
               query={query}
               hintClass={hintClass}
               onOpenFolder={showFolder}
-              onBackToDepartments={showDepartmentList}
-              canBack={canGoBack(history)}
-              canForward={canGoForward(history)}
-              onBack={() => goHistory(-1)}
-              onForward={() => goHistory(1)}
               onBeginDrag={beginDrag}
               onEndDrag={endDrag}
               onAllowDrop={allowDrop}
@@ -1266,21 +1339,6 @@ export function FolderExplorerPage() {
               onHoverRow={hoverRow}
               onLeaveRow={leaveRow}
               onDropRow={dropRow}
-              onUploadFiles={uploadFiles}
-              onUploadClick={requestDocumentUpload}
-              onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
-              onRename={(id, name) =>
-                updateFolder.mutate(
-                  { id, name },
-                  {
-                    onError: (err) => void extractErrorMessageAsync(err, "Couldn't rename that folder.").then((message) => toast.error(message)),
-                  },
-                )
-              }
-              onMove={(id) => openMove(id)}
-              onEditFolder={canRenameFolders ? (row) => setNameEdit(row) : undefined}
-              onDeleteFolder={canDeleteFolders ? (row) => setRetireTarget(row) : undefined}
-              folderActionPending={updateFolder.isPending || retireFolder.isPending}
               canManage={canManageFolders}
               detailActions={actionsFor}
               dragKind={dragKind}
@@ -1291,62 +1349,10 @@ export function FolderExplorerPage() {
             />
           ) : (
           <>
-          <ExplorerPathBar
-            crumbs={explorerCrumbs(deptChain)}
-            canBack={canGoBack(history)}
-            canForward={canGoForward(history)}
-            canUp={deptParent != null}
-            onBack={() => goHistory(-1)}
-            onForward={() => goHistory(1)}
-            onUp={() => {
-              if (deptParent) selectTreeFolder(deptParent);
-            }}
-            onCrumb={(id) => {
-              if (id == null) return;
-              const target = visibleFolders.find((row) => row.id === id);
-              if (target) selectTreeFolder(target);
-            }}
-          />
-          <FolderPathBar path={deptPath} />
-          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+          <div className="flex shrink-0 items-center gap-2 px-1">
             <FolderOpen size={18} className="shrink-0 text-primary" />
-            <h2 className="text-lg font-semibold">{activeDept.name}</h2>
-            <button type="button" onClick={() => showFolder(activeDept.id)} className="text-xs text-primary hover:underline">
-              Open
-            </button>
-            {canManageFolders && activeDept.name !== LIBRARY_POOL_NAME && (
-              <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => openMove(activeDept.id)}>
-                Move to…
-              </button>
-            )}
-            {activeDept.name !== LIBRARY_POOL_NAME && activeDept.name !== "ISO Compliance Documents" && (
-              <FolderActionButtons
-                canRename={canRenameFolders}
-                canDelete={canDeleteFolders}
-                pending={updateFolder.isPending || retireFolder.isPending}
-                onEdit={() => setNameEdit(activeDept)}
-                onDelete={() => setRetireTarget(activeDept)}
-              />
-            )}
-            <button
-              onClick={() => requestDocumentUpload(activeDept.id)}
-              className="ml-1 flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-              title={`Upload a document directly into ${activeDept.name}`}
-            >
-              <UploadCloud size={13} />
-              Upload Document
-            </button>
+            <h2 className="text-lg font-semibold" title={activeDept.name}>{activeDept.name}</h2>
           </div>
-
-          <FileDropZone
-            onFiles={(dropped) => void uploadFiles(activeDept.id, dropped)}
-            overlay={false}
-            className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-2 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
-          >
-            <span className="inline-flex items-center gap-2">
-              <UploadCloud size={14} /> Drag files from your computer onto {activeDept.name}, or onto any folder below, to add them as documents
-            </span>
-          </FileDropZone>
 
           <div
             onDragOver={(event) => {
@@ -1412,28 +1418,10 @@ export function FolderExplorerPage() {
               />
             )}
           </div>
-
-          {canManageFolders && (
-          <form
-            className="flex shrink-0 items-center gap-2 pt-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!newFolderName.trim()) return;
-              createFolder.mutate({ name: newFolderName.trim(), parentId: activeDept.id });
-              setNewFolderName("");
-            }}
-          >
-            <div className="max-w-xs flex-1">
-              <TextField label="" placeholder="New folder name…" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} />
-            </div>
-            <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-              + Add folder to {activeDept.name}
-            </button>
-          </form>
-          )}
           </>
           )}
-        </div>
+          </div>
+        </FileDropZone>
       </div>
 
       {/* In normal flow under the folder library, so the shelf stays on screen
@@ -1454,7 +1442,7 @@ export function FolderExplorerPage() {
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
           }`}
         >
-          <div className="flex flex-col gap-2 px-4 py-3">
+          <div className="flex flex-col gap-3 px-4 py-4">
             <div className="flex flex-wrap items-center gap-3">
               <Inbox size={16} className="flex-none text-muted-foreground" />
               <span className="flex-none text-sm font-medium">Library Pool</span>
@@ -1528,6 +1516,31 @@ export function FolderExplorerPage() {
       {movingFolder && (
         <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={movePending} onClose={() => { if (!movePending) setMovingId(null); }} onMove={(parentId) => void moveInto(parentId)} />
       )}
+      <NewFolderDialog
+        open={newFolderOpen && currentFolder != null}
+        parentName={currentFolder?.name ?? ""}
+        siblingNames={siblingNames}
+        pending={createFolder.isPending}
+        onClose={() => {
+          if (!createFolder.isPending) setNewFolderOpen(false);
+        }}
+        onCreate={(name) => {
+          if (!currentFolder) return;
+          createFolder.mutate(
+            { name, parentId: currentFolder.id },
+            {
+              onSuccess: (created) => {
+                if (folders.some((folder) => folder.id === created.id)) {
+                  toast.error("A folder with that name is already here.");
+                  return;
+                }
+                setNewFolderOpen(false);
+              },
+              onError: (err) => void extractErrorMessageAsync(err, "Couldn't create that folder.").then((message) => toast.error(message)),
+            },
+          );
+        }}
+      />
       <RenameFolderDialog
         open={nameEdit != null}
         name={nameEdit?.name ?? ""}
@@ -1757,7 +1770,7 @@ function DocPill({
 
 function EmptyFolder({ filtered }: { filtered: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-3 py-3 text-center" data-testid="folder-empty">
+    <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border px-4 py-6 text-center" data-testid="folder-empty">
       <Folder size={18} className="text-muted-foreground" />
       <p className="text-sm text-muted-foreground">{filtered ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>
       {!filtered && <p className="text-xs text-muted-foreground">Blank templates are in Blank Forms Templates. A form shows up here after it is saved into this folder.</p>}
@@ -1774,6 +1787,7 @@ function ExplorerPathBar({
   onForward,
   onUp,
   onCrumb,
+  actions,
 }: {
   crumbs: { id: number | null; name: string }[];
   canBack: boolean;
@@ -1783,10 +1797,11 @@ function ExplorerPathBar({
   onForward: () => void;
   onUp: () => void;
   onCrumb: (id: number | null) => void;
+  actions?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
       <button type="button" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Back" disabled={!canBack} onClick={onBack}>
         <ChevronLeft size={16} />
       </button>
@@ -1828,6 +1843,7 @@ function ExplorerPathBar({
           );
         })}
       </nav>
+      {actions && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   );
 }
@@ -1838,11 +1854,6 @@ function FolderBrowser({
   query,
   hintClass,
   onOpenFolder,
-  onBackToDepartments,
-  canBack,
-  canForward,
-  onBack,
-  onForward,
   onBeginDrag,
   onEndDrag,
   onAllowDrop,
@@ -1850,14 +1861,6 @@ function FolderBrowser({
   onHoverRow,
   onLeaveRow,
   onDropRow,
-  onUploadFiles,
-  onUploadClick,
-  onCreateFolder,
-  onRename,
-  onMove,
-  onEditFolder,
-  onDeleteFolder,
-  folderActionPending,
   canManage,
   detailActions,
   dragKind,
@@ -1871,11 +1874,6 @@ function FolderBrowser({
   query: string;
   hintClass: (id: number) => string;
   onOpenFolder: (id: number) => void;
-  onBackToDepartments: () => void;
-  canBack: boolean;
-  canForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
   onBeginDrag: (event: DragEvent, id: number, kind: DragKind) => void;
   onEndDrag: () => void;
   onAllowDrop: (event: DragEvent, targetParentId: number | null) => boolean;
@@ -1883,14 +1881,6 @@ function FolderBrowser({
   onHoverRow: (event: DragEvent, folder: DocumentFolder) => void;
   onLeaveRow: (id: number) => void;
   onDropRow: (event: DragEvent, folder: DocumentFolder) => void;
-  onUploadFiles: (parentId: number, files: File[]) => Promise<void>;
-  onUploadClick: (parentId: number) => void;
-  onCreateFolder: (name: string, parentId: number) => void;
-  onRename: (id: number, name: string) => void;
-  onMove: (id: number) => void;
-  onEditFolder?: (folder: DocumentFolder) => void;
-  onDeleteFolder?: (folder: DocumentFolder) => void;
-  folderActionPending?: boolean;
   canManage: boolean;
   detailActions: (item: FolderDetailItem<DocumentFolder>, parentNames: string[]) => FolderRowAction[];
   dragKind: DragKind | null;
@@ -1899,122 +1889,17 @@ function FolderBrowser({
   onGapLeave: (key: string) => void;
   onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
 }) {
-  const [name, setName] = useState("");
-  const [rename, setRename] = useState(folder.name);
-  const [renaming, setRenaming] = useState(false);
-  useEffect(() => {
-    setRenaming(false);
-    setRename(folder.name);
-  }, [folder.id, folder.name]);
   const chain = folderChain(folders, folder.id);
-  const selectedPath = joinFolderPath(chain.map((crumb) => crumb.name));
-  const parent = chain.length > 1 ? chain[chain.length - 2] : undefined;
   const items = folderContents(folders, folder.id).filter((item) => !query || `${item.label} ${item.node.name}`.toLowerCase().includes(query));
-  const canRename = canManage && folder.name !== LIBRARY_POOL_NAME;
 
   return (
-    <div className="flex flex-col gap-2" data-testid="folder-browser">
-      <ExplorerPathBar
-        crumbs={explorerCrumbs(chain)}
-        canBack={canBack}
-        canForward={canForward}
-        canUp={parent != null || chain.length > 0}
-        onBack={onBack}
-        onForward={onForward}
-        onUp={() => (parent ? onOpenFolder(parent.id) : onBackToDepartments())}
-        onCrumb={(id) => (id == null ? onBackToDepartments() : onOpenFolder(id))}
-      />
-      <FolderPathBar path={selectedPath} />
-
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-3" data-testid="folder-browser">
+      <div className="flex items-center gap-2 px-1">
         <FolderOpen size={18} className="shrink-0 text-primary" />
-        <h2 className="text-lg font-semibold">{folder.name}</h2>
+        <h2 className="text-lg font-semibold" title={folder.name}>{folder.name}</h2>
       </div>
 
       {folder.name === FAI_VALIDATION_FOLDER_NAME && <ValidationReportsPanel />}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => (parent ? onOpenFolder(parent.id) : onBackToDepartments())}
-          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-        >
-          Up
-        </button>
-        <button
-          type="button"
-          onClick={() => onUploadClick(folder.id)}
-          className="flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-        >
-          <UploadCloud size={13} />
-          Upload Document
-        </button>
-        {onEditFolder || onDeleteFolder ? (
-          folder.name !== LIBRARY_POOL_NAME && folder.name !== "ISO Compliance Documents" && (
-            <FolderActionButtons
-              canRename={onEditFolder != null}
-              canDelete={onDeleteFolder != null}
-              pending={folderActionPending}
-              onEdit={() => onEditFolder?.(folder)}
-              onDelete={() => onDeleteFolder?.(folder)}
-            />
-          )
-        ) : (
-          canRename && !renaming && (
-            <button
-              type="button"
-              onClick={() => {
-                setRename(folder.name);
-                setRenaming(true);
-              }}
-              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
-            >
-              Edit folder
-            </button>
-          )
-        )}
-        {canManage && folder.name !== LIBRARY_POOL_NAME && (
-          <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => onMove(folder.id)}>
-            Move to…
-          </button>
-        )}
-      </div>
-
-      {canRename && renaming && (
-        <form
-          className="flex flex-wrap items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const next = rename.trim();
-            if (!next || next === folder.name) {
-              setRenaming(false);
-              return;
-            }
-            onRename(folder.id, next);
-            setRenaming(false);
-          }}
-        >
-          <div className="w-full max-w-xs">
-            <TextField label="Folder name" value={rename} onChange={(event) => setRename(event.target.value)} />
-          </div>
-          <button type="submit" disabled={folderActionPending} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60">
-            {folderActionPending ? "Saving…" : "Save name"}
-          </button>
-          <button type="button" onClick={() => setRenaming(false)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-            Cancel
-          </button>
-        </form>
-      )}
-
-      <FileDropZone
-        onFiles={(dropped) => void onUploadFiles(folder.id, dropped)}
-        overlay={false}
-        className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-2 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
-      >
-        <span className="inline-flex items-center gap-2">
-          <UploadCloud size={14} /> Drag files from your computer onto {folder.name} to add them as documents
-        </span>
-      </FileDropZone>
 
       <div
         data-testid="folder-contents"
@@ -2081,25 +1966,6 @@ function FolderBrowser({
           />
         )}
       </div>
-
-      {canManage && (
-      <form
-        className="flex shrink-0 items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!name.trim()) return;
-          onCreateFolder(name.trim(), folder.id);
-          setName("");
-        }}
-      >
-        <div className="max-w-xs flex-1">
-          <TextField label="" placeholder="New folder name…" value={name} onChange={(event) => setName(event.target.value)} />
-        </div>
-        <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-          + Add folder to {folder.name}
-        </button>
-      </form>
-      )}
     </div>
   );
 }
