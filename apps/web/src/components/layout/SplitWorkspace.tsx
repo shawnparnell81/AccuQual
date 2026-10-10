@@ -11,7 +11,7 @@ import { locationPath, paneLocation, readSplit, resolvePaneTarget, writeSplit } 
 import { RecordEditBar } from "../shared/RecordEditBar";
 import { ItemFolderPath } from "../documents/ItemFolderPath";
 import { PrintChrome } from "../records/PrintChrome";
-import { RouteErrorBoundary } from "../shared/ErrorBoundary";
+import { PaneErrorBoundary, RouteErrorBoundary } from "../shared/ErrorBoundary";
 
 /**
  * Main workspace under the tab bar. One pane is the real router outlet.
@@ -90,16 +90,18 @@ export function SplitWorkspace() {
         >
           {open && <PaneBar title="Left pane" onExpand={expandLeft} onClose={expandRight} closeLabel="Close left pane" />}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
-            <div key={location.pathname + location.search} className="page-enter mx-auto h-full w-full max-w-none">
-              <ItemFolderPath />
-              <PrintChrome />
-              <RecordEditBar />
-              <RouteErrorBoundary key={location.pathname}>
-                <Suspense fallback={<LoadingPlaceholder />}>
-                  <Outlet />
-                </Suspense>
-              </RouteErrorBoundary>
-            </div>
+            <PaneErrorBoundary key={location.pathname + location.search}>
+              <div className="page-enter mx-auto h-full w-full max-w-none">
+                <ItemFolderPath />
+                <PrintChrome />
+                <RecordEditBar />
+                <RouteErrorBoundary key={location.pathname}>
+                  <Suspense fallback={<LoadingPlaceholder />}>
+                    <Outlet />
+                  </Suspense>
+                </RouteErrorBoundary>
+              </div>
+            </PaneErrorBoundary>
           </div>
         </section>
         {open && (
@@ -109,9 +111,11 @@ export function SplitWorkspace() {
               <PaneBar title="Right pane" onExpand={expandRight} onClose={expandLeft} closeLabel="Close right pane" />
               <RightPaneTabs />
               <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
-                <div key={rightPath ?? "empty"} className="page-enter mx-auto h-full max-w-none">
-                  {rightPath ? <RightPaneRouter path={rightPath} /> : <RightPanePicker />}
-                </div>
+                <PaneErrorBoundary key={rightPath ?? "empty"}>
+                  <div className="page-enter mx-auto h-full max-w-none">
+                    {rightPath ? <RightPaneRouter path={rightPath} /> : <RightPanePicker />}
+                  </div>
+                </PaneErrorBoundary>
               </div>
             </section>
           </>
@@ -249,14 +253,16 @@ function RightPaneRouter({ path }: { path: string }) {
 
   return (
     <Router location={location} navigator={navigator}>
-      <ItemFolderPath />
-      <PrintChrome />
-      <RecordEditBar />
-      <RouteErrorBoundary key={path}>
-        <Suspense fallback={<LoadingPlaceholder />}>
-          <Routes key={path}>{workspaceRouteElements()}</Routes>
-        </Suspense>
-      </RouteErrorBoundary>
+      <PaneErrorBoundary key={path}>
+        <ItemFolderPath />
+        <PrintChrome />
+        <RecordEditBar />
+        <RouteErrorBoundary key={path}>
+          <Suspense fallback={<LoadingPlaceholder />}>
+            <Routes key={path}>{workspaceRouteElements()}</Routes>
+          </Suspense>
+        </RouteErrorBoundary>
+      </PaneErrorBoundary>
     </Router>
   );
 }

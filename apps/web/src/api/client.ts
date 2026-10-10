@@ -5,6 +5,7 @@ import { siteHeaderValue, useSiteStore } from "../store/siteStore";
 import {
   classifyRefreshFailure,
   createSessionRefresher,
+  routeNotFoundTriggersReconnect,
   nextProactiveDelayMs,
   readRetryAfterHeader,
   refreshDecision,
@@ -35,7 +36,7 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.set("Authorization", `Bearer ${accessToken}`);
   }
   const siteHeader = siteHeaderValue();
-  if (siteHeader) config.headers.set("X-AccuQual-Site", siteHeader);
+  if (siteHeader && !config.headers.has("X-AccuQual-Site")) config.headers.set("X-AccuQual-Site", siteHeader);
   return config;
 });
 
@@ -298,8 +299,14 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+    const status = error.response?.status;
 
-    if (error.response?.status === 401 && original && !original._retried && !isRefreshRequest(original)) {
+    // A missing route or a missing record must not renew the session.
+    if (status === 404 && !routeNotFoundTriggersReconnect(status)) {
+      return Promise.reject(error);
+    }
+
+    if (status === 401 && original && !original._retried && !isRefreshRequest(original)) {
       original._retried = true;
       const settled = await settleAfterRefresh(
         () => refreshSession("unauthorized"),

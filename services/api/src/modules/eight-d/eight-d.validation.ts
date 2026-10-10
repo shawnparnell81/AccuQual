@@ -8,13 +8,14 @@ export const createEightDSchema = z.object({
   // for every optional numeric field. Plain z.number() used to reject a
   // string here with a silent 400.
   ncrId: z.coerce.number().int().optional(),
+  attachedCapaId: z.union([z.coerce.number().int().positive(), z.null()]).optional(),
 });
 
 const sheetCells = z.record(z.string(), z.string());
 
 export const updateEightDSchema = z.object({
   recordNumber: recordNumberSchema,
-  currentStep: z.coerce.number().int().min(1).max(8).optional(),
+  currentStep: z.coerce.number().int().min(1).max(9).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
   problemDescriptionD2: sheetCells.optional(),
   problemSolvingWorksheetD4: sheetCells.optional(),
@@ -26,4 +27,5 @@ export const updateEightDSchema = z.object({
 
 export const completeStepSchema = z.object({
   data: z.record(z.string(), z.unknown()),
+  pin: z.string().regex(/^\d{4}$/).optional(),
 });

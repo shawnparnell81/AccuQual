@@ -13,6 +13,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { formatDate } from "../../lib/dates";
 import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel, peopleForAssignment } from "../../lib/opsLanguage";
+import { NCR_ALL_STATES, ncrMatchesStateFilter } from "../../lib/ncrSearch";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
@@ -74,7 +75,7 @@ export function NcrListPage() {
   const accessPending = !canEdit && reason == null;
   const { label, people } = usePersonDirectory();
   const [severityFilter, setSeverityFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(NCR_ALL_STATES);
   const [textFilter, setTextFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -121,7 +122,7 @@ export function NcrListPage() {
     const needle = textFilter.trim().toLowerCase();
     return ncrs.filter((n) => {
       if (severityFilter && listedSeverity(n) !== severityFilter) return false;
-      if (statusFilter && ncrStepKey(n.status) !== statusFilter) return false;
+      if (!ncrMatchesStateFilter(ncrStepKey(n.status), statusFilter)) return false;
       if (!needle) return true;
       return `${showRecordNumber(n.recordNumber)} ${whatHappenedText(n)} ${ncrStepLabel(n.status)}`.toLowerCase().includes(needle);
     });
@@ -228,7 +229,7 @@ export function NcrListPage() {
         </select>
         {view === "list" && (
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="State" className="border border-border bg-background px-3 py-1.5 text-sm">
-          <option value="">All states</option>
+          <option value={NCR_ALL_STATES}>All states</option>
           {NCR_STATUSES.map((s) => (
             <option key={s} value={s}>
               {ncrStepLabel(s)}

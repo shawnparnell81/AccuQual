@@ -1947,17 +1947,19 @@ body.side-collapsed .aq-nav-folder-link {
   border-right: 2px solid hsl(var(--foreground));
   border-bottom: 2px solid hsl(var(--foreground));
 }
-.aq-picture-tools {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  z-index: 1;
+.aq-picture-tools,
+.aq-picture-insert {
   border-radius: 6px;
   border: 1px solid hsl(var(--border));
   background: hsl(var(--card));
   color: hsl(var(--foreground));
   padding: 2px 8px;
   font-size: 11px;
+}
+.aq-picture-insert {
+  display: inline-flex;
+  margin-top: 8px;
+  cursor: pointer;
 }
 .aq-picture-handle.aq-picture-tools {
   right: 0;
@@ -2078,7 +2080,8 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-form-copy .overflow-x-auto {
     overflow: visible !important;
   }
-  .aq-picture-tools {
+  .aq-picture-tools,
+  .aq-picture-insert {
     display: none !important;
   }
   .aq-picture img {

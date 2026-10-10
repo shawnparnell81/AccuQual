@@ -1,6 +1,5 @@
 import { useEffect } from "react";
-
-const EDITABLE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+import { isEditableFocusTarget } from "../lib/editableFocus";
 
 /**
  * Cmd/Ctrl+K, app-wide — the first global keyboard shortcut in this app
@@ -15,8 +14,7 @@ export function useGlobalHotkey(onTrigger: () => void) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey)) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (EDITABLE_TAGS.has(target.tagName) || target.isContentEditable)) return;
+      if (isEditableFocusTarget(e.target)) return;
       e.preventDefault();
       onTrigger();
     }

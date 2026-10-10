@@ -147,14 +147,22 @@ export function blank8dFromData(data: Record<string, unknown> | null | undefined
   return values;
 }
 
-export function formatStoredValue(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value == null) return "";
+function isRawJsonBlob(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
   try {
-    return JSON.stringify(value, null, 2);
+    const parsed = JSON.parse(trimmed) as unknown;
+    return parsed !== null && typeof parsed === "object";
   } catch {
-    return String(value);
+    return false;
   }
+}
+
+/** Plain text only. Objects and JSON blobs stay off the page; the audit trail has the history. */
+export function formatStoredValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  if (isRawJsonBlob(value)) return "";
+  return value;
 }
 
 export interface PreviousField {

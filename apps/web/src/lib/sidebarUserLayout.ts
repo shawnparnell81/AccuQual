@@ -21,8 +21,11 @@ export interface SidebarGroupPref {
   label: string;
 }
 
-/** ERP groups. A saved menu from before this edition gets its group hides cleared once. */
-export const MENU_EDITION = 2;
+/** ERP groups, then the NCR & CAPA children. Older saves get those rows shown again once. */
+export const MENU_EDITION = 3;
+
+/** Hidden by older menus, which then collapsed the group into a single NCR link. */
+const NCR_CAPA_MENU_KEYS = ["ncr-capa", "ncr", "frm-ncr-001", "capa", "8d"];
 
 export interface SidebarDraft {
   layout: SidebarPlacement[];
@@ -258,9 +261,13 @@ function hoistLockedNodes(nodes: SidebarNode[]): SidebarNode[] {
 export function normalizeSidebarPrefs(prefs: SidebarShortcutPrefs | null | undefined): SidebarShortcutPrefs {
   const edition = readMenuEdition(prefs?.menuEdition);
   let hidden = withoutLockedHidden(prefs?.hidden ?? []);
-  if (edition < MENU_EDITION) {
+  if (edition < 2) {
     const folders = catalogFolderKeys(SIDEBAR_FOLDERS);
     hidden = hidden.filter((key) => !folders.has(key));
+  }
+  if (edition < MENU_EDITION) {
+    const restore = new Set(NCR_CAPA_MENU_KEYS);
+    hidden = hidden.filter((key) => !restore.has(key));
   }
   const pinned = prefs?.pinned ?? [];
   const groups = prefs?.groups ?? [];

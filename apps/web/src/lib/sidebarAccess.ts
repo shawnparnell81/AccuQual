@@ -283,6 +283,14 @@ function routeExists(pathname: string): boolean {
   return ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
 }
 
+/** True for a page the app can draw. /capa/new is not one of them. */
+export function isKnownAppPath(pathname: string): boolean {
+  const path = pathname.split("?")[0]?.split("#")[0] || "/";
+  const normalized = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  if (normalized === "/change-password" || normalized === "/set-signature-pin" || normalized === "/login") return true;
+  return routeExists(normalized);
+}
+
 /**
  * A saved path the app can still open.
  * Retired list pages and unknown routes are dropped.

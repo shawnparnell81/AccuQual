@@ -258,8 +258,33 @@ describe("per-user sidebar layout", () => {
     assert.equal(shown.some((node) => node.key === "quality"), false);
     assert.equal(shown.some((node) => node.key === "document-control"), true);
     const saved = draftToPrefs(draftFromPrefs(SIDEBAR_FOLDERS, prefs));
-    assert.equal(saved.menuEdition, 2);
+    assert.equal(saved.menuEdition, 3);
     assert.equal(saved.hidden.includes("quality"), true);
+  });
+
+  it("shows NCR, CAPA, and 8D again when an older menu hid them", () => {
+    const prefs = {
+      hidden: ["capa", "8d", "frm-ncr-001", "ncr"],
+      pinned: [],
+      groups: [],
+      layout: null,
+      menuEdition: 2,
+    };
+    const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, prefs, allowAll));
+    assert.equal(links.some((link) => link.path === "/ncr"), true);
+    assert.equal(links.some((link) => link.path === "/capa"), true);
+    assert.equal(links.some((link) => link.path === "/8d"), true);
+    assert.equal(links.some((link) => link.path === "/iso-forms/frm-ncr-001"), true);
+    const later = {
+      hidden: ["capa"],
+      pinned: [],
+      groups: [],
+      layout: null,
+      menuEdition: 3,
+    };
+    const kept = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, later, allowAll));
+    assert.equal(kept.some((link) => link.path === "/capa"), false);
+    assert.equal(kept.some((link) => link.path === "/8d"), true);
   });
 
   it("hides the executive dashboard when the role does not have it", () => {

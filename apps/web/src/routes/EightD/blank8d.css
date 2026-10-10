@@ -77,6 +77,17 @@
   white-space: normal;
 }
 
+h2.b8-head {
+  margin: 0;
+}
+
+.b8-hint {
+  display: block;
+  padding: 2px 6px 4px;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+}
+
 .b8-head {
   display: flex;
   align-items: center;

@@ -100,9 +100,13 @@ export function folderMenuEntries(node: SidebarFolder): SidebarNode[] {
  * The row keeps the group name and opens the only destination.
  * A nested folder is left alone so a real submenu can still open.
  */
+/** Quality's NCR, CAPA, and 8D stay a group even when a saved menu left one child. */
+const OPEN_MENU_GROUPS = new Set(["ncr-capa"]);
+
 export function collapseSingleItemMenus(node: SidebarNode): SidebarNode {
   if (!isFolder(node)) return node;
   const folder: SidebarFolder = { ...node, children: node.children.map(collapseSingleItemMenus) };
+  if (OPEN_MENU_GROUPS.has(folder.key)) return folder;
   const entries = folderMenuEntries(folder);
   const only = entries[0];
   if (entries.length !== 1 || !only || isFolder(only)) return folder;

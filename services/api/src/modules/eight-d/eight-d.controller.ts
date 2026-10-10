@@ -9,6 +9,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { applyStepCompletion } from "./blank8dForm.js";
 import { EIGHT_D_NUMBER } from "../records/recordNumberSpecs.js";
+import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -19,10 +20,17 @@ export const baseHandlers = crudFactory(eightD, {
   idColumn: "id",
   blankCreatePath: "/8d",
   recordNumber: EIGHT_D_NUMBER,
-  prepareCreate: (body) => ({
-    ...body,
-    data: answersWithTemplateStamp("form:eight_d", undefined, asRecord(body.data), true),
-  }),
+  prepareCreate: (body) => {
+    const attachedCapaId = body.attachedCapaId;
+    const rest = { ...body };
+    delete rest.attachedCapaId;
+    const data = asRecord(rest.data);
+    if (attachedCapaId !== undefined) data.attachedCapaId = attachedCapaId;
+    return {
+      ...rest,
+      data: answersWithTemplateStamp("form:eight_d", undefined, data, true),
+    };
+  },
   mergeUpdate: (existing, patch) => {
     if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
     return {
@@ -63,6 +71,11 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
   if (!existing) throw AppError.notFound("8D Report");
 
   const stepKey = STEP_KEYS[step - 1] ?? "d1_team";
+  let signedBy: string | undefined;
+  if (typeof req.body.pin === "string" && req.body.pin) {
+    if (!req.user?.id) throw AppError.unauthorized("Not signed in");
+    signedBy = (await verifySignaturePin(req.user.id, req.body.pin)).displayName;
+  }
   const payload = (req.body.data ?? {}) as Record<string, unknown>;
   const mergedData = answersWithTemplateStamp(
     "form:eight_d",
@@ -70,7 +83,7 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
     applyStepCompletion((existing.data ?? {}) as Record<string, unknown>, stepKey, payload),
     false,
   );
-  const nextStep = Math.min(step + 1, 8);
+  const nextStep = step >= 8 ? 9 : step + 1;
 
   const [updated] = await req
     .db!.update(eightD)
@@ -83,7 +96,13 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
     entityType: "8D Report",
     entityId: id,
     action: isClosure ? "status_change" : "update",
-    changes: { subAction: "step_completed", step, stepKey, ...(isClosure ? { closed: true } : {}) },
+    changes: {
+      subAction: "step_completed",
+      step,
+      stepKey,
+      ...(isClosure ? { closed: true } : {}),
+      ...(signedBy ? { signedBy, signedAt: new Date().toISOString() } : {}),
+    },
     performedBy: req.user?.id,
   });
   await publishEvent(WORKFLOW_STREAM, { module: "eight_d", event: isClosure ? "closed" : "step_completed", entityId: id });
