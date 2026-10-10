@@ -2,30 +2,20 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import type { AppRole } from "../../api/types";
+import { RolePermissionFields } from "../../components/admin/RolePermissionFields";
 import { useToast } from "../../components/shared/ToastProvider";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { allRolePermissionKeys, rolePermissionLabel } from "../../lib/rolePermissionSelection";
 
-const PERMISSIONS: { key: string; label: string }[] = [
-  { key: "import_data", label: "Can import data" },
-  { key: "form_builder", label: "Can build forms" },
-  { key: "folders.rename", label: "Can rename folders" },
-  { key: "folders.delete", label: "Can delete folders" },
-  { key: "plants.delete", label: "Can delete plants" },
-  { key: "login_history", label: "Can view login history" },
-  { key: "sites.view_all", label: "View all sites" },
-  { key: "executive.dashboard", label: "Executive dashboard" },
-];
-
-const KNOWN = new Set(PERMISSIONS.map((item) => item.key));
+const KNOWN = new Set(allRolePermissionKeys());
 
 function roleLabel(role: AppRole): string {
   return role.displayName || role.name;
 }
 
 function grantedLabels(role: AppRole): string[] {
-  const granted = new Set(role.permissions ?? []);
-  return PERMISSIONS.filter((item) => granted.has(item.key)).map((item) => item.label);
+  return (role.permissions ?? []).filter((key) => KNOWN.has(key)).map((key) => rolePermissionLabel(key));
 }
 
 /**
@@ -58,15 +48,6 @@ export function SystemRolesPanel() {
   function startEdit(role: AppRole) {
     setEditingId(role.id);
     setDraft([...(role.permissions ?? [])]);
-  }
-
-  function toggle(key: string, on: boolean) {
-    setDraft((current) => {
-      const next = new Set(current);
-      if (on) next.add(key);
-      else next.delete(key);
-      return [...next];
-    });
   }
 
   return (
@@ -112,16 +93,11 @@ export function SystemRolesPanel() {
                     onSubmit={(event) => {
                       event.preventDefault();
                       const extras = draft.filter((key) => !KNOWN.has(key));
-                      const checked = PERMISSIONS.map((item) => item.key).filter((key) => draft.includes(key));
+                      const checked = allRolePermissionKeys().filter((key) => draft.includes(key));
                       save.mutate({ id: role.id, permissions: [...extras, ...checked] });
                     }}
                   >
-                    {PERMISSIONS.map((item) => (
-                      <label key={item.key} className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" checked={draft.includes(item.key)} onChange={(event) => toggle(item.key, event.target.checked)} />
-                        {item.label}
-                      </label>
-                    ))}
+                    <RolePermissionFields selected={draft} onChange={setDraft} />
                     <button type="submit" disabled={save.isPending} className="mt-1 w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
                       {save.isPending ? "Saving…" : "Save"}
                     </button>

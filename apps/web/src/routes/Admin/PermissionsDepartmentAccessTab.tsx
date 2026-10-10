@@ -8,6 +8,33 @@ import type { DepartmentPermissionCell, ModuleAccessLevel, PermissionModuleInfo 
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const LEVEL_LABEL: Record<ModuleAccessLevel, string> = { none: "None", read: "Read", edit: "Edit" };
+const BULK_LEVELS: { value: ModuleAccessLevel; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "read", label: "View" },
+  { value: "edit", label: "Edit" },
+];
+
+function SetAllSelect({ label, disabled, onPick }: { label: string; disabled: boolean; onPick: (level: ModuleAccessLevel) => void }) {
+  return (
+    <select
+      aria-label={label}
+      value=""
+      disabled={disabled}
+      onChange={(event) => {
+        const level = event.target.value as ModuleAccessLevel;
+        if (level) onPick(level);
+      }}
+      className="w-full min-w-0 max-w-full rounded-md border border-border bg-background px-1 py-1 text-[11px] text-foreground"
+    >
+      <option value="">Set all to…</option>
+      {BULK_LEVELS.map((level) => (
+        <option key={level.value} value={level.value}>
+          {level.label}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 /**
  * The direct replacement for PERMISSION_MATRIX — every (department, module)
@@ -43,6 +70,32 @@ export function PermissionsDepartmentAccessTab() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update that permission.")),
   });
 
+  const setMany = useMutation({
+    mutationFn: async (cells: { departmentName: string; moduleName: string; accessLevel: ModuleAccessLevel }[]) =>
+      (await apiClient.patch<{ updated: number }>("/permissions/department-permissions/bulk", { cells })).data,
+    onSuccess: (result) => {
+      invalidate();
+      if (result.updated > 0) toast.success("Access updated.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update those permissions.")),
+  });
+
+  function cellsFor(match: (cell: DepartmentPermissionCell) => boolean, accessLevel: ModuleAccessLevel) {
+    return grid
+      .filter((cell) => match(cell) && cell.accessLevel !== accessLevel)
+      .map((cell) => ({ departmentName: cell.departmentName, moduleName: cell.moduleName, accessLevel }));
+  }
+
+  function setColumn(departmentName: string, accessLevel: ModuleAccessLevel) {
+    const cells = cellsFor((cell) => cell.departmentName === departmentName, accessLevel);
+    if (cells.length > 0) setMany.mutate(cells);
+  }
+
+  function setRow(moduleName: string, accessLevel: ModuleAccessLevel) {
+    const cells = cellsFor((cell) => cell.moduleName === moduleName, accessLevel);
+    if (cells.length > 0) setMany.mutate(cells);
+  }
+
   const resetToDefault = useMutation({
     mutationFn: async ({ departmentName, moduleName }: { departmentName: string; moduleName: string }) =>
       apiClient.delete("/permissions/department-permissions", { data: { departmentName, moduleName } }),
@@ -69,7 +122,10 @@ export function PermissionsDepartmentAccessTab() {
             <th className="px-1.5 py-2">Module</th>
             {DEPARTMENTS.map((d) => (
               <th key={d.key} className="px-1 py-2">
-                {d.label}
+                <div className="flex flex-col gap-1">
+                  <span>{d.label}</span>
+                  <SetAllSelect label={`Set all ${d.label} to`} disabled={setMany.isPending} onPick={(level) => setColumn(d.key, level)} />
+                </div>
               </th>
             ))}
           </tr>
@@ -77,7 +133,12 @@ export function PermissionsDepartmentAccessTab() {
         <tbody>
           {modules.map((m) => (
             <tr key={m.key} className="border-t border-border">
-              <td className="bg-card px-1.5 py-1.5 font-medium">{m.label}</td>
+              <td className="bg-card px-1.5 py-1.5 font-medium">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span>{m.label}</span>
+                  <SetAllSelect label={`Set all ${m.label} to`} disabled={setMany.isPending} onPick={(level) => setRow(m.key, level)} />
+                </div>
+              </td>
               {DEPARTMENTS.map((d) => {
                 const cell = cellByKey.get(`${d.key}:${m.key}`);
                 const level = cell?.accessLevel ?? "none";

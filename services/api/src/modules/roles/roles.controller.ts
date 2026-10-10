@@ -8,6 +8,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { isFullAccessRole } from "./roleAccess.js";
 import { decideRoleDeletion, displayNameForRole, hierarchyLevelForRoleName, moveRank, PROTECTED_ROLE_NAMES, roleIsProtected } from "./roleHierarchy.js";
+import { permissionDiff } from "./permissionDiff.js";
 import { deleteRoleSchema } from "./roles.validation.js";
 
 async function loadRole(id: number) {
@@ -73,7 +74,19 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   if (body.permissions !== undefined) patch.permissions = body.permissions;
   const [updated] = await db.update(roles).set(patch).where(eq(roles.id, role.id)).returning();
   if (!updated) throw AppError.notFound("Role");
-  await recordAuditTrail(db, { entityType: "Role", entityId: role.id, action: "update", changes: patch, performedBy: req.user?.id });
+  const diff = body.permissions !== undefined ? permissionDiff(role.permissions ?? [], body.permissions) : { granted: [] as string[], revoked: [] as string[] };
+  const changes: Record<string, unknown> = {};
+  if (patch.name !== undefined && patch.name !== role.name) changes.name = { from: role.name, to: patch.name };
+  if (patch.description !== undefined && patch.description !== role.description) changes.description = { from: role.description, to: patch.description };
+  if (patch.hierarchyLevel !== undefined && patch.hierarchyLevel !== role.hierarchyLevel) changes.hierarchyLevel = { from: role.hierarchyLevel, to: patch.hierarchyLevel };
+  if (diff.granted.length > 0 || diff.revoked.length > 0) {
+    changes.roleName = role.name;
+    changes.bulk = diff.granted.length + diff.revoked.length > 1;
+    changes.permissions = { granted: diff.granted, revoked: diff.revoked };
+  }
+  if (Object.keys(changes).length > 0) {
+    await recordAuditTrail(db, { entityType: "Role", entityId: role.id, action: "update", changes, performedBy: req.user?.id });
+  }
   res.json({ ...updated, displayName: displayNameForRole(updated), userCount: await userCount(role.id) });
 });
 

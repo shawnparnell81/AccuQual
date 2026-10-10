@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { RolePermissionFields } from "../../components/admin/RolePermissionFields";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -621,7 +622,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false, canViewLoginHistory: false, canViewAllSites: false, canExecutiveDashboard: false });
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", permissions: [] as string[] });
   const [replacing, setReplacing] = useState<AppRole | null>(null);
   const [replacementId, setReplacementId] = useState("");
 
@@ -682,14 +683,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                       name: r.name,
                       description: r.description ?? "",
                       hierarchyLevel: String(r.hierarchyLevel ?? 80),
-                      canImport: (r.permissions ?? []).includes("import_data"),
-                      canBuildForms: (r.permissions ?? []).includes("form_builder"),
-                      canRenameFolders: (r.permissions ?? []).includes("folders.rename"),
-                      canDeleteFolders: (r.permissions ?? []).includes("folders.delete"),
-                      canDeletePlants: (r.permissions ?? []).includes("plants.delete"),
-                      canViewLoginHistory: (r.permissions ?? []).includes("login_history"),
-                      canViewAllSites: (r.permissions ?? []).includes("sites.view_all"),
-                      canExecutiveDashboard: (r.permissions ?? []).includes("executive.dashboard"),
+                      permissions: [...(r.permissions ?? [])],
                     });
                   }}
                   className="text-primary hover:underline"
@@ -750,30 +744,13 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!editing) return;
-            const permissions = new Set(editing.permissions ?? []);
-            if (editForm.canImport) permissions.add("import_data");
-            else permissions.delete("import_data");
-            if (editForm.canBuildForms) permissions.add("form_builder");
-            else permissions.delete("form_builder");
-            if (editForm.canRenameFolders) permissions.add("folders.rename");
-            else permissions.delete("folders.rename");
-            if (editForm.canDeleteFolders) permissions.add("folders.delete");
-            else permissions.delete("folders.delete");
-            if (editForm.canDeletePlants) permissions.add("plants.delete");
-            else permissions.delete("plants.delete");
-            if (editForm.canViewLoginHistory) permissions.add("login_history");
-            else permissions.delete("login_history");
-            if (editForm.canViewAllSites) permissions.add("sites.view_all");
-            else permissions.delete("sites.view_all");
-            if (editForm.canExecutiveDashboard) permissions.add("executive.dashboard");
-            else permissions.delete("executive.dashboard");
             updateRole.mutate(
               {
                 id: editing.id,
                 name: editing.isProtected ? editing.name : editForm.name,
                 description: editForm.description || null,
                 hierarchyLevel: Number(editForm.hierarchyLevel),
-                permissions: [...permissions],
+                permissions: editForm.permissions,
               } as Partial<AppRole> & { id: number },
               {
                 onSuccess: () => {
@@ -790,45 +767,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
           <TextField label="Description" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
           <TextField label="Rank" type="number" required min={1} max={1000} value={editForm.hierarchyLevel} onChange={(e) => setEditForm({ ...editForm, hierarchyLevel: e.target.value })} />
           <p className="text-xs text-muted-foreground">A smaller number is listed higher. Owner is 10. Staff is 80.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canImport} onChange={(e) => setEditForm({ ...editForm, canImport: e.target.checked })} />
-            Can import data
-          </label>
-          <p className="text-xs text-muted-foreground">Owner and Administrator can always import, even if this is turned off.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canBuildForms} onChange={(e) => setEditForm({ ...editForm, canBuildForms: e.target.checked })} />
-            Can build forms
-          </label>
-          <p className="text-xs text-muted-foreground">Creating a form and editing its structure, including adding, renaming, or removing columns on a living controlled list. Filling a published copy does not use this. Owner and Administrator can always build forms.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canRenameFolders} onChange={(e) => setEditForm({ ...editForm, canRenameFolders: e.target.checked })} />
-            Can rename folders
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canDeleteFolders} onChange={(e) => setEditForm({ ...editForm, canDeleteFolders: e.target.checked })} />
-            Can delete folders
-          </label>
-          <p className="text-xs text-muted-foreground">An administrator assigns these on the role. They are not tied to a job title. A folder with saved forms asks where to move them before it is deleted.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canDeletePlants} onChange={(e) => setEditForm({ ...editForm, canDeletePlants: e.target.checked })} />
-            Can delete plants
-          </label>
-          <p className="text-xs text-muted-foreground">Removes a plant from every list. Records keep the plant name. This follows the permission on the role, not the role's name.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canViewLoginHistory} onChange={(e) => setEditForm({ ...editForm, canViewLoginHistory: e.target.checked })} />
-            Can view login history
-          </label>
-          <p className="text-xs text-muted-foreground">Who signed in, when, from where, and on what device. An administrator assigns this on the role. Owner and Administrator start with it.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canViewAllSites} onChange={(e) => setEditForm({ ...editForm, canViewAllSites: e.target.checked })} />
-            View all sites
-          </label>
-          <p className="text-xs text-muted-foreground">Shows every plant, including All sites in the header. People without this only see plants they are assigned to.</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={editForm.canExecutiveDashboard} onChange={(e) => setEditForm({ ...editForm, canExecutiveDashboard: e.target.checked })} />
-            Executive dashboard
-          </label>
-          <p className="text-xs text-muted-foreground">Opens the executive dashboard after sign-in. Viewing does not grant permission to edit records.</p>
+          <RolePermissionFields selected={editForm.permissions} onChange={(permissions) => setEditForm({ ...editForm, permissions })} />
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
           </button>
