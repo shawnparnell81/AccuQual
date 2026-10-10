@@ -46,11 +46,14 @@ export function RecordReferences({
   step,
   entityType,
   entityId,
+  attachments = true,
 }: {
   modules: string[];
   step: string;
   entityType: string;
   entityId: number;
+  /** Controlled lists are not an attachment parent. Leave this off so the page does not ask for files. */
+  attachments?: boolean;
 }) {
   const links = useWorkflowStepLinks(modules, step);
   return (
@@ -59,7 +62,7 @@ export function RecordReferences({
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Linked docs</h2>
         <LinkedDocumentList documents={links} empty="No published document is linked on this step." />
       </section>
-      <AttachmentsPanel entityType={entityType} entityId={entityId} title="Attachments" />
+      {attachments ? <AttachmentsPanel entityType={entityType} entityId={entityId} title="Attachments" /> : null}
     </>
   );
 }

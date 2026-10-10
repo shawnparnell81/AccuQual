@@ -454,8 +454,25 @@ async function requireLevel(req: Request, key: ListKey, level: "read" | "edit") 
   }
 }
 
+/** Header repair and outside-row absorb for the list being opened. Other lists stay as they are. */
+async function refreshOpenedList(req: Request, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }) {
+  if (!req.db || !req.user) return row;
+  const repaired = await repairStoredHeader(req.db, key, row, req.user.id);
+  const sheets = await absorbOutsideRows(req.db, key, repaired.sheets, req.user.id, repaired.id);
+  return sheets === repaired.sheets ? repaired : { ...repaired, sheets };
+}
+
 export async function openControlledList(req: Request, key: ListKey): Promise<ControlledListView> {
   await requireLevel(req, key, "read");
+  const existing = await loadRow(req.db!, key);
+  // A list that already exists does not need every other list, the folder tree,
+  // and the blank-form filing pass. That serial walk is what held the page on Loading.
+  // Old Quality Manual copies are still retired here. Opening the list is what removes them.
+  if (existing) {
+    const refreshed = await refreshOpenedList(req, key, existing);
+    await retireSupersededLists(req);
+    return present(req, key, refreshed);
+  }
   await ensureLivingControlledLists(req);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
