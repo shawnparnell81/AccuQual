@@ -1,4 +1,4 @@
-/* Inter, Montserrat, JetBrains Mono — SIL OFL 1.1, vendored in public/fonts. */
+/* Inter and Montserrat stay on form sheets. Roboto (self-hosted) is the UI face. JetBrains Mono stays for codes. SIL OFL 1.1. */
 @font-face {
   font-family: "Inter";
   src: url("/fonts/inter.woff2") format("woff2");
@@ -233,17 +233,15 @@
   }
 }
 
-html {
-  /* Modestly tighter than the 16px browser default so lists and sections fit more on a page. */
-  font-size: 15px;
-}
 body {
   margin: 0;
   background: hsl(var(--background));
   color: hsl(var(--text));
-  font-family: var(--fb);
-  font-size: 13px;
-  line-height: 1.45;
+  /* UI chrome. One step under the 16px root (16 → 14) via --ui-step on the type utilities. */
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  --ui-step: 0.875;
   -webkit-font-smoothing: antialiased;
 }
 body::before {
@@ -260,9 +258,95 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--fh);
+  font-family: "Roboto", system-ui, sans-serif;
   color: hsl(var(--foreground));
   letter-spacing: -0.01em;
+}
+/* Form sheets, blank templates, filled viewers, Office preview, and LST grids keep the faces they had. */
+:is(
+  .aq-form-copy,
+  .aq-print-sheet,
+  .iso,
+  .csa,
+  .csa-sheet,
+  .fp,
+  .fp-sheet,
+  .insp,
+  .e8-sheet,
+  .e8-grid,
+  .b8,
+  .fb-grid,
+  .fb-sheet,
+  .sheet-grid,
+  .aq-paper,
+  .office-docx
+) {
+  --ui-step: 1;
+  font-family: var(--fb);
+}
+:is(.controlled-list-sheet, .controlled-list-print) {
+  --ui-step: 1;
+}
+:is(
+  .aq-form-copy,
+  .aq-print-sheet,
+  .iso,
+  .csa,
+  .csa-sheet,
+  .fp,
+  .fp-sheet,
+  .insp,
+  .e8-sheet,
+  .e8-grid,
+  .b8,
+  .fb-grid,
+  .fb-sheet,
+  .sheet-grid,
+  .aq-paper,
+  .office-docx,
+  .controlled-list-sheet,
+  .controlled-list-print
+) :is(h1, h2, h3, h4) {
+  font-family: inherit;
+}
+/* The UI type ramp, one step down. A form surface sets --ui-step back to 1, so these sizes stay put inside it. */
+body .text-xs {
+  font-size: calc(0.75rem * var(--ui-step));
+  line-height: calc(1rem * var(--ui-step));
+}
+body .text-sm {
+  font-size: calc(0.875rem * var(--ui-step));
+  line-height: calc(1.25rem * var(--ui-step));
+}
+body .text-base {
+  font-size: calc(1rem * var(--ui-step));
+  line-height: calc(1.5rem * var(--ui-step));
+}
+body .text-lg {
+  font-size: calc(1.125rem * var(--ui-step));
+  line-height: calc(1.75rem * var(--ui-step));
+}
+body .text-xl {
+  font-size: calc(1.25rem * var(--ui-step));
+  line-height: calc(1.75rem * var(--ui-step));
+}
+body .text-2xl {
+  font-size: calc(1.5rem * var(--ui-step));
+  line-height: calc(2rem * var(--ui-step));
+}
+body .text-3xl {
+  font-size: calc(1.875rem * var(--ui-step));
+  line-height: calc(2.25rem * var(--ui-step));
+}
+body .text-4xl {
+  font-size: calc(2.25rem * var(--ui-step));
+  line-height: calc(2.5rem * var(--ui-step));
+}
+body .text-\[2rem\] {
+  font-size: calc(2rem * var(--ui-step));
+}
+body .text-\[1\.6rem\] {
+  font-size: calc(1.6rem * var(--ui-step));
 }
 code,
 kbd,
@@ -662,7 +746,7 @@ a.border.border-border:hover {
 
 main table thead th {
   font-family: var(--fm);
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--ui-step));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -991,19 +1075,19 @@ body.nav-top .aq-menu-btn {
   align-items: center;
   gap: 10px;
   color: #fff;
-  font: 800 1rem/1 var(--fh);
+  font: 800 calc(1rem * var(--ui-step))/1 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.06em;
   white-space: nowrap;
   text-decoration: none;
   min-width: 0;
 }
 .aq-product-line {
-  font: 700 0.78rem/1.2 var(--fh);
+  font: 700 calc(0.78rem * var(--ui-step))/1.2 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .aq-product-line-signin {
-  font: 800 1.05rem/1.3 var(--fh);
+  font: 800 calc(1.05rem * var(--ui-step))/1.3 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.01em;
   white-space: normal;
 }
@@ -1213,7 +1297,7 @@ a:focus-visible {
   border-radius: 999px;
   background: hsl(var(--destructive));
   color: #fff;
-  font: 700 0.66rem/18px var(--fb);
+  font: 700 0.66rem/18px "Roboto", system-ui, sans-serif;
   text-align: center;
 }
 .aq-avatar {
@@ -1222,12 +1306,16 @@ a:focus-visible {
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
-  font: 700 0.72rem/1 var(--fb);
+  font: 700 0.72rem/1 "Roboto", system-ui, sans-serif;
   color: hsl(var(--primary-foreground));
   background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
 }
 .aq-menu-btn {
   display: none;
+}
+.aq-sidebar,
+.aq-topbar {
+  font-size: calc(14px * var(--ui-step));
 }
 .aq-sidebar {
   position: fixed;
@@ -1404,7 +1492,7 @@ body.aq-side-resizing * {
 }
 .aq-nav-count {
   margin-left: 6px;
-  font: 700 0.66rem/1 var(--fb);
+  font: 700 0.66rem/1 "Roboto", system-ui, sans-serif;
   background: hsl(var(--warning) / 0.15);
   color: hsl(var(--warning));
   padding: 3px 6px;
@@ -1801,19 +1889,12 @@ body.side-collapsed .aq-nav-folder-link {
     --form-heading: #111111 !important;
     --form-bar-foreground: #ffffff !important;
   }
-  html {
-    font-size: 16px !important;
-  }
   html,
   body {
     height: auto !important;
     overflow: visible !important;
     background: #fff !important;
     color: #111 !important;
-  }
-  body {
-    font-size: 14px !important;
-    line-height: 1.5 !important;
   }
   .aq-split,
   .aq-split-pane {
