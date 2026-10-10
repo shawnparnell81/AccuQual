@@ -49,6 +49,7 @@ export * from "./qualityInspectionReports.js";
 export * from "./attachments.js";
 export * from "./pdfExports.js";
 export * from "./warranty.js";
+export * from "./laborClaims.js";
 export * from "./supplierPortal.js";
 export * from "./supplierRma.js";
 export * from "./crar.js";

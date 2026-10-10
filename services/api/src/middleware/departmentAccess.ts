@@ -56,6 +56,7 @@ export type ResourceKey =
   | "sales"
   | "customers"
   | "warranty"
+  | "labor_claims"
   | "supplier_portal"
   | "crar"
   | "crar_workflow"
@@ -113,6 +114,7 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   // VISIBLE_RESOURCE_KEYS omits this key from admin catalogs.
   customers: "Customer Onboarding",
   warranty: "Warranty",
+  labor_claims: "Labor Claims",
   supplier_portal: "Supplier Portal",
   crar: "Customer Return Analysis (CRAR)",
   crar_workflow: "CRAR — Workflow Transitions",
@@ -163,6 +165,7 @@ const RECORD_DELETE_MOUNTS = new Set([
   "/work-orders",
   "/rma",
   "/warranty",
+  "/labor-claims",
   "/crar",
   "/rma-log",
   "/quality",

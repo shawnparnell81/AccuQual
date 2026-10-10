@@ -36,6 +36,12 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     requested: moneyCell(view.executive.totalAmountRequested),
     partsAmount: moneyCell(view.executive.partsAmountRequested),
     labor: moneyCell(view.executive.laborAmountRequested),
+    financialNote: "Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.",
+    laborCount: view.claimMonth.laborCount == null ? "—" : String(view.claimMonth.laborCount),
+    laborHours: view.claimMonth.laborHours == null ? "—" : String(view.claimMonth.laborHours),
+    laborCost: moneyCell(view.claimMonth.laborCost),
+    warrantyCount: view.claimMonth.warrantyCount == null ? "—" : String(view.claimMonth.warrantyCount),
+    warrantyCost: moneyCell(view.claimMonth.warrantyCost),
     liability: moneyCell(view.executive.potentialLiability),
     flat: view.executive.flatRate == null ? "—" : money(view.executive.flatRate),
     approved: dash(view.executive.claimsApproved),
@@ -84,12 +90,12 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     { metric: "Total Product Alerts", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.metrics.totalProductAlerts[index] ?? null)])) },
   ];
   const financialRows = [
-    { metric: "Total Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.total[index] ?? null)])) },
-    { metric: "Parts Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.parts[index] ?? null)])) },
-    { metric: "Labor Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.labor[index] ?? null)])) },
+    { metric: "Total (Labor Claims + Warranty)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.total[index] ?? null)])) },
+    { metric: "Warranty (Warranty claims)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.parts[index] ?? null)])) },
+    { metric: "Labor (Labor Claims)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.labor[index] ?? null)])) },
   ];
   const warrantyRows = [
-    { metric: "Labor-to-Parts Ratio", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.warranty.ratio[index] ?? null)])) },
+    { metric: "Labor-to-Warranty", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.warranty.ratio[index] ?? null)])) },
     { metric: "Mean Time to Failure", ...Object.fromEntries(months.map((month, index) => [month.key, view.tables.warranty.mttfDays[index] == null ? "—" : `${view.tables.warranty.mttfDays[index]} days`])) },
     { metric: "Median Time to Failure", ...Object.fromEntries(months.map((month, index) => [month.key, view.tables.warranty.medianDays[index] == null ? "—" : `${view.tables.warranty.medianDays[index]} days`])) },
   ];
@@ -140,7 +146,7 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
           { type: "textarea", name: "achievement", label: "Primary achievement" },
           { type: "textarea", name: "risk", label: "Critical risk / blocker" },
           { type: "row", fields: [{ kind: "text", name: "claims", label: "Total claims" }, { kind: "text", name: "pumps", label: "Fuel pump returns" }] },
-          { type: "row", fields: [{ kind: "text", name: "requested", label: "Total requested" }, { kind: "text", name: "partsAmount", label: "Parts requested" }, { kind: "text", name: "labor", label: "Labor requested" }] },
+          { type: "row", fields: [{ kind: "text", name: "requested", label: "Total (Labor Claims + Warranty)" }, { kind: "text", name: "partsAmount", label: "Warranty" }, { kind: "text", name: "labor", label: "Labor" }] },
           { type: "row", fields: [{ kind: "text", name: "liability", label: "Potential liability" }, { kind: "text", name: "flat", label: "Flat rate" }, { kind: "text", name: "savings", label: "Denied labor savings" }] },
           { type: "row", fields: [{ kind: "text", name: "approved", label: "Approved" }, { kind: "text", name: "denied", label: "Denied" }, { kind: "text", name: "pending", label: "Pending" }] },
           { type: "textarea", name: "payout", label: "Payout policy" },
@@ -151,6 +157,7 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
         title: "Trend tables",
         blocks: [
           { type: "table", name: "metrics", columns: [{ key: "metric", label: "Metric", kind: "text" }, ...monthColumns] },
+          { type: "textarea", name: "financialNote", label: "Dollar source" },
           { type: "table", name: "financials", columns: [{ key: "metric", label: "Financial category", kind: "text" }, ...monthColumns] },
           { type: "table", name: "warranty", columns: [{ key: "metric", label: "Warranty metric", kind: "text" }, ...monthColumns] },
         ],
@@ -159,6 +166,8 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
         number: "6.2",
         title: "Labor Claims",
         blocks: [
+          { type: "row", fields: [{ kind: "text", name: "laborCount", label: "Labor claims" }, { kind: "text", name: "laborHours", label: "Labor hours" }, { kind: "text", name: "laborCost", label: "Labor cost" }] },
+          { type: "row", fields: [{ kind: "text", name: "warrantyCount", label: "Warranty claims" }, { kind: "text", name: "warrantyCost", label: "Warranty cost" }] },
           { type: "row", fields: [{ kind: "text", name: "mttf", label: "Mean time to failure" }, { kind: "text", name: "median", label: "Median time to failure" }] },
           { type: "table", name: "claimsChart", columns: [{ key: "date", label: "Date", kind: "text" }, { key: "claims", label: "Claims", kind: "text" }, { key: "returns", label: "Returns", kind: "text" }] },
           { type: "table", name: "topParts", columns: [{ key: "part", label: "Part number", kind: "text" }, { key: "description", label: "Description", kind: "text" }, { key: "claims", label: "Total claims", kind: "text" }] },

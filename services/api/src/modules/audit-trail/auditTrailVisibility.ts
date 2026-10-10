@@ -88,6 +88,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   SupplierScorecard: "suppliers",
   TrainingAssignment: "training",
   WarrantyClaim: "warranty",
+  LaborClaim: "labor_claims",
   warranty_claim: "warranty",
   WorkOrder: "work_orders",
   WorkflowDefinition: "workflow",

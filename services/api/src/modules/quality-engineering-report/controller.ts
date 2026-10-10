@@ -28,6 +28,7 @@ function actor(req: Request) {
     month: 0,
     user: { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department },
     siteIds: req.allowedSiteIds ?? [],
+    plantId: req.allSites ? null : (req.siteId ?? null),
   };
 }
 

@@ -1,7 +1,7 @@
 import * as reportingService from "./reporting.service.js";
 import type { Db } from "../../lib/requestDb.js";
 
-export const REPORT_TYPES = ["ncr_summary", "capa_summary", "supplier_scorecard", "warranty_summary", "receiving_summary"] as const;
+export const REPORT_TYPES = ["ncr_summary", "capa_summary", "supplier_scorecard", "warranty_summary", "labor_claims_summary", "receiving_summary"] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
@@ -9,6 +9,7 @@ export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   capa_summary: "CAPA Summary",
   supplier_scorecard: "Supplier Scorecard",
   warranty_summary: "Warranty / RMA Summary",
+  labor_claims_summary: "Labor Claims",
   receiving_summary: "Receiving Inspection Summary",
 };
 
@@ -65,6 +66,16 @@ export async function buildReportEmail(db: Db, reportType: ReportType, companyNa
         body:
           `Warranty / RMA Summary as of ${today}\n\n` +
           `Total claims: ${m.total}\nTotal actual cost: $${m.totalActualCost.toFixed(2)}\n\n` +
+          `By status:\n${m.byStatus.map((s) => `  ${s.status}: ${s.count}`).join("\n")}\n`,
+      };
+    }
+    case "labor_claims_summary": {
+      const m = await reportingService.getLaborClaimTrends(db);
+      return {
+        subject: `${companyName} — Labor Claims (${today})`,
+        body:
+          `Labor Claims as of ${today}\n\n` +
+          `Total claims: ${m.total}\nTotal hours: ${m.totalHours}\nTotal labor cost: $${m.totalLaborCost.toFixed(2)}\n\n` +
           `By status:\n${m.byStatus.map((s) => `  ${s.status}: ${s.count}`).join("\n")}\n`,
       };
     }

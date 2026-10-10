@@ -31,6 +31,7 @@ const REPORT_TYPE_OPTIONS = [
   { value: "capa_summary", label: "CAPA Summary" },
   { value: "supplier_scorecard", label: "Supplier Scorecard" },
   { value: "warranty_summary", label: "Warranty / RMA Summary" },
+  { value: "labor_claims_summary", label: "Labor Claims" },
   { value: "receiving_summary", label: "Receiving Inspection Summary" },
 ];
 

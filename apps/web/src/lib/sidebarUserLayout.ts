@@ -55,29 +55,32 @@ function collectKeys(nodes: SidebarPlacement[], into = new Set<string>()): Set<s
   return into;
 }
 
-function insertPlacement(layout: SidebarPlacement[], parentKey: string | null, item: SidebarPlacement) {
-  if (parentKey === null) {
-    layout.push(item);
-    return;
+function insertPlacement(layout: SidebarPlacement[], parentKey: string | null, item: SidebarPlacement, afterKey: string | null) {
+  if (parentKey !== null) {
+    const parent = findPlacement(layout, parentKey);
+    if (!parent) {
+      layout.push(item);
+      return;
+    }
+    parent.children ??= [];
   }
-  const parent = findPlacement(layout, parentKey);
-  if (!parent) {
-    layout.push(item);
-    return;
-  }
-  parent.children ??= [];
-  parent.children.push(item);
+  const children = parentKey === null ? layout : findPlacement(layout, parentKey)!.children!;
+  const index = afterKey == null ? -1 : children.findIndex((child) => child.key === afterKey);
+  if (index >= 0) children.splice(index + 1, 0, item);
+  else children.push(item);
 }
 
 function ensureCatalogPlaced(layout: SidebarPlacement[], catalog: SidebarNode[], skip: Set<string>): SidebarPlacement[] {
   const next = structuredClone(layout);
   const used = collectKeys(next);
   function walk(nodes: SidebarNode[], parentKey: string | null) {
+    let previousKey: string | null = null;
     for (const node of nodes) {
       if (!used.has(node.key) && !skip.has(node.key)) {
         used.add(node.key);
-        insertPlacement(next, parentKey, isFolder(node) ? { key: node.key, children: [] } : { key: node.key });
+        insertPlacement(next, parentKey, isFolder(node) ? { key: node.key, children: [] } : { key: node.key }, previousKey);
       }
+      if (used.has(node.key)) previousKey = node.key;
       if (isFolder(node)) walk(node.children, used.has(node.key) ? node.key : parentKey);
     }
   }

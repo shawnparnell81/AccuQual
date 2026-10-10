@@ -45,6 +45,7 @@ const RULES: SurfaceRule[] = [
   { test: /^\/quarantine\/\d+$/, kind: "form", access: "quarantine" },
   { test: /^\/crar\/\d+$/, kind: "form", access: "crar" },
   { test: /^\/warranty\/\d+$/, kind: "form", access: "warranty" },
+  { test: /^\/labor-claims\/\d+$/, kind: "form", access: "labor_claims" },
   { test: /^\/work-orders\/\d+$/, kind: "form", access: "work_orders" },
   { test: /^\/rma\/\d+$/, kind: "form", access: "rma" },
   { test: /^\/documents\/\d+$/, kind: "form", access: "documents" },

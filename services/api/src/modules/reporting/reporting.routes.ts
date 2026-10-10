@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
@@ -10,6 +11,7 @@ import {
   capaMetricsHandler,
   supplierPerformanceReportHandler,
   warrantyTrendsHandler,
+  laborClaimTrendsHandler,
   receivingTrendsHandler,
   inventoryQualityTrendsHandler,
   workflowCycleTimeHandler,
@@ -50,6 +52,7 @@ reportingRouter.get("/ncr-metrics", requireDepartmentAccess("ncr"), ncrMetricsHa
 reportingRouter.get("/capa-metrics", requireDepartmentAccess("capa"), capaMetricsHandler);
 reportingRouter.get("/supplier-performance", requireDepartmentAccess("suppliers"), supplierPerformanceReportHandler);
 reportingRouter.get("/warranty-trends", requireDepartmentAccess("warranty"), warrantyTrendsHandler);
+reportingRouter.get("/labor-claims-trends", withSiteContext, requireDepartmentAccess("labor_claims"), laborClaimTrendsHandler);
 reportingRouter.get("/receiving-trends", requireDepartmentAccess("inventory"), receivingTrendsHandler);
 reportingRouter.get("/inventory-quality-trends", requireDepartmentAccess("inventory"), inventoryQualityTrendsHandler);
 reportingRouter.get("/workflow-cycle-time", requireDepartmentAccess("ncr"), workflowCycleTimeHandler);
@@ -64,6 +67,7 @@ reportingRouter.get("/export/:reportKey(ncr-metrics)", requireDepartmentAccess("
 reportingRouter.get("/export/:reportKey(capa-metrics)", requireDepartmentAccess("capa"), exportReportHandler);
 reportingRouter.get("/export/:reportKey(supplier-performance)", requireDepartmentAccess("suppliers"), exportReportHandler);
 reportingRouter.get("/export/:reportKey(warranty-trends)", requireDepartmentAccess("warranty"), exportReportHandler);
+reportingRouter.get("/export/:reportKey(labor-claims-trends)", withSiteContext, requireDepartmentAccess("labor_claims"), exportReportHandler);
 reportingRouter.get("/export/:reportKey(receiving-trends)", requireDepartmentAccess("inventory"), exportReportHandler);
 reportingRouter.get("/export/:reportKey(inventory-quality-trends)", requireDepartmentAccess("inventory"), exportReportHandler);
 

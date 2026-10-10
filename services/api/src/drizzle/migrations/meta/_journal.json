@@ -841,6 +841,13 @@
       "when": 1794351600000,
       "tag": "0119_owner_executive_and_greer",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1794438000000,
+      "tag": "0122_labor_claims",
+      "breakpoints": true
     }
   ]
 }

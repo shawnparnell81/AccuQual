@@ -131,7 +131,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
       <div>
         {!embedded && <h1 className="text-2xl font-semibold">Reports</h1>}
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Weekly, monthly, and custom quality reports from the records already in NCR, CAPA, receiving, and the other modules. A section you can't read is left out. A section whose table isn't in this database is skipped. Quality / Engineering is the monthly pack (TMP-ENG-001): supplier upload for claim charts, live NCR and quarantine for the month, and a PDF.
+          Weekly, monthly, and custom quality reports from the records already in NCR, CAPA, receiving, and the other modules. A section you can't read is left out. A section whose table isn't in this database is skipped. Quality / Engineering is the monthly pack (TMP-ENG-001): supplier upload for claim charts, Labor Claims and Warranty dollars from AccuQual, live NCR and quarantine for the month, and a PDF.
         </p>
       </div>
 

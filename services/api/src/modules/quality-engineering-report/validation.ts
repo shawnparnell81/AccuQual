@@ -25,6 +25,18 @@ export const saveEngineeringReportSchema = z.object({
     techLine: z.array(qaItem).max(40),
     fitment: z.array(qaItem).max(40),
     productInfo: z.array(qaItem).max(40),
+    financialEntries: z
+      .array(
+        z.object({
+          month: z.string().regex(/^\d{4}-\d{2}$/),
+          laborAmount: z.string().max(40),
+          warrantyAmount: z.string().max(40),
+          totalAmount: z.string().max(40),
+        }),
+      )
+      .max(24)
+      .optional()
+      .default([]),
   }),
   recipients: zodRecipients(0).optional(),
 });

@@ -120,6 +120,8 @@ export const ErpPresetEditorPage = lazyNamed("/settings/erp/presets", () => impo
 export const ErpSyncErrorsPage = lazyNamed("/settings/erp/sync-errors", () => import("./Erp/ErpSyncErrorsPage"), "ErpSyncErrorsPage");
 export const RmaDetailPage = lazyNamed("/rma", () => import("./Rma/RmaDetailPage"), "RmaDetailPage");
 export const WarrantyClaimsList = lazyNamed("/warranty", () => import("./Warranty/WarrantyClaimsList"), "WarrantyClaimsList");
+export const LaborClaimsList = lazyNamed("/labor-claims", () => import("./LaborClaims/LaborClaimsList"), "LaborClaimsList");
+export const LaborClaimDetail = lazyNamed("/labor-claims", () => import("./LaborClaims/LaborClaimDetail"), "LaborClaimDetail");
 export const WarrantyClaimDetail = lazyNamed("/warranty", () => import("./Warranty/WarrantyClaimDetail"), "WarrantyClaimDetail");
 export const WarrantyDashboard = lazyNamed("/warranty/dashboard", () => import("./Warranty/WarrantyDashboard"), "WarrantyDashboard");
 export const CrarListPage = lazyNamed("/crar", () => import("./Crar/CrarListPage"), "CrarListPage");

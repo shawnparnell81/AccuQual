@@ -152,6 +152,7 @@ const ENTITY_TABLE: Record<string, string> = {
   Rma: "rma",
   RmaLog: "rma_log",
   WarrantyClaim: "warranty_claims",
+  LaborClaim: "labor_claims",
   Crar: "crar",
   Customer: "customers",
   User: "users",

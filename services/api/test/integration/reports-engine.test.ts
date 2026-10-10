@@ -46,7 +46,7 @@ describe("quality reports", () => {
     const res = await request(app).post("/reports/weekly").set("Authorization", `Bearer ${adminToken}`).send({ plantId: siteId });
     expect(res.status).toBe(200);
     expect(res.body.header.type).toBe("weekly");
-    expect(res.body.header.templateVersion).toBe(1);
+    expect(res.body.header.templateVersion).toBe(2);
     expect(res.body.header.plant).toMatchObject({ id: siteId, name: "Dayton" });
     expect(res.body.header.generatedBy.name).toBe("Report Admin");
     const ncrSection = res.body.sections.find((section: { key: string }) => section.key === "ncr");
@@ -94,14 +94,14 @@ describe("quality reports", () => {
   it("adds the monthly sections and rejects a custom report without dates", async () => {
     const monthly = await request(app).post("/reports/monthly").set("Authorization", `Bearer ${adminToken}`).send({ plantId: "all" });
     expect(monthly.status).toBe(200);
-    expect(monthly.body.sections.map((section: { key: string }) => section.key)).toEqual(expect.arrayContaining(["training", "calibration", "ppap", "workflow_cycle_times"]));
+    expect(monthly.body.sections.map((section: { key: string }) => section.key)).toEqual(expect.arrayContaining(["training", "calibration", "ppap", "workflow_cycle_times", "warranty", "labor_claims"]));
 
     const adhoc = await request(app).post("/reports/adhoc").set("Authorization", `Bearer ${adminToken}`).send({ plantId: "all" });
     expect(adhoc.status).toBe(400);
 
     const templates = await request(app).get("/reports/templates").set("Authorization", `Bearer ${adminToken}`);
     expect(templates.status).toBe(200);
-    expect(templates.body.version).toBe(1);
+    expect(templates.body.version).toBe(2);
 
     const schedule = await request(app).get("/reports/schedule").set("Authorization", `Bearer ${adminToken}`);
     expect(schedule.status).toBe(200);

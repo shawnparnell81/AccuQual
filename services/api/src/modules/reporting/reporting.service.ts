@@ -8,6 +8,8 @@ import { qualityInspectionReports } from "../../drizzle/schema/qualityInspection
 import { inventoryAlerts, inventoryMovements } from "../../drizzle/schema/inventory.js";
 import { erpReceivingLineItems } from "../../drizzle/schema/erp.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
+import { laborBooksBetween } from "../labor-claims/claimBooks.js";
+import { optionalRows } from "../sites/optionalSql.js";
 import type { Db } from "../../lib/requestDb.js";
 import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
 
@@ -216,6 +218,44 @@ export async function getWarrantyTrends(db: Db, range?: DateRange): Promise<Warr
     const [costRow] = await db.select({ total: sql<number>`coalesce(sum(${warrantyClaims.warrantyActualCost}), 0)::float` }).from(warrantyClaims).where(where);
 
     return { total: totalRow?.count ?? 0, byStatus, byMonth, totalActualCost: costRow?.total ?? 0 };
+  });
+}
+
+export interface LaborClaimTrends {
+  available: boolean;
+  total: number;
+  totalHours: number;
+  totalLaborCost: number;
+  byStatus: { status: string; count: number }[];
+  byMonth: { month: string; count: number }[];
+}
+
+/** Same plant rule as the Warranty claims list: a chosen plant includes unassigned rows. */
+export async function getLaborClaimTrends(db: Db, range?: DateRange, siteId?: number | null): Promise<LaborClaimTrends> {
+  const plant = siteId == null ? "all" : String(siteId);
+  return cached(`labor-claims:${plant}:${JSON.stringify(range)}`, async () => {
+    const from = range?.from ?? new Date(Date.UTC(2000, 0, 1));
+    const to = range?.to ?? new Date(Date.UTC(2100, 0, 1));
+    const end = new Date(to.getTime() + 1);
+    const books = await laborBooksBetween(db, from, end, siteId ?? null);
+    if (books == null) return { available: false, total: 0, totalHours: 0, totalLaborCost: 0, byStatus: [], byMonth: [] };
+    const site = siteId == null ? sql`true` : sql`(site_id = ${siteId} OR site_id IS NULL)`;
+    const span = sql`coalesce(claim_date, created_at) >= ${from} AND coalesce(claim_date, created_at) < ${end} AND ${site}`;
+    const byStatus = await optionalRows<{ status: string; count: number }>(
+      db,
+      sql`SELECT coalesce(status, 'unspecified') AS status, count(*)::int AS count FROM labor_claims WHERE ${span} GROUP BY 1`,
+    );
+    const total = books.reduce((sum, row) => sum + row.count, 0);
+    const totalHours = books.reduce((sum, row) => sum + row.hours, 0);
+    const costs = books.filter((row) => row.cost != null);
+    return {
+      available: true,
+      total,
+      totalHours: Math.round(totalHours * 100) / 100,
+      totalLaborCost: costs.reduce((sum, row) => sum + (row.cost ?? 0), 0),
+      byStatus: (byStatus ?? []).map((row) => ({ status: row.status, count: Number(row.count) })),
+      byMonth: books.map((row) => ({ month: row.month, count: row.count })),
+    };
   });
 }
 

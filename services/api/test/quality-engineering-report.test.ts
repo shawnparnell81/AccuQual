@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 import { pdfVisibleText } from "../src/modules/forms/controlledPdf.js";
+import { resolveMonthMoney } from "../src/modules/quality-engineering-report/financials.js";
 import {
   assembleReport,
   emptyLive,
@@ -72,6 +73,8 @@ describe("quality engineering supplier upload", () => {
     expect(view.charts.topVehicles[0]?.vehicle).toContain("Silverado");
     expect(view.charts.emailIssues.find((row) => row.month === "2026-08")?.totalIssues).toBe(42);
     expect(view.labor).toEqual({ mttfDays: 125.9, medianDays: 41 });
+    expect(view.executive.totalAmountRequested).toBeNull();
+    expect(view.tables.financials.total.every((value) => value == null)).toBe(true);
     expect(view.live.ncr).toMatchObject({ status: "ok", data: { total: 11 } });
 
     const blank = assembleReport({
@@ -100,7 +103,8 @@ describe("quality engineering supplier upload", () => {
     const text = await pdfVisibleText(pdf);
     expect(text).toContain("459");
     expect(text).toContain("A60076");
-    expect(text).toContain("108,871.03");
+    expect(text).not.toContain("108,871.03");
+    expect(text).toContain("Labor Claims");
     expect(text).toContain("DMA Parts");
     expect(text).toContain("YELLOW");
     expect(text).toContain("B0086P");
@@ -115,6 +119,55 @@ describe("quality engineering supplier upload", () => {
     const parsed = await parseSupplierFile(buffer, "supplier.xlsx", 2026);
     expect(parsed.data.monthlyMetrics).toEqual([{ month: "2026-08", totalClaims: 12, totalProductAlerts: 3 }]);
     expect(parsed.data.fuelPumpReturns).toEqual([]);
+  });
+});
+
+describe("labor and warranty dollars", () => {
+  it("uses AccuQual books when a month has a dollar row, and the typed amount when it does not", () => {
+    const typed = resolveMonthMoney({
+      month: "2026-08",
+      labor: { status: "unavailable" },
+      warranty: { status: "unavailable" },
+      entry: { month: "2026-08", laborAmount: "12.50", warrantyAmount: "", totalAmount: "" },
+    });
+    expect(typed.labor).toMatchObject({ value: 12.5, source: "entered", editable: true });
+    expect(typed.total).toMatchObject({ value: 12.5, editable: false });
+
+    const books = resolveMonthMoney({
+      month: "2026-08",
+      labor: { status: "ok", months: [{ month: "2026-08", count: 2, hours: 4, cost: 80 }] },
+      warranty: { status: "ok", months: [{ month: "2026-08", count: 3, hours: 0, cost: 20 }] },
+      entry: { month: "2026-08", laborAmount: "1", warrantyAmount: "1", totalAmount: "9" },
+    });
+    expect(books.labor).toMatchObject({ value: 80, source: "labor_claims", editable: false });
+    expect(books.warranty).toMatchObject({ value: 20, source: "warranty", editable: false });
+    expect(books.total).toMatchObject({ value: 100, source: "combined", editable: false });
+
+    const live = emptyLive();
+    live.laborBooks = { status: "ok", months: [{ month: "2026-08", count: 2, hours: 4, cost: 80 }] };
+    live.warrantyBooks = { status: "ok", months: [{ month: "2026-08", count: 1, hours: 0, cost: 20 }] };
+    const view = assembleReport({
+      year: 2026,
+      month: 8,
+      narrative: {
+        ...emptyNarrative(),
+        financialEntries: [{ month: "2026-08", laborAmount: "999", warrantyAmount: "999", totalAmount: "999" }],
+      },
+      supplier: {
+        ...emptySupplierData(),
+        financials: [{ month: "2026-08", totalAmount: 108871.03, partsAmount: 14028.27, laborAmount: 94842.76 }],
+      },
+      live,
+      saved: true,
+      uploadFileName: null,
+      canEdit: true,
+    });
+    expect(view.executive.laborAmountRequested).toBe(80);
+    expect(view.executive.partsAmountRequested).toBe(20);
+    expect(view.executive.totalAmountRequested).toBe(100);
+    expect(view.tables.financials.laborSource.at(-1)).toBe("labor_claims");
+    expect(view.tables.warranty.ratio.at(-1)).toBe("4:1");
+    expect(view.claimMonth).toEqual({ laborCount: 2, laborHours: 4, laborCost: 80, warrantyCount: 1, warrantyCost: 20 });
   });
 });
 

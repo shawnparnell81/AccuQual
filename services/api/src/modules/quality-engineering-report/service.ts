@@ -75,12 +75,13 @@ export async function buildEngineeringReport(
     month: number;
     user: { id: number; roleName: string | null; department: string | null };
     siteIds: number[];
+    plantId?: number | null;
   },
 ): Promise<EngineeringReportView> {
   const access = await engineeringAccess(db, input.user);
   if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
   const row = await loadRow(db, input.year, input.month);
-  const live = await pullLive(db, { year: input.year, month: input.month, siteIds: input.siteIds, level: access.level });
+  const live = await pullLive(db, { year: input.year, month: input.month, siteIds: input.siteIds, plantId: input.plantId ?? null, level: access.level });
   return assembleReport({
     year: input.year,
     month: input.month,
@@ -103,6 +104,7 @@ export async function saveEngineeringNarrative(
     recipients?: string[];
     user: { id: number; roleName: string | null; department: string | null };
     siteIds: number[];
+    plantId?: number | null;
   },
 ): Promise<EngineeringReportView> {
   const access = await engineeringAccess(db, input.user);
@@ -142,6 +144,7 @@ export async function uploadEngineeringSupplier(
     replaceNotes: boolean;
     user: { id: number; roleName: string | null; department: string | null };
     siteIds: number[];
+    plantId?: number | null;
   },
 ): Promise<{ report: EngineeringReportView; warnings: string[] }> {
   const access = await engineeringAccess(db, input.user);
@@ -195,6 +198,7 @@ export async function emailEngineeringReport(
     narrative?: EngineeringNarrative;
     user: { id: number; roleName: string | null; department: string | null };
     siteIds: number[];
+    plantId?: number | null;
   },
 ): Promise<{ report: EngineeringReportView; deliveries: ReportDelivery[] }> {
   const access = await engineeringAccess(db, input.user);

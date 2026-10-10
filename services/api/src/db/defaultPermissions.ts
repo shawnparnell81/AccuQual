@@ -144,6 +144,9 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // as rma/risk/feasibility above. material_management stays read-only —
   // it has no write action of its own in this module.
   warranty: { customer_service: "edit", quality: "edit", engineering: "edit", purchasing: "edit", material_management: "read" },
+  // Labor Claims uses the same department baseline as Warranty. A company
+  // changes it in Roles & Permissions. This file does not name a role.
+  labor_claims: { customer_service: "edit", quality: "edit", engineering: "edit", purchasing: "edit", material_management: "read" },
   // The Supplier Portal — the INTERNAL staff side only. Quality owns
   // reviewing/approving what suppliers submit (onboarding docs, PPAP,
   // corrective actions, 8Ds — the same disposition-authority role it has

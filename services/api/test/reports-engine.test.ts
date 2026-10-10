@@ -23,7 +23,7 @@ const NOW = new Date("2026-10-01T15:00:00.000Z");
 describe("report templates", () => {
   it("versions the weekly and monthly section lists", () => {
     const document = ReportTemplateService.list();
-    expect(document.version).toBe(1);
+    expect(document.version).toBe(2);
     const weekly = document.templates.find((template) => template.key === "weekly");
     const monthly = document.templates.find((template) => template.key === "monthly");
     expect(weekly?.header).toEqual(["type", "dateRange", "plant", "generatedAt", "generatedBy"]);
@@ -45,8 +45,10 @@ describe("report templates", () => {
       "calibration",
       "ppap",
       "workflow_cycle_times",
+      "warranty",
+      "labor_claims",
     ]);
-    expect(ReportTemplateService.get("adhoc")?.sections).toHaveLength(14);
+    expect(ReportTemplateService.get("adhoc")?.sections).toHaveLength(16);
     expect(ReportTemplateService.get("nope")).toBeNull();
   });
 

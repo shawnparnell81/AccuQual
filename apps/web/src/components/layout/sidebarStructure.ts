@@ -182,6 +182,7 @@ const QUALITY_FOLDER: SidebarFolder = {
     doc("product-alerts", FileText),
     doc("recalls", FileText),
     { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
+    { key: "labor-claims", label: "Labor Claims", path: "/labor-claims", icon: Wrench },
     doc("repairs", Hammer),
     {
       key: "audits",

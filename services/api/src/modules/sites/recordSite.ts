@@ -15,6 +15,7 @@ const RECORD_SITES = {
   audit: { table: "audits", resource: "audit", audit: "Audit" },
   complaint: { table: "complaints", resource: "complaints", audit: "Complaint" },
   warranty: { table: "warranty_claims", resource: "warranty", audit: "WarrantyClaim" },
+  labor_claim: { table: "labor_claims", resource: "labor_claims", audit: "LaborClaim" },
   validation_report: { table: "validation_reports", resource: "documents", audit: "Validation Report" },
   iso_form: { table: "iso_quality_forms", resource: "documents", audit: "ISO form" },
   qms_form: { table: "qms_forms", resource: "qms_forms", audit: "QmsForm" },

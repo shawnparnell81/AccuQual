@@ -4,8 +4,7 @@ import { users } from "./users.js";
 /**
  * One Quality / Engineering monthly report (the TMP-ENG-001 pack: executive
  * summary, supplier warranty charts, and the narrative around NCR, quarantine,
- * and first article). Supplier claim dollars are stored from an upload. They
- * are not copied out of the warranty module.
+ * and first article). Dollar totals come from Labor Claims and Warranty claims.
  */
 export const qualityEngineeringReports = pgTable(
   "quality_engineering_reports",
