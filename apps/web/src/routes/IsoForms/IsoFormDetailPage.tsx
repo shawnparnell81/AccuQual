@@ -14,6 +14,7 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
@@ -80,7 +81,7 @@ export function IsoFormDetailPage() {
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.documents === "edit";
-  const { data: record, isLoading, isError } = hooks.useOne(recordId);
+  const { data: record, isLoading, isError, error } = hooks.useOne(recordId);
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
   const beginEdit = hooks.useAction("begin-edit");
@@ -133,7 +134,7 @@ export function IsoFormDetailPage() {
     setLoadedFor(record.id);
   }, [loadedFor, record]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this form. Refresh the page and try again.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this form. Refresh the page and try again." noun="this form" />;
   if (isLoading || !record || !cells) return <LoadingPlaceholder />;
 
   const meta = formByType(record.formType);

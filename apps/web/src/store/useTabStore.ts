@@ -113,7 +113,10 @@ export const useTabStore = create<TabState>((set, get) => ({
     if (!isLiveTabPath(path)) return;
     const { ownerId, tabs, activeId } = get();
     const active = tabs.find((t) => t.id === activeId);
+    const activePath = active?.path.split("?")[0]?.split("#")[0] ?? "";
     if (active?.path === path) return; // already showing this path — e.g. openTab's own navigate() just landed here
+    // A filtered list tab keeps its query. The router reports the pathname alone.
+    if (active && activePath === path && active.path.startsWith(`${path}?`)) return;
 
     const existing = tabs.find((t) => t.path === path);
     if (existing) {

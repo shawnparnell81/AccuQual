@@ -17,6 +17,7 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { useToast } from "../../components/shared/ToastProvider";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { getFormLayout } from "../../components/forms/layouts";
 import { GenericFormRenderer } from "../../components/forms/GenericFormRenderer";
 import { useFormEditorState } from "../../components/forms/useFormEditorState";
@@ -77,7 +78,7 @@ export function NcrWorkspacePage() {
   const [showHistory, setShowHistory] = useState(false);
   const [quarantineOnHold, setQuarantineOnHold] = useState(false);
 
-  const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
+  const { data: ncr, isLoading, isError, error } = ncrHooks.useOne(ncrId);
   const user = useCurrentUser();
   useEffect(() => {
     if (!ncr) return;
@@ -129,7 +130,7 @@ export function NcrWorkspacePage() {
     }
   }
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this issue. Refresh the page and try again.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this issue. Refresh the page and try again." noun="this NCR" />;
   if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading this issue…</p>;
 
   const owner = label(ncr.assignedTo);

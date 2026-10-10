@@ -25,6 +25,8 @@ interface Figure {
 }
 interface Widget {
   id: string;
+  kind: string;
+  dateRange: string;
   figures: Figure[];
 }
 interface Column {
@@ -75,6 +77,22 @@ describe("executive dashboard", () => {
     expect(ncr.body.siteId).toBe(greerId);
 
     await db.execute(sql`INSERT INTO complaints (description, status, record_number, customer_name) VALUES ('Unassigned complaint', 'open', 'CMP-UNASSIGNED', 'Acme')`);
+
+    await db.execute(sql`
+      INSERT INTO validation_reports (record_number, site_id, data, created_at, updated_at)
+      VALUES
+        ('FAI-GREER-OPEN', ${greerId}, '{"formType":"csa","cells":{"B2":"housing"}}'::jsonb, now(), now()),
+        ('FAI-GREER-PASS', ${greerId}, '{"formType":"fuel_pump","cells":{"A1":"Passed"}}'::jsonb, now(), now()),
+        ('FAI-WELLMAN-OPEN', ${wellmanId}, '{"formType":"fuel_pump","cells":{}}'::jsonb, now(), now())
+    `);
+    await db.execute(sql`
+      INSERT INTO iso_quality_forms (form_type, record_number, site_id, data, created_at, updated_at)
+      VALUES ('first_article', 'FAI-ISO-GREER', ${greerId}, '{"cells":{},"lines":[]}'::jsonb, now(), now())
+    `);
+    await db.execute(sql`
+      INSERT INTO labor_claims (claim_number, status, site_id, part_name, created_at)
+      VALUES ('LAB-GREER-1', 'open', ${greerId}, 'Pump labor', now())
+    `);
   });
 
   afterAll(async () => {
@@ -157,6 +175,68 @@ describe("executive dashboard", () => {
     expect(reset.status).toBe(200);
     expect(reset.body.customized).toBe(false);
     expect(reset.body.layout.widgets).toHaveLength(7);
+  });
+
+  it("matches every dashboard count to the list that count opens", async () => {
+    const res = await request(app).get("/executive").set("Authorization", `Bearer ${execToken}`);
+    expect(res.status).toBe(200);
+    const columns = res.body.columns as Column[];
+    for (const column of columns) {
+      for (const widget of column.widgets) {
+        for (const figure of widget.figures) {
+          const drill = await request(app)
+            .get("/executive/records")
+            .query({
+              kind: widget.kind,
+              bucket: figure.bucket,
+              dateRange: widget.dateRange,
+              siteId: column.siteId == null ? "unassigned" : column.siteId,
+            })
+            .set("Authorization", `Bearer ${execToken}`);
+          expect(drill.status, `${column.siteName} ${widget.kind} ${figure.bucket}`).toBe(200);
+          expect(drill.body.total, `${column.siteName} ${widget.kind} ${figure.label}`).toBe(figure.value);
+          expect(drill.body.rows).toHaveLength(Math.min(figure.value, 1000));
+        }
+      }
+    }
+
+    const greer = columns.find((column) => column.siteName === "Greer");
+    const wellman = columns.find((column) => column.siteName === "Wellman");
+    const greerOpen = await request(app)
+      .get("/executive/records")
+      .query({ kind: "fai", bucket: "open", dateRange: "90d", siteId: greer?.siteId })
+      .set("Authorization", `Bearer ${execToken}`);
+    const numbers = (greerOpen.body.rows as { recordNumber: string; href: string | null }[]).map((row) => row.recordNumber);
+    expect(numbers).toContain("FAI-GREER-OPEN");
+    expect(numbers).toContain("FAI-ISO-GREER");
+    expect(numbers).not.toContain("FAI-GREER-PASS");
+    expect(numbers).not.toContain("FAI-WELLMAN-OPEN");
+    for (const row of greerOpen.body.rows as { href: string | null }[]) {
+      expect(row.href === null || row.href.startsWith("/validation-reports/") || row.href.startsWith("/iso-forms/record/")).toBe(true);
+    }
+    const greerPass = await request(app)
+      .get("/executive/records")
+      .query({ kind: "fai", bucket: "pass", dateRange: "90d", siteId: greer?.siteId })
+      .set("Authorization", `Bearer ${execToken}`);
+    expect((greerPass.body.rows as { recordNumber: string }[]).map((row) => row.recordNumber)).toContain("FAI-GREER-PASS");
+    const wellmanOpen = await request(app)
+      .get("/executive/records")
+      .query({ kind: "fai", bucket: "open", dateRange: "90d", siteId: wellman?.siteId })
+      .set("Authorization", `Bearer ${execToken}`);
+    expect((wellmanOpen.body.rows as { recordNumber: string }[]).map((row) => row.recordNumber)).toContain("FAI-WELLMAN-OPEN");
+    expect((wellmanOpen.body.rows as { recordNumber: string }[]).map((row) => row.recordNumber)).not.toContain("FAI-GREER-OPEN");
+
+    const labor = greer?.widgets.find((widget) => widget.kind === "warranty")?.figures.find((figure) => figure.bucket === "labor");
+    expect(labor?.value).toBeGreaterThanOrEqual(1);
+  });
+
+  it("lets an executive view the modules the dashboard opens", async () => {
+    for (const path of ["/ncr", "/capa", "/audits", "/complaints", "/warranty/claims", "/labor-claims", "/8d", "/validation-reports", "/iso-quality-forms"]) {
+      const res = await request(app).get(path).set("Authorization", `Bearer ${execToken}`);
+      expect(res.status, path).toBe(200);
+    }
+    const blocked = await request(app).post("/ncr").set("Authorization", `Bearer ${execToken}`).send({ title: "Should stay closed", severity: "low" });
+    expect(blocked.status).toBe(403);
   });
 
   it("does not let an executive with no department edit records", async () => {

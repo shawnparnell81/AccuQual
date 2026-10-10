@@ -158,6 +158,7 @@ const ROUTE_PATTERNS = [
   /^\/$/,
   /^\/home$/,
   /^\/executive$/,
+  /^\/executive\/list$/,
   /^\/calendar$/,
   /^\/audit-log$/,
   /^\/ncr$/,

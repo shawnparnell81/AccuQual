@@ -4,7 +4,9 @@ import { checkedOptions } from "../quality-automation/logic.js";
 import { optionalRows } from "../sites/optionalSql.js";
 
 export interface Fact {
-  group: "ncr" | "capa" | "audit" | "complaint" | "warranty" | "fai";
+  group: "ncr" | "capa" | "audit" | "complaint" | "warranty" | "fai" | "labor" | "eightd";
+  /** Permission key for the page this row opens. Null when the row has no page. */
+  module: string | null;
   siteId: number | null;
   createdAt: Date | null;
   dueAt: Date | null;
@@ -101,6 +103,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     const outcome = row.status === "closed" ? "closed" : "open";
     facts.push({
       group: "ncr",
+      module: "ncr",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt,
@@ -128,6 +131,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     const outcome = row.status === "closed" ? "closed" : "open";
     facts.push({
       group: "capa",
+      module: "capa",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt,
@@ -156,6 +160,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     const outcome = row.status === "completed" ? "closed" : "open";
     facts.push({
       group: "audit",
+      module: "audit",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt,
@@ -183,6 +188,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     const outcome = row.status === "closed" || row.status === "resolved" ? "closed" : "open";
     facts.push({
       group: "complaint",
+      module: "complaints",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
@@ -201,31 +207,74 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     db,
     sql`SELECT id, site_id, record_number, created_at FROM iso_quality_forms WHERE form_type ILIKE '%complaint%'`,
   );
-  const qmsComplaints = await rowsOf<{ id: number; site_id: number | null; record_number: string | null; created_at: Date | string | null }>(
-    db,
-    sql`SELECT id, site_id, form_no AS record_number, created_at FROM qms_forms WHERE form_type ILIKE '%complaint%' AND status IS DISTINCT FROM 'obsolete'`,
-  );
-  const filedComplaints = await rowsOf<{ id: number; site_id: number | null; record_number: string | null; title: string | null; created_at: Date | string | null }>(
-    db,
-    sql`
-      SELECT f.id, n.site_id, n.record_number, n.title, f.created_at
-      FROM form_data f
-      LEFT JOIN ncr n ON f.entity_type = 'ncr' AND f.entity_id = n.id
-      WHERE f.form_type = 'complaint'
-    `,
-  );
-  for (const row of [...isoComplaints, ...qmsComplaints, ...filedComplaints.map((item) => ({ ...item }))]) {
-    const filed = "title" in row;
+  for (const row of isoComplaints) {
     facts.push({
       group: "complaint",
+      module: "documents",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
       status: "open",
       statusLabel: "Open",
       recordNumber: text(row.record_number),
-      title: filed ? text((row as { title?: string | null }).title) ?? "Customer complaint" : "Customer complaint",
-      href: null,
+      title: "Customer complaint",
+      href: `/iso-forms/record/${row.id}`,
+      outcome: "open",
+      categories: [],
+      overdue: false,
+    });
+  }
+  const qmsComplaints = await rowsOf<{ id: number; site_id: number | null; form_type: string; record_number: string | null; created_at: Date | string | null }>(
+    db,
+    sql`SELECT id, site_id, form_type, form_no AS record_number, created_at FROM qms_forms WHERE form_type ILIKE '%complaint%' AND status IS DISTINCT FROM 'obsolete'`,
+  );
+  for (const row of qmsComplaints) {
+    facts.push({
+      group: "complaint",
+      module: "qms_forms",
+      siteId: row.site_id == null ? null : Number(row.site_id),
+      createdAt: asDate(row.created_at),
+      dueAt: null,
+      status: "open",
+      statusLabel: "Open",
+      recordNumber: text(row.record_number),
+      title: "Customer complaint",
+      href: `/qms-forms/${encodeURIComponent(row.form_type)}/${row.id}`,
+      outcome: "open",
+      categories: [],
+      overdue: false,
+    });
+  }
+  const filedComplaints = await rowsOf<{
+    id: number;
+    entity_type: string | null;
+    entity_id: number | null;
+    site_id: number | null;
+    record_number: string | null;
+    title: string | null;
+    created_at: Date | string | null;
+  }>(
+    db,
+    sql`
+      SELECT f.id, f.entity_type, f.entity_id, n.site_id, n.record_number, n.title, f.created_at
+      FROM form_data f
+      LEFT JOIN ncr n ON f.entity_type = 'ncr' AND f.entity_id = n.id
+      WHERE f.form_type = 'complaint'
+    `,
+  );
+  for (const row of filedComplaints) {
+    const ncrId = row.entity_type === "ncr" && row.entity_id != null ? Number(row.entity_id) : null;
+    facts.push({
+      group: "complaint",
+      module: ncrId == null ? null : "ncr",
+      siteId: row.site_id == null ? null : Number(row.site_id),
+      createdAt: asDate(row.created_at),
+      dueAt: null,
+      status: "open",
+      statusLabel: "Open",
+      recordNumber: text(row.record_number),
+      title: text(row.title) ?? "Customer complaint",
+      href: ncrId == null ? null : `/ncr/${ncrId}`,
       outcome: "open",
       categories: [],
       overdue: false,
@@ -244,6 +293,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     const outcome = row.status === "closed" || row.status === "rejected" ? "closed" : "open";
     facts.push({
       group: "warranty",
+      module: "warranty",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
@@ -262,13 +312,10 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     db,
     sql`SELECT id, site_id, record_number, created_at FROM iso_quality_forms WHERE form_type ILIKE '%warranty%'`,
   );
-  const qmsWarranty = await rowsOf<{ id: number; site_id: number | null; record_number: string | null; created_at: Date | string | null }>(
-    db,
-    sql`SELECT id, site_id, form_no AS record_number, created_at FROM qms_forms WHERE form_type ILIKE '%warranty%' AND status IS DISTINCT FROM 'obsolete'`,
-  );
-  for (const row of [...isoWarranty, ...qmsWarranty]) {
+  for (const row of isoWarranty) {
     facts.push({
       group: "warranty",
+      module: "documents",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
@@ -276,7 +323,28 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
       statusLabel: "Open",
       recordNumber: text(row.record_number),
       title: "Warranty claim",
-      href: null,
+      href: `/iso-forms/record/${row.id}`,
+      outcome: "open",
+      categories: [],
+      overdue: false,
+    });
+  }
+  const qmsWarranty = await rowsOf<{ id: number; site_id: number | null; form_type: string; record_number: string | null; created_at: Date | string | null }>(
+    db,
+    sql`SELECT id, site_id, form_type, form_no AS record_number, created_at FROM qms_forms WHERE form_type ILIKE '%warranty%' AND status IS DISTINCT FROM 'obsolete'`,
+  );
+  for (const row of qmsWarranty) {
+    facts.push({
+      group: "warranty",
+      module: "qms_forms",
+      siteId: row.site_id == null ? null : Number(row.site_id),
+      createdAt: asDate(row.created_at),
+      dueAt: null,
+      status: "open",
+      statusLabel: "Open",
+      recordNumber: text(row.record_number),
+      title: "Warranty claim",
+      href: `/qms-forms/${encodeURIComponent(row.form_type)}/${row.id}`,
       outcome: "open",
       categories: [],
       overdue: false,
@@ -293,15 +361,17 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
   for (const row of validations) {
     const blob = JSON.stringify(row.data ?? {});
     const outcome = faiOutcome("", null, false, blob);
+    const kind = validationKind(row.data);
     facts.push({
       group: "fai",
+      module: "documents",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
       status: outcome,
-      statusLabel: outcome === "pass" ? "Pass" : outcome === "fail" ? "Fail" : "Open",
+      statusLabel: outcome === "pass" ? "Pass" : outcome === "fail" ? "Fail" : "In progress",
       recordNumber: text(row.record_number),
-      title: "Validation report",
+      title: VALIDATION_TITLES[kind] ?? "Validation report",
       href: `/validation-reports/${row.id}`,
       outcome,
       categories: [],
@@ -309,56 +379,90 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     });
   }
 
-  const csas = await rowsOf<{
+  const firstArticles = await rowsOf<{
     id: number;
     site_id: number | null;
-    number: string | null;
-    status: string;
-    failure_detected: string | null;
-    date_closed: Date | string | null;
-    part_description: string | null;
+    record_number: string | null;
     created_at: Date | string | null;
-  }>(db, sql`SELECT id, site_id, number, status, failure_detected, date_closed, part_description, created_at FROM csa_fai_records`);
-  for (const row of csas) {
-    const outcome = faiOutcome(row.status ?? "", text(row.failure_detected), asDate(row.date_closed) != null, "");
+    data: unknown;
+  }>(db, sql`SELECT id, site_id, record_number, created_at, data FROM iso_quality_forms WHERE form_type = 'first_article'`);
+  for (const row of firstArticles) {
+    const blob = JSON.stringify(row.data ?? {});
+    const outcome = faiOutcome("", null, false, blob);
     facts.push({
       group: "fai",
+      module: "documents",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
       status: outcome,
-      statusLabel: outcome === "pass" ? "Pass" : outcome === "fail" ? "Fail" : "Open",
-      recordNumber: text(row.number),
-      title: text(row.part_description) ?? "CSA first article",
-      href: null,
+      statusLabel: outcome === "pass" ? "Pass" : outcome === "fail" ? "Fail" : "In progress",
+      recordNumber: text(row.record_number),
+      title: "First Article Inspection",
+      href: `/iso-forms/record/${row.id}`,
       outcome,
       categories: [],
       overdue: false,
     });
   }
 
-  const pumps = await rowsOf<{
+  const labor = await rowsOf<{
     id: number;
     site_id: number | null;
-    number: string | null;
     status: string;
-    failure_detected: string | null;
-    date_closed: Date | string | null;
-    part_description: string | null;
+    claim_number: string | null;
+    customer_name: string | null;
+    part_name: string | null;
     created_at: Date | string | null;
-  }>(db, sql`SELECT id, site_id, fai_number AS number, status, failure_detected, date_closed, part_description, created_at FROM fuel_pump_fai_records`);
-  for (const row of pumps) {
-    const outcome = faiOutcome(row.status ?? "", text(row.failure_detected), asDate(row.date_closed) != null, "");
+  }>(db, sql`SELECT id, site_id, status, claim_number, customer_name, part_name, created_at FROM labor_claims`);
+  for (const row of labor) {
+    const outcome = row.status === "closed" || row.status === "denied" ? "closed" : "open";
     facts.push({
-      group: "fai",
+      group: "labor",
+      module: "labor_claims",
       siteId: row.site_id == null ? null : Number(row.site_id),
       createdAt: asDate(row.created_at),
       dueAt: null,
-      status: outcome,
-      statusLabel: outcome === "pass" ? "Pass" : outcome === "fail" ? "Fail" : "Open",
-      recordNumber: text(row.number),
-      title: text(row.part_description) ?? "Fuel pump first article",
-      href: null,
+      status: row.status,
+      statusLabel: labelStatus({ open: "Open", pending: "Pending", approved: "Approved", denied: "Denied", closed: "Closed" }, row.status),
+      recordNumber: text(row.claim_number),
+      title: text(row.part_name) ?? text(row.customer_name) ?? "Labor claim",
+      href: `/labor-claims/${row.id}`,
+      outcome,
+      categories: [],
+      overdue: false,
+    });
+  }
+
+  const eight = await rowsOf<{
+    id: number;
+    site_id: number | null;
+    record_number: string | null;
+    current_step: number | null;
+    title: string | null;
+    created_at: Date | string | null;
+  }>(
+    db,
+    sql`
+      SELECT e.id, n.site_id, e.record_number, e.current_step, n.title, e.created_at
+      FROM eight_d e
+      LEFT JOIN ncr n ON n.id = e.ncr_id
+    `,
+  );
+  for (const row of eight) {
+    const step = row.current_step == null ? 1 : Number(row.current_step);
+    const outcome = step >= 8 ? "closed" : "open";
+    facts.push({
+      group: "eightd",
+      module: "eight_d",
+      siteId: row.site_id == null ? null : Number(row.site_id),
+      createdAt: asDate(row.created_at),
+      dueAt: null,
+      status: outcome === "closed" ? "closed" : "in_progress",
+      statusLabel: outcome === "closed" ? "Closed" : `D${Math.min(8, Math.max(1, step))}`,
+      recordNumber: text(row.record_number),
+      title: text(row.title) ?? "8D report",
+      href: `/8d/${row.id}`,
       outcome,
       categories: [],
       overdue: false,
@@ -366,4 +470,23 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
   }
 
   return facts;
+}
+
+const VALIDATION_TITLES: Record<string, string> = {
+  csa: "CSA Validation",
+  fuel_pump: "Fuel Pump Validation",
+  air_strut: "Air Strut Validation",
+  air_spring: "Air Spring Validation",
+  fuel_injector: "Fuel Injector Validation",
+  brake_wear: "Brake Wear Sensor Validation",
+  shock: "Shock Validation",
+  air_compressor: "Air Compressor Validation",
+  electric_lift: "Electric Lift Support Validation",
+  gas_lift: "Gas Lift Support Validation",
+  coil_spring: "Coil Spring Validation",
+};
+
+function validationKind(data: unknown): string {
+  const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
+  return typeof raw === "string" && VALIDATION_TITLES[raw] ? raw : "csa";
 }

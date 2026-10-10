@@ -15,6 +15,7 @@ import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 
 interface Complaint {
   id: number;
@@ -42,7 +43,7 @@ export function ComplaintDetailPage() {
   const toast = useToast();
   const complaintId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "complaints", complaintId]];
-  const { data: complaint, isLoading, isError } = complaintHooks.useOne(complaintId);
+  const { data: complaint, isLoading, isError, error } = complaintHooks.useOne(complaintId);
   const updateComplaint = complaintHooks.useUpdate();
   const canEdit = useCanEditWorkflow("complaints");
 
@@ -64,7 +65,7 @@ export function ComplaintDetailPage() {
     });
   }, [complaint]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this complaint" />;
   if (isLoading || !complaint) return <LoadingPlaceholder />;
 
   const closed = complaint.status === "closed";

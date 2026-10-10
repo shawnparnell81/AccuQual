@@ -10,6 +10,7 @@ import { SaveStatus } from "../../components/shared/SaveStatus";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../../components/shared/ToastProvider";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { GripVertical } from "lucide-react";
 import { dropPosition, reorderDropClass, reorderIds } from "../../lib/listReorder";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -54,7 +55,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const { id } = useParams();
   const auditId = entityId ?? Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
-  const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
+  const { data: audit, isLoading, isError, error } = auditHooks.useOne(auditId);
   const updateAudit = auditHooks.useUpdate();
   const permitted = useCanEditWorkflow("audit");
   const canEditNcr = useCanEditWorkflow("ncr");
@@ -103,7 +104,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
     }
   }
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this audit" />;
   if (isLoading || !audit) return <LoadingPlaceholder />;
 
   return (

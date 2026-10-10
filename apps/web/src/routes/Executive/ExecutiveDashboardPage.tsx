@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { apiClient } from "../../api/client";
@@ -7,6 +6,10 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { useOpenTab } from "../../hooks/useOpenTab";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { DrillRows } from "./ExecutiveDrillListPage";
+import { canViewModule, drillDetail, drillHeading, drillTooltip, executiveListPath, permissionMessage, tabIconForHref, type DrillTarget } from "../../lib/executiveDrill";
 
 interface Figure {
   label: string;
@@ -60,21 +63,20 @@ interface DrillRow {
   status: string;
   ageLabel: string;
   href: string | null;
+  module: string | null;
 }
 
 interface DrillPayload {
   title: string;
   siteName: string;
+  total: number;
   rows: DrillRow[];
 }
 
-interface DrillRequest {
-  kind: string;
-  siteId: number | null;
-  siteName: string;
-  bucket: string;
-  dateRange: string;
-  figureLabel: string;
+interface OpenPanel {
+  target: DrillTarget;
+  data: DrillPayload;
+  denied: string | null;
 }
 
 function newWidgetId(kind: string, existing: { id: string }[]): string {
@@ -89,12 +91,18 @@ function newWidgetId(kind: string, existing: { id: string }[]): string {
   return id;
 }
 
+const SEGMENT_COLORS = ["hsl(var(--primary))", "hsl(200 65% 42%)", "hsl(32 88% 46%)", "hsl(152 42% 36%)", "hsl(280 35% 46%)", "hsl(350 55% 46%)"];
+
 export function ExecutiveDashboardPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const openTab = useOpenTab();
+  const { effective, isLoading: permissionsLoading } = useEffectivePermissions();
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState<DashboardLayout | null>(null);
-  const [drill, setDrill] = useState<DrillRequest | null>(null);
+  const [panel, setPanel] = useState<OpenPanel | null>(null);
+  const [openingKey, setOpeningKey] = useState<string | null>(null);
+  const panelTitle = useRef<HTMLHeadingElement>(null);
 
   const dashboard = useQuery({
     queryKey: ["executive"],
@@ -125,22 +133,18 @@ export function ExecutiveDashboardPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't reset the dashboard.")),
   });
 
-  const records = useQuery({
-    queryKey: ["executive-records", drill],
-    enabled: drill != null,
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        kind: drill!.kind,
-        bucket: drill!.bucket,
-        dateRange: drill!.dateRange,
-        siteId: drill!.siteId == null ? "unassigned" : String(drill!.siteId),
-      });
-      return (await apiClient.get<DrillPayload>(`/executive/records?${params.toString()}`)).data;
-    },
-  });
-
   const catalog = dashboard.data?.catalog ?? [];
   const catalogByKind = useMemo(() => new Map(catalog.map((item) => [item.kind, item])), [catalog]);
+
+  useEffect(() => {
+    if (!panel) return;
+    panelTitle.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setPanel(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel]);
 
   if (dashboard.isLoading) return <LoadingPlaceholder />;
   if (dashboard.isError && axios.isAxiosError(dashboard.error) && dashboard.error.response?.status === 403) {
@@ -151,6 +155,40 @@ export function ExecutiveDashboardPage() {
   }
 
   const columns = dashboard.data.columns;
+
+  async function openFigure(target: DrillTarget) {
+    if (target.value <= 0) return;
+    const key = `${target.siteName}-${target.kind}-${target.bucket}`;
+    setOpeningKey(key);
+    try {
+      const params = new URLSearchParams({
+        kind: target.kind,
+        bucket: target.bucket,
+        dateRange: target.dateRange,
+        siteId: target.siteId == null ? "unassigned" : String(target.siteId),
+      });
+      const data = (await apiClient.get<DrillPayload>(`/executive/records?${params.toString()}`)).data;
+      const only = data.total === 1 ? data.rows[0] : undefined;
+      if (only?.href) {
+        if (!canViewModule(only.module, effective, permissionsLoading)) {
+          setPanel({ target: { ...target, value: data.total }, data, denied: permissionMessage(only.module) });
+          return;
+        }
+        openTab({ path: only.href, title: `${only.recordNumber} ${only.title}`.trim(), icon: tabIconForHref(only.href) });
+        setPanel(null);
+        return;
+      }
+      setPanel({ target: { ...target, value: data.total, siteName: data.siteName || target.siteName }, data, denied: null });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't open those records."));
+    } finally {
+      setOpeningKey(null);
+    }
+  }
+
+  function openFullList(target: DrillTarget) {
+    openTab({ path: executiveListPath(target), title: drillHeading(target), icon: "dashboard" });
+  }
 
   function updateWidget(id: string, patch: Partial<DashboardLayout["widgets"][number]>) {
     setDraft({
@@ -261,13 +299,38 @@ export function ExecutiveDashboardPage() {
               {(customizing ? layout.widgets : column.widgets).map((widget) => {
                 const live = column.widgets.find((item) => item.id === widget.id);
                 const item = catalogByKind.get(widget.kind);
+                const figures = live?.figures ?? [];
+                const dateRange = live?.dateRange ?? widget.dateRange;
+                const targets = figures.map((figure) => ({
+                  kind: widget.kind,
+                  bucket: figure.bucket,
+                  label: figure.label,
+                  dateRange,
+                  siteId: column.siteId,
+                  siteName: column.siteName,
+                  value: figure.value,
+                }));
+                const cardTarget = targets.find((target) => target.bucket === "open" && target.value > 0) ?? targets.find((target) => target.value > 0) ?? null;
+                const chart = targets.filter((target) => target.value > 0);
+                const chartTotal = chart.reduce((sum, target) => sum + target.value, 0);
                 return (
                   <article key={`${column.siteName}-${widget.id}`} className="aq-panel p-4">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h3 className="truncate text-sm font-medium text-foreground" title={live?.title ?? item?.label ?? widget.kind}>
-                          {live?.title ?? item?.label ?? widget.kind}
-                        </h3>
+                        {cardTarget ? (
+                          <button
+                            type="button"
+                            className="block max-w-full cursor-pointer truncate rounded-md text-left text-sm font-medium text-foreground hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+                            title={drillTooltip(cardTarget)}
+                            onClick={() => void openFigure(cardTarget)}
+                          >
+                            {live?.title ?? item?.label ?? widget.kind}
+                          </button>
+                        ) : (
+                          <h3 className="truncate text-sm font-medium text-muted-foreground" title="Nothing to open">
+                            {live?.title ?? item?.label ?? widget.kind}
+                          </h3>
+                        )}
                         <p className="truncate text-xs text-muted-foreground" title={live?.dateRangeLabel}>
                           {live?.dateRangeLabel}
                         </p>
@@ -315,29 +378,47 @@ export function ExecutiveDashboardPage() {
                         </select>
                       </div>
                     )}
-                    <ul className="flex flex-col gap-1">
-                      {(live?.figures ?? []).map((figure) => (
-                        <li key={`${widget.id}-${figure.bucket}-${figure.label}`}>
+                    {chart.length > 1 && chartTotal > 0 && (
+                      <div className="mb-2 flex h-3 overflow-hidden rounded-full" role="group" aria-label={`${live?.title ?? widget.kind} chart`}>
+                        {chart.map((target, index) => (
                           <button
+                            key={`${target.bucket}-bar`}
                             type="button"
-                            className="flex w-full items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left hover:bg-muted"
-                            title={figure.label}
-                            onClick={() =>
-                              setDrill({
-                                kind: widget.kind,
-                                siteId: column.siteId,
-                                siteName: column.siteName,
-                                bucket: figure.bucket,
-                                dateRange: live?.dateRange ?? widget.dateRange,
-                                figureLabel: figure.label,
-                              })
-                            }
-                          >
-                            <span className="truncate text-sm text-muted-foreground">{figure.label}</span>
-                            <span className="text-sm font-semibold text-foreground">{figure.value}</span>
-                          </button>
-                        </li>
-                      ))}
+                            className="h-full min-w-1 cursor-pointer hover:opacity-80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+                            style={{ width: `${(target.value / chartTotal) * 100}%`, background: SEGMENT_COLORS[index % SEGMENT_COLORS.length] }}
+                            title={drillTooltip(target)}
+                            aria-label={drillTooltip(target)}
+                            onClick={() => void openFigure(target)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <ul className="flex flex-col gap-1">
+                      {targets.map((target) => {
+                        const clickable = target.value > 0;
+                        const key = `${target.siteName}-${target.kind}-${target.bucket}`;
+                        const tip = drillTooltip(target);
+                        return (
+                          <li key={`${widget.id}-${target.bucket}-${target.label}`}>
+                            <button
+                              type="button"
+                              className={
+                                clickable
+                                  ? "flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left hover:bg-muted focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+                                  : "flex w-full cursor-not-allowed items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left opacity-70"
+                              }
+                              title={tip}
+                              aria-disabled={clickable ? undefined : true}
+                              onClick={() => {
+                                if (clickable) void openFigure(target);
+                              }}
+                            >
+                              <span className="truncate text-sm text-muted-foreground">{target.label}</span>
+                              <span className="text-sm font-semibold text-foreground">{openingKey === key ? "…" : target.value}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </article>
                 );
@@ -347,51 +428,45 @@ export function ExecutiveDashboardPage() {
         </div>
       )}
 
-      {drill && (
-        <section className="rounded-lg border border-border bg-card p-4">
-          <div className="mb-3 flex items-start justify-between gap-3">
+      {panel && (
+        <aside
+          role="dialog"
+          aria-labelledby="executive-drill-title"
+          className="fixed inset-y-0 right-0 z-40 flex w-[min(26rem,100%)] flex-col border-l border-border bg-card shadow-2xl"
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-border p-4">
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-semibold text-foreground" title={`${drill.siteName} · ${drill.figureLabel}`}>
-                {drill.siteName} · {drill.figureLabel}
+              <h2 id="executive-drill-title" ref={panelTitle} tabIndex={-1} className="text-lg font-semibold text-foreground outline-none">
+                {drillHeading(panel.target)}
               </h2>
-              <p className="text-xs text-muted-foreground">{records.data?.title}</p>
+              <p className="text-xs text-muted-foreground">{drillDetail(panel.target.kind, panel.target.bucket)}</p>
             </div>
-            <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setDrill(null)}>
+            <button type="button" className="cursor-pointer rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setPanel(null)}>
               Close
             </button>
           </div>
-          {records.isLoading && <p className="text-sm text-muted-foreground">Loading records…</p>}
-          {records.isError && <p className="text-sm text-destructive">Couldn't load those records.</p>}
-          {records.data && records.data.rows.length === 0 && <p className="text-sm text-muted-foreground">No records in this count.</p>}
-          {records.data && records.data.rows.length > 0 && (
-            <ul className="flex flex-col divide-y divide-border">
-              {records.data.rows.map((row, index) => {
-                const label = `${row.recordNumber} ${row.title}`.trim();
-                const body = (
-                  <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
-                    <span className="truncate text-sm text-foreground" title={label}>
-                      {row.recordNumber} {row.title}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground" title={`${row.status} · ${row.ageLabel}`}>
-                      {row.status} · {row.ageLabel}
-                    </span>
-                  </span>
-                );
-                return (
-                  <li key={`${row.recordNumber}-${index}`} className="py-2">
-                    {row.href ? (
-                      <Link to={row.href} className="flex hover:underline">
-                        {body}
-                      </Link>
-                    ) : (
-                      body
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+            <p className="text-sm text-muted-foreground">{panel.data.total} {panel.data.total === 1 ? "record" : "records"}</p>
+            <button
+              type="button"
+              className="cursor-pointer rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => openFullList(panel.target)}
+            >
+              Open full list
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {panel.denied && <p className="mb-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground">{panel.denied}</p>}
+            {panel.data.rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No records in this count.</p>
+            ) : (
+              <DrillRows
+                rows={panel.data.rows}
+                onDenied={(message) => setPanel({ ...panel, denied: message })}
+              />
+            )}
+          </div>
+        </aside>
       )}
     </div>
   );
