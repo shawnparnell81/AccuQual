@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AdminCompanyAiConfigPage } from "./AdminCompanyAiConfigPage";
 import { AdminAiUsagePage } from "./AdminAiUsagePage";
+import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 const TABS = ["Configuration", "Usage"] as const;
 type Tab = (typeof TABS)[number];
@@ -24,11 +25,17 @@ export function AdminAiSettingsPage() {
             className={`px-3 py-2 text-sm ${tab === t ? "border-b-2 border-primary font-medium text-primary" : "text-muted-foreground hover:text-foreground"}`}
           >
             {t}
+            <UnsavedDot subtab={t} />
           </button>
         ))}
       </div>
-      {tab === "Configuration" && <AdminCompanyAiConfigPage />}
-      {tab === "Usage" && <AdminAiUsagePage />}
+      <KeptPanes
+        active={tab}
+        panes={[
+          { id: "Configuration", node: <AdminCompanyAiConfigPage /> },
+          { id: "Usage", node: <AdminAiUsagePage /> },
+        ]}
+      />
     </div>
   );
 }

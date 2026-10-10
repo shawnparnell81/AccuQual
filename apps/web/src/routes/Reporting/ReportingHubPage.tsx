@@ -16,6 +16,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { ReportsPage } from "../Reports/ReportsPage";
 import { useSiteStore } from "../../store/siteStore";
+import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 // ---------------------------------------------------------------------------
 // Types — local to this page, matching reporting.service.ts's real response
@@ -543,6 +544,7 @@ export function ReportingHubPage() {
   const visibleTabs = TABS.filter((t) => t.navKey === "" || accessByKey[t.navKey] !== "none");
   const [activeTab, setActiveTab] = useState<string>(visibleTabs[0]?.key ?? "quality");
   const [showSchedules, setShowSchedules] = useState(false);
+  const [openedSchedules, setOpenedSchedules] = useState(false);
 
   if (visibleTabs.length === 0 && !isAdmin) {
     return <p className="text-sm text-muted-foreground">You don't have access to any reports yet — ask your admin to grant you read access to a module.</p>;
@@ -553,16 +555,26 @@ export function ReportingHubPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Reports</h1>
         {isAdmin && (
-          <button onClick={() => setShowSchedules((v) => !v)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+          <button
+            onClick={() => {
+              setShowSchedules((open) => {
+                if (!open) setOpenedSchedules(true);
+                return !open;
+              });
+            }}
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+          >
             {showSchedules ? "View Dashboards" : "Manage Scheduled Reports"}
           </button>
         )}
       </div>
 
-      {showSchedules ? (
-        <ScheduledReportsSection />
-      ) : (
-        <>
+      {openedSchedules && (
+        <div hidden={!showSchedules}>
+          <ScheduledReportsSection />
+        </div>
+      )}
+      <div hidden={showSchedules}>
           <div className="flex gap-2 border-b border-border">
             {visibleTabs.map((t) => (
               <button
@@ -571,18 +583,23 @@ export function ReportingHubPage() {
                 className={`border-b-2 px-3 py-2 text-sm font-medium ${activeTab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
                 {t.label}
+                <UnsavedDot subtab={t.key} />
               </button>
             ))}
           </div>
 
-          {activeTab === "quality" && accessByKey.ncr !== "none" && <QualityOverview />}
-          {activeTab === "supplier" && accessByKey.suppliers !== "none" && <SupplierOverview />}
-          {activeTab === "warranty" && accessByKey.warranty !== "none" && <WarrantyOverview />}
-          {activeTab === "labor" && accessByKey.labor_claims !== "none" && <LaborClaimsOverview />}
-          {activeTab === "production" && accessByKey.inventory !== "none" && <ProductionReceivingOverview />}
-          {activeTab === "runner" && <ReportsPage embedded />}
-        </>
-      )}
+          <KeptPanes
+            active={activeTab}
+            panes={[
+              ...(accessByKey.ncr !== "none" ? [{ id: "quality", node: <QualityOverview /> }] : []),
+              ...(accessByKey.suppliers !== "none" ? [{ id: "supplier", node: <SupplierOverview /> }] : []),
+              ...(accessByKey.warranty !== "none" ? [{ id: "warranty", node: <WarrantyOverview /> }] : []),
+              ...(accessByKey.labor_claims !== "none" ? [{ id: "labor", node: <LaborClaimsOverview /> }] : []),
+              ...(accessByKey.inventory !== "none" ? [{ id: "production", node: <ProductionReceivingOverview /> }] : []),
+              { id: "runner", node: <ReportsPage embedded /> },
+            ]}
+          />
+      </div>
     </div>
   );
 }

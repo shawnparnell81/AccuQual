@@ -14,7 +14,6 @@ import { useLogout } from "../../hooks/useAuth";
 import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 import { useThemeSync } from "../../hooks/useThemeSync";
 import { deriveTabMeta } from "../../lib/tabMeta";
-import { noteTabUserGesture } from "../../lib/tabSession";
 import { normalizeTabPath } from "../../lib/tabPaths";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
@@ -22,6 +21,9 @@ import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 import { GridClipboard } from "../shared/GridClipboard";
+import { isSectionPathCommitted, subscribeCommittedPath } from "../../lib/sectionKeepAlive";
+import { noteTabUserGesture } from "../../lib/workspaceTab";
+import { useDirtyPathStore } from "../../store/dirtyPathStore";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -71,6 +73,7 @@ export function AppLayout() {
   const tabOwnerId = useTabStore((s) => s.ownerId);
   const location = useLocation();
   const navigate = useNavigate();
+  const syncedPath = useRef<string | null>(null);
   const redirectGuard = useRef<string | null>(null);
   const isSupplierPortal = roleName === "supplier";
   useThemeSync();
@@ -117,8 +120,7 @@ export function AppLayout() {
     loadTabsForUser(String(userId));
   }, [isSupplierPortal, userId, loadWindowsForUser, loadTabsForUser]);
 
-  // A click opens a page on purpose. The tab's X is not one of those clicks:
-  // closing must not count as asking for that page back.
+  // A click opens a page on purpose. The tab's close control is not one of those clicks.
   useEffect(() => {
     if (isSupplierPortal) return;
     const onClick = (event: MouseEvent) => {
@@ -131,13 +133,33 @@ export function AppLayout() {
     return () => document.removeEventListener("click", onClick, true);
   }, [isSupplierPortal]);
 
-  // Keeps the open tabs in line with the address bar. A path the user just
-  // closed is not created again; the strip's neighbor replaces that URL.
+  // Sub-pages of the current section rewrite that tab. A closed section is not
+  // created again; the strip's neighbor replaces that URL.
   useEffect(() => {
     if (isSupplierPortal) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const pending = Object.values(useDirtyPathStore.getState().paths).some(Boolean);
+      if (!pending) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSupplierPortal]);
+
+  const [commitTick, setCommitTick] = useState(0);
+  useEffect(() => subscribeCommittedPath(() => setCommitTick((tick) => tick + 1)), []);
+
+  useEffect(() => {
+    if (isSupplierPortal) return;
+    const pathChanged = syncedPath.current !== location.pathname;
+    const allowCreate = isSectionPathCommitted(location.pathname);
     const { title, icon } = deriveTabMeta(location.pathname);
-    const redirectTo = syncActiveTabLocation(location.pathname, title, icon);
     document.title = title && title !== location.pathname ? `${title} · AccuQual` : "AccuQual";
+    const redirectTo = syncActiveTabLocation(location.pathname, title, icon, { pathChanged, allowCreate });
+    // A leave dialog is still open. Keep this visit pending so confirming it can open the page.
+    if (!allowCreate && !redirectTo) return;
+    syncedPath.current = location.pathname;
     if (!redirectTo || normalizeTabPath(redirectTo) === normalizeTabPath(location.pathname)) {
       redirectGuard.current = null;
       return;
@@ -146,7 +168,7 @@ export function AppLayout() {
     if (redirectGuard.current === hop) return;
     redirectGuard.current = hop;
     navigate(redirectTo, { replace: true });
-  }, [isSupplierPortal, location.pathname, navigate, syncActiveTabLocation, tabOwnerId]);
+  }, [commitTick, isSupplierPortal, location.pathname, navigate, syncActiveTabLocation, tabOwnerId]);
 
   if (isSupplierPortal) {
     return location.pathname === "/supplier-portal" ? <SupplierPortalShell /> : <Navigate to="/supplier-portal" replace />;

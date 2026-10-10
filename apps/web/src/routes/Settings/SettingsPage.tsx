@@ -11,6 +11,7 @@ import { SignaturePinSection } from "./SignaturePinSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
+import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 const BASE_TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "Feasibility", "Navigation"] as const;
 const NETSUITE_TAB = "ERP / NetSuite";
@@ -71,11 +72,17 @@ export function SettingsPage() {
             className={`whitespace-nowrap px-3 py-2 text-sm ${tab === t ? "border-b-2 border-primary font-medium text-primary" : "text-muted-foreground"}`}
           >
             {t}
+            <UnsavedDot subtab={t} />
           </button>
         ))}
       </div>
 
-      {tab === "User Preferences" && (
+      <KeptPanes
+        active={tab}
+        panes={[
+          {
+            id: "User Preferences",
+            node: (
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-3 text-sm font-medium">Your Account</h3>
@@ -116,24 +123,31 @@ export function SettingsPage() {
             </p>
           </div>
         </div>
-      )}
-
-      {tab === "Company" && <CompanySettingsLinks />}
-      {tab === "Security" && (
+            ),
+          },
+          { id: "Company", node: <CompanySettingsLinks /> },
+          {
+            id: "Security",
+            node: (
         <div className="flex flex-col gap-4">
           <MfaSettingsSection />
           <TrustedDevicesSection />
           <ChangePasswordSection />
           <SignaturePinSection />
         </div>
-      )}
-      {tab === "Theme" && <ThemeSettingsSection />}
+            ),
+          },
+          { id: "Theme", node: <ThemeSettingsSection /> },
 
-      {tab === "Notifications" && <NotificationPreferencesSection mode="inApp" />}
-      {tab === "Email Alerts" && <NotificationPreferencesSection mode="email" />}
-      {tab === "Feasibility" && <FeasibilitySettingsPanel />}
+          { id: "Notifications", node: <NotificationPreferencesSection mode="inApp" /> },
+          { id: "Email Alerts", node: <NotificationPreferencesSection mode="email" /> },
+          { id: "Feasibility", node: <FeasibilitySettingsPanel /> },
 
-      {tab === NETSUITE_TAB && isAdmin && (
+          ...(isAdmin
+            ? [
+                {
+                  id: NETSUITE_TAB,
+                  node: (
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-lg font-medium">ERP / NetSuite</h2>
@@ -151,9 +165,13 @@ export function SettingsPage() {
           </div>
           <ERPSyncSettingsPanel />
         </div>
-      )}
-
-      {tab === "Navigation" && <NavigationSettingsPage />}
+                  ),
+                },
+              ]
+            : []),
+          { id: "Navigation", node: <NavigationSettingsPage /> },
+        ]}
+      />
     </div>
   );
 }

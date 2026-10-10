@@ -1,17 +1,13 @@
-import { Suspense, useLayoutEffect, useMemo, type PointerEvent as ReactPointerEvent } from "react";
-import { Outlet, Router, Routes, useLocation, useNavigate, type Navigator, type To } from "react-router-dom";
+import { useLayoutEffect, type PointerEvent as ReactPointerEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Columns2, Maximize2, X } from "lucide-react";
-import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
-import { workspaceRouteElements } from "../../routes/workspaceRoutes";
 import { useSplitStore } from "../../store/useSplitStore";
 import { useTabStore } from "../../store/useTabStore";
 import { deriveTabMeta } from "../../lib/tabMeta";
 import { isLiveTabPath } from "../../lib/tabPaths";
-import { locationPath, paneLocation, readSplit, resolvePaneTarget, writeSplit } from "../../lib/splitView";
-import { RecordEditBar } from "../shared/RecordEditBar";
-import { ItemFolderPath } from "../documents/ItemFolderPath";
-import { PrintChrome } from "../records/PrintChrome";
-import { PaneErrorBoundary, RouteErrorBoundary } from "../shared/ErrorBoundary";
+import { locationPath, paneLocation, readSplit, writeSplit } from "../../lib/splitView";
+import { PaneErrorBoundary } from "../shared/ErrorBoundary";
+import { KeptSectionStack } from "./KeptSection";
 
 /**
  * Main workspace under the tab bar. One pane is the real router outlet.
@@ -89,20 +85,15 @@ export function SplitWorkspace() {
           data-pane="left"
         >
           {open && <PaneBar title="Left pane" onExpand={expandLeft} onClose={expandRight} closeLabel="Close left pane" />}
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
-            <PaneErrorBoundary key={location.pathname + location.search}>
-              <div className="page-enter mx-auto h-full w-full max-w-none">
-                <ItemFolderPath />
-                <PrintChrome />
-                <RecordEditBar />
-                <RouteErrorBoundary key={location.pathname}>
-                  <Suspense fallback={<LoadingPlaceholder />}>
-                    <Outlet />
-                  </Suspense>
-                </RouteErrorBoundary>
-              </div>
-            </PaneErrorBoundary>
-          </div>
+          <PaneErrorBoundary>
+            <KeptSectionStack
+              pathname={location.pathname}
+              search={location.search}
+              hash={location.hash}
+              onNavigate={(href, opts) => navigate(href, { replace: opts?.replace })}
+              onGo={(delta) => navigate(delta)}
+            />
+          </PaneErrorBoundary>
         </section>
         {open && (
           <>
@@ -110,13 +101,17 @@ export function SplitWorkspace() {
             <section className="aq-split-pane flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border" data-pane="right">
               <PaneBar title="Right pane" onExpand={expandRight} onClose={expandLeft} closeLabel="Close right pane" />
               <RightPaneTabs />
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
-                <PaneErrorBoundary key={rightPath ?? "empty"}>
-                  <div className="page-enter mx-auto h-full max-w-none">
-                    {rightPath ? <RightPaneRouter path={rightPath} /> : <RightPanePicker />}
-                  </div>
+              {rightPath ? (
+                <PaneErrorBoundary>
+                  <RightKept path={rightPath} />
                 </PaneErrorBoundary>
-              </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
+                  <div className="page-enter mx-auto h-full max-w-none">
+                    <RightPanePicker />
+                  </div>
+                </div>
+              )}
             </section>
           </>
         )}
@@ -217,52 +212,21 @@ function RightPanePicker() {
   );
 }
 
-function RightPaneRouter({ path }: { path: string }) {
+function RightKept({ path }: { path: string }) {
   const parts = paneLocation(path);
-  const location = useMemo(
-    () => ({ pathname: parts.pathname, search: parts.search, hash: parts.hash, state: null, key: path }),
-    [parts.hash, parts.pathname, parts.search, path],
-  );
-  const navigator = useMemo<Navigator>(() => {
-    const current = () => useSplitStore.getState().rightPath ?? path;
-    return {
-      createHref(to: To) {
-        return resolvePaneTarget(current(), to);
-      },
-      createURL(to: To) {
-        return new URL(resolvePaneTarget(current(), to), "http://accuqual.local");
-      },
-      encodeLocation(to: To) {
-        return paneLocation(resolvePaneTarget(current(), to));
-      },
-      go(delta: number) {
-        useSplitStore.getState().goRight(delta);
-      },
-      push(to: To) {
-        useSplitStore.getState().pushRight(resolvePaneTarget(current(), to));
-      },
-      replace(to: To) {
-        useSplitStore.getState().replaceRight(resolvePaneTarget(current(), to));
-      },
-    };
-  }, [path]);
-
+  const pushRight = useSplitStore((state) => state.pushRight);
+  const replaceRight = useSplitStore((state) => state.replaceRight);
+  const goRight = useSplitStore((state) => state.goRight);
   if (!isLiveTabPath(parts.pathname)) {
-    return <p className="text-sm text-muted-foreground">That page can’t be opened beside another form.</p>;
+    return <p className="px-4 py-5 text-sm text-muted-foreground">That page can’t be opened beside another form.</p>;
   }
-
   return (
-    <Router location={location} navigator={navigator}>
-      <PaneErrorBoundary key={path}>
-        <ItemFolderPath />
-        <PrintChrome />
-        <RecordEditBar />
-        <RouteErrorBoundary key={path}>
-          <Suspense fallback={<LoadingPlaceholder />}>
-            <Routes key={path}>{workspaceRouteElements()}</Routes>
-          </Suspense>
-        </RouteErrorBoundary>
-      </PaneErrorBoundary>
-    </Router>
+    <KeptSectionStack
+      pathname={parts.pathname}
+      search={parts.search}
+      hash={parts.hash}
+      onNavigate={(href, opts) => (opts?.replace ? replaceRight(href) : pushRight(href))}
+      onGo={goRight}
+    />
   );
 }

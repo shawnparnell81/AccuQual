@@ -3,6 +3,7 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { PermissionsDepartmentAccessTab } from "./PermissionsDepartmentAccessTab";
 import { PermissionsRolesTab } from "./PermissionsRolesTab";
 import { PermissionsUserAssignmentsTab } from "./PermissionsUserAssignmentsTab";
+import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 const TABS = [
   { key: "department_access", label: "Department Access" },
@@ -40,13 +41,19 @@ export function RolesPermissionsPage() {
               className={`rounded-t-md px-3 py-2 text-sm ${tab === t.key ? "border-b-2 border-primary font-medium text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               {t.label}
+              <UnsavedDot subtab={t.key} />
             </button>
           ))}
         </div>
 
-        {tab === "department_access" && <PermissionsDepartmentAccessTab />}
-        {tab === "roles" && <PermissionsRolesTab />}
-        {tab === "users" && <PermissionsUserAssignmentsTab />}
+        <KeptPanes
+          active={tab}
+          panes={[
+            { id: "department_access", node: <PermissionsDepartmentAccessTab /> },
+            { id: "roles", node: <PermissionsRolesTab /> },
+            { id: "users", node: <PermissionsUserAssignmentsTab /> },
+          ]}
+        />
       </div>
     </AdminOnlyGuard>
   );
