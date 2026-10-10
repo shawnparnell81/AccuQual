@@ -15,6 +15,13 @@ interface QaItem {
   response: string;
 }
 
+interface FinancialEntry {
+  month: string;
+  laborAmount: string;
+  warrantyAmount: string;
+  totalAmount: string;
+}
+
 interface Narrative {
   departmentStatus: Status;
   primaryAchievement: string;
@@ -31,6 +38,7 @@ interface Narrative {
   techLine: QaItem[];
   fitment: QaItem[];
   productInfo: QaItem[];
+  financialEntries?: FinancialEntry[];
 }
 
 interface Gated<T> {
@@ -70,7 +78,17 @@ interface ReportView {
   tables: {
     months: { key: string; label: string }[];
     metrics: { totalClaims: Array<number | null>; totalProductAlerts: Array<number | null> };
-    financials: { total: Array<number | null>; parts: Array<number | null>; labor: Array<number | null> };
+    financials: {
+      total: Array<number | null>;
+      parts: Array<number | null>;
+      labor: Array<number | null>;
+      totalSource?: string[];
+      partsSource?: string[];
+      laborSource?: string[];
+      totalEditable?: boolean[];
+      partsEditable?: boolean[];
+      laborEditable?: boolean[];
+    };
     warranty: { ratio: Array<string | null>; mttfDays: Array<number | null>; medianDays: Array<number | null> };
     topParts: { partNumber: string; description: string; totalClaims: number }[];
     fai: {
@@ -87,6 +105,13 @@ interface ReportView {
     emailIssues: { label: string; totalIssues: number | null; orIssues: number | null; napaIssues: number | null }[];
   };
   labor: { mttfDays: number | null; medianDays: number | null };
+  claimMonth?: {
+    laborCount: number | null;
+    laborHours: number | null;
+    laborCost: number | null;
+    warrantyCount: number | null;
+    warrantyCost: number | null;
+  };
   productAlerts: {
     total: number | null;
     open: number | null;
@@ -128,6 +153,15 @@ function money(value: number | null): string {
 function plain(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
   return String(value);
+}
+
+function moneySource(source: string | undefined): string {
+  if (source === "labor_claims") return "Labor Claims";
+  if (source === "warranty") return "Warranty claims";
+  if (source === "combined") return "Labor Claims + Warranty";
+  if (source === "entered") return "Entered";
+  if (source === "no_access") return "No access";
+  return "";
 }
 
 function gateText(gate: Gated<{ count: number }> | undefined): string {
@@ -180,6 +214,81 @@ function TrendTable({ months, rows }: { months: { key: string; label: string }[]
                   {value}
                 </td>
               ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MoneyTable({
+  months,
+  financials,
+  narrative,
+  locked,
+  onChange,
+}: {
+  months: { key: string; label: string }[];
+  financials: ReportView["tables"]["financials"];
+  narrative: Narrative;
+  locked: boolean;
+  onChange: (entries: FinancialEntry[]) => void;
+}) {
+  const rows: { label: string; values: Array<number | null>; sources?: string[]; editable?: boolean[]; field: keyof FinancialEntry }[] = [
+    { label: "Labor (Labor Claims)", values: financials.labor, sources: financials.laborSource, editable: financials.laborEditable, field: "laborAmount" },
+    { label: "Warranty (Warranty claims)", values: financials.parts, sources: financials.partsSource, editable: financials.partsEditable, field: "warrantyAmount" },
+    { label: "Total (Labor Claims + Warranty)", values: financials.total, sources: financials.totalSource, editable: financials.totalEditable, field: "totalAmount" },
+  ];
+  const entries = narrative.financialEntries ?? [];
+
+  function typed(month: string, field: keyof FinancialEntry): string {
+    return entries.find((entry) => entry.month === month)?.[field] ?? "";
+  }
+
+  function edit(month: string, field: keyof FinancialEntry, value: string) {
+    const current = entries.find((entry) => entry.month === month) ?? { month, laborAmount: "", warrantyAmount: "", totalAmount: "" };
+    const next = { ...current, [field]: value };
+    const rest = entries.filter((entry) => entry.month !== month);
+    onChange([...rest, next]);
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-foreground">
+            <th className="p-2 font-semibold">Metric</th>
+            {months.map((month) => (
+              <th key={month.key} className="p-2 font-semibold">
+                {month.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label} className="border-b border-border last:border-0">
+              <td className="p-2">{row.label}</td>
+              {months.map((month, index) => {
+                const canType = !locked && row.editable?.[index] === true && row.field !== "month";
+                const source = moneySource(row.sources?.[index]);
+                return (
+                  <td key={`${row.label}-${month.key}`} className="p-2 align-top">
+                    {canType ? (
+                      <input
+                        aria-label={`${row.label} ${month.label}`}
+                        value={typed(month.key, row.field)}
+                        onChange={(event) => edit(month.key, row.field, event.target.value)}
+                        className="w-full min-w-[6rem] rounded-md border border-border bg-background px-2 py-1 text-sm"
+                      />
+                    ) : (
+                      <span>{money(row.values[index] ?? null)}</span>
+                    )}
+                    {source && <span className="mt-1 block text-xs text-muted-foreground">{source}</span>}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -374,7 +483,7 @@ export function EngineeringMonthlyReport() {
         </p>
         <h2 className="text-lg font-semibold">{view?.title ?? "Monthly Quality Report"}</h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Pick the month, upload the supplier workbook, then edit the narrative. Charts and claim dollars come from that file. NCR, quarantine, first articles, and document counts come from AccuQual when you can read those modules.
+          Pick the month, upload the supplier workbook, then edit the narrative. Charts come from that file. Labor Claims and Warranty dollars come from AccuQual, and a month with no dollar records stays editable. NCR, quarantine, first articles, and document counts come from AccuQual when you can read those modules.
         </p>
       </div>
 
@@ -491,15 +600,15 @@ export function EngineeringMonthlyReport() {
                 <dd>{view.executive.fuelPumpReturns.length === 0 ? "—" : view.executive.fuelPumpReturns.map((row) => `${row.source}: ${row.count}`).join(" · ")}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Total requested</dt>
+                <dt className="text-muted-foreground">Total (Labor Claims + Warranty)</dt>
                 <dd>{money(view.executive.totalAmountRequested)}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Parts requested</dt>
+                <dt className="text-muted-foreground">Warranty</dt>
                 <dd>{money(view.executive.partsAmountRequested)}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Labor requested</dt>
+                <dt className="text-muted-foreground">Labor</dt>
                 <dd>{money(view.executive.laborAmountRequested)}</dd>
               </div>
               <div>
@@ -538,18 +647,12 @@ export function EngineeringMonthlyReport() {
                 { label: "Total Product Alerts", values: view.tables.metrics.totalProductAlerts.map(plain) },
               ]}
             />
+            <p className="text-sm text-muted-foreground">Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.</p>
+            <MoneyTable months={view.tables.months} financials={view.tables.financials} narrative={narrative} locked={locked} onChange={(financialEntries) => patch({ financialEntries })} />
             <TrendTable
               months={view.tables.months}
               rows={[
-                { label: "Total Amount Requested", values: view.tables.financials.total.map(money) },
-                { label: "Parts Amount Requested", values: view.tables.financials.parts.map(money) },
-                { label: "Labor Amount Requested", values: view.tables.financials.labor.map(money) },
-              ]}
-            />
-            <TrendTable
-              months={view.tables.months}
-              rows={[
-                { label: "Labor-to-Parts Ratio", values: view.tables.warranty.ratio.map(plain) },
+                { label: "Labor-to-Warranty", values: view.tables.warranty.ratio.map(plain) },
                 { label: "Mean Time to Failure", values: view.tables.warranty.mttfDays.map((value) => (value == null ? "—" : `${value} days`)) },
                 { label: "Median Time to Failure", values: view.tables.warranty.medianDays.map((value) => (value == null ? "—" : `${value} days`)) },
               ]}
@@ -557,6 +660,28 @@ export function EngineeringMonthlyReport() {
           </Section>
 
           <Section number="6.2" title="Labor Claims">
+            <dl className="grid gap-2 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-muted-foreground">Labor claims</dt>
+                <dd>{plain(view.claimMonth?.laborCount)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Labor hours</dt>
+                <dd>{plain(view.claimMonth?.laborHours)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Labor cost</dt>
+                <dd>{money(view.claimMonth?.laborCost ?? null)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Warranty claims</dt>
+                <dd>{plain(view.claimMonth?.warrantyCount)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Warranty cost</dt>
+                <dd>{money(view.claimMonth?.warrantyCost ?? null)}</dd>
+              </div>
+            </dl>
             <p className="text-sm">
               Mean time to failure: {view.labor.mttfDays == null ? "—" : `${view.labor.mttfDays} days`}. Median time to failure: {view.labor.medianDays == null ? "—" : `${view.labor.medianDays} days`}.
             </p>

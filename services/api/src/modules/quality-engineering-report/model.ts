@@ -1,8 +1,10 @@
-/** Shapes for the Quality / Engineering monthly report. Supplier claim figures stay in the upload. */
+/** Shapes for the Quality / Engineering monthly report. Labor and warranty dollars come from AccuQual. */
 
 export const DOCUMENT_ID = "TMP-ENG-001";
 export const DOCUMENT_REVISION = "C";
 export const DOCUMENT_TITLE = "Monthly Engineering Development Report";
+
+import { normalizeFinancialEntries, resolveMonthMoney, type BookGate, type FinancialEntry, type MoneySource } from "./financials.js";
 
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
 
@@ -29,6 +31,8 @@ export interface EngineeringNarrative {
   techLine: QaItem[];
   fitment: QaItem[];
   productInfo: QaItem[];
+  /** Company-typed dollars for a month that has no Labor Claim or Warranty cost yet. */
+  financialEntries: FinancialEntry[];
 }
 
 export interface MonthMetric {
@@ -144,6 +148,8 @@ export interface LivePull {
   productAlertDocuments: Gated<{ count: number }>;
   recallDocuments: Gated<{ count: number }>;
   fai: Gated<{ rows: FaiCategoryRow[]; open: number }>;
+  laborBooks: BookGate;
+  warrantyBooks: BookGate;
 }
 
 export interface EngineeringReportView {
@@ -183,7 +189,17 @@ export interface EngineeringReportView {
   tables: {
     months: { key: string; label: string }[];
     metrics: { totalClaims: Array<number | null>; totalProductAlerts: Array<number | null> };
-    financials: { total: Array<number | null>; parts: Array<number | null>; labor: Array<number | null> };
+    financials: {
+      total: Array<number | null>;
+      parts: Array<number | null>;
+      labor: Array<number | null>;
+      totalSource: MoneySource[];
+      partsSource: MoneySource[];
+      laborSource: MoneySource[];
+      totalEditable: boolean[];
+      partsEditable: boolean[];
+      laborEditable: boolean[];
+    };
     warranty: { ratio: Array<string | null>; mttfDays: Array<number | null>; medianDays: Array<number | null> };
     topParts: TopPart[];
     fai: { source: "supplier" | "accuqual" | "none"; rows: FaiCategoryRow[]; inAppOpen: number | null };
@@ -197,6 +213,13 @@ export interface EngineeringReportView {
     emailIssues: Array<{ month: string; label: string; totalIssues: number | null; orIssues: number | null; napaIssues: number | null }>;
   };
   labor: { mttfDays: number | null; medianDays: number | null };
+  claimMonth: {
+    laborCount: number | null;
+    laborHours: number | null;
+    laborCost: number | null;
+    warrantyCount: number | null;
+    warrantyCost: number | null;
+  };
   productAlerts: ProductAlertSummary & { documentCount: Gated<{ count: number }> };
   sections: {
     quarantineNotes: string;
@@ -232,6 +255,7 @@ export function emptyNarrative(): EngineeringNarrative {
     techLine: [],
     fitment: [],
     productInfo: [],
+    financialEntries: [],
   };
 }
 
@@ -262,6 +286,8 @@ export function emptyLive(): LivePull {
     productAlertDocuments: unavailable,
     recallDocuments: unavailable,
     fai: unavailable,
+    laborBooks: unavailable,
+    warrantyBooks: unavailable,
   };
 }
 
@@ -413,11 +439,19 @@ export function assembleReport(input: {
   const selected = monthKey(year, month);
   const months = monthWindow(year, month);
   const metrics = byMonth(supplier.monthlyMetrics);
-  const financials = byMonth(supplier.financials);
   const warranty = byMonth(supplier.warrantyMetrics);
-  const selectedFinancials = financials.get(selected);
   const selectedWarranty = warranty.get(selected);
   const selectedMetrics = metrics.get(selected);
+  const entries = new Map(narrative.financialEntries.map((entry) => [entry.month, entry]));
+  const moneyRows = months.map((key) =>
+    resolveMonthMoney({
+      month: key,
+      labor: live.laborBooks,
+      warranty: live.warrantyBooks,
+      entry: entries.get(key),
+    }),
+  );
+  const selectedMoney = moneyRows[moneyRows.length - 1] ?? resolveMonthMoney({ month: selected, labor: live.laborBooks, warranty: live.warrantyBooks });
 
   const rawClaimCount = executiveNumber(supplier.executive, "raw_claim_count");
   const flatRate = executiveNumber(supplier.executive, "flat_rate");
@@ -427,16 +461,19 @@ export function assembleReport(input: {
   const potentialLiabilityDerived = givenLiability == null && rawClaimCount != null && flatRate != null;
   const deniedLaborSavingsDerived = givenSavings == null && claimsDenied != null && flatRate != null;
 
-  const ratioFor = (key: string): string | null => {
-    const row = warranty.get(key);
-    if (row?.laborToPartsRatio) return row.laborToPartsRatio;
-    const moneyRow = financials.get(key);
-    if (moneyRow?.laborAmount != null && moneyRow.partsAmount != null && moneyRow.partsAmount !== 0) {
-      const ratio = Math.round((moneyRow.laborAmount / moneyRow.partsAmount) * 100) / 100;
-      return `${ratio}:1`;
-    }
-    return null;
+  const ratioFor = (index: number): string | null => {
+    const moneyRow = moneyRows[index];
+    if (!moneyRow || moneyRow.labor.value == null || moneyRow.warranty.value == null || moneyRow.warranty.value === 0) return null;
+    const ratio = Math.round((moneyRow.labor.value / moneyRow.warranty.value) * 100) / 100;
+    return `${ratio}:1`;
   };
+
+  const monthBook = (gate: BookGate) => {
+    if (gate.status !== "ok") return null;
+    return gate.months.find((row) => row.month === selected) ?? { month: selected, count: 0, hours: 0, cost: null as number | null };
+  };
+  const laborBook = monthBook(live.laborBooks);
+  const warrantyBook = monthBook(live.warrantyBooks);
 
   const supplierFai = supplier.faiCategories.length > 0;
   const inAppFai = live.fai.status === "ok" ? live.fai.data : null;
@@ -465,9 +502,9 @@ export function assembleReport(input: {
       rawClaimCount,
       trackerProcessed: executiveNumber(supplier.executive, "tracker_processed"),
       fuelPumpReturns: supplier.fuelPumpReturns,
-      totalAmountRequested: selectedFinancials?.totalAmount ?? null,
-      partsAmountRequested: selectedFinancials?.partsAmount ?? null,
-      laborAmountRequested: selectedFinancials?.laborAmount ?? null,
+      totalAmountRequested: selectedMoney.total.value,
+      partsAmountRequested: selectedMoney.warranty.value,
+      laborAmountRequested: selectedMoney.labor.value,
       potentialLiability: givenLiability ?? (potentialLiabilityDerived && rawClaimCount != null && flatRate != null ? rawClaimCount * flatRate : null),
       potentialLiabilityDerived,
       flatRate,
@@ -485,12 +522,18 @@ export function assembleReport(input: {
         totalProductAlerts: months.map((key) => metrics.get(key)?.totalProductAlerts ?? null),
       },
       financials: {
-        total: months.map((key) => financials.get(key)?.totalAmount ?? null),
-        parts: months.map((key) => financials.get(key)?.partsAmount ?? null),
-        labor: months.map((key) => financials.get(key)?.laborAmount ?? null),
+        total: moneyRows.map((row) => row.total.value),
+        parts: moneyRows.map((row) => row.warranty.value),
+        labor: moneyRows.map((row) => row.labor.value),
+        totalSource: moneyRows.map((row) => row.total.source),
+        partsSource: moneyRows.map((row) => row.warranty.source),
+        laborSource: moneyRows.map((row) => row.labor.source),
+        totalEditable: moneyRows.map((row) => row.total.editable),
+        partsEditable: moneyRows.map((row) => row.warranty.editable),
+        laborEditable: moneyRows.map((row) => row.labor.editable),
       },
       warranty: {
-        ratio: months.map((key) => ratioFor(key)),
+        ratio: months.map((_key, index) => ratioFor(index)),
         mttfDays: months.map((key) => warranty.get(key)?.mttfDays ?? null),
         medianDays: months.map((key) => warranty.get(key)?.medianDays ?? null),
       },
@@ -520,6 +563,13 @@ export function assembleReport(input: {
     labor: {
       mttfDays: selectedWarranty?.mttfDays ?? null,
       medianDays: selectedWarranty?.medianDays ?? null,
+    },
+    claimMonth: {
+      laborCount: laborBook?.count ?? null,
+      laborHours: laborBook?.hours ?? null,
+      laborCost: laborBook?.cost ?? null,
+      warrantyCount: warrantyBook?.count ?? null,
+      warrantyCost: warrantyBook?.cost ?? null,
     },
     productAlerts: {
       total: supplier.productAlerts?.total ?? selectedMetrics?.totalProductAlerts ?? null,
@@ -586,5 +636,6 @@ export function normalizeNarrative(value: unknown): EngineeringNarrative {
     techLine: asQa(row.techLine),
     fitment: asQa(row.fitment),
     productInfo: asQa(row.productInfo),
+    financialEntries: normalizeFinancialEntries(row.financialEntries),
   };
 }

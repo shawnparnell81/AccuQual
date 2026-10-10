@@ -143,6 +143,7 @@ BEGIN
       ('quality_inspection_reports',  ARRAY[]::text[]),
       ('quality_inspection_items',    ARRAY[]::text[]),
       ('warranty_claims',             ARRAY[]::text[]),
+      ('labor_claims',                ARRAY[]::text[]),
       ('warranty_claim_costs',        ARRAY[]::text[]),
       ('crar',                        ARRAY[]::text[]),
       ('rma',                         ARRAY[]::text[]),

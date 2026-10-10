@@ -21,6 +21,8 @@ import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { workflowRuns } from "../../drizzle/schema/workflow.js";
 import { AGING_LABELS, agingLabel, type ReportSection, type SectionKey, type SectionSpec } from "./reports.model.js";
 import { plantDisplayName } from "../sites/siteAccess.js";
+import { laborClaims } from "../../drizzle/schema/laborClaims.js";
+import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 
 export interface SectionContext {
   db: Db;
@@ -615,6 +617,69 @@ async function cycleSection(spec: SectionSpec, ctx: SectionContext): Promise<Rep
   return section(spec, summary, rows, "Cycle time is creation to close, in days, for records that finished in this range.");
 }
 
+function onPlant(column: PgColumn, siteIds: number[]): SQL {
+  if (siteIds.length === 0) return sql`false`;
+  return sql`(${inArray(column, siteIds)} OR ${column} IS NULL)`;
+}
+
+function onPlantColumn(siteIds: number[]): SQL {
+  if (siteIds.length === 0) return sql`false`;
+  return sql`(site_id IS NULL OR site_id IN (${sql.join(siteIds.map((id) => sql`${id}`), sql`, `)}))`;
+}
+
+async function warrantySection(spec: SectionSpec, ctx: SectionContext): Promise<ReportSection> {
+  const { db, from, to, siteIds } = ctx;
+  const where = and(sql`coalesce(${warrantyClaims.failureDate}, ${warrantyClaims.createdAt}) >= ${from} AND coalesce(${warrantyClaims.failureDate}, ${warrantyClaims.createdAt}) <= ${to}`, onPlantColumn(siteIds));
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      withCost: sql<number>`count(${warrantyClaims.warrantyActualCost})::int`,
+      total: sql<number>`coalesce(sum(${warrantyClaims.warrantyActualCost}), 0)::float`,
+    })
+    .from(warrantyClaims)
+    .where(where);
+  const byStatus = await db
+    .select({ key: sql<string>`coalesce(${warrantyClaims.status}, 'unspecified')`, count: sql<number>`count(*)::int` })
+    .from(warrantyClaims)
+    .where(where)
+    .groupBy(sql`coalesce(${warrantyClaims.status}, 'unspecified')`);
+  const count = num(row?.count);
+  const withCost = num(row?.withCost);
+  return section(
+    spec,
+    { count, totalActualCost: withCost > 0 ? round1(row?.total) : null, withCost },
+    byStatus.map((status) => ({ label: `Status · ${status.key}`, value: num(status.count) })),
+    "Counts use the failure date when the claim has one. Dollars are the warranty actual cost.",
+  );
+}
+
+async function laborClaimsSection(spec: SectionSpec, ctx: SectionContext): Promise<ReportSection> {
+  const { db, from, to, siteIds } = ctx;
+  const where = and(sql`coalesce(${laborClaims.claimDate}, ${laborClaims.createdAt}) >= ${from} AND coalesce(${laborClaims.claimDate}, ${laborClaims.createdAt}) <= ${to}`, onPlant(laborClaims.siteId, siteIds));
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      hours: sql<number>`coalesce(sum(${laborClaims.laborHours}), 0)::float`,
+      withCost: sql<number>`count(${laborClaims.totalLaborCost})::int`,
+      total: sql<number>`coalesce(sum(${laborClaims.totalLaborCost}), 0)::float`,
+    })
+    .from(laborClaims)
+    .where(where);
+  const byStatus = await db
+    .select({ key: sql<string>`coalesce(${laborClaims.status}, 'unspecified')`, count: sql<number>`count(*)::int` })
+    .from(laborClaims)
+    .where(where)
+    .groupBy(sql`coalesce(${laborClaims.status}, 'unspecified')`);
+  const count = num(row?.count);
+  const withCost = num(row?.withCost);
+  return section(
+    spec,
+    { count, totalHours: count > 0 ? round1(row?.hours) : 0, totalLaborCost: withCost > 0 ? round1(row?.total) : null, withCost },
+    byStatus.map((status) => ({ label: `Status · ${status.key}`, value: num(status.count) })),
+    "Counts use the claim date. Dollars are the labor cost on each Labor Claim.",
+  );
+}
+
 const LOADERS: Record<SectionKey, (spec: SectionSpec, ctx: SectionContext) => Promise<ReportSection>> = {
   ncr: ncrSection,
   capa: capaSection,
@@ -630,6 +695,8 @@ const LOADERS: Record<SectionKey, (spec: SectionSpec, ctx: SectionContext) => Pr
   calibration: calibrationSection,
   ppap: ppapSection,
   workflow_cycle_times: cycleSection,
+  warranty: warrantySection,
+  labor_claims: laborClaimsSection,
 };
 
 export async function loadReportSection(spec: SectionSpec, ctx: SectionContext): Promise<ReportSection> {

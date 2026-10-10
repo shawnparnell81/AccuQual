@@ -231,6 +231,17 @@ export const WARRANTY: NavLeaf = {
   notes: "Not in the department sheet — a new Warranty module (claims, inspection, supplier review, cost tracking)",
 };
 
+export const LABOR_CLAIMS: NavLeaf = {
+  key: "labor_claims",
+  label: "Labor Claims",
+  path: "/labor-claims",
+  icon: Wrench,
+  access: { customer_service: "edit", quality: "edit", engineering: "edit", purchasing: "edit", material_management: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Labor claims typed by the company. Access follows the labor_claims permission.",
+};
+
 // Not a sheet row — the internal-staff side of the new Supplier Portal.
 // Mirrors departmentAccess.ts's PERMISSION_MATRIX.supplier_portal exactly.
 // An actual external supplier login (roleName:"supplier") never sees this
@@ -368,6 +379,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       WORK_ORDERS,
       PURCHASE_REQUISITIONS,
       WARRANTY,
+      LABOR_CLAIMS,
       SUPPLIER_PORTAL,
       CRAR,
       RMA_LOG,
@@ -376,7 +388,8 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "engineering",
-    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
+    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, FEASIBILITY, WARRANTY,
+      LABOR_CLAIMS, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "production",
@@ -384,15 +397,18 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "customer_service",
-    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG, RMA_ACTIVITY_LOG, WORK_ORDERS],
+    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY,
+      LABOR_CLAIMS, CRAR, RMA_LOG, RMA_ACTIVITY_LOG, WORK_ORDERS],
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY,
+      LABOR_CLAIMS, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, RMA_LOG],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY,
+      LABOR_CLAIMS, RMA_LOG],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is

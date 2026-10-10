@@ -45,6 +45,7 @@ const ROUTE_ENTITY_TYPES: Record<string, string> = {
   // confirmed directly against each module's own recordAuditTrail calls).
   "8d": "8D Report",
   warranty: "WarrantyClaim",
+  "labor-claims": "LaborClaim",
   crar: "Crar",
   "rma-log": "RmaLog",
   erp: "PurchaseOrder",

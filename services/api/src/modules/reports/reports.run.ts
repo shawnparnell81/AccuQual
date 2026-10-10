@@ -37,6 +37,8 @@ const ACCESS_KEYS = [
   "ppap",
   "workflow",
   "audit",
+  "warranty",
+  "labor_claims",
 ] as const satisfies readonly ResourceKey[];
 
 export interface RunReportInput {

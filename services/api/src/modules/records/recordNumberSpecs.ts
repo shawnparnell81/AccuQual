@@ -28,4 +28,5 @@ export const FUEL_PUMP_FAI_NUMBER: RecordNumberSpec = { table: "fuel_pump_fai_re
 export const RMA_NUMBER: RecordNumberSpec = { table: "rma", column: "rma_number", field: "rmaNumber", label: "RMA No." };
 export const RMA_LOG_NUMBER: RecordNumberSpec = { table: "rma_log", column: "rma_number", field: "rmaNumber", label: "RMA No." };
 export const WARRANTY_NUMBER: RecordNumberSpec = { table: "warranty_claims", column: "claim_number", field: "claimNumber", label: "Claim No." };
+export const LABOR_NUMBER: RecordNumberSpec = { table: "labor_claims", column: "claim_number", field: "claimNumber", label: "Claim No." };
 export const BUILT_FILL_NUMBER: RecordNumberSpec = { table: "built_form_fills", column: "record_number", field: "recordNumber", label: "Record No.", typeColumn: "form_id", typeField: "formId" };

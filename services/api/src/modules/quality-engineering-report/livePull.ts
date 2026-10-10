@@ -9,9 +9,11 @@ import { scarForms } from "../../drizzle/schema/scarForms.js";
 import { fmeaItems } from "../../drizzle/schema/risk.js";
 import { quarantineRecords } from "../../drizzle/schema/quarantine.js";
 import { documents } from "../../drizzle/schema/documents.js";
-import { monthBounds, type Gated, type LivePull, type NcrRow } from "./model.js";
+import { laborBooksBetween, warrantyBooksBetween } from "../labor-claims/claimBooks.js";
+import type { BookGate, ClaimBookMonth } from "./financials.js";
+import { monthBounds, monthKey, monthWindow, type Gated, type LivePull, type NcrRow } from "./model.js";
 
-const ACCESS_KEYS = ["ncr", "capa", "quarantine", "fai", "documents", "risk", "scar", "warranty"] as const satisfies readonly ResourceKey[];
+const ACCESS_KEYS = ["ncr", "capa", "quarantine", "fai", "documents", "risk", "scar", "warranty", "labor_claims"] as const satisfies readonly ResourceKey[];
 
 export async function engineeringAccess(
   db: Db,
@@ -61,6 +63,8 @@ export async function pullLive(db: Db, input: {
   year: number;
   month: number;
   siteIds: number[];
+  /** Null means every plant, including rows that were never assigned. */
+  plantId?: number | null;
   level: (resource: ResourceKey) => "none" | "read" | "edit";
 }): Promise<LivePull> {
   const present = await loadPresentTables(db);
@@ -173,7 +177,21 @@ export async function pullLive(db: Db, input: {
     return { status: "ok", data: { rows: [], open: 0 } };
   };
 
-  const [ncrResult, cars, rpn, quarantine, productAlertDocuments, recallDocuments, fai] = await Promise.all([
+  const booksGate = async (resource: "labor_claims" | "warranty", load: () => Promise<ClaimBookMonth[] | null>): Promise<BookGate> => {
+    if (input.level(resource) === "none") return { status: "no_access" };
+    const months = await load();
+    if (months == null) return { status: "unavailable", reason: "The table is not in this database." };
+    return { status: "ok", months };
+  };
+
+  const windowKeys = monthWindow(input.year, input.month);
+  const first = windowKeys[0] ?? monthKey(input.year, input.month);
+  const [startYear, startMonth] = first.split("-").map(Number);
+  const windowStart = monthBounds(startYear ?? input.year, startMonth ?? input.month).start;
+  const windowEnd = end;
+  const plantId = input.plantId ?? null;
+
+  const [ncrResult, cars, rpn, quarantine, productAlertDocuments, recallDocuments, fai, laborBooks, warrantyBooks] = await Promise.all([
     ncrGate(),
     carsGate(),
     rpnGate(),
@@ -181,7 +199,9 @@ export async function pullLive(db: Db, input: {
     documentsGate("product-alerts"),
     documentsGate("recalls"),
     faiGate(),
+    booksGate("labor_claims", () => laborBooksBetween(db, windowStart, windowEnd, plantId)),
+    booksGate("warranty", () => warrantyBooksBetween(db, windowStart, windowEnd, plantId)),
   ]);
 
-  return { ncr: ncrResult, cars, rpn, quarantine, productAlertDocuments, recallDocuments, fai };
+  return { ncr: ncrResult, cars, rpn, quarantine, productAlertDocuments, recallDocuments, fai, laborBooks, warrantyBooks };
 }

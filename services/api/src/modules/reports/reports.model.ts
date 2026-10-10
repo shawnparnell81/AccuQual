@@ -6,7 +6,7 @@ import type { ResourceKey } from "../../middleware/departmentAccess.js";
  * JSON (`GET /reports/templates`). There is no separate reporting warehouse:
  * each section is filled from the module table that already owns the records.
  */
-export const REPORT_TEMPLATE_VERSION = 1;
+export const REPORT_TEMPLATE_VERSION = 2;
 
 export type ReportKind = "weekly" | "monthly" | "adhoc";
 
@@ -24,7 +24,9 @@ export type SectionKey =
   | "training"
   | "calibration"
   | "ppap"
-  | "workflow_cycle_times";
+  | "workflow_cycle_times"
+  | "warranty"
+  | "labor_claims";
 
 export type SectionStatus = "ok" | "skipped" | "no_access";
 
@@ -100,6 +102,8 @@ export const SECTION_SPECS: readonly SectionSpec[] = [
     allTables: [],
     anyTables: ["workflow_runs", "ncr", "capa"],
   },
+  { key: "warranty", title: "Warranty", cadence: "monthly", access: ["warranty"], allTables: ["warranty_claims"], anyTables: [] },
+  { key: "labor_claims", title: "Labor Claims", cadence: "monthly", access: ["labor_claims"], allTables: ["labor_claims"], anyTables: [] },
 ];
 
 const TITLES: Record<ReportKind, string> = {

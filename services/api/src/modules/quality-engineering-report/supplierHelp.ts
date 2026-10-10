@@ -1,7 +1,7 @@
 /**
  * Supplier upload columns for the Quality / Engineering monthly report.
  * One CSV with a `dataset` column, or an Excel workbook with one sheet per dataset.
- * Warranty claim counts and dollars come only from this file.
+ * Labor and warranty dollars come from AccuQual, not from this file.
  */
 
 export interface SupplierColumnDoc {
@@ -15,11 +15,6 @@ export const SUPPLIER_COLUMNS: SupplierColumnDoc[] = [
     dataset: "monthly_metrics",
     purpose: "Claim count and product-alert count for each month in the trend table.",
     columns: ["month (YYYY-MM)", "total_claims", "total_product_alerts"],
-  },
-  {
-    dataset: "financials",
-    purpose: "Requested dollars by month.",
-    columns: ["month", "total_amount_requested", "parts_amount_requested", "labor_amount_requested"],
   },
   {
     dataset: "warranty_metrics",
@@ -74,4 +69,4 @@ export const SUPPLIER_COLUMNS: SupplierColumnDoc[] = [
 ];
 
 export const SUPPLIER_UPLOAD_NOTE =
-  "Supplier warranty claims, dollars, return charts, and the FAI category sheet are filled only from this upload. NCR, quarantine, CAPA/SCAR, RPN, product-alert documents, and recall documents are read from AccuQual for the selected month when you can open those modules. Empty modules are not turned into claim counts. The August 2026 template carries that month's published totals, parts, vehicles, fuel-pump split, FAI categories, and narrative. Its daily claims/returns rows are format examples (the chart image had no data table). Email-issue heights were read from that chart.";
+  "Return charts and the FAI category sheet are filled from this upload. Labor Claims and Warranty dollars come from AccuQual. NCR, quarantine, CAPA/SCAR, RPN, product-alert documents, and recall documents are read from AccuQual for the selected month when you can open those modules. Empty modules are not turned into claim counts. The August 2026 template carries that month's published claim counts, parts, vehicles, fuel-pump split, FAI categories, and narrative. Its daily claims/returns rows are format examples (the chart image had no data table). Email-issue heights were read from that chart.";

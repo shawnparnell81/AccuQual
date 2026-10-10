@@ -58,7 +58,7 @@ export interface FieldChange {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "training_courses" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints" | "eight_d" | "iso_forms" | "validation_reports" | "change" | "fai" | "csa_fai" | "fuel_pump_fai" | "form_fills";
+export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "training_courses" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints" | "eight_d" | "iso_forms" | "validation_reports" | "change" | "fai" | "csa_fai" | "fuel_pump_fai" | "form_fills" | "labor_claims";
 
 export type NcrStep = "ncr_created" | "contain" | "disposition" | "fix" | "verify" | "closed";
 

@@ -70,6 +70,7 @@ const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
   work_orders: { label: "Work orders" },
   purchase_requisitions: { label: "Purchase requests" },
   warranty: { label: "Warranty" },
+  labor_claims: { label: "Labor Claims" },
   supplier_portal: { label: "Supplier portal" },
   crar: { label: "Return analysis", standard: "CRAR" },
   rma_log: { label: "Return log" },

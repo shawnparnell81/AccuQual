@@ -37,6 +37,11 @@ export const warrantyTrendsHandler = asyncHandler(async (req: Request, res: Resp
   res.json(await reportingService.getWarrantyTrends(req.db! as Db, parseRange(req)));
 });
 
+export const laborClaimTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const siteId = req.allSites ? null : (req.siteId ?? null);
+  res.json(await reportingService.getLaborClaimTrends(req.db! as Db, parseRange(req), siteId));
+});
+
 export const receivingTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await reportingService.getReceivingTrends(req.db! as Db, parseRange(req)));
 });
@@ -136,7 +141,7 @@ export const recipientPeopleHandler = asyncHandler(async (req: Request, res: Res
 // the underlying data (see reporting.routes.ts), and every format carries
 // the same audit-metadata line ("Ensure exports include audit metadata").
 // ---------------------------------------------------------------------------
-const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "companyName">>> = {
+const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange, siteId?: number | null) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "companyName">>> = {
   "ncr-metrics": async (db, range) => {
     const m = await reportingService.getNcrMetrics(db, range);
     return { title: "NCR Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
@@ -156,6 +161,14 @@ const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange) => Promise<Omit
   "warranty-trends": async (db, range) => {
     const m = await reportingService.getWarrantyTrends(db, range);
     return { title: "Warranty / RMA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
+  },
+  "labor-claims-trends": async (db, range, siteId) => {
+    const m = await reportingService.getLaborClaimTrends(db, range, siteId ?? null);
+    return {
+      title: "Labor Claims",
+      columns: ["Status", "Count"],
+      rows: m.available ? m.byStatus.map((s) => [s.status, s.count]) : [["unavailable", "Labor Claims isn't in this database yet."]],
+    };
   },
   "receiving-trends": async (db, range) => {
     const m = await reportingService.getReceivingTrends(db, range);
@@ -184,7 +197,8 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   const [co] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
-  const partial = await builder(db, parseRange(req));
+  const siteId = req.allSites ? null : (req.siteId ?? null);
+  const partial = await builder(db, parseRange(req), siteId);
   const report: ExportableReport = {
     ...partial,
     generatedAt: new Date(),

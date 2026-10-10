@@ -203,6 +203,7 @@ export const MODULE_ENTITY_TYPES: Record<string, string> = {
   training_courses: "TrainingCourse",
   form_fills: "BuiltFormFill",
   warranty: "WarrantyClaim",
+  labor_claims: "LaborClaim",
   crar: "Crar",
   rma_log: "RmaLog",
 };

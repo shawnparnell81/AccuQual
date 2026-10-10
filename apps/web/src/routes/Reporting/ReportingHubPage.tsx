@@ -15,6 +15,7 @@ import { ReportExportButtons } from "../../components/shared/ReportExportButtons
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { ReportsPage } from "../Reports/ReportsPage";
+import { useSiteStore } from "../../store/siteStore";
 
 // ---------------------------------------------------------------------------
 // Types — local to this page, matching reporting.service.ts's real response
@@ -45,6 +46,14 @@ interface WarrantyTrends {
   byStatus: { status: string; count: number }[];
   byMonth: TrendDatum[];
   totalActualCost: number;
+}
+interface LaborClaimTrends {
+  available: boolean;
+  total: number;
+  totalHours: number;
+  totalLaborCost: number;
+  byStatus: { status: string; count: number }[];
+  byMonth: TrendDatum[];
 }
 interface ReceivingTrends {
   total: number;
@@ -215,6 +224,30 @@ function WarrantyOverview() {
   );
 }
 
+function LaborClaimsOverview() {
+  const plantKey = useSiteStore((s) => (s.siteScope === "all" ? "all" : s.currentSiteId));
+  const { data } = useQuery<LaborClaimTrends>({
+    queryKey: ["reporting", "labor-claims-trends", plantKey],
+    queryFn: async () => (await apiClient.get("/reporting/labor-claims-trends")).data,
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader title="Labor Claims" reportKey="labor-claims-trends" />
+      {!data?.available && data && <p className="text-sm text-muted-foreground">Labor Claims isn't available until the database update runs.</p>}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Total Claims" value={data?.total ?? "—"} />
+        <StatCard label="Total Hours" value={data ? data.totalHours : "—"} />
+        <StatCard label="Total Labor Cost" value={data ? `$${data.totalLaborCost.toFixed(2)}` : "—"} />
+      </div>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-2 text-sm font-medium">Claims per Month</h3>
+        <TrendLineChart data={data?.byMonth ?? []} label="Claims" />
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Production / Receiving Overview
 // ---------------------------------------------------------------------------
@@ -287,6 +320,7 @@ const REPORT_TYPE_OPTIONS = [
   { value: "capa_summary", label: "CAPA Summary" },
   { value: "supplier_scorecard", label: "Supplier Scorecard" },
   { value: "warranty_summary", label: "Warranty / RMA Summary" },
+  { value: "labor_claims_summary", label: "Labor Claims" },
   { value: "receiving_summary", label: "Receiving Inspection Summary" },
 ];
 
@@ -491,6 +525,7 @@ const TABS = [
   { key: "quality", label: "Quality Overview", navKey: "ncr" },
   { key: "supplier", label: "Supplier Overview", navKey: "suppliers" },
   { key: "warranty", label: "Warranty Overview", navKey: "warranty" },
+  { key: "labor", label: "Labor Claims", navKey: "labor_claims" },
   { key: "production", label: "Production / Receiving", navKey: "inventory" },
   { key: "runner", label: "Quality reports", navKey: "" },
 ] as const;
@@ -501,8 +536,9 @@ export function ReportingHubPage() {
   const ncrAccess = useWorkflowAccessLevel("ncr");
   const supplierAccess = useWorkflowAccessLevel("suppliers");
   const warrantyAccess = useWorkflowAccessLevel("warranty");
+  const laborAccess = useWorkflowAccessLevel("labor_claims");
   const inventoryAccess = useWorkflowAccessLevel("inventory");
-  const accessByKey: Record<string, string> = { ncr: ncrAccess, suppliers: supplierAccess, warranty: warrantyAccess, inventory: inventoryAccess };
+  const accessByKey: Record<string, string> = { ncr: ncrAccess, suppliers: supplierAccess, warranty: warrantyAccess, labor_claims: laborAccess, inventory: inventoryAccess };
 
   const visibleTabs = TABS.filter((t) => t.navKey === "" || accessByKey[t.navKey] !== "none");
   const [activeTab, setActiveTab] = useState<string>(visibleTabs[0]?.key ?? "quality");
@@ -542,6 +578,7 @@ export function ReportingHubPage() {
           {activeTab === "quality" && accessByKey.ncr !== "none" && <QualityOverview />}
           {activeTab === "supplier" && accessByKey.suppliers !== "none" && <SupplierOverview />}
           {activeTab === "warranty" && accessByKey.warranty !== "none" && <WarrantyOverview />}
+          {activeTab === "labor" && accessByKey.labor_claims !== "none" && <LaborClaimsOverview />}
           {activeTab === "production" && accessByKey.inventory !== "none" && <ProductionReceivingOverview />}
           {activeTab === "runner" && <ReportsPage embedded />}
         </>
