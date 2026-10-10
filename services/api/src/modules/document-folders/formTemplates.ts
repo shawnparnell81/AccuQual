@@ -104,13 +104,49 @@ async function blankFormsAlreadyFiled(db: Db): Promise<boolean> {
   return fillable.every((seed) => have.has(seed.formKey));
 }
 
+/** A cleared number goes back to the seed. A number someone typed stays. Folder placement is left alone. */
+async function repairStoredTemplateFields(db: Db): Promise<void> {
+  const saved = await db.select().from(controlledFormTemplates);
+  const savedByKey = new Map(saved.map((row) => [row.formKey, row]));
+  for (const seed of FORM_TEMPLATES) {
+    const existing = savedByKey.get(seed.formKey);
+    if (!existing) continue;
+    const nextFormId = storedFormId(existing.formId, seed.formId, seed.formKey);
+    if (existing.formId === nextFormId && existing.title === seed.title && existing.subjectRoute === seed.subjectRoute) continue;
+    await db
+      .update(controlledFormTemplates)
+      .set({ formId: nextFormId, title: seed.title, subjectRoute: seed.subjectRoute })
+      .where(eq(controlledFormTemplates.id, existing.id));
+  }
+}
+
+/** Empty numbered ISO placeholders (the old "8D" drawer, "03_Blank_Forms_Templates") go away without the seed walk. */
+async function pruneNumberedPlaceholders(db: Db): Promise<void> {
+  const all = await db.select().from(documentFolders);
+  const iso = all.find((folder) => folder.parentId === null && folder.name === ISO_DOCUMENTS_FOLDER);
+  if (!iso) return;
+  const keep = new Set<number>();
+  const home = all.find((folder) => folder.parentId === iso.id && folder.name === BLANK_FORMS_FOLDER);
+  if (home) keep.add(home.id);
+  const legacy = all.find((folder) => folder.parentId === iso.id && folder.name === PREVIOUS_BLANK_FORMS_FOLDER);
+  if (legacy) keep.add(legacy.id);
+  for (const folder of all) {
+    if (folder.linkedPath?.startsWith("/blank-forms/start/")) keep.add(folder.id);
+  }
+  await pruneEmptyDescendants(db, iso.id, keep);
+}
+
 export async function ensureFormTemplates(db: Db, performedBy?: number): Promise<void> {
   if (RETIRED_FORM_KEYS.length > 0) {
     await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
   }
-  // Form folders and every controlled-list open used to walk this filing pass again.
-  // Once the blanks are placed, reading them is a select, not another serial seed.
-  if (await blankFormsAlreadyFiled(db)) return;
+  // Form folders used to walk this filing pass on every read. Once the blanks are
+  // placed, keep the number repair and the numbered-placeholder prune, and skip the seed walk.
+  if (await blankFormsAlreadyFiled(db)) {
+    await repairStoredTemplateFields(db);
+    await pruneNumberedPlaceholders(db);
+    return;
+  }
   let all = await db.select().from(documentFolders);
 
   const legacyIso = all.find((folder) => folder.parentId === null && folder.name === PREVIOUS_ISO_ROOT);

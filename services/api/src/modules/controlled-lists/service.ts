@@ -467,7 +467,12 @@ export async function openControlledList(req: Request, key: ListKey): Promise<Co
   const existing = await loadRow(req.db!, key);
   // A list that already exists does not need every other list, the folder tree,
   // and the blank-form filing pass. That serial walk is what held the page on Loading.
-  if (existing) return present(req, key, await refreshOpenedList(req, key, existing));
+  // Old Quality Manual copies are still retired here. Opening the list is what removes them.
+  if (existing) {
+    const refreshed = await refreshOpenedList(req, key, existing);
+    await retireSupersededLists(req);
+    return present(req, key, refreshed);
+  }
   await ensureLivingControlledLists(req);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
