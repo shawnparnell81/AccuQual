@@ -31,6 +31,7 @@ import { ValidationReportSheet } from "./ValidationReportSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { rememberRecord } from "../../lib/recentRecords";
 import { savedFieldsEditable } from "../../lib/savedFormLock";
@@ -200,6 +201,7 @@ export function ValidationReportDetailPage() {
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
             <RecordNumberEditor label="Report No." value={report.recordNumber} canEdit={fieldsEditable} onSave={(next) => updateReport.mutateAsync({ id: reportId, recordNumber: next.trim() || null })} />
+            <RecordSiteField entity="validation_report" id={reportId} canEdit={fieldsEditable} />
             <FormNumberEditor formKey={formKey} compact />
             <p className="text-sm text-muted-foreground">
               {doc}

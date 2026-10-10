@@ -15,6 +15,7 @@ import { WarrantyCrarPanel } from "./WarrantyCrarPanel";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -90,6 +91,7 @@ export function WarrantyClaimDetail() {
         <div>
           <h1 className="text-2xl font-semibold">{recordHeading("Warranty claim", claim.claimNumber)}</h1>
           <RecordNumberEditor label="Claim No." value={claim.claimNumber} canEdit={canEditFields} onSave={(next) => updateClaim.mutateAsync({ id: claim.id, claimNumber: next.trim() || null })} />
+          <RecordSiteField entity="warranty" id={claim.id} canEdit={canEditFields} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={claim.status} />
           </div>

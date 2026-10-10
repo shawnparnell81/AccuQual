@@ -20,6 +20,12 @@ export const PLANTS_DELETE_PERMISSION = "plants.delete";
 /** Open Admin → Login History. Granted on the role. A role name does not grant it. Owner and Administrator start with it. */
 export const LOGIN_HISTORY_PERMISSION = "login_history";
 
+/** See every living site, including ones the person is not assigned to, and the All sites choice. */
+export const SITES_VIEW_ALL_PERMISSION = "sites.view_all";
+
+/** Open the executive dashboard. Viewing does not grant editing. */
+export const EXECUTIVE_DASHBOARD_PERMISSION = "executive.dashboard";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 

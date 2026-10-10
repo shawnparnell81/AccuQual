@@ -12,7 +12,14 @@ export const updateSiteSchema = z.object({
   code: codeSchema.optional(),
 });
 
-export const switchSiteSchema = z.object({
+export const switchSiteSchema = z.union([
+  z.object({ siteId: z.number().int().positive() }),
+  z.object({ scope: z.literal("all") }),
+]);
+
+export const changeRecordSiteSchema = z.object({
+  entity: z.enum(["ncr", "capa", "audit", "complaint", "warranty", "validation_report", "iso_form", "qms_form", "built_fill"]),
+  id: z.number().int().positive(),
   siteId: z.number().int().positive(),
 });
 

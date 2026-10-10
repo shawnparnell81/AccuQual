@@ -15,6 +15,7 @@ import { emptyFrame } from "../forms/controlledPdf.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { diffSignatureRequired, flushSignatureRequiredAudit, rememberSignatureRequiredAudit, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -47,6 +48,7 @@ export const baseHandlers = crudFactory(validationReports, {
   afterCreate: async (created, req) => {
     if (!req.db) return;
     const id = typeof created.id === "number" ? created.id : 0;
+    await stampRecordSite(req.db, "validation_reports", id, req.siteId);
     await snapshotFormNumber(req.db, validationFormKeyFor(created.data), id);
     const kind = validationKind(created.data);
     const changes = diffSignatureRequired({}, created.data, signatureBlocksFor(`validation:${kind}`));
@@ -95,6 +97,7 @@ export const copyValidationHandler = asyncHandler(async (req: Request, res: Resp
   const next = answersWithTemplateStamp(`validation:${kind}`, undefined, { formType: kind, cells }, true);
   const [created] = await req.db!.insert(validationReports).values({ data: next as typeof validationReports.$inferInsert.data }).returning();
   if (!created) throw new AppError("The validation report could not be copied.", 500);
+  await stampRecordSite(req.db!, "validation_reports", created.id, req.siteId);
   await snapshotFormNumber(req.db!, validationFormKeyFor(created.data), created.id);
   res.status(201).json(created);
 });

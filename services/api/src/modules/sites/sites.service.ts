@@ -5,6 +5,8 @@ import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { AppError } from "../../utils/appError.js";
 import { roleHasPlantDeletePermission } from "../roles/roleAccess.js";
+import { roleCanViewAllSites, roleHasExecutiveDashboard } from "../roles/rolePermissions.js";
+import { optionalRows } from "./optionalSql.js";
 import { isRetiredPlant, isSiteAdmin, plantDeleteDescription, plantDisplayName, slugifyPlantCode } from "./siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
@@ -20,6 +22,9 @@ export interface SiteContextView {
   currentSiteId: number | null;
   canManage: boolean;
   canDelete: boolean;
+  canViewAllSites: boolean;
+  executiveDashboard: boolean;
+  siteScope: "all" | null;
   sites: SiteView[];
 }
 
@@ -52,17 +57,22 @@ async function membershipIds(db: Db, userId: number): Promise<number[]> {
 }
 
 export async function getSiteContext(db: Db, userId: number, roleName: string | null): Promise<SiteContextView> {
-  const [all, [user]] = await Promise.all([
+  const [all, [user], canViewAllSites, executiveDashboard, scopeRows] = await Promise.all([
     loadSites(db),
     db.select({ currentSiteId: users.currentSiteId }).from(users).where(and(eq(users.id, userId))),
+    roleCanViewAllSites(db, roleName),
+    roleHasExecutiveDashboard(db, roleName),
+    optionalRows<{ site_scope: string | null }>(db, sql`SELECT site_scope FROM users WHERE id = ${userId}`),
   ]);
   const canManage = isSiteAdmin(roleName);
   const canDelete = await callerCanDeletePlants(db, roleName);
-  const allowed = new Set(canManage ? all.map((site) => site.id) : await membershipIds(db, userId));
+  const seeEveryPlant = canManage || canViewAllSites;
+  const allowed = new Set(seeEveryPlant ? all.map((site) => site.id) : await membershipIds(db, userId));
   const visible = all.filter((site) => allowed.has(site.id));
   const saved = user?.currentSiteId ?? null;
   const currentSiteId = saved != null && allowed.has(saved) ? saved : (visible.find((site) => site.isDefault && site.status === "active") ?? visible.find((site) => site.status === "active"))?.id ?? null;
-  return { currentSiteId, canManage, canDelete, sites: visible };
+  const siteScope = canViewAllSites && scopeRows?.[0]?.site_scope === "all" ? "all" : null;
+  return { currentSiteId, canManage, canDelete, canViewAllSites, executiveDashboard, siteScope, sites: visible };
 }
 
 async function uniqueCode(db: Db, base: string): Promise<string> {
@@ -186,7 +196,26 @@ export async function switchSite(db: Db, userId: number, roleName: string | null
   const context = await getSiteContext(db, userId, roleName);
   if (!context.sites.some((site) => site.id === siteId)) throw AppError.forbidden("You aren't assigned to that plant.");
   await db.update(users).set({ currentSiteId: siteId, updatedAt: new Date() }).where(and(eq(users.id, userId)));
-  return { ...context, currentSiteId: siteId };
+  await optionalRows(db, sql`UPDATE users SET site_scope = NULL WHERE id = ${userId}`);
+  return { ...context, currentSiteId: siteId, siteScope: null };
+}
+
+export async function applySiteSwitch(
+  db: Db,
+  userId: number,
+  roleName: string | null,
+  input: { siteId?: number; scope?: "all" },
+): Promise<SiteContextView> {
+  if (input.scope === "all") {
+    const viewAll = await roleCanViewAllSites(db, roleName);
+    if (!viewAll) throw AppError.forbidden("You don't have permission to view every site.");
+    const wrote = await optionalRows(db, sql`UPDATE users SET site_scope = 'all', updated_at = now() WHERE id = ${userId} RETURNING id`);
+    if (wrote == null) throw new AppError("All sites can't be saved until the database update runs.", 503);
+    const context = await getSiteContext(db, userId, roleName);
+    return { ...context, siteScope: "all" };
+  }
+  if (input.siteId == null) throw AppError.badRequest("Choose a plant.");
+  return switchSite(db, userId, roleName, input.siteId);
 }
 
 export async function listMemberIds(db: Db, siteId: number): Promise<number[]> {

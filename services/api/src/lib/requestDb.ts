@@ -22,8 +22,12 @@ declare global {
       db?: Db;
       /** Plant the caller is working in. Set by withSiteContext (modules/sites). */
       siteId?: number | null;
-      /** Plants this caller may open records in. Admins get every plant. */
+      /** Plants this caller may open records in. Admins and view-all roles get every plant. */
       allowedSiteIds?: number[];
+      /** The caller asked for every plant they may see, instead of one working plant. */
+      allSites?: boolean;
+      /** Records with no plant are included. Only set for view-all. */
+      allowUnassigned?: boolean;
       /** Work that must run only after this request's transaction commits (file removal). */
       afterCommit?: Array<() => Promise<void>>;
     }
