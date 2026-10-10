@@ -1,16 +1,18 @@
 import { ensureTestCompany } from "../helpers/company.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
+import { roles } from "../../src/drizzle/schema/roles.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 const app = createApp();
 const suffix = Date.now();
 
 let adminToken: string;
+let ownerToken: string;
 let operatorToken: string;
 let execToken: string;
 let greerId: number;
@@ -41,9 +43,11 @@ describe("executive dashboard", () => {
   beforeAll(async () => {
     await ensureTestCompany();
     const [admin] = await db.insert(users).values({ email: `exec-admin-${suffix}@test.local`, passwordHash: "unused", name: "Exec Admin" }).returning();
+    const [owner] = await db.insert(users).values({ email: `exec-owner-${suffix}@test.local`, passwordHash: "unused", name: "Exec Owner" }).returning();
     const [operator] = await db.insert(users).values({ email: `exec-op-${suffix}@test.local`, passwordHash: "unused", name: "Greer Operator", department: "quality" }).returning();
     const [exec] = await db.insert(users).values({ email: `exec-viewer-${suffix}@test.local`, passwordHash: "unused", name: "Executive Viewer", department: null }).returning();
     adminToken = signAccessToken({ sub: String(admin!.id), roleId: null, roleName: "admin", department: null });
+    ownerToken = signAccessToken({ sub: String(owner!.id), roleId: null, roleName: "owner", department: null });
     operatorToken = signAccessToken({ sub: String(operator!.id), roleId: null, roleName: "operator", department: "quality" });
     execToken = signAccessToken({ sub: String(exec!.id), roleId: null, roleName: "executive", department: null });
 
@@ -59,7 +63,7 @@ describe("executive dashboard", () => {
     const context = await request(app).get("/sites").set("Authorization", `Bearer ${adminToken}`);
     const main = (context.body.sites as { id: number; isDefault: boolean }[]).find((site) => site.isDefault);
     expect(main).toBeTruthy();
-    const keepMain = await request(app).put(`/sites/${main!.id}/members`).set("Authorization", `Bearer ${adminToken}`).send({ userIds: [admin!.id, exec!.id] });
+    const keepMain = await request(app).put(`/sites/${main!.id}/members`).set("Authorization", `Bearer ${adminToken}`).send({ userIds: [admin!.id, owner!.id, exec!.id] });
     expect(keepMain.status).toBe(200);
 
     const ncr = await request(app)
@@ -81,6 +85,30 @@ describe("executive dashboard", () => {
   it("refuses the dashboard to someone without the executive permission", async () => {
     const res = await request(app).get("/executive").set("Authorization", `Bearer ${operatorToken}`);
     expect(res.status).toBe(403);
+    expect(res.body.message).toBe("You don't have access to the executive dashboard.");
+  });
+
+  it("lets Owner and Administrator open the dashboard from the permission on the role", async () => {
+    const admin = await request(app).get("/executive").set("Authorization", `Bearer ${adminToken}`);
+    const owner = await request(app).get("/executive").set("Authorization", `Bearer ${ownerToken}`);
+    expect(admin.status).toBe(200);
+    expect(owner.status).toBe(200);
+    const sites = await request(app).get("/sites").set("Authorization", `Bearer ${adminToken}`);
+    expect(sites.body.canViewAllSites).toBe(true);
+    expect(sites.body.executiveDashboard).toBe(true);
+
+    const [adminRole] = await db.select().from(roles).where(eq(roles.name, "admin"));
+    const original = adminRole!.permissions ?? [];
+    await db.update(roles).set({ permissions: original.filter((permission) => permission !== "executive.dashboard" && permission !== "sites.view_all") }).where(eq(roles.name, "admin"));
+    try {
+      const blocked = await request(app).get("/executive").set("Authorization", `Bearer ${adminToken}`);
+      expect(blocked.status).toBe(403);
+      expect(blocked.body.message).toBe("You don't have access to the executive dashboard.");
+      const narrowed = await request(app).get("/sites").set("Authorization", `Bearer ${adminToken}`);
+      expect(narrowed.body.canViewAllSites).toBe(false);
+    } finally {
+      await db.update(roles).set({ permissions: original }).where(eq(roles.name, "admin"));
+    }
   });
 
   it("limits a person to their assigned plants and refuses All sites", async () => {

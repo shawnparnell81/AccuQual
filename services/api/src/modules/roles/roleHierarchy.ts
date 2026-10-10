@@ -43,8 +43,8 @@ export interface RoleSeed {
 
 /** Built-in roles. Names are what sign-in and the permission checks use, so they stay fixed. */
 export const ROLE_SEEDS: RoleSeed[] = [
-  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION] },
-  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION] },
+  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
+  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
   { name: "executive", description: "Executive — view every site and the executive dashboard. Does not grant editing.", hierarchyLevel: 18, isProtected: true, permissions: [SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },

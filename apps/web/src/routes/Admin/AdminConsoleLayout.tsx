@@ -23,7 +23,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "users", label: "Users & Roles", icon: Users, path: "users", description: "Create, edit, and remove users; assign system roles" },
   { key: "import", label: "Import data", icon: Upload, path: "import", description: "Load suppliers, parts, inspections, and other records from a spreadsheet" },
   { key: "plants", label: "Plants", icon: Factory, path: "plants", description: "Add plants and choose who works at each one" },
-  { key: "permissions", label: "Permissions", icon: ShieldCheck, path: "roles-permissions", description: "Department access, custom roles, and user-role assignments" },
+  { key: "permissions", label: "Permissions", icon: ShieldCheck, path: "roles-permissions", description: "System roles, department access, and who is assigned" },
   { key: "login_history", label: "Login History", icon: History, path: "login-history", description: "Who signed in, when, from where, and on what device", permission: "login_history" },
   { key: "workflows", label: "Workflows", icon: Workflow, externalPath: "/workflow", description: "Edit workflow states, transitions, conditions, and actions" },
   { key: "ai", label: "AI Settings", icon: Bot, path: "ai-settings", description: "LLM provider, model, safety mode, and usage" },

@@ -8,6 +8,7 @@ import { Modal } from "../../components/modals/Modal";
 import { useConfirm } from "../../components/shared/ConfirmDialog";
 import type { ModuleAccessLevel, PermissionModuleInfo, PermissionRole } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { SystemRolesPanel } from "./SystemRolesPanel";
 
 const LEVELS: ModuleAccessLevel[] = ["read", "edit"];
 
@@ -62,6 +63,11 @@ export function PermissionsRolesTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <SystemRolesPanel />
+      <div>
+        <h2 className="text-sm font-medium">Custom roles</h2>
+        <p className="text-xs text-muted-foreground">These add module access on top of a department. They are separate from the system roles above.</p>
+      </div>
       <form
         className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-card p-4"
         onSubmit={(e) => {
