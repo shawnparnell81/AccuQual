@@ -11,6 +11,8 @@ import { getQmsFormDefinition } from "../routes/QmsForms/qmsFormDefinitions";
  * fetched for the results list) and skip this entirely — see openTab callers.
  */
 
+import { workspaceSectionId, workspaceSectionTitle } from "./workspaceTab";
+
 interface RoutePattern {
   test: RegExp;
   icon: string;
@@ -100,14 +102,17 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/change/, icon: "default", title: () => "Change Requests" },
   { test: /^\/risk/, icon: "default", title: () => "Risk" },
   { test: /^\/ppap/, icon: "default", title: () => "PPAP" },
-  { test: /^\/settings/, icon: "settings", title: () => "Settings" },
-  { test: /^\/admin/, icon: "admin", title: () => "Admin" },
   { test: /^\/$/, icon: "dashboard", title: () => "Dashboard" },
   { test: /^\/home\/?$/, icon: "dashboard", title: () => "Home" },
   { test: /^\/calendar\/?$/, icon: "dashboard", title: () => "Calendar" },
 ];
 
 export function deriveTabMeta(pathname: string): { title: string; icon: string } {
+  const section = workspaceSectionId(pathname);
+  const sectionTitle = workspaceSectionTitle(pathname);
+  if (section && sectionTitle) {
+    return { title: sectionTitle, icon: section === "admin" ? "admin" : "settings" };
+  }
   for (const pattern of ROUTE_PATTERNS) {
     const match = pathname.match(pattern.test);
     if (match) return { title: pattern.title(match), icon: pattern.icon };
