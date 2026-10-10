@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type MutableRefObject, type RefObject } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import clsx from "clsx";
@@ -14,6 +14,12 @@ import {
   type SidebarNode,
 } from "./sidebarStructure";
 import { placeMenuFlyout } from "../../lib/menuFlyout";
+import {
+  keepSubmenuWhileTraveling,
+  MENU_HOVER_INTENT_MS,
+  movingTowardSubmenu,
+  type HoverPoint,
+} from "../../lib/menuHoverIntent";
 import { collapseSingleItemMenus, folderMenuEntries } from "../../lib/navigationLayout";
 import { prefetchRoute } from "../../routes/pages";
 
@@ -23,6 +29,10 @@ function focusItem(item: HTMLElement | undefined) {
 
 function siblingItems(list: HTMLElement): HTMLElement[] {
   return Array.from(list.querySelectorAll<HTMLElement>(":scope > li > [role='menuitem'], :scope > li > .aq-topnav-branch > [role='menuitem']"));
+}
+
+function pointOf(event: { clientX: number; clientY: number }): HoverPoint {
+  return { x: event.clientX, y: event.clientY };
 }
 
 function moveInList(event: ReactKeyboardEvent<HTMLElement>) {
@@ -57,13 +67,39 @@ function moveInList(event: ReactKeyboardEvent<HTMLElement>) {
   return false;
 }
 
-function MenuLink({ node, onPick }: { node: SidebarLink; onPick: () => void }) {
+interface SubmenuIntent {
+  origin: HoverPoint;
+  element: HTMLElement | null;
+  side: "left" | "right";
+}
+
+interface IntentApi {
+  register(slot: MutableRefObject<SubmenuIntent | null>): () => void;
+  movingToward(point: HoverPoint): boolean;
+}
+
+const IntentContext = createContext<IntentApi | null>(null);
+
+function useIntentApi(): IntentApi {
+  return useContext(IntentContext) ?? { register: () => () => {}, movingToward: () => false };
+}
+
+function MenuLink({ node, onPick, onHover }: { node: SidebarLink; onPick: () => void; onHover: (point: HoverPoint) => void }) {
   const label = node.label;
   const className = "aq-topnav-item";
   const body = <TruncatedName name={label} className="aq-topnav-label" />;
   if (sidebarLinkOpensNewTab(node)) {
     return (
-      <a role="menuitem" href={node.path} target="_blank" rel="noopener noreferrer" title={`${label} (opens in a new tab)`} className={className} onClick={onPick}>
+      <a
+        role="menuitem"
+        href={node.path}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`${label} (opens in a new tab)`}
+        className={className}
+        onMouseEnter={(event) => onHover(pointOf(event))}
+        onClick={onPick}
+      >
         {body}
       </a>
     );
@@ -75,7 +111,10 @@ function MenuLink({ node, onPick }: { node: SidebarLink; onPick: () => void }) {
       title={label}
       className={className}
       onClick={onPick}
-      onMouseEnter={() => prefetchRoute(node.path)}
+      onMouseEnter={(event) => {
+        onHover(pointOf(event));
+        prefetchRoute(node.path);
+      }}
       onFocus={() => prefetchRoute(node.path)}
     >
       {body}
@@ -83,19 +122,46 @@ function MenuLink({ node, onPick }: { node: SidebarLink; onPick: () => void }) {
   );
 }
 
-function MenuBranch({ node, onPick }: { node: SidebarFolder; onPick: () => void }) {
-  const [open, setOpen] = useState(false);
+function MenuBranch({
+  node,
+  open,
+  onHover,
+  onTrack,
+  onOpenImmediate,
+  onClose,
+  onPick,
+  onPlaced,
+  onRetain,
+}: {
+  node: SidebarFolder;
+  open: boolean;
+  onHover: (point: HoverPoint) => void;
+  onTrack: (point: HoverPoint) => void;
+  onOpenImmediate: () => void;
+  onClose: () => void;
+  onPick: () => void;
+  onPlaced: (element: HTMLElement, side: "left" | "right") => void;
+  onRetain: () => void;
+}) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const entries = folderMenuEntries(node);
 
+  function focusSubmenu() {
+    window.requestAnimationFrame(() => {
+      const menu = document.getElementById(`${panelId}-menu`);
+      if (!menu) return;
+      focusItem(siblingItems(menu)[0]);
+    });
+  }
+
   function close() {
-    setOpen(false);
+    onClose();
     buttonRef.current?.focus({ preventScroll: true });
   }
 
   return (
-    <div className="aq-topnav-branch" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <div className="aq-topnav-branch">
       <button
         ref={buttonRef}
         type="button"
@@ -106,12 +172,19 @@ function MenuBranch({ node, onPick }: { node: SidebarFolder; onPick: () => void 
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? `${panelId}-menu` : undefined}
-        onClick={() => setOpen((value) => !value)}
+        onMouseEnter={(event) => onHover(pointOf(event))}
+        onMouseMove={(event) => onTrack(pointOf(event))}
+        onClick={(event) => {
+          event.preventDefault();
+          onOpenImmediate();
+          focusSubmenu();
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             event.stopPropagation();
-            setOpen(true);
+            onOpenImmediate();
+            focusSubmenu();
           }
         }}
       >
@@ -127,6 +200,8 @@ function MenuBranch({ node, onPick }: { node: SidebarFolder; onPick: () => void 
           anchorRef={buttonRef}
           onPick={onPick}
           onClose={close}
+          onPlaced={onPlaced}
+          onRetain={onRetain}
         />
       )}
     </div>
@@ -141,6 +216,8 @@ function MenuList({
   anchorRef,
   onPick,
   onClose,
+  onPlaced,
+  onRetain,
 }: {
   id: string;
   labelledBy: string;
@@ -149,18 +226,113 @@ function MenuList({
   anchorRef?: RefObject<HTMLElement | null>;
   onPick: () => void;
   onClose: () => void;
+  onPlaced?: (element: HTMLElement, side: "left" | "right") => void;
+  /** Called when the pointer enters this panel, including from a gap outside its parent list. */
+  onRetain?: () => void;
 }) {
   const ref = useRef<HTMLUListElement>(null);
+  const intentApi = useIntentApi();
+  const intent = useRef<SubmenuIntent | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const openKeyRef = useRef<string | null>(null);
+  const lastPoint = useRef<HoverPoint>({ x: Number.NaN, y: Number.NaN });
+  const pendingKey = useRef<string | null>(null);
+  const switchTimer = useRef<number | null>(null);
+  const onPlacedRef = useRef(onPlaced);
+  onPlacedRef.current = onPlaced;
+
+  useEffect(() => intentApi.register(intent), [intentApi]);
+
+  function commitOpen(key: string | null) {
+    openKeyRef.current = key;
+    intent.current = null;
+    setOpenKey(key);
+  }
+
+  function clearSwitch() {
+    if (switchTimer.current != null) window.clearTimeout(switchTimer.current);
+    switchTimer.current = null;
+  }
+
+  useEffect(() => () => clearSwitch(), []);
+
+  function armSwitch(key: string | null) {
+    pendingKey.current = key;
+    if (switchTimer.current != null) return;
+    const start = lastPoint.current;
+    switchTimer.current = window.setTimeout(() => {
+      switchTimer.current = null;
+      const next = pendingKey.current;
+      const moved = Math.hypot(lastPoint.current.x - start.x, lastPoint.current.y - start.y);
+      if (keepSubmenuWhileTraveling(intentApi.movingToward(lastPoint.current), moved)) {
+        armSwitch(next);
+        return;
+      }
+      commitOpen(next);
+    }, MENU_HOVER_INTENT_MS);
+  }
+
+  function requestOpen(key: string, point: HoverPoint) {
+    lastPoint.current = point;
+    if (openKeyRef.current === key) {
+      clearSwitch();
+      return;
+    }
+    if (openKeyRef.current && intentApi.movingToward(point)) {
+      armSwitch(key);
+      return;
+    }
+    clearSwitch();
+    commitOpen(key);
+  }
+
+  function requestClear(point: HoverPoint) {
+    lastPoint.current = point;
+    if (!openKeyRef.current) return;
+    if (intentApi.movingToward(point)) {
+      armSwitch(null);
+      return;
+    }
+    clearSwitch();
+    commitOpen(null);
+  }
+
+  function trackRow(key: string, point: HoverPoint) {
+    lastPoint.current = point;
+    if (openKeyRef.current === key && intent.current) intent.current.origin = point;
+  }
+
+  function openImmediate(key: string) {
+    clearSwitch();
+    commitOpen(key);
+  }
+
+  function rememberSubmenu(key: string, element: HTMLElement, side: "left" | "right") {
+    if (openKeyRef.current !== key) return;
+    const origin = Number.isFinite(lastPoint.current.x) ? lastPoint.current : { x: element.getBoundingClientRect().left, y: element.getBoundingClientRect().top };
+    intent.current = { origin, element, side };
+  }
+
   useLayoutEffect(() => {
     const list = ref.current;
     if (!list) return;
     if (flyout) {
       const anchor = anchorRef?.current;
       if (!anchor) return;
-      const placed = placeMenuFlyout(anchor.getBoundingClientRect(), { width: list.offsetWidth, height: list.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
+      const viewport = { width: window.innerWidth, height: window.innerHeight };
+      const anchorRect = anchor.getBoundingClientRect();
+      let placed = placeMenuFlyout(anchorRect, { width: list.offsetWidth, height: list.offsetHeight }, viewport);
+      list.dataset.side = placed.side;
+      placed = placeMenuFlyout(anchorRect, { width: list.offsetWidth, height: list.offsetHeight }, viewport);
+      if (list.dataset.side !== placed.side) {
+        list.dataset.side = placed.side;
+        placed = placeMenuFlyout(anchorRect, { width: list.offsetWidth, height: list.offsetHeight }, viewport);
+      }
       list.style.top = `${placed.top}px`;
       list.style.left = `${placed.left}px`;
+      list.dataset.side = placed.side;
       list.dataset.placed = "1";
+      onPlacedRef.current?.(list, placed.side);
       return;
     }
     const rect = list.getBoundingClientRect();
@@ -169,7 +341,8 @@ function MenuList({
       list.style.right = "0";
     }
     if (rect.bottom > window.innerHeight - 8) list.style.maxHeight = `${Math.max(120, window.innerHeight - rect.top - 8)}px`;
-  }, [anchorRef, flyout, nodes]);
+  }, [anchorRef, flyout, nodes, openKey]);
+
   useEffect(() => {
     const list = ref.current;
     if (!list) return;
@@ -183,6 +356,13 @@ function MenuList({
       role="menu"
       aria-labelledby={labelledBy}
       className={clsx("aq-topnav-panel", flyout && "aq-topnav-fly")}
+      onMouseEnter={() => {
+        clearSwitch();
+        onRetain?.();
+      }}
+      onMouseMove={(event) => {
+        lastPoint.current = pointOf(event);
+      }}
       onKeyDown={(event) => {
         if (moveInList(event)) return;
         if (event.key === "Escape" || event.key === "ArrowLeft") {
@@ -194,7 +374,24 @@ function MenuList({
     >
       {nodes.map((node) => (
         <li key={node.key} role="none">
-          {isFolder(node) ? <MenuBranch node={node} onPick={onPick} /> : <MenuLink node={node} onPick={onPick} />}
+          {isFolder(node) ? (
+            <MenuBranch
+              node={node}
+              open={openKey === node.key}
+              onHover={(hoverPoint) => requestOpen(node.key, hoverPoint)}
+              onTrack={(hoverPoint) => trackRow(node.key, hoverPoint)}
+              onOpenImmediate={() => openImmediate(node.key)}
+              onClose={() => {
+                clearSwitch();
+                if (openKeyRef.current === node.key) commitOpen(null);
+              }}
+              onPick={onPick}
+              onPlaced={(element, side) => rememberSubmenu(node.key, element, side)}
+              onRetain={clearSwitch}
+            />
+          ) : (
+            <MenuLink node={node} onPick={onPick} onHover={requestClear} />
+          )}
         </li>
       ))}
     </ul>
@@ -215,8 +412,82 @@ function RootItem({
   tabIndex: number;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const location = useLocation();
+  const slots = useRef(new Set<MutableRefObject<SubmenuIntent | null>>());
+  const intentApi = useMemo<IntentApi>(() => ({
+    register(slot) {
+      slots.current.add(slot);
+      return () => {
+        slots.current.delete(slot);
+      };
+    },
+    movingToward(point) {
+      for (const slot of slots.current) {
+        const current = slot.current;
+        if (!current?.element) continue;
+        const rect = current.element.getBoundingClientRect();
+        if (movingTowardSubmenu(point, current.origin, rect, current.side)) return true;
+      }
+      return false;
+    },
+  }), []);
+  const closeTimer = useRef<number | null>(null);
+  const watching = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const considerRef = useRef<(point: HoverPoint) => void>(() => {});
+  const listenerRef = useRef<(event: PointerEvent) => void>((event: PointerEvent) => {
+    considerRef.current({ x: event.clientX, y: event.clientY });
+  });
+
+  function clearCloseTimer() {
+    if (closeTimer.current != null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }
+
+  function stopWatch() {
+    clearCloseTimer();
+    if (watching.current) {
+      window.removeEventListener("pointermove", listenerRef.current);
+      watching.current = false;
+    }
+  }
+
+  function pointerInside(point: HoverPoint): boolean {
+    const hit = document.elementFromPoint(point.x, point.y);
+    return !!hit && !!wrapRef.current?.contains(hit);
+  }
+
+  considerRef.current = (point: HoverPoint) => {
+    if (!openRef.current) {
+      stopWatch();
+      return;
+    }
+    if (pointerInside(point)) {
+      stopWatch();
+      return;
+    }
+    if (intentApi.movingToward(point)) {
+      clearCloseTimer();
+      return;
+    }
+    if (closeTimer.current == null) {
+      closeTimer.current = window.setTimeout(() => {
+        closeTimer.current = null;
+        stopWatch();
+        onCloseRef.current();
+      }, MENU_HOVER_INTENT_MS);
+    }
+  };
+
+  useEffect(() => () => stopWatch(), []);
+  useEffect(() => {
+    if (!open) stopWatch();
+  }, [open]);
 
   if (!isFolder(node)) {
     const active = pathMatches(location.pathname, node.path);
@@ -244,34 +515,47 @@ function RootItem({
 
   const entries = folderMenuEntries(node);
   const active = node.path ? pathMatches(location.pathname, node.path) : false;
+
+  function onMouseLeave(event: ReactMouseEvent<HTMLDivElement>) {
+    const next = event.relatedTarget;
+    if (next instanceof Node && wrapRef.current?.contains(next)) return;
+    if (!watching.current) {
+      watching.current = true;
+      window.addEventListener("pointermove", listenerRef.current);
+    }
+    considerRef.current(pointOf(event));
+  }
+
   return (
-    <div className="aq-topnav-root-wrap" onMouseEnter={onOpen} onMouseLeave={onClose}>
-      <button
-        ref={buttonRef}
-        type="button"
-        role="menuitem"
-        id={panelId}
-        className={clsx("aq-topnav-root", (open || active) && "active")}
-        title={node.label}
-        tabIndex={tabIndex}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? `${panelId}-menu` : undefined}
-        onClick={() => (open ? onClose() : onOpen())}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onOpen();
-          }
-        }}
-      >
-        <span className="aq-topnav-root-label">{node.label}</span>
-        <ChevronDown size={14} aria-hidden className={clsx("aq-topnav-caret", open && "open")} />
-      </button>
-      {open && entries.length > 0 && (
-        <MenuList id={`${panelId}-menu`} labelledBy={panelId} nodes={entries} onPick={onClose} onClose={() => { onClose(); buttonRef.current?.focus({ preventScroll: true }); }} />
-      )}
-    </div>
+    <IntentContext.Provider value={intentApi}>
+      <div ref={wrapRef} className="aq-topnav-root-wrap" onMouseEnter={() => { stopWatch(); onOpen(); }} onMouseLeave={onMouseLeave}>
+        <button
+          ref={buttonRef}
+          type="button"
+          role="menuitem"
+          id={panelId}
+          className={clsx("aq-topnav-root", (open || active) && "active")}
+          title={node.label}
+          tabIndex={tabIndex}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={open ? `${panelId}-menu` : undefined}
+          onClick={() => (open ? onClose() : onOpen())}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onOpen();
+            }
+          }}
+        >
+          <span className="aq-topnav-root-label">{node.label}</span>
+          <ChevronDown size={14} aria-hidden className={clsx("aq-topnav-caret", open && "open")} />
+        </button>
+        {open && entries.length > 0 && (
+          <MenuList id={`${panelId}-menu`} labelledBy={panelId} nodes={entries} onPick={onClose} onClose={() => { onClose(); buttonRef.current?.focus({ preventScroll: true }); }} />
+        )}
+      </div>
+    </IntentContext.Provider>
   );
 }
 
