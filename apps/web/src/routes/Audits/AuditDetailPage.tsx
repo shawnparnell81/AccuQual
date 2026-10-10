@@ -59,7 +59,8 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const permitted = useCanEditWorkflow("audit");
   const canEditNcr = useCanEditWorkflow("ncr");
   const canEditInvestigation = useCanEditWorkflow("di");
-  const canOpenFollowUp = permitted && canEditNcr && canEditInvestigation;
+  const canCreateNcr = permitted && canEditNcr;
+  const canCreateInvestigation = permitted && canEditInvestigation;
   const formLock = useModuleFormLock(auditId, permitted, `/audits/${auditId}/begin-edit`);
   const canEdit = formLock.fieldsEditable;
   useSetAssistantContext("audit", auditId, audit ? recordHeading("Audit", audit.recordNumber) : "Audit");
@@ -260,7 +261,8 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
                 item={i}
                 auditId={auditId}
                 canEdit={canEdit}
-                canOpenFollowUp={canOpenFollowUp}
+                canCreateInvestigation={canCreateInvestigation}
+                canCreateNcr={canCreateNcr}
                 canReorder={audit.status !== "completed" && items.length > 1}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
@@ -335,7 +337,8 @@ function AuditItemRow({
   item,
   auditId,
   canEdit,
-  canOpenFollowUp,
+  canCreateInvestigation,
+  canCreateNcr,
   canReorder,
   onDragStart,
   onDragEnd,
@@ -344,7 +347,8 @@ function AuditItemRow({
   item: AuditItem;
   auditId: number;
   canEdit: boolean;
-  canOpenFollowUp: boolean;
+  canCreateInvestigation: boolean;
+  canCreateNcr: boolean;
   canReorder: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
@@ -354,18 +358,32 @@ function AuditItemRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ question: item.question, finding: item.finding ?? "", severity: item.severity ?? "observation" });
   const [saving, setSaving] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const [openingInvestigation, setOpeningInvestigation] = useState(false);
+  const [openingNcr, setOpeningNcr] = useState(false);
 
-  async function openFollowUp() {
-    setOpening(true);
+  async function openInvestigation() {
+    setOpeningInvestigation(true);
     try {
-      await apiClient.post(`/audits/${auditId}/item/${item.id}/follow-up`);
-      toast.success("Investigation and NCR opened from this item.");
+      await apiClient.post(`/audits/${auditId}/item/${item.id}/investigation`);
+      toast.success("Investigation opened from this item.");
       onSaved();
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't open an investigation and NCR."));
+      toast.error(extractErrorMessage(err, "Couldn't open an investigation."));
     } finally {
-      setOpening(false);
+      setOpeningInvestigation(false);
+    }
+  }
+
+  async function openNcr() {
+    setOpeningNcr(true);
+    try {
+      await apiClient.post(`/audits/${auditId}/item/${item.id}/ncr`);
+      toast.success("NCR opened from this item.");
+      onSaved();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't open an NCR."));
+    } finally {
+      setOpeningNcr(false);
     }
   }
 
@@ -481,9 +499,14 @@ function AuditItemRow({
             NCR
           </Link>
         )}
-        {canOpenFollowUp && (!item.discrepancyInvestigationId || !item.ncrId) && (
-          <button type="button" disabled={opening} onClick={() => void openFollowUp()} className="text-xs text-primary hover:underline disabled:opacity-60">
-            {opening ? "Opening…" : "Create investigation / NCR"}
+        {canCreateInvestigation && !item.discrepancyInvestigationId && (
+          <button type="button" disabled={openingInvestigation} onClick={() => void openInvestigation()} className="text-xs text-primary hover:underline disabled:opacity-60">
+            {openingInvestigation ? "Opening…" : "Create investigation"}
+          </button>
+        )}
+        {canCreateNcr && !item.ncrId && (
+          <button type="button" disabled={openingNcr} onClick={() => void openNcr()} className="text-xs text-primary hover:underline disabled:opacity-60">
+            {openingNcr ? "Opening…" : "Create NCR"}
           </button>
         )}
       </div>

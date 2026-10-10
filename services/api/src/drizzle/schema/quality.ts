@@ -5,8 +5,8 @@ import { audits, auditItems } from "./audits.js";
 /**
  * Discrepancy & Inspection investigations — the "Quality" folder's own
  * record type, backing formType "discrepancy_inspection". A row is opened
- * when someone chooses Create investigation / NCR on an audit item, or
- * starts one with no audit link. Adding an audit item never inserts one.
+ * when someone chooses Create investigation on an audit item, or starts
+ * one with no audit link. Adding an audit item never inserts one.
  */
 export const discrepancyInvestigations = pgTable("discrepancy_investigations", {
   id: serial("id").primaryKey(),

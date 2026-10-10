@@ -6,7 +6,7 @@ import type { FormLayout } from "./types.js";
  * form type. Structured as a standard Material Review Board-style
  * disposition record, consistent with the real `discrepancy_investigations`
  * table (services/api's drizzle/schema/quality.ts) this attaches to. Most
- * investigations are opened when someone chooses Create investigation / NCR
+ * investigations are opened when someone chooses Create investigation
  * on an audit item, or starts one by hand. The header fields below are
  * filled from that item and stay editable afterward.
  */

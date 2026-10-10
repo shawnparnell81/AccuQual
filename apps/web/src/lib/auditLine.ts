@@ -265,8 +265,10 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       if (from && to) return `Moved from ${from} to ${to}.`;
       return "Moved the held item.";
     }
-    case "follow_up_opened":
-      return "Opened a Discrepancy Investigation and an NCR from this item.";
+    case "investigation_opened":
+      return "Opened a Discrepancy Investigation from this item.";
+    case "ncr_opened":
+      return "Opened an NCR from this item.";
     case "item_added":
     case "row_added":
       return "Added a line.";

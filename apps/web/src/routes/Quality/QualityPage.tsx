@@ -16,7 +16,7 @@ export interface DiscrepancyInvestigation {
 /**
  * The Quality folder: Discrepancy & Inspection investigations. An audit
  * item does not open one on its own. Someone chooses Create investigation
- * / NCR on the item, or starts one here for something found outside an audit.
+ * on the item, or starts one here for something found outside an audit.
  */
 export function QualityPage() {
   const navigate = useNavigate();

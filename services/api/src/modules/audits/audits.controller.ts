@@ -83,102 +83,108 @@ function transferredText(item: { question: string | null; finding: string | null
   return { title, description: parts.join("\n") };
 }
 
-/** Opens a Discrepancy Investigation and an NCR from this item. Nothing is created until someone chooses this. */
-export const createFollowUpHandler = asyncHandler(async (req: Request, res: Response) => {
-  const auditId = Number(req.params.id);
-  const itemId = Number(req.params.itemId);
-  const { audit, item } = await loadAuditItem(req, auditId, itemId);
-  if (!req.user) throw AppError.forbidden("Sign in to create an investigation or NCR.");
-  if ((await getUserAccessLevel(req.db!, req.user, "di")) !== "edit" || (await getUserAccessLevel(req.db!, req.user, "ncr")) !== "edit") {
-    throw AppError.forbidden("Creating an investigation and an NCR needs edit access to both.");
-  }
+async function requireEdit(req: Request, resource: "di" | "ncr", message: string): Promise<void> {
+  if (!req.user) throw AppError.forbidden(message);
+  if ((await getUserAccessLevel(req.db!, req.user, resource)) !== "edit") throw AppError.forbidden(message);
+}
 
+/** Opens only a Discrepancy Investigation from this item. A second call returns the same one. */
+export const createInvestigationHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { audit, item } = await loadAuditItem(req, Number(req.params.id), Number(req.params.itemId));
+  await requireEdit(req, "di", "Creating an investigation needs edit access to Discrepancy Investigations.");
   const { title, description } = transferredText(item);
-  const existingInvestigations = await req
+  const [existing] = await req
     .db!.select()
     .from(discrepancyInvestigations)
     .where(and(eq(discrepancyInvestigations.sourceAuditId, audit.id), eq(discrepancyInvestigations.sourceAuditItemId, item.id)));
-  let investigation = existingInvestigations[0] ?? null;
-  let opened = false;
-  if (!investigation) {
-    opened = true;
-    const [created] = await req
-      .db!.insert(discrepancyInvestigations)
-      .values({
-        title,
-        description: description || null,
-        severity: investigationSeverity(item.severity),
-        status: "open",
-        autoCreated: false,
-        sourceAuditId: audit.id,
-        sourceAuditItemId: item.id,
-      })
-      .returning();
-    if (!created) throw new Error("Insert did not return the created discrepancy investigation");
-    investigation = created;
-    await recordAuditTrail(req.db!, {
-      entityType: "Discrepancy investigation",
-      entityId: investigation.id,
-      action: "create",
-      changes: { openedFrom: "audit item", severity: investigation.severity, title: investigation.title },
-      performedBy: req.user.id,
-    });
-    await syncDiRecordToForm(req.db!, investigation, req.user.id);
+  if (existing) {
+    res.status(200).json(existing);
+    return;
   }
+  const [created] = await req
+    .db!.insert(discrepancyInvestigations)
+    .values({
+      title,
+      description: description || null,
+      severity: investigationSeverity(item.severity),
+      status: "open",
+      autoCreated: false,
+      sourceAuditId: audit.id,
+      sourceAuditItemId: item.id,
+    })
+    .returning();
+  if (!created) throw new Error("Insert did not return the created discrepancy investigation");
+  await recordAuditTrail(req.db!, {
+    entityType: "Discrepancy investigation",
+    entityId: created.id,
+    action: "create",
+    changes: { openedFrom: "audit item", severity: created.severity, title: created.title },
+    performedBy: req.user?.id,
+  });
+  await syncDiRecordToForm(req.db!, created, req.user?.id);
+  await recordAuditTrail(req.db!, {
+    entityType: "Audit",
+    entityId: audit.id,
+    action: "create",
+    changes: { event: "investigation_opened", question: item.question },
+    performedBy: req.user?.id,
+  });
+  res.status(201).json(created);
+});
 
-  const linkedNcrs = await req
+/** Opens only an NCR from this item. A second call returns the same one. */
+export const createNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { audit, item } = await loadAuditItem(req, Number(req.params.id), Number(req.params.itemId));
+  await requireEdit(req, "ncr", "Creating an NCR needs edit access to NCRs.");
+  const { title, description } = transferredText(item);
+  const [existing] = await req
     .db!.select()
     .from(ncr)
     .where(and(eq(ncr.isDeleted, false), sql`(${ncr.processData}->>'sourceAuditItemId') = ${String(item.id)}`));
-  let createdNcr = linkedNcrs[0] ?? null;
-  if (!createdNcr) {
-    opened = true;
-    const severity = ncrSeverityFromAudit(item.severity);
-    const [row] = await req
-      .db!.insert(ncr)
-      .values({
-        title,
-        description: description || null,
-        severity,
-        status: "ncr_created",
-        createdBy: req.user.id,
-        ...(audit.siteId ? { siteId: audit.siteId } : {}),
-        processData: { sourceAuditId: audit.id, sourceAuditItemId: item.id },
-      })
-      .returning();
-    if (!row) throw new Error("Insert did not return the created NCR");
-    createdNcr = row;
-    await recordAuditTrail(req.db!, {
-      entityType: "NCR",
-      entityId: createdNcr.id,
-      action: "create",
-      changes: { openedFrom: "audit item", title: createdNcr.title, severity: createdNcr.severity },
-      performedBy: req.user.id,
-    });
-    await syncNcrFormData(
-      req.db!,
-      createdNcr.id,
-      {
-        dateIssued: ncrIsoDate(createdNcr.createdAt ?? new Date()),
-        documentStatus: "Active",
-        nonconformanceDescription: createdNcr.description ?? undefined,
-        ncrClassification: mapSeverityToClassification(createdNcr.severity),
-      },
-      req.user.id,
-    );
+  if (existing) {
+    res.status(200).json(existing);
+    return;
   }
-
-  if (opened) {
-    await recordAuditTrail(req.db!, {
-      entityType: "Audit",
-      entityId: audit.id,
-      action: "create",
-      changes: { event: "follow_up_opened", question: item.question },
-      performedBy: req.user.id,
-    });
-  }
-
-  res.status(opened ? 201 : 200).json({ discrepancyInvestigation: investigation, ncr: createdNcr });
+  const severity = ncrSeverityFromAudit(item.severity);
+  const [created] = await req
+    .db!.insert(ncr)
+    .values({
+      title,
+      description: description || null,
+      severity,
+      status: "ncr_created",
+      createdBy: req.user?.id,
+      ...(audit.siteId ? { siteId: audit.siteId } : {}),
+      processData: { sourceAuditId: audit.id, sourceAuditItemId: item.id },
+    })
+    .returning();
+  if (!created) throw new Error("Insert did not return the created NCR");
+  await recordAuditTrail(req.db!, {
+    entityType: "NCR",
+    entityId: created.id,
+    action: "create",
+    changes: { openedFrom: "audit item", title: created.title, severity: created.severity },
+    performedBy: req.user?.id,
+  });
+  await syncNcrFormData(
+    req.db!,
+    created.id,
+    {
+      dateIssued: ncrIsoDate(created.createdAt ?? new Date()),
+      documentStatus: "Active",
+      nonconformanceDescription: created.description ?? undefined,
+      ncrClassification: mapSeverityToClassification(created.severity),
+    },
+    req.user?.id,
+  );
+  await recordAuditTrail(req.db!, {
+    entityType: "Audit",
+    entityId: audit.id,
+    action: "create",
+    changes: { event: "ncr_opened", question: item.question },
+    performedBy: req.user?.id,
+  });
+  res.status(201).json(created);
 });
 
 export const listItemsHandler = asyncHandler(async (req: Request, res: Response) => {
