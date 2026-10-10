@@ -302,6 +302,13 @@ export const company = pgTable("company", {
      * again. No new column.
      */
     supersededListsRetiredStamp?: string;
+    /**
+     * Account ids in the order an administrator set on Users & Roles.
+     * Lists show these first. Anyone left out follows, by role rank then
+     * name. Company Settings spreads this object, so a profile save keeps
+     * the list. No new column.
+     */
+    userDisplayOrder?: number[];
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

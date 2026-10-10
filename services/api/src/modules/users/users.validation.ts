@@ -42,6 +42,12 @@ export const updateUserSchema = z.object({
   managerId: z.number().int().positive().nullable().optional(),
 });
 
+/** The full account list in display order. movedUserId is the person the administrator moved. */
+export const updateUserDisplayOrderSchema = z.object({
+  userIds: z.array(z.number().int().positive()).max(5000),
+  movedUserId: z.number().int().positive().optional(),
+});
+
 /** A user's own theme override — see users.themePreferences. "" clears a color back to following the company/default theme, same convention as company.validation.ts's updateBrandingSchema. */
 export const updateMyThemeSchema = z.object({
   mode: z.enum(["light", "dark", "system"]).optional(),

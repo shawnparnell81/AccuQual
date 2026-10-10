@@ -124,6 +124,45 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   const [replacementId, setReplacementId] = useState("");
   const [removeReason, setRemoveReason] = useState("");
   const [removeBusy, setRemoveBusy] = useState(false);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [orderBusy, setOrderBusy] = useState(false);
+
+  async function saveOrder(nextIds: number[], movedUserId: number) {
+    setOrderBusy(true);
+    try {
+      await apiClient.put("/users/display-order", { userIds: nextIds, movedUserId });
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+      void queryClient.invalidateQueries({ queryKey: ["training", "people"] });
+      void queryClient.invalidateQueries({ queryKey: ["permissions", "company-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["workers"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't save that order."));
+    } finally {
+      setOrderBusy(false);
+      setDraggingId(null);
+    }
+  }
+
+  function movePerson(id: number, direction: "up" | "down") {
+    const index = users.findIndex((person) => person.id === id);
+    const other = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || other < 0 || other >= users.length) return;
+    const next = users.map((person) => person.id);
+    const [moved] = next.splice(index, 1);
+    next.splice(other, 0, moved!);
+    void saveOrder(next, id);
+  }
+
+  function dropOn(targetId: number) {
+    if (draggingId == null || draggingId === targetId) return;
+    const next = users.map((person) => person.id);
+    const from = next.indexOf(draggingId);
+    const to = next.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
+    void saveOrder(next, draggingId);
+  }
 
   async function finishRemove(person: AppUser, replacementUserId?: number, reason?: string) {
     setRemoveBusy(true);
@@ -158,15 +197,16 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="mb-3 text-sm font-medium">Users</h3>
+      <h3 className={`text-sm font-medium ${isAdmin ? "mb-1" : "mb-3"}`}>Users</h3>
+      {isAdmin && <p className="mb-3 text-xs text-muted-foreground">Company order. Move a person up or down, or drag the handle. Anyone not yet placed follows, by role then name.</p>}
       <table className="aq-fit-table mb-4 text-sm">
         <colgroup>
-          <col style={{ width: isAdmin ? "10%" : "16%" }} />
-          <col style={{ width: isAdmin ? "11%" : "20%" }} />
-          <col style={{ width: isAdmin ? "19%" : "16%" }} />
-          <col style={{ width: isAdmin ? "15%" : "14%" }} />
-          <col style={{ width: isAdmin ? "23%" : "16%" }} />
-          <col style={{ width: isAdmin ? "15%" : "18%" }} />
+          <col style={{ width: isAdmin ? "18%" : "16%" }} />
+          <col style={{ width: isAdmin ? "14%" : "20%" }} />
+          <col style={{ width: isAdmin ? "16%" : "16%" }} />
+          <col style={{ width: isAdmin ? "12%" : "14%" }} />
+          <col style={{ width: isAdmin ? "18%" : "16%" }} />
+          <col style={{ width: isAdmin ? "14%" : "18%" }} />
           {isAdmin && <col style={{ width: "7%" }} />}
         </colgroup>
         <thead>
@@ -181,10 +221,51 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => (
+          {users.map((u, index) => (
             <Fragment key={u.id}>
-            <tr className="border-t border-border">
-              <td className="py-1.5 pr-2">{personOptionLabel(u)}</td>
+            <tr
+              className="border-t border-border"
+              onDragOver={(event) => {
+                if (isAdmin && draggingId != null) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                if (!isAdmin) return;
+                event.preventDefault();
+                dropOn(u.id);
+              }}
+            >
+              <td className="py-1.5 pr-2">
+                <div className="flex items-start gap-1">
+                  {isAdmin && (
+                    <span className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        draggable={!orderBusy}
+                        aria-label={`Drag ${personOptionLabel(u)}`}
+                        title="Drag to reorder"
+                        className="cursor-grab px-0.5 text-muted-foreground active:cursor-grabbing"
+                        onDragStart={(event) => {
+                          setDraggingId(u.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", String(u.id));
+                        }}
+                        onDragEnd={() => setDraggingId(null)}
+                      >
+                        ⋮⋮
+                      </button>
+                      <span className="flex flex-col leading-none">
+                        <button type="button" aria-label={`Move ${personOptionLabel(u)} up`} disabled={orderBusy || index === 0} onClick={() => movePerson(u.id, "up")} className="text-left text-[10px] text-primary hover:underline disabled:opacity-40">
+                          Up
+                        </button>
+                        <button type="button" aria-label={`Move ${personOptionLabel(u)} down`} disabled={orderBusy || index === users.length - 1} onClick={() => movePerson(u.id, "down")} className="text-left text-[10px] text-primary hover:underline disabled:opacity-40">
+                          Down
+                        </button>
+                      </span>
+                    </span>
+                  )}
+                  <span>{personOptionLabel(u)}</span>
+                </div>
+              </td>
               <td className="py-1.5 pr-2 text-muted-foreground">{u.email}</td>
               <td className="py-1.5 pr-2">
                 {isAdmin ? (

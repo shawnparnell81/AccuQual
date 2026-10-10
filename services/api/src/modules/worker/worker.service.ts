@@ -5,6 +5,7 @@ import { roles } from "../../drizzle/schema/roles.js";
 import { workerProfiles, type EmploymentStatus } from "../../drizzle/schema/workerProfiles.js";
 import { AppError } from "../../utils/appError.js";
 import { getItemsForUser, type CalendarItem } from "../calendar/calendar.controller.js";
+import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 
 // Mirrors requirePermission.ts's own EXTERNAL_ROLES — a supplier/customer
 // portal login is never a member of anyone's internal workforce roster.
@@ -84,7 +85,8 @@ export async function listWorkers(db: Db): Promise<WorkerProfileView[]> {
     .leftJoin(roles, eq(users.roleId, roles.id))
     .leftJoin(workerProfiles, and(eq(workerProfiles.userId, users.id)))
     .where(and(internalOnly));
-  return rows.map(toView);
+  const views = rows.map(toView);
+  return sortByDisplayOrder(db, views, (person) => person.userId, (person) => displayName(person.name, person.email));
 }
 
 async function loadOne(db: Db, userId: number, restrictToInternal: boolean): Promise<WorkerProfileView> {

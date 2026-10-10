@@ -25,6 +25,7 @@ import { deleteUserSchema } from "./users.validation.js";
 import { withTableOwner, type Db } from "../../lib/requestDb.js";
 import { omitUserSecrets } from "./publicUser.js";
 import { emptySidebarShortcuts, normalizeSidebarShortcuts } from "./sidebarPrefs.js";
+import { displayName, movedPerson, saveUserDisplayOrder, sortByDisplayOrder } from "./userDisplayOrder.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -39,14 +40,24 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       mfaEnabled: users.mfaEnabled,
       lockedUntil: users.lockedUntil,
       createdAt: users.createdAt,
+      roleRank: roles.hierarchyLevel,
     })
-    .from(users);
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id));
+  const ordered = await sortByDisplayOrder(
+    req.db!,
+    rows,
+    (person) => person.id,
+    (person) => displayName(person.name, person.email),
+    req.user?.id,
+    (person) => person.roleRank,
+  );
   if (isFullAccessRole(req.user?.roleName)) {
-    res.json(rows);
+    res.json(ordered.map(({ roleRank: _roleRank, ...person }) => person));
     return;
   }
   res.json(
-    rows.map((person) => ({
+    ordered.map((person) => ({
       id: person.id,
       email: person.email,
       name: person.name,
@@ -57,6 +68,43 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       createdAt: person.createdAt,
     })),
   );
+});
+
+export const updateUserDisplayOrder = asyncHandler(async (req: Request, res: Response) => {
+  if (!isFullAccessRole(req.user?.roleName)) throw AppError.forbidden("Requires an administrator.");
+  const { userIds, movedUserId } = req.body as { userIds: number[]; movedUserId?: number };
+  const rows = await req
+    .db!.select({ id: users.id, name: users.name, email: users.email, roleRank: roles.hierarchyLevel })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id));
+  const displayed = await sortByDisplayOrder(
+    req.db!,
+    rows,
+    (person) => person.id,
+    (person) => displayName(person.name, person.email),
+    req.user?.id,
+    (person) => person.roleRank,
+  );
+  const known = new Set(displayed.map((person) => person.id));
+  const unique = new Set(userIds);
+  if (unique.size !== userIds.length || unique.size !== known.size || displayed.some((person) => !unique.has(person.id))) {
+    throw AppError.badRequest("Include each person once.");
+  }
+  if (movedUserId != null && !unique.has(movedUserId)) throw AppError.badRequest("That person is not in the list.");
+  const beforeIds = displayed.map((person) => person.id);
+  const targetId = movedUserId ?? movedPerson(beforeIds, userIds);
+  const person = targetId == null ? undefined : displayed.find((row) => row.id === targetId);
+  const fromPosition = targetId == null ? -1 : beforeIds.indexOf(targetId) + 1;
+  const toPosition = targetId == null ? -1 : userIds.indexOf(targetId) + 1;
+  await saveUserDisplayOrder(
+    req.db!,
+    userIds,
+    req.user?.id,
+    person && fromPosition > 0 && toPosition > 0
+      ? { movedUserId: person.id, movedUserName: displayName(person.name, person.email), fromPosition, toPosition }
+      : null,
+  );
+  res.json({ userIds });
 });
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {

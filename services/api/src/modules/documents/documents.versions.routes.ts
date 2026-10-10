@@ -22,6 +22,7 @@ import { decisionSchema, requestReviewSchema } from "./documents.validation.js";
 import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 import { LINK_TYPES, LINK_TYPE_LABEL, normalizeDocumentPayload, type LinkType } from "./documentPayload.js";
+import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 
 const idParam = (req: Request, name = "id") => {
   const id = Number(req.params[name]);
@@ -69,9 +70,9 @@ export function registerDocumentVersionRoutes(router: Router) {
         .select({ id: users.id, name: users.name, email: users.email, role: roles.name })
         .from(users)
         .innerJoin(roles, eq(users.roleId, roles.id))
-        .where(and(eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])))
-        .orderBy(asc(users.name), asc(users.email));
-      res.json(rows.filter((r) => r.id !== req.user!.id));
+        .where(and(eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])));
+      const ordered = await sortByDisplayOrder(dbOf(req), rows, (person) => person.id, (person) => displayName(person.name, person.email), req.user?.id);
+      res.json(ordered.filter((r) => r.id !== req.user!.id));
     }),
   );
 

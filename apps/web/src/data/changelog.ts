@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-10.2",
+    date: "2026-10-10",
+    items: [
+      "Users & Roles keeps a company order. An administrator moves a person up or down, or drags the handle. That order is what people pickers use. Someone not yet placed follows, by role then name.",
+    ],
+  },
+  {
     version: "2026-10-10",
     date: "2026-10-10",
     items: [
