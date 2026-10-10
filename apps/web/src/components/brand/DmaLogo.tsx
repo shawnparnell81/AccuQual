@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useAuthStore } from "../../store/authStore";
+import { useCompanyLogo } from "../../lib/companyLogo";
 
 /** Official DMA Industries mark. Dark navy on transparent; CSS turns it white on dark chrome. */
 export const DMA_LOGO_SRC = "/branding/dma-logo.png";
@@ -23,15 +23,14 @@ export function DmaLogo({ height = 40, className, alt = "DMA Industries, LLC" }:
 }
 
 /**
- * Company mark from Admin branding when one is set. Otherwise the DMA logo.
- * This is display only. Form headers do not offer a picture upload.
+ * Company mark from Settings, inlined so print does not ask the browser to
+ * fetch it. An unset or unreachable logo leaves the slot empty.
  */
-export function CompanyLogo({ height = 40 }: { height?: number }) {
-  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
-  if (logoUrl) {
-    return <img src={logoUrl} alt="Company logo" className="dma-form-logo" style={{ height }} />;
-  }
-  return <DmaLogo height={height} />;
+export function CompanyLogo({ height = 40, className }: { height?: number; className?: string }) {
+  const { src } = useCompanyLogo();
+  const name = className ? `dma-form-logo ${className}` : "dma-form-logo";
+  if (!src) return <span className={name} aria-hidden="true" style={{ height, width: 0 }} />;
+  return <img src={src} alt="" className={name} style={{ height }} />;
 }
 
 /**
@@ -50,10 +49,10 @@ export function FormHeader({ title, meta }: { title?: string; meta?: ReactNode }
   );
 }
 
-/** A company-uploaded mark when one is set; otherwise the DMA logo in the same header slot. */
+/** Company mark from Settings. A data URL passed in is used as-is. Nothing is shown when no logo is set. */
 export function BrandMark({ logoUrl, height = 48 }: { logoUrl?: string | null; height?: number }) {
-  if (logoUrl) {
-    return <img src={logoUrl} alt="Company logo" className="dma-form-logo" style={{ height }} />;
-  }
-  return <DmaLogo height={height} />;
+  const { src } = useCompanyLogo();
+  const shown = logoUrl?.startsWith("data:image/") ? logoUrl : src;
+  if (!shown) return <span className="dma-form-logo" aria-hidden="true" style={{ height, width: 0 }} />;
+  return <img src={shown} alt="" className="dma-form-logo" style={{ height }} />;
 }

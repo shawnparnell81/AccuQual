@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -15,6 +15,7 @@ import { CHANGE_REQUEST_KINDS, changeRequestByFormType } from "../change-request
 import { stampNewEcr } from "../change-requests/ecr.controller.js";
 import { syncQuarantineNotice } from "../quarantine/quarantineNotice.js";
 import { stampRecordSite } from "../sites/recordSite.js";
+import { canonicalIsoFormType, normalizeIsoFormData } from "./isoFormRead.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -98,6 +99,55 @@ const FORM_SIGNATURES: Record<string, Record<string, string>> = {
     ]),
   ),
 };
+
+function presentIsoRow(row: { formType: string; data: unknown }) {
+  return { ...row, formType: canonicalIsoFormType(row.formType), data: normalizeIsoFormData(row.data) };
+}
+
+/**
+ * One saved copy. A row whose JSON the typed reader cannot return is read as
+ * text and parsed again. Unreadable JSON is not replaced with an empty form.
+ */
+export const getIsoQualityForm = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.db) throw AppError.unauthorized("Not signed in");
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.notFound("ISO form");
+  try {
+    const [row] = await req.db.select().from(isoQualityForms).where(eq(isoQualityForms.id, id));
+    if (!row) throw AppError.notFound("ISO form");
+    res.json(presentIsoRow(row));
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    try {
+      const found = await req.db.execute(sql`
+        SELECT id, record_number, form_type, data::text AS data_text, created_at, updated_at
+        FROM iso_quality_forms WHERE id = ${id}
+      `);
+      const raw = (found.rows?.[0] ?? null) as {
+        id: number;
+        record_number: string | null;
+        form_type: string;
+        data_text: string | null;
+        created_at: Date | string | null;
+        updated_at: Date | string | null;
+      } | null;
+      if (!raw) throw error;
+      const parsed = JSON.parse(raw.data_text ?? "null") as unknown;
+      if (parsed == null || typeof parsed !== "object") throw error;
+      res.json({
+        id: Number(raw.id),
+        recordNumber: raw.record_number,
+        formType: canonicalIsoFormType(raw.form_type),
+        data: normalizeIsoFormData(parsed),
+        createdAt: raw.created_at,
+        updatedAt: raw.updated_at,
+      });
+    } catch (fallback) {
+      if (fallback instanceof AppError) throw fallback;
+      throw error;
+    }
+  }
+});
 
 export const signIsoQualityForm = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);

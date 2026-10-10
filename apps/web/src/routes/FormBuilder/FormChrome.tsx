@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { useAuthStore } from "../../store/authStore";
+import { useCompanyLogo } from "../../lib/companyLogo";
 
 export function FormMasthead({ formNumber, revision, title }: { formNumber: string | null | undefined; revision: string; title?: string }) {
-  const logoUrl = useAuthStore((state) => state.company?.branding.logoUrl);
+  const { src, pending } = useCompanyLogo();
   return (
     <header className="aq-doc-head mb-3 flex items-start justify-between gap-3 border-b border-border pb-2">
       <div className="flex items-center gap-3">
-        {logoUrl ? <img src={logoUrl} alt="" className="h-10 w-auto object-contain" /> : <span className="text-sm font-semibold text-primary">AccuQual</span>}
+        {src ? <img src={src} alt="" className="h-10 w-auto object-contain" /> : pending ? <span className="inline-block h-10 w-10" aria-hidden="true" /> : <span className="text-sm font-semibold text-primary">AccuQual</span>}
         {title ? <h1 className="text-lg font-semibold">{title}</h1> : null}
       </div>
       <div className="text-right text-xs">

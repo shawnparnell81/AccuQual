@@ -2030,6 +2030,11 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-scrim,
   .aq-skip,
   .no-print,
+  .record-frame-header,
+  .record-glance,
+  .folder-path-bar,
+  .aq-step-trail,
+  .record-related,
   button,
   input[type="button"],
   input[type="submit"],
@@ -2041,6 +2046,7 @@ body.side-collapsed .aq-nav-folder-link {
   #main-content,
   .page-enter {
     height: auto !important;
+    min-height: 0 !important;
     max-width: none !important;
     overflow: visible !important;
     margin: 0 !important;
@@ -2055,8 +2061,15 @@ body.side-collapsed .aq-nav-folder-link {
     width: 100% !important;
     max-width: none !important;
     position: static !important;
-    break-inside: avoid;
+    break-inside: auto;
     margin-bottom: 12px;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .aq-print-sheet {
     background: #fff !important;
@@ -2219,17 +2232,23 @@ body.side-collapsed .aq-nav-folder-link {
     position: fixed;
     bottom: 0;
     left: 0;
-    right: 1.5in;
+    right: 1.7in;
     z-index: 1;
     font-size: 8pt;
     line-height: 1.2;
     color: #333 !important;
     background: transparent !important;
+    box-shadow: none !important;
+  }
+  .aq-print-banner {
+    margin: 0 0 8px;
+    font: 600 10pt Arial, Helvetica, sans-serif;
+    color: #111 !important;
   }
   @page {
     margin: 0.5in 0.5in 0.65in;
     @bottom-right {
-      content: counter(page);
+      content: counter(page) " of " counter(pages);
       font-size: 9pt;
       color: #333;
     }
@@ -2238,7 +2257,7 @@ body.side-collapsed .aq-nav-folder-link {
     size: letter landscape;
     margin: 0.4in 0.4in 0.55in;
     @bottom-right {
-      content: counter(page);
+      content: counter(page) " of " counter(pages);
       font-size: 9pt;
       color: #333;
     }
@@ -2304,7 +2323,7 @@ body.side-collapsed .aq-nav-folder-link {
     width: 7.5in;
     max-width: 100%;
     box-sizing: border-box;
-    min-height: 9.2in;
+    min-height: 0;
     break-after: page;
     page-break-after: always;
     background: #fff !important;
@@ -2333,10 +2352,48 @@ body.side-collapsed .aq-nav-folder-link {
     border-top: 1px solid #111;
     padding-top: 8px;
   }
+  #aq-print-root,
+  #aq-print-root * {
+    box-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  #aq-print-root .dma-logo {
+    filter: none !important;
+    background: transparent !important;
+  }
+  #aq-print-root .aq-print-sheet,
+  #aq-print-root .xl\:sticky {
+    position: static !important;
+  }
+  html.aq-print-isolated body > *:not(#aq-print-root):not(#aq-print-footer) {
+    display: none !important;
+  }
+  html.aq-print-isolated #aq-print-root {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
 }
 
 .aq-print-footer {
   display: none;
+}
+
+#aq-print-root {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 7.5in;
+  background: #fff;
+  color: #111;
 }
 
 /* Uploaded files stay on white paper in either theme. The dialog around them uses the app colors. */

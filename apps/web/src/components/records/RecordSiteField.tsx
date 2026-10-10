@@ -32,14 +32,14 @@ export function RecordSiteField({ entity, id, canEdit }: { entity: string; id: n
   const choices = (plants?.sites ?? []).filter((site) => site.status === "active");
   if (!canEdit || choices.length === 0) {
     return (
-      <p className="truncate text-xs text-muted-foreground" title={name}>
+      <p className="truncate text-xs text-muted-foreground" title={name} data-print-site={name}>
         Plant: {name}
       </p>
     );
   }
 
   return (
-    <label className="mt-1 flex max-w-xs flex-col gap-1 text-xs text-muted-foreground">
+    <label className="mt-1 flex max-w-xs flex-col gap-1 text-xs text-muted-foreground" data-print-site={name}>
       <span>Plant</span>
       <select
         aria-label="Plant"
