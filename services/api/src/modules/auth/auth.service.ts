@@ -16,6 +16,7 @@ import { AppError } from "../../utils/appError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
 import { sessionLengthHoursFromProfile, sessionLengthMs } from "./sessionLength.js";
 import { issueTrustedDevice, revokeAllTrustedDevices, useTrustedDevice } from "./trustedDevice.service.js";
+import { personallyRequiresMfa, readPortrait } from "../users/userProfile.js";
 
 /**
  * Two renewals that leave the browser at the same moment both present the
@@ -164,7 +165,7 @@ export async function login(input: { email: string; password: string; rememberMe
   // tokens, no cookie) and the failure counters stay untouched until the
   // second step succeeds — unless this browser was trusted at a previous
   // code entry and that trust has not expired. The password is still required.
-  const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy);
+  const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy, new Date(), await personallyRequiresMfa(user.id));
   if (user.mfaEnabled) {
     if (await useTrustedDevice(user.id, input.trustedDeviceToken)) {
       return completeLogin(user, roleName, row.company, null, { method: "trusted_device", client: input.client });
@@ -209,7 +210,7 @@ async function completeLogin(
 
   const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, sessionEndFrom(co?.profile));
   return {
-    user: sanitize({ ...user, roleName }),
+    user: await publicUser({ ...user, roleName }),
     company: co ? { id: co.id, name: co.name, branding: co.branding } : null,
     ...(mfaGraceEndsAt ? { mfaGraceEndsAt: mfaGraceEndsAt.toISOString() } : {}),
     ...tokens,
@@ -340,7 +341,7 @@ export async function refresh(refreshToken: string, client?: SignInClient) {
     throw AppError.unauthorized("Account is deactivated");
   }
   // The company's policy may have started requiring MFA since this session began; once the grace period is over the user must go back through sign-in, which walks them through enrollment.
-  if (evaluateMfa(full, full.roleName, full.companyMfaPolicy).state === "blocked") {
+  if (evaluateMfa(full, full.roleName, full.companyMfaPolicy, new Date(), await personallyRequiresMfa(full.id)).state === "blocked") {
     throw AppError.unauthorized("Multi-factor authentication setup is required. Please sign in again.");
   }
 
@@ -412,7 +413,7 @@ export async function refresh(refreshToken: string, client?: SignInClient) {
       .set({ replacedByJti: tokens.refreshJti })
       .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.replacedByJti)));
   }
-  return { user: sanitize(full), company: await companyInfo(), ...tokens };
+  return { user: await publicUser(full), company: await companyInfo(), ...tokens };
 }
 
 /** The overlapping renewal of the token that was just rotated — not a stolen token used after the session moved on. */
@@ -689,13 +690,13 @@ export async function changePassword(userId: number, currentPassword: string, ne
   const notice = renderTemplate("password_changed", { resetUrl: `${env.FRONTEND_URL}/forgot-password` });
   await sendEmail({ to: user.email, subject: notice.subject, body: notice.body }).catch((err) => logger.error("Failed to send the password-changed email", { userId, err }));
 
-  return { user: sanitize(full), company: await companyInfo(), ...tokens };
+  return { user: await publicUser(full), company: await companyInfo(), ...tokens };
 }
 
 export async function me(userId: number) {
   const full = await userWithRole(userId);
   if (!full) throw AppError.notFound("User");
-  return sanitize(full);
+  return publicUser(full);
 }
 
 /** Everything a session response may show about a user — never the password hash, the PIN hash, the MFA secret, or lockout bookkeeping. */
@@ -717,12 +718,17 @@ function sanitize<T extends { passwordHash?: string; pinHash?: string | null }>(
   return { ...rest, pinSet: typeof pinHash === "string" && pinHash.length > 0 };
 }
 
+async function publicUser<T extends { id: number; passwordHash?: string; pinHash?: string | null }>(user: T) {
+  const portrait = await readPortrait(user.id);
+  return { ...sanitize(user), preferredName: portrait.preferredName, avatarUrl: portrait.avatarUrl };
+}
+
 // ---- Signed-in MFA management (My account) --------------------------------------------------------------------------------------------------
 
 export async function mfaStatus(userId: number) {
   const full = await userWithRole(userId);
   if (!full) throw AppError.notFound("User");
-  const mfa = evaluateMfa(full, full.roleName, full.companyMfaPolicy);
+  const mfa = evaluateMfa(full, full.roleName, full.companyMfaPolicy, new Date(), await personallyRequiresMfa(userId));
   return {
     enabled: mfa.enabled,
     required: mfa.required,
@@ -765,7 +771,7 @@ async function reverify(userId: number, password: string, code: string) {
 export async function disableMfa(userId: number, password: string, code: string) {
   await reverify(userId, password, code);
   const full = await userWithRole(userId);
-  if (full && evaluateMfa({ mfaEnabled: false, mfaRequiredSince: full.mfaRequiredSince }, full.roleName, full.companyMfaPolicy).required) {
+  if (full && evaluateMfa({ mfaEnabled: false, mfaRequiredSince: full.mfaRequiredSince }, full.roleName, full.companyMfaPolicy, new Date(), await personallyRequiresMfa(userId)).required) {
     throw AppError.forbidden("Your organization requires multi-factor authentication, so it can't be turned off.");
   }
   await clearMfa(userId);

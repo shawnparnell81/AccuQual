@@ -23,9 +23,10 @@ import { loadUserHistory } from "./userLinks.js";
 import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
 import { deleteUserSchema } from "./users.validation.js";
 import { withTableOwner, type Db } from "../../lib/requestDb.js";
-import { omitUserSecrets } from "./publicUser.js";
 import { emptySidebarShortcuts, normalizeSidebarShortcuts } from "./sidebarPrefs.js";
 import { displayName, movedPerson, saveUserDisplayOrder, sortByDisplayOrder } from "./userDisplayOrder.js";
+import { applyTeamMemberExtras, attachListProfiles, canReadStaffProfile, presentUser, type TeamMemberInput } from "./teamMember.controller.js";
+import { changedEdits, readUserProfile } from "./userProfile.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -52,21 +53,25 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
     req.user?.id,
     (person) => person.roleRank,
   );
+  const listed = ordered.map(({ roleRank: _roleRank, ...person }) => person);
   if (isFullAccessRole(req.user?.roleName)) {
-    res.json(ordered.map(({ roleRank: _roleRank, ...person }) => person));
+    res.json(await attachListProfiles(req.db!, listed));
     return;
   }
   res.json(
-    ordered.map((person) => ({
-      id: person.id,
-      email: person.email,
-      name: person.name,
-      roleId: person.roleId,
-      department: person.department,
-      managerId: person.managerId,
-      isActive: person.isActive,
-      createdAt: person.createdAt,
-    })),
+    await attachListProfiles(
+      req.db!,
+      listed.map((person) => ({
+        id: person.id,
+        email: person.email,
+        name: person.name,
+        roleId: person.roleId,
+        department: person.department,
+        managerId: person.managerId,
+        isActive: person.isActive,
+        createdAt: person.createdAt,
+      })),
+    ),
   );
 });
 
@@ -123,12 +128,12 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
     .from(users)
     .where(and(eq(users.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("User");
-  // Owner and Administrator see the staff record. Everyone else gets the name only.
-  if (!isFullAccessRole(req.user?.roleName)) {
+  if (!canReadStaffProfile(req.user?.roleName, req.user?.id, row.id)) {
     res.json({ id: row.id, name: row.name });
     return;
   }
-  res.json(row);
+  const [full] = await req.db!.select().from(users).where(eq(users.id, row.id));
+  res.json(await presentUser(req.db!, full!, await readUserProfile(req.db!, row.id)));
 });
 
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
@@ -148,10 +153,12 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   // Said together so one submit explains every problem. A duplicate used to hit the unique-email rule and come back as a server error.
   const problems: string[] = [];
   if (!name?.trim()) problems.push("Enter a name.");
+  let chosenRoleName: string | null = null;
   if (roleId == null) problems.push("Choose a role.");
   else {
-    const [role] = await req.db!.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId));
+    const [role] = await req.db!.select({ id: roles.id, name: roles.name }).from(roles).where(eq(roles.id, roleId));
     if (!role) problems.push("That role doesn't exist.");
+    else chosenRoleName = role.name;
   }
   const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(btrim(${users.email})) = ${email}`);
   if (existing) problems.push("That email is already in use.");
@@ -161,7 +168,17 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   try {
     const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, managerId: managerId ?? null, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
     if (!created) throw new AppError("Failed to create user", 500);
-    res.status(201).json(omitUserSecrets(created));
+    const { edits, profile } = await applyTeamMemberExtras(req.db!, req.user?.id, created.id, req.body as TeamMemberInput);
+    edits.unshift(
+      { label: "Name", from: "(blank)", to: created.name?.trim() || "(blank)" },
+      { label: "Email", from: "(blank)", to: created.email },
+      { label: "Role", from: "(blank)", to: chosenRoleName ?? "(blank)" },
+      { label: "Department", from: "(blank)", to: created.department ?? "(blank)" },
+      { label: "Manager", from: "(blank)", to: await managerAuditLabel(req.db!, created.managerId) },
+      { label: "Temporary password", from: "(blank)", to: "Assigned. They choose their own password at first sign-in." },
+    );
+    await recordAuditTrail(req.db!, { entityType: "User", entityId: created.id, action: "create", changes: { edits }, performedBy: req.user?.id });
+    res.status(201).json(await presentUser(req.db!, created, profile));
   } catch (err) {
     const pg = postgresError(err);
     if (pg.code === "23505") throw AppError.badRequest("That email is already in use.");
@@ -170,6 +187,12 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     throw err;
   }
 });
+
+async function managerAuditLabel(db: Db, managerId: number | null): Promise<string> {
+  if (managerId == null) return "(blank)";
+  const [manager] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, managerId));
+  return manager?.name?.trim() || manager?.email || "(blank)";
+}
 
 async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<number> {
   const rows = await db
@@ -183,7 +206,7 @@ async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<numb
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const [before] = await req
-    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email, managerId: users.managerId })
+    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email, name: users.name, managerId: users.managerId })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
     .where(eq(users.id, id));
@@ -235,17 +258,26 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req.db!.update(users).set(patch).where(eq(users.id, id)).returning();
   if (!updated) throw AppError.notFound("User");
 
-  // Profile edits and roleId changes are audited here.
+  const { edits: extraEdits, profile } = await applyTeamMemberExtras(req.db!, req.user?.id, id, body as TeamMemberInput);
+  let nextRoleLabel = before.roleName;
+  if (body.roleId !== undefined && body.roleId !== before.roleId) nextRoleLabel = nextRoleName;
+  const beforeManager = await managerAuditLabel(req.db!, before.managerId);
+  const afterManager = await managerAuditLabel(req.db!, updated.managerId);
+  const coreEdits = changedEdits(
+    { name: before.name, email: before.email, department: before.department, isActive: before.isActive, role: before.roleName, manager: beforeManager },
+    { name: updated.name, email: updated.email, department: updated.department, isActive: updated.isActive, role: nextRoleLabel, manager: afterManager },
+    { name: "Name", email: "Email", department: "Department", isActive: "Active", role: "Role", manager: "Manager" },
+  );
   await recordAuditTrail(req.db!, {
     entityType: "User",
     entityId: updated.id,
     action: "update",
-    changes: { fieldsChanged: Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined), ...(revokeSessions ? { sessionsRevoked: true } : {}) },
+    changes: { edits: [...coreEdits, ...extraEdits], ...(revokeSessions ? { sessionsRevoked: true } : {}) },
     performedBy: req.user?.id,
   });
   if (revokeSessions) await revokeRefreshTokenRows(updated.id);
 
-  res.json(omitUserSecrets(updated));
+  res.json(await presentUser(req.db!, updated, profile));
 });
 
 /**

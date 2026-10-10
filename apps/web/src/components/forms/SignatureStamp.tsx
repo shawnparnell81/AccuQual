@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { UserAvatar } from "../shared/UserAvatar";
 import { NOT_REQUIRED_LABEL, type SignatureChoice } from "./signatureRequired";
 
 /** Sibling date field the server fills the first time a signature is stamped. */
@@ -96,7 +98,9 @@ export function SignatureStamp({
   const [certified, setCertified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const user = useCurrentUser();
   const stamped = (value ?? "").trim();
+  const ownStamp = Boolean(user?.name && user.avatarUrl && stamped.startsWith(user.name));
   const sheet = variant === "sheet";
   // The record often keeps the previous choice until a save returns. Hold the
   // click here so Yes/No, and the PIN block, move immediately.
@@ -122,7 +126,10 @@ export function SignatureStamp({
     return (
       <div className={sheet ? "px-2 py-1.5" : undefined}>
         {choice}
-        <p className={sheet ? "whitespace-pre-wrap text-xs text-foreground" : "whitespace-pre-wrap text-xs text-foreground"}>{stamped}</p>
+        <p className="flex items-start gap-2 whitespace-pre-wrap text-xs text-foreground">
+          {ownStamp && <UserAvatar userId={user?.id} name={user?.name} hasPhoto size={20} />}
+          <span>{stamped}</span>
+        </p>
       </div>
     );
   }

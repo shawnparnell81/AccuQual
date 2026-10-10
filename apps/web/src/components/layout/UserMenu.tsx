@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, UserRound } from "lucide-react";
 import { useCurrentCompany, useCurrentUser, useLogout } from "../../hooks/useAuth";
 import { rolePhrase } from "../../lib/opsLanguage";
+import { UserAvatar } from "../shared/UserAvatar";
 
 /** Who you are, in one place: email, role and organization, plus Settings and Logout. */
 export function UserMenu() {
@@ -28,8 +29,6 @@ export function UserMenu() {
     };
   }, [open]);
 
-  const initial = (user?.name ?? user?.email ?? "?").trim().charAt(0).toUpperCase();
-
   return (
     <div className="relative" ref={ref}>
       <button
@@ -39,18 +38,23 @@ export function UserMenu() {
         aria-label="Account menu"
         className="aq-icon-btn"
       >
-        <span className="aq-avatar">{initial}</span>
+        <UserAvatar userId={user?.id} name={user?.preferredName || user?.name || user?.email} hasPhoto={Boolean(user?.avatarUrl)} size={32} />
       </button>
       {open && (
         <div className="aq-menu absolute right-0 top-full z-40 mt-2 w-64 rounded-lg border border-border bg-card p-2 text-foreground shadow-xl">
           <div className="border-b border-border px-3 pb-2 pt-1">
-            {user?.name && <p className="truncate text-sm font-medium">{user.name}</p>}
+            {(user?.preferredName || user?.name) && <p className="truncate text-sm font-medium">{user.preferredName || user.name}</p>}
             <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {user?.roleName && <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[11px] text-accent">{rolePhrase(user.roleName)}</span>}
               {company?.name && <span className="truncate text-[11px] text-muted-foreground">{company.name}</span>}
             </div>
           </div>
+          {user?.id != null && (
+            <Link to={`/admin/users/${user.id}`} onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-secondary">
+              <UserRound size={15} /> My profile
+            </Link>
+          )}
           <Link to="/settings" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-secondary">
             <Settings size={15} /> Settings
           </Link>

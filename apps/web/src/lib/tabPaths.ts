@@ -97,6 +97,8 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/work-orders\/\d+$/,
   /^\/workflow\/\d+$/,
   /^\/admin\/[^/]+$/,
+  /^\/admin\/users\/new$/,
+  /^\/admin\/users\/\d+$/,
   /^\/settings\/erp\/presets\/[^/]+$/,
 ];
 

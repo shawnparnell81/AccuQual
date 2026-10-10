@@ -48,6 +48,9 @@ export interface AuthUser {
   mustChangePassword?: boolean;
   /** False until the person chooses a 4-digit signature PIN. Undefined on a session saved before this field existed. */
   pinSet?: boolean;
+  preferredName?: string | null;
+  /** Set when this person has a profile photo. */
+  avatarUrl?: string | null;
 }
 
 export interface CompanyContext {

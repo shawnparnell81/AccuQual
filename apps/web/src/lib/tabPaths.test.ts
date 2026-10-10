@@ -43,6 +43,8 @@ describe("saved tabs for removed pages", () => {
     assert.equal(isLiveTabPath("/work-orders/4"), true);
     assert.equal(isLiveTabPath("/notifications"), true);
     assert.equal(isLiveTabPath("/admin/users"), true);
+    assert.equal(isLiveTabPath("/admin/users/new"), true);
+    assert.equal(isLiveTabPath("/admin/users/12"), true);
     assert.equal(isLiveTabPath("/sales"), false);
     assert.equal(isLiveTabPath("/sales/dashboard"), false);
     assert.equal(isLiveTabPath("/sales/8"), false);

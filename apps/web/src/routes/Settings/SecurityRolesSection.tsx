@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { Link } from "react-router-dom";
 import { RolePermissionFields } from "../../components/admin/RolePermissionFields";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -13,6 +14,7 @@ import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { AppUser, AppRole } from "../../api/types";
 import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { isFullAccessRole } from "../../lib/fullAccess";
+import { UserAvatar } from "../../components/shared/UserAvatar";
 
 const userHooks = createResourceHooks<AppUser>("users");
 const roleHooks = createResourceHooks<AppRole>("roles");
@@ -100,7 +102,6 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   const toast = useToast();
   const roleNameById = new Map(roles.map((r) => [r.id, roleLabel(r)]));
 
-  const createUser = userHooks.useCreate();
   const updateUser = userHooks.useUpdate();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AppUser | null>(null);
@@ -116,7 +117,6 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
     }
   }
 
-  const [form, setForm] = useState({ email: "", password: "", name: "", roleId: "", department: "", managerId: "" });
   const [resetFor, setResetFor] = useState<AppUser | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -284,7 +284,10 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                       </span>
                     </span>
                   )}
-                  <span>{u.name?.trim() || u.email}</span>
+                  <Link to={`/admin/users/${u.id}`} className="inline-flex min-w-0 items-center gap-2 hover:underline">
+                    <UserAvatar userId={u.id} name={u.name || u.email} hasPhoto={Boolean(u.avatarUrl)} size={24} />
+                    <span className="truncate">{personOptionLabel(u)}</span>
+                  </Link>
                 </div>
               </td>
               <td className="py-1.5 pr-2 text-muted-foreground">{u.email}</td>
@@ -404,69 +407,11 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
       </table>
 
       {isAdmin && (
-        <form
-          autoComplete="off"
-          className="relative grid min-w-0 gap-2 border-t border-border pt-3 md:grid-cols-5 [&>*]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0"
-          onSubmit={(e) => {
-            e.preventDefault();
-            // Read the fields from the form itself. A password manager can fill the boxes without updating React state, and submitting that empty state was refused as a validation error.
-            const data = new FormData(e.currentTarget);
-            const email = String(data.get("new-user-email") ?? "").trim();
-            const password = String(data.get("new-user-password") ?? "");
-            const name = String(data.get("name") ?? "").trim();
-            const roleId = String(data.get("roleId") ?? "");
-            const department = String(data.get("department") ?? "");
-            const managerId = String(data.get("managerId") ?? "");
-            createUser.mutate(
-              { email, password, name: name || undefined, roleId: roleId ? Number(roleId) : undefined, department: department || undefined, managerId: managerId ? Number(managerId) : null } as Partial<AppUser> & { password: string },
-              {
-                onSuccess: () => {
-                  toast.success("User created. They'll be asked to choose their own password the first time they sign in.");
-                  setForm({ email: "", password: "", name: "", roleId: "", department: "", managerId: "" });
-                },
-                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create user.")),
-              }
-            );
-          }}
-        >
-          {/* Decoys sit off-screen so the browser drops the signed-in admin's saved login here instead of into the new person's email and temporary password. The real boxes are not named email/password, which is what triggers that fill. */}
-          <div aria-hidden="true" className="pointer-events-none absolute h-0 w-0 overflow-hidden">
-            <input type="text" tabIndex={-1} autoComplete="username" name="username" defaultValue="" />
-            <input type="password" tabIndex={-1} autoComplete="current-password" name="current-password" defaultValue="" />
-          </div>
-          <TextField label="Email" name="new-user-email" type="text" inputMode="email" required autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <TextField label="Temporary password" name="new-user-password" type="password" required minLength={12} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          <TextField label="Name" name="name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <SelectField label="Role" name="roleId" value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
-            <option value="">Choose a role</option>
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {roleLabel(r)}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Manager" name="managerId" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
-            <option value="">None</option>
-            {users
-              .filter((person) => person.isActive)
-              .map((person) => (
-                <option key={person.id} value={person.id}>
-                  {personOptionLabel(person)}
-                </option>
-              ))}
-          </SelectField>
-          <SelectField label="Department" name="department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
-            <option value="">None</option>
-            {DEPARTMENTS.map((d) => (
-              <option key={d.key} value={d.key}>
-                {d.label}
-              </option>
-            ))}
-          </SelectField>
-          <button type="submit" disabled={createUser.isPending} className="col-span-full w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-            {createUser.isPending ? "Creating…" : "Add User"}
-          </button>
-        </form>
+        <div className="border-t border-border pt-3">
+          <Link to="/admin/users/new" className="inline-flex w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
+            New team member
+          </Link>
+        </div>
       )}
 
       <Modal title={editing ? `Edit ${editing.email}` : "Edit person"} isOpen={editing !== null} onClose={() => setEditing(null)}>

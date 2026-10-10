@@ -15,6 +15,8 @@ export interface AuditEntryLike {
   changes?: Record<string, unknown> | null;
   fieldChanges?: AuditFieldChange[] | null;
   performedByName?: string | null;
+  performedBy?: number | null;
+  performedByAvatarUrl?: string | null;
 }
 
 export interface AuditLine {
