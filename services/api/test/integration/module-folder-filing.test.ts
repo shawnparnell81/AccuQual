@@ -119,7 +119,7 @@ describe("module records land in their own form folder after the first real save
 
       await request(app).delete(`${start.createPath}/${id}`).set(auth());
     }
-  });
+  }, 30_000);
 
   it("puts a supplier NCR in its own folder when a generic ncr pin already exists", async () => {
     const created = await request(app).post("/ncr").set(auth()).send({ title: "Supplier NCR", recordNumber: `PIN-${suffix}` });

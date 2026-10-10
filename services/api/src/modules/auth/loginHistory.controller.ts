@@ -2,10 +2,13 @@ import type { Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { company } from "../../drizzle/schema/company.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import type { Db } from "../../lib/requestDb.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { roleHasLoginHistoryPermission } from "../roles/roleAccess.js";
-import { LOGIN_EVENT_TYPES, exportLoginEvents, listLoginEvents, type LoginEventType, type LoginHistoryQuery } from "./loginEvents.js";
+import { LOGIN_EVENT_TYPES, exportLoginEvents, listLoginEvents, readRecordingStart, type LoginEventType, type LoginHistoryQuery } from "./loginEvents.js";
+import { parseRecordingStart, recordingOpen, recordingStartNotice, utcToEasternWall } from "./loginHistoryStart.js";
 
 const FORBIDDEN = "Login history is limited to roles an administrator has allowed to see it.";
 
@@ -61,6 +64,35 @@ function readPage(req: Request): LoginHistoryQuery {
 
 export const listLoginHistoryHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listLoginEvents(req.db as Db, readPage(req)));
+});
+
+export const updateLoginHistoryStartHandler = asyncHandler(async (req: Request, res: Response) => {
+  const raw = (req.body as { startsAt?: unknown } | undefined)?.startsAt;
+  if (typeof raw !== "string") throw AppError.badRequest("That start time is not valid.");
+  const next = parseRecordingStart(raw);
+  if (!next) throw AppError.badRequest("That start time is not valid.");
+  const database = req.db as Db;
+  const [co] = await database.select().from(company).limit(1);
+  if (!co) throw AppError.notFound("Company");
+  const previous = await readRecordingStart(database);
+  const nextIso = next.toISOString();
+  if (next.getTime() !== previous.getTime()) {
+    await database.update(company).set({ profile: { ...co.profile, loginHistoryStartsAt: nextIso } }).where(eq(company.id, co.id));
+    await recordAuditTrail(database, {
+      entityType: "Company",
+      entityId: co.id,
+      action: "update",
+      changes: { setting: "loginHistoryStartsAt", from: previous.toISOString(), to: nextIso },
+      performedBy: req.user?.id,
+    });
+  }
+  const open = recordingOpen(next);
+  res.json({
+    recordingStartsAt: nextIso,
+    recordingStartsAtEastern: utcToEasternWall(next),
+    recording: open,
+    recordingNotice: open ? null : recordingStartNotice(next),
+  });
 });
 
 export const exportLoginHistoryHandler = asyncHandler(async (req: Request, res: Response) => {

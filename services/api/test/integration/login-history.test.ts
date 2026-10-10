@@ -7,7 +7,9 @@ import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { loginEvents } from "../../src/drizzle/schema/loginEvents.js";
+import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken, signRefreshToken } from "../../src/utils/jwt.js";
 import { encryptRefreshCookie, REFRESH_COOKIE_NAME } from "../../src/modules/auth/refreshCookie.js";
 
@@ -34,10 +36,15 @@ async function makeUser(label: string, extra: Partial<typeof users.$inferInsert>
   return user!;
 }
 
+async function setRecordingStart(startsAt: string) {
+  await db.update(company).set({ profile: { loginHistoryStartsAt: startsAt } }).where(eq(company.id, companyId));
+}
+
 describe("login history", () => {
   beforeAll(async () => {
-    const company = await ensureTestCompany();
-    companyId = company!.id;
+    const row = await ensureTestCompany();
+    companyId = row!.id;
+    await setRecordingStart("2000-01-01T00:00:00.000Z");
     const admin = await makeUser("Admin");
     const operator = await makeUser("Operator");
     adminToken = signAccessToken({ sub: String(admin.id), roleId: null, roleName: "admin", department: null });
@@ -230,6 +237,54 @@ describe("login history", () => {
     expect(text).toContain("Sign-in failed");
     expect(text).not.toContain(`outside-${suffix}`);
     expect(text).not.toContain(PASSWORD);
+  });
+
+  it("writes nothing before the recording start and hides earlier rows", async () => {
+    const user = await makeUser("Cutoff");
+    await setRecordingStart("2099-01-01T00:00:00.000Z");
+    try {
+      const blocked = await request(app).post("/auth/login").send({ email: user.email, password: PASSWORD });
+      expect(blocked.status).toBe(200);
+      expect(await db.select().from(loginEvents).where(eq(loginEvents.email, user.email))).toHaveLength(0);
+
+      const earlyEmail = `early-cutoff-${suffix}@test.local`;
+      const laterEmail = `later-cutoff-${suffix}@test.local`;
+      await db.insert(loginEvents).values([
+        { companyId, email: earlyEmail, userName: "Early", eventType: "signed_in", success: true, reason: "Password", occurredAt: new Date("2098-12-01T00:00:00.000Z") },
+        { companyId, email: laterEmail, userName: "Later", eventType: "signed_in", success: true, reason: "Password", occurredAt: new Date("2099-02-01T00:00:00.000Z") },
+      ]);
+      const hidden = await request(app).get("/login-history").query({ user: "cutoff-" }).set(auth(adminToken));
+      expect(hidden.status).toBe(200);
+      expect(hidden.body.recording).toBe(false);
+      expect(hidden.body.recordingNotice).toMatch(/^Recording starts /);
+      expect(hidden.body.items.map((item: { email: string }) => item.email)).toEqual([laterEmail]);
+
+      const opened = await request(app).patch("/login-history/start").set(auth(adminToken)).send({ startsAt: "2026-10-12T00:00" });
+      expect(opened.status).toBe(200);
+      expect(opened.body.recordingStartsAt).toBe("2026-10-12T04:00:00.000Z");
+      expect(opened.body.recordingStartsAtEastern).toBe("2026-10-12T00:00");
+      const change = (await db.select().from(auditTrail)).find((row) => (row.changes as { setting?: string } | null)?.setting === "loginHistoryStartsAt");
+      expect(change?.action).toBe("update");
+      expect(change?.entityType).toBe("Company");
+      expect(change?.entityId).toBe(companyId);
+      expect(change?.changes).toMatchObject({ setting: "loginHistoryStartsAt", from: "2099-01-01T00:00:00.000Z", to: "2026-10-12T04:00:00.000Z" });
+
+      const denied = await request(app).patch("/login-history/start").set(auth(operatorToken)).send({ startsAt: "2026-10-12T00:00" });
+      expect(denied.status).toBe(403);
+
+      await db.update(company).set({ profile: {} }).where(eq(company.id, companyId));
+      const fallback = await request(app).get("/login-history").set(auth(adminToken));
+      expect(fallback.body.recordingStartsAt).toBe("2026-10-12T04:00:00.000Z");
+
+      await setRecordingStart("2000-01-01T00:00:00.000Z");
+      const recorded = await request(app).post("/auth/login").send({ email: user.email, password: PASSWORD });
+      expect(recorded.status).toBe(200);
+      const rows = await db.select().from(loginEvents).where(eq(loginEvents.email, user.email));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.eventType).toBe("signed_in");
+    } finally {
+      await setRecordingStart("2000-01-01T00:00:00.000Z");
+    }
   });
 
   it("keeps sign-in working and returns an empty page when the history table is not there yet", async () => {
