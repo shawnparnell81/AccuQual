@@ -1139,6 +1139,15 @@ body.aq-side-resizing .app-main {
 .aq-topnav-fly[data-placed="1"] {
   visibility: visible;
 }
+/* Extra padding on the parent side overlaps the row. It stays inside the hit box, so a straight move never falls through a gap. */
+.aq-topnav-fly[data-side="right"] {
+  margin-left: -12px;
+  padding-left: 16px;
+}
+.aq-topnav-fly[data-side="left"] {
+  margin-right: -12px;
+  padding-right: 16px;
+}
 .aq-topnav-branch {
   position: relative;
 }
