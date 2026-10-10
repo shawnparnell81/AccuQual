@@ -4,11 +4,16 @@ import {
   classifyRefreshFailure,
   createSessionRefresher,
   nextProactiveDelayMs,
+  parseRefreshLock,
   proactiveRefreshDelayMs,
   bootstrapSessionDecision,
+  readRetryAfterHeader,
   refreshDecision,
+  refreshLockClaim,
   refreshWhileBackingOff,
+  REFRESH_LOCK_KEY,
   retryDelayMs,
+  runWithRefreshLock,
   settleAfterRefresh,
   shouldRedirectToLogin,
   tokenNearExpiry,
@@ -52,26 +57,23 @@ describe("single-flight session refresh", () => {
     assert.equal(next.ok && next.accessToken, "next");
   });
 
-  it("retries a short slow-down on the same flight and does not end the session", async () => {
+  it("does not retry a slow-down inside the shared renewal", async () => {
     let calls = 0;
-    const sleeps: number[] = [];
     const gate = createSessionRefresher({
-      maxAttempts: 4,
-      sleep: async (ms) => {
-        sleeps.push(ms);
-      },
       attempt: async () => {
         calls += 1;
-        if (calls < 3) return { kind: "backoff", retryAfterMs: 25 };
-        return { kind: "ok", accessToken: "renewed" };
+        return { kind: "backoff", retryAfterMs: 25 };
       },
     });
 
     const [a, b] = await Promise.all([gate.refresh(), gate.refresh()]);
-    assert.equal(calls, 3);
-    assert.deepEqual(sleeps, [25, 25]);
-    assert.equal(a.ok && a.accessToken, "renewed");
-    assert.equal(b.ok && b.accessToken, "renewed");
+    assert.equal(calls, 1);
+    assert.equal(a.ok, false);
+    assert.equal(b.ok, false);
+    if (!a.ok) {
+      assert.equal(a.logout, false);
+      if (!a.logout) assert.equal(a.retryAfterMs, 25);
+    }
   });
 
   it("does not retry a rejected session, and does not end the session when a long slow-down persists", async () => {
@@ -80,9 +82,6 @@ describe("single-flight session refresh", () => {
       attempt: async () => {
         rejected += 1;
         return { kind: "unauthenticated" };
-      },
-      sleep: async () => {
-        throw new Error("should not wait");
       },
     });
     const dead = await rejectedGate.refresh();
@@ -95,9 +94,6 @@ describe("single-flight session refresh", () => {
       attempt: async () => {
         slowed += 1;
         return { kind: "backoff", retryAfterMs: 60_000 };
-      },
-      sleep: async () => {
-        throw new Error("a long wait must not block the request");
       },
     });
     const waiting = await slowGate.refresh();
@@ -175,27 +171,25 @@ describe("single-flight session refresh", () => {
 
 describe("when a renewal failure should end the session", () => {
   it("treats a definitive 401 as signed out and a 429 or 5xx as a wait", () => {
-    assert.equal(classifyRefreshFailure(401, null, 0).kind, "unauthenticated");
-    const limited = classifyRefreshFailure(429, "2", 0);
+    const noJitter = () => 0;
+    assert.equal(classifyRefreshFailure(401, null, 0, Date.now(), noJitter).kind, "unauthenticated");
+    const limited = classifyRefreshFailure(429, "2", 0, Date.now(), noJitter);
     assert.equal(limited.kind, "backoff");
     if (limited.kind === "backoff") assert.equal(limited.retryAfterMs, 2_000);
-    const dropped = classifyRefreshFailure(undefined, null, 1);
+    const dropped = classifyRefreshFailure(undefined, null, 1, Date.now(), noJitter);
     assert.equal(dropped.kind, "backoff");
     if (dropped.kind === "backoff") assert.equal(dropped.retryAfterMs, 2_000);
     for (const status of [403, 408, 500, 502, 503]) {
-      assert.equal(classifyRefreshFailure(status, null, 0).kind, "backoff");
+      assert.equal(classifyRefreshFailure(status, null, 0, Date.now(), noJitter).kind, "backoff");
     }
   });
 
   it("does not log the user out on a 429 or a 5xx, and does on a 401", async () => {
     for (const status of [429, 500, 502, 503, undefined] as const) {
-      const outcome = classifyRefreshFailure(status, "30", 0);
+      const outcome = classifyRefreshFailure(status, "30", 0, Date.now(), () => 0);
       assert.equal(outcome.kind, "backoff");
       const gate = createSessionRefresher({
         attempt: async () => outcome,
-        sleep: async () => {
-          throw new Error("a long wait must not block the request");
-        },
       });
       let logouts = 0;
       const settled = await settleAfterRefresh(
@@ -234,12 +228,31 @@ describe("when a renewal failure should end the session", () => {
   });
 
   it("reads Retry-After as seconds or a date, and backs off when it is missing", () => {
-    assert.equal(retryDelayMs(0, "3"), 3_000);
+    const noJitter = () => 0;
+    assert.equal(retryDelayMs(0, "3", Date.now(), noJitter), 3_000);
     const now = 1_700_000_000_000;
-    assert.equal(retryDelayMs(0, new Date(now + 4_000).toUTCString(), now), 4_000);
-    assert.equal(retryDelayMs(0, null), 1_000);
-    assert.equal(retryDelayMs(2, null), 4_000);
-    assert.equal(retryDelayMs(0, "999999"), 15 * 60 * 1000);
+    assert.equal(retryDelayMs(0, new Date(now + 4_000).toUTCString(), now, noJitter), 4_000);
+    assert.equal(retryDelayMs(0, null, now, noJitter), 1_000);
+    assert.equal(retryDelayMs(2, null, now, noJitter), 4_000);
+    assert.equal(retryDelayMs(0, "999999", now, noJitter), 15 * 60 * 1000);
+  });
+
+  it("waits at least Retry-After and adds jitter without retrying early", () => {
+    const now = 1_700_000_000_000;
+    assert.equal(retryDelayMs(0, "30", now, () => 0), 30_000);
+    assert.equal(retryDelayMs(5, "30", now, () => 0), 30_000);
+    assert.equal(retryDelayMs(0, "30", now, () => 1), 37_500);
+    const jittered = retryDelayMs(3, null, now, () => 1);
+    assert.equal(jittered, 10_000);
+    assert.ok(retryDelayMs(0, "2", now, () => 0.5) >= 2_000);
+  });
+
+  it("reads Retry-After from a header getter, a number, or a list", () => {
+    assert.equal(readRetryAfterHeader({ get: (name: string) => (name === "retry-after" ? "12" : undefined) }), "12");
+    assert.equal(readRetryAfterHeader({ "retry-after": 7 }), "7");
+    assert.equal(readRetryAfterHeader({ "Retry-After": ["9"] }), "9");
+    assert.equal(readRetryAfterHeader(undefined), null);
+    assert.equal(readRetryAfterHeader({ get: () => "  " }), null);
   });
 });
 
@@ -300,6 +313,71 @@ describe("load-time session check", () => {
     assert.equal(shouldRedirectToLogin({ accessToken: "tok", reconnecting: false }), false);
     assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: true }), false);
     assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: false }), true);
+  });
+
+  it("one tab holds the refresh lock and the other waits", () => {
+    const now = 1_700_000_000_000;
+    const held = refreshLockClaim({ now, ownerId: "tab-b", existing: { owner: "tab-a", expiresAt: now + 5_000 } });
+    assert.equal(held.acquired, false);
+    if (!held.acquired) assert.equal(held.retryAfterMs, 5_000);
+    const expired = refreshLockClaim({ now, ownerId: "tab-b", existing: { owner: "tab-a", expiresAt: now - 1 } });
+    assert.equal(expired.acquired, true);
+    const free = refreshLockClaim({ now, ownerId: "tab-a", existing: null });
+    assert.equal(free.acquired, true);
+    if (free.acquired) assert.equal(free.lock.owner, "tab-a");
+    assert.equal(parseRefreshLock("not-json"), null);
+    assert.equal(parseRefreshLock(JSON.stringify({ owner: "tab-a", expiresAt: now }))?.owner, "tab-a");
+  });
+
+  it("does not start a second renewal while another tab holds the lock", async () => {
+    const storage = new Map<string, string>();
+    const box = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+    };
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = runWithRefreshLock({
+      storage: box,
+      ownerId: "tab-a",
+      maxWaitMs: 2_000,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      work: async () => {
+        calls += 1;
+        await gate;
+        return "a";
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(calls, 1);
+    assert.equal(parseRefreshLock(box.getItem(REFRESH_LOCK_KEY))?.owner, "tab-a");
+    let secondStarted = false;
+    const second = runWithRefreshLock({
+      storage: box,
+      ownerId: "tab-b",
+      maxWaitMs: 2_000,
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      work: async () => {
+        secondStarted = true;
+        calls += 1;
+        return "b";
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(secondStarted, false);
+    release();
+    assert.equal(await first, "a");
+    assert.equal(await second, "b");
+    assert.equal(calls, 2);
+    assert.equal(box.getItem(REFRESH_LOCK_KEY), null);
   });
 
   it("does not start another renewal while a backoff is still open", () => {

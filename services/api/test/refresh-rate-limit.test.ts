@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { env } from "../src/config/env.js";
-import { createRefreshCoordinator, createRefreshRateLimiter, refreshRateLimitKey, REFRESH_RATE_LIMIT_MAX, skipApiRateLimit } from "../src/middleware/rateLimit.js";
+import { createRefreshCoordinator, createRefreshRateLimiter, refreshRateLimitKey, REFRESH_RATE_LIMIT_MAX, REFRESH_RATE_WINDOW_MS, skipApiRateLimit } from "../src/middleware/rateLimit.js";
 import { withSharedRefresh } from "../src/modules/auth/refreshFlight.js";
 import { signRefreshToken } from "../src/utils/jwt.js";
 
@@ -23,9 +23,27 @@ function appWithLimit(limit: number) {
 }
 
 describe("refresh rate limit", () => {
-  it("is loose enough for a normal session and still finite", () => {
-    expect(REFRESH_RATE_LIMIT_MAX).toBeGreaterThanOrEqual(30);
-    expect(REFRESH_RATE_LIMIT_MAX).toBeLessThanOrEqual(120);
+  it("fits a normal session and blocks a tight loop within a minute", () => {
+    expect(REFRESH_RATE_WINDOW_MS).toBe(60_000);
+    expect(REFRESH_RATE_LIMIT_MAX).toBeGreaterThanOrEqual(8);
+    expect(REFRESH_RATE_LIMIT_MAX).toBeLessThanOrEqual(20);
+  });
+
+  it("returns 429 with Retry-After inside that minute once the budget is spent", async () => {
+    const app = express();
+    app.use(cookieParser());
+    app.post("/auth/refresh", createRefreshRateLimiter({ limit: REFRESH_RATE_LIMIT_MAX, windowMs: REFRESH_RATE_WINDOW_MS }), (_req, res) => {
+      res.json({ ok: true });
+    });
+    const cookie = cookieFor("42", "minute");
+    for (let i = 0; i < REFRESH_RATE_LIMIT_MAX; i++) {
+      expect((await request(app).post("/auth/refresh").set("Cookie", cookie)).status).toBe(200);
+    }
+    const blocked = await request(app).post("/auth/refresh").set("Cookie", cookie);
+    expect(blocked.status).toBe(429);
+    const retryAfter = Number(blocked.headers["retry-after"]);
+    expect(retryAfter).toBeGreaterThan(0);
+    expect(retryAfter).toBeLessThanOrEqual(60);
   });
 
   it("counts a signed refresh cookie by user, and an invalid one by address", () => {
