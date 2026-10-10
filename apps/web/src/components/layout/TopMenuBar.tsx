@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import clsx from "clsx";
@@ -13,6 +13,7 @@ import {
   type SidebarLink,
   type SidebarNode,
 } from "./sidebarStructure";
+import { placeMenuFlyout } from "../../lib/menuFlyout";
 import { folderMenuEntries } from "../../lib/navigationLayout";
 import { prefetchRoute } from "../../routes/pages";
 
@@ -123,6 +124,7 @@ function MenuBranch({ node, onPick }: { node: SidebarFolder; onPick: () => void 
           labelledBy={panelId}
           nodes={entries}
           flyout
+          anchorRef={buttonRef}
           onPick={onPick}
           onClose={close}
         />
@@ -136,6 +138,7 @@ function MenuList({
   labelledBy,
   nodes,
   flyout = false,
+  anchorRef,
   onPick,
   onClose,
 }: {
@@ -143,17 +146,33 @@ function MenuList({
   labelledBy: string;
   nodes: SidebarNode[];
   flyout?: boolean;
+  anchorRef?: RefObject<HTMLElement | null>;
   onPick: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLUListElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const list = ref.current;
     if (!list) return;
     if (flyout) {
-      const rect = list.getBoundingClientRect();
-      if (rect.right > window.innerWidth - 8) list.dataset.flip = "1";
+      const anchor = anchorRef?.current;
+      if (!anchor) return;
+      const placed = placeMenuFlyout(anchor.getBoundingClientRect(), { width: list.offsetWidth, height: list.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
+      list.style.top = `${placed.top}px`;
+      list.style.left = `${placed.left}px`;
+      list.dataset.placed = "1";
+      return;
     }
+    const rect = list.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) {
+      list.style.left = "auto";
+      list.style.right = "0";
+    }
+    if (rect.bottom > window.innerHeight - 8) list.style.maxHeight = `${Math.max(120, window.innerHeight - rect.top - 8)}px`;
+  }, [anchorRef, flyout, nodes]);
+  useEffect(() => {
+    const list = ref.current;
+    if (!list) return;
     focusItem(siblingItems(list)[0]);
   }, [flyout]);
 

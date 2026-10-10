@@ -285,6 +285,23 @@ export const company = pgTable("company", {
     deletedFormFolderKeys?: string[];
     /** Display name an administrator typed for a Folders tab row, keyed by form key. */
     formFolderDisplayNames?: Record<string, string>;
+    /**
+     * Fingerprint of the rows a folder listing would repair. A matching read
+     * does not file or relink again. Company Settings spreads this object.
+     * No new column.
+     */
+    savedFormListingsStamp?: string;
+    /**
+     * Set once empty numbered ISO placeholders have been removed. A later
+     * folder read does not walk the tree to delete them again.
+     */
+    numberedPlaceholdersCleared?: boolean;
+    /**
+     * Max ids of documents, folders, and blank templates the last time a list
+     * open found nothing left to retire. A new row makes the next open look
+     * again. No new column.
+     */
+    supersededListsRetiredStamp?: string;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

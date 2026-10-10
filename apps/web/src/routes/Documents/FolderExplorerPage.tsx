@@ -1443,8 +1443,9 @@ export function FolderExplorerPage() {
       {/* In normal flow under the folder library, so the shelf stays on screen
           without covering Forms & Templates or any other folder card. The
           folder column scrolls on its own. */}
-      {poolFolder && (
+      {poolFolder && (dragKind != null || poolItems.length > 0) && (
         <div
+          data-testid="library-pool"
           onDragOver={(e) => {
             if (dragRef.current?.kind === "doc" && allowDrop(e, poolFolder.id)) setPoolHover(true);
           }}

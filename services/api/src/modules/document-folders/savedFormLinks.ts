@@ -21,6 +21,7 @@ import { shouldRepairFiledLink } from "../forms/formEditAudit.js";
 import { FILEABLE_FORM_KEYS, ISO_TYPE_TO_FORM_KEY, recordLinkedPath, validationFormKeyFor } from "./editableForms.js";
 import { FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, auditRecordKept, blankFormKeyForCreate, fileNamePatternFor, moduleRecordKept, savedFillFileName } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
+import { rememberSavedListingStamp, skipSavedListingRepair } from "./listingRepairGate.js";
 
 /**
  * Saved forms must open the record that was filed. Listing and search run this
@@ -301,9 +302,15 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   const copies: SavedCopy[] = [];
   const known = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
   const validations = await db
-    .select({ id: validationReports.id, data: validationReports.data, recordNumber: validationReports.recordNumber, createdAt: validationReports.createdAt, updatedAt: validationReports.updatedAt })
+    .select({
+      id: validationReports.id,
+      formType: sql<string | null>`${validationReports.data}->>'formType'`,
+      recordNumber: validationReports.recordNumber,
+      createdAt: validationReports.createdAt,
+      updatedAt: validationReports.updatedAt,
+    })
     .from(validationReports);
-  for (const row of validations) pushCopy(copies, validationFormKeyFor(row.data), row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
+  for (const row of validations) pushCopy(copies, validationFormKeyFor({ formType: row.formType }), row.id, row.createdAt, row.recordNumber, row.updatedAt != null);
   const isos = await db
     .select({ id: isoQualityForms.id, formType: isoQualityForms.formType, recordNumber: isoQualityForms.recordNumber, createdAt: isoQualityForms.createdAt, updatedAt: isoQualityForms.updatedAt })
     .from(isoQualityForms);
@@ -608,6 +615,7 @@ async function refileMissingSavedRecords(db: Db, performedBy?: number): Promise<
 
 /** Point a filed copy at the record that was saved. Adds a missing file. Does not detach, delete, or move a live one. */
 export async function repairSavedFormListings(db: Db, performedBy?: number): Promise<void> {
+  if (await skipSavedListingRepair(db)) return;
   await deleteExpiredUnsavedDrafts(db);
   await releaseUnsavedFolderNodes(db, performedBy);
   await refileMissingSavedRecords(db, performedBy);
@@ -677,6 +685,7 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
     });
     node.linkedPath = expected;
   }
+  await rememberSavedListingStamp(db);
 }
 
 /** Record-delete kinds that have a saved-form listing. Unlisted kinds are left alone. */

@@ -136,17 +136,26 @@ async function pruneNumberedPlaceholders(db: Db): Promise<void> {
   await pruneEmptyDescendants(db, iso.id, keep);
 }
 
-export async function ensureFormTemplates(db: Db, performedBy?: number): Promise<void> {
-  if (RETIRED_FORM_KEYS.length > 0) {
-    await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
-  }
+async function dropRetiredTemplates(db: Db): Promise<void> {
+  await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
+}
+
+export async function ensureFormTemplates(db: Db, performedBy?: number, opts?: { forcePrune?: boolean }): Promise<void> {
   // Form folders used to walk this filing pass on every read. Once the blanks are
   // placed, keep the number repair and the numbered-placeholder prune, and skip the seed walk.
   if (await blankFormsAlreadyFiled(db)) {
     await repairStoredTemplateFields(db);
+    const [marked] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+    if (marked?.profile?.numberedPlaceholdersCleared && !opts?.forcePrune) return;
+    await dropRetiredTemplates(db);
     await pruneNumberedPlaceholders(db);
+    const [fresh] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+    if (fresh && !fresh.profile?.numberedPlaceholdersCleared) {
+      await db.update(company).set({ profile: { ...(fresh.profile ?? {}), numberedPlaceholdersCleared: true } }).where(eq(company.id, fresh.id));
+    }
     return;
   }
+  await dropRetiredTemplates(db);
   let all = await db.select().from(documentFolders);
 
   const legacyIso = all.find((folder) => folder.parentId === null && folder.name === PREVIOUS_ISO_ROOT);
@@ -521,6 +530,14 @@ export interface FormTemplateView {
   onBlankShelf: boolean;
   fileNamePattern: string;
   start: FormStart | null;
+}
+
+/** Titles and starts for the Folders tab. Does not load the document tree. */
+export async function listFolderTemplates(db: Db): Promise<{ formKey: string; title: string; formId: string; start: FormStart | null }[]> {
+  await ensureFormTemplates(db);
+  const rows = await db.select({ formKey: controlledFormTemplates.formKey, title: controlledFormTemplates.title, formId: controlledFormTemplates.formId }).from(controlledFormTemplates);
+  const starts = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed.start ?? null]));
+  return rows.map((row) => ({ formKey: row.formKey, title: row.title, formId: row.formId, start: starts.get(row.formKey) ?? null }));
 }
 
 export async function listFormTemplates(db: Db, performedBy?: number): Promise<{ fileNamePattern: string; templates: FormTemplateView[] }> {
