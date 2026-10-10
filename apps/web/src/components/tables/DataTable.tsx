@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, Inbox } from "lucide-react";
+import { FilterBar, SummaryCards, summarizeRecords } from "../layout/PageHeader";
 
 export interface Column<T> {
   header: string;
@@ -36,6 +37,11 @@ interface DataTableProps<T> {
    */
   selectedIds?: Set<string | number>;
   onSelectionChange?: (ids: Set<string | number>) => void;
+  /**
+   * A count row and a text filter above the table. Turn this off when the
+   * page already draws its own summary and filters.
+   */
+  listChrome?: boolean;
 }
 
 /** Generic list table shared by every module's list page (NCR, CAPA, Audits, ...). */
@@ -50,8 +56,15 @@ export function DataTable<T>({
   emptyMessage = "No records",
   selectedIds,
   onSelectionChange,
+  listChrome = true,
 }: DataTableProps<T>) {
   const selectable = selectedIds !== undefined && onSelectionChange !== undefined;
+  const [filter, setFilter] = useState("");
+  const shown = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    if (!listChrome || !needle) return rows;
+    return rows.filter((row) => recordText(row).includes(needle));
+  }, [filter, listChrome, rows]);
   if (isLoading) {
     return (
       <div className="overflow-hidden rounded-xl border border-border bg-card" aria-busy="true" aria-label="Loading">
@@ -76,18 +89,39 @@ export function DataTable<T>({
     );
   }
 
-  if (rows.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <Inbox size={22} />
+  const chrome = listChrome ? (
+    <div className="flex flex-col gap-6">
+      <SummaryCards items={summarizeRecords(shown)} />
+      <FilterBar>
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Filter this list…"
+          aria-label="Filter this list"
+          className="w-64 border border-border bg-background px-3 py-1.5 text-sm"
+        />
+        <span className="text-sm text-muted-foreground">
+          {shown.length} of {rows.length}
         </span>
-        <p className="max-w-md text-sm text-muted-foreground">{emptyMessage}</p>
+      </FilterBar>
+    </div>
+  ) : null;
+
+  if (rows.length === 0 || shown.length === 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        {chrome}
+        <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border px-6 py-12 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Inbox size={22} />
+          </span>
+          <p className="max-w-md text-sm text-muted-foreground">{filter.trim() ? "Nothing matches this filter." : emptyMessage}</p>
+        </div>
       </div>
     );
   }
 
-  const visibleIds = rows.map(rowKey);
+  const visibleIds = shown.map(rowKey);
   const allVisibleSelected = selectable && visibleIds.length > 0 && visibleIds.every((id) => selectedIds!.has(id));
 
   function toggleOne(id: string | number) {
@@ -105,47 +139,59 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card">
-      <table className="w-full min-w-[36rem] text-sm">
-        <thead className="bg-muted/40 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-          <tr>
-            {selectable && (
-              <th className="w-8 px-4 py-2">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all" />
-              </th>
-            )}
-            {columns.map((col) => (
-              <th key={col.header} className="px-4 py-2.5 text-left font-semibold">
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => {
-            const id = rowKey(row);
-            return (
-              <tr
-                key={id}
-                onClick={() => onRowClick?.(row)}
-                style={{ animationDelay: `${Math.min(rowIndex, 14) * 22}ms` }}
-                className={`row-in border-t border-border/70 transition-colors ${onRowClick ? "cursor-pointer hover:bg-primary/5" : ""}`}
-              >
-                {selectable && (
-                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selectedIds!.has(id)} onChange={() => toggleOne(id)} aria-label="Select row" />
-                  </td>
-                )}
-                {columns.map((col) => (
-                  <td key={col.header} className={`px-4 py-2.5 ${col.className ?? ""}`}>
-                    {col.accessor(row)}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="flex flex-col gap-6">
+      {chrome}
+      <div className="aq-list-table">
+        <table>
+          <thead>
+            <tr>
+              {selectable && (
+                <th className="w-8">
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all" />
+                </th>
+              )}
+              {columns.map((col) => (
+                <th key={col.header} className="text-left">
+                  {col.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row, rowIndex) => {
+              const id = rowKey(row);
+              return (
+                <tr
+                  key={id}
+                  onClick={() => onRowClick?.(row)}
+                  style={{ animationDelay: `${Math.min(rowIndex, 14) * 22}ms` }}
+                  className={`row-in ${onRowClick ? "cursor-pointer hover:bg-primary/5" : ""}`}
+                >
+                  {selectable && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds!.has(id)} onChange={() => toggleOne(id)} aria-label="Select row" />
+                    </td>
+                  )}
+                  {columns.map((col) => (
+                    <td key={col.header} className={col.className ?? ""}>
+                      {col.accessor(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
+}
+
+function recordText(row: unknown): string {
+  if (!row || typeof row !== "object") return "";
+  return Object.entries(row as Record<string, unknown>)
+    .filter(([key, value]) => !/password|secret|token|hash/i.test(key) && (typeof value === "string" || typeof value === "number"))
+    .map(([, value]) => String(value))
+    .join(" ")
+    .toLowerCase();
 }

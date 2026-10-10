@@ -17,6 +17,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
+import { FilterBar, PageHeader, SummaryCards } from "../../components/layout/PageHeader";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PendingFilesField } from "../../components/shared/PendingFilesField";
 import { SegmentedTabs } from "../../components/dashboard/kit";
@@ -74,6 +75,7 @@ export function NcrListPage() {
   const { label, people } = usePersonDirectory();
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [textFilter, setTextFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [params, setParams] = useSearchParams();
@@ -115,13 +117,25 @@ export function NcrListPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update all of the selected NCRs — none were changed.")),
   });
 
-  const filtered = useMemo(
-    () =>
-      ncrs.filter(
-        (n) => (!severityFilter || listedSeverity(n) === severityFilter) && (!statusFilter || ncrStepKey(n.status) === statusFilter)
-      ),
-    [ncrs, severityFilter, statusFilter]
-  );
+  const filtered = useMemo(() => {
+    const needle = textFilter.trim().toLowerCase();
+    return ncrs.filter((n) => {
+      if (severityFilter && listedSeverity(n) !== severityFilter) return false;
+      if (statusFilter && ncrStepKey(n.status) !== statusFilter) return false;
+      if (!needle) return true;
+      return `${showRecordNumber(n.recordNumber)} ${whatHappenedText(n)} ${ncrStepLabel(n.status)}`.toLowerCase().includes(needle);
+    });
+  }, [ncrs, severityFilter, statusFilter, textFilter]);
+  const openCount = ncrs.filter((n) => ncrStepKey(n.status) !== "closed").length;
+  const severeCount = ncrs.filter((n) => {
+    const severity = listedSeverity(n);
+    return severity === "high" || severity === "critical";
+  }).length;
+  const overdueCount = ncrs.filter((n) => {
+    if (ncrStepKey(n.status) === "closed" || !n.dueDate) return false;
+    const due = new Date(n.dueDate);
+    return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+  }).length;
 
   const columns: Column<Ncr>[] = [
     { header: "NCR No.", accessor: (n) => showRecordNumber(n.recordNumber) || "" },
@@ -150,28 +164,42 @@ export function NcrListPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">NCR</h1>
-          <p className="text-sm text-muted-foreground">Nonconformances. Log what went wrong, then contain it.</p>
-          <CurrentPlantNote />
-        </div>
-        <div className="flex gap-2">
-          <button onClick={exportCsv} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Export CSV
-          </button>
-          {canEdit && (
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              Log an NCR
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        crumbs={[{ label: "Home", to: "/" }, { label: "Quality" }, { label: "NCR" }]}
+        title="NCR"
+        description={
+          <>
+            <p>Nonconformances. Log what went wrong, then contain it.</p>
+            <CurrentPlantNote />
+            {reason && <p>{reason}</p>}
+          </>
+        }
+        actions={
+          <>
+            <button onClick={exportCsv} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted">
+              Export CSV
             </button>
-          )}
-        </div>
-      </div>
-      {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
+            {canEdit && (
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Log an NCR
+              </button>
+            )}
+          </>
+        }
+      />
+
+      <SummaryCards
+        items={[
+          { label: "Open", value: openCount, accent: true, detail: "Not closed" },
+          { label: "High or critical", value: severeCount },
+          { label: "Overdue", value: overdueCount },
+          { label: "Showing", value: filtered.length, detail: `${ncrs.length} in this plant` },
+        ]}
+      />
 
       <SegmentedTabs
         tabs={[
@@ -182,8 +210,15 @@ export function NcrListPage() {
         onChange={(key) => setParams(key === "list" ? {} : { view: key }, { replace: true })}
       />
 
-      <div className="flex gap-3">
-        <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
+      <FilterBar>
+        <input
+          value={textFilter}
+          onChange={(e) => setTextFilter(e.target.value)}
+          placeholder="Filter NCRs…"
+          aria-label="Filter NCRs"
+          className="w-64 border border-border bg-background px-3 py-1.5 text-sm"
+        />
+        <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity" className="border border-border bg-background px-3 py-1.5 text-sm">
           <option value="">All severities</option>
           {["low", "medium", "high", "critical"].map((s) => (
             <option key={s} value={s}>
@@ -192,7 +227,7 @@ export function NcrListPage() {
           ))}
         </select>
         {view === "list" && (
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="State" className="border border-border bg-background px-3 py-1.5 text-sm">
           <option value="">All states</option>
           {NCR_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -201,7 +236,7 @@ export function NcrListPage() {
           ))}
         </select>
         )}
-      </div>
+      </FilterBar>
 
       {view === "board" ? (
         <>
@@ -241,6 +276,7 @@ export function NcrListPage() {
         onRowClick={(n) => navigate(`/ncr/${n.id}`)}
         selectedIds={canEdit ? selectedIds : undefined}
         onSelectionChange={canEdit ? setSelectedIds : undefined}
+        listChrome={false}
       />
       </>
       )}

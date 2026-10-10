@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { PageHeader } from "../../components/layout/PageHeader";
 
 interface Figure {
   label: string;
@@ -174,13 +175,13 @@ export function ExecutiveDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Executive dashboard</h1>
-          <p className="text-sm text-muted-foreground">Greer and Wellman, side by side. Numbers open the matching records.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        crumbs={[{ label: "Home", to: "/" }, { label: "Executive dashboard" }]}
+        title="Executive dashboard"
+        description="Greer and Wellman, side by side. Numbers open the matching records."
+        actions={
+          <>
           {customizing ? (
             <>
               <button
@@ -215,8 +216,9 @@ export function ExecutiveDashboardPage() {
           >
             Reset
           </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {customizing && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
@@ -256,7 +258,7 @@ export function ExecutiveDashboardPage() {
                 const live = column.widgets.find((item) => item.id === widget.id);
                 const item = catalogByKind.get(widget.kind);
                 return (
-                  <article key={`${column.siteName}-${widget.id}`} className="rounded-lg border border-border bg-card p-3">
+                  <article key={`${column.siteName}-${widget.id}`} className="aq-panel p-4">
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h3 className="truncate text-sm font-medium text-foreground" title={live?.title ?? item?.label ?? widget.kind}>
