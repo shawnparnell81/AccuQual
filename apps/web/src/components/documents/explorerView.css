@@ -1,0 +1,82 @@
+/* Icon and list layouts flow with the page. No pane of its own scrolls. */
+
+.explorer-list,
+.explorer-icons,
+.explorer-details,
+.explorer-list-row,
+.explorer-detail-row,
+.explorer-tile {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.explorer-icons {
+  display: grid;
+  align-items: start;
+}
+
+.explorer-icons[data-explorer-view="small"] {
+  grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));
+  gap: 0.5rem;
+}
+
+.explorer-icons[data-explorer-view="large"] {
+  grid-template-columns: repeat(auto-fill, minmax(11.25rem, 1fr));
+  gap: 0.75rem;
+}
+
+.explorer-tile {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.explorer-tile-visual {
+  display: grid;
+  width: 100%;
+  place-items: center;
+}
+
+.explorer-tile-small .explorer-tile-visual {
+  height: 2.25rem;
+}
+
+.explorer-tile-large .explorer-tile-visual {
+  height: 7.5rem;
+  overflow: hidden;
+  border-radius: 0.375rem;
+}
+
+.explorer-tile-visual img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.explorer-tile-title {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+  text-align: center;
+}
+
+.explorer-detail-row {
+  display: grid;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.explorer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

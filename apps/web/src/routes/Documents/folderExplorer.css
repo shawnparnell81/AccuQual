@@ -137,21 +137,21 @@ div:has(> .page-enter > .folder-explorer) {
   min-width: 0;
 }
 
-.folder-explorer [data-testid="folder-details"] [role="row"],
-.folder-explorer [data-testid="library-pool-details"] [role="row"] {
+.folder-explorer [data-testid="folder-details"][data-explorer-view="details"] [role="row"],
+.folder-explorer [data-testid="library-pool-details"][data-explorer-view="details"] [role="row"] {
   padding-top: 0.55rem;
   padding-bottom: 0.55rem;
 }
 
-.folder-explorer [data-testid="folder-details"] [role="row"] {
+.folder-explorer [data-testid="folder-details"][data-explorer-view="details"] [role="row"] {
   grid-template-columns: minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
 }
 
-.folder-explorer [data-testid="library-pool-details"] [role="row"] {
+.folder-explorer [data-testid="library-pool-details"][data-explorer-view="details"] [role="row"] {
   grid-template-columns: minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
 }
 
-.folder-explorer [data-testid="library-pool-details"] [role="row"]:has(> :nth-child(7)) {
+.folder-explorer [data-testid="library-pool-details"][data-explorer-view="details"] [role="row"]:has(> :nth-child(7)) {
   grid-template-columns: 1.75rem minmax(0, 1.7fr) minmax(4rem, 7rem) minmax(2.25rem, 3.25rem) minmax(4.5rem, 7rem) minmax(4.5rem, 7rem) 1.75rem;
 }
 

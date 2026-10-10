@@ -22,6 +22,9 @@ import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/lis
 import { Modal } from "../../components/modals/Modal";
 import { FolderPathBar, copyFolderPath } from "../../components/documents/FolderPathBar";
 import { FolderContentsList, type FolderRowAction } from "../../components/documents/FolderContentsList";
+import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
+import { useExplorerView } from "../../hooks/useExplorerView";
+import type { ExplorerView } from "../../lib/explorerView";
 import { RemoveSavedFileDialog } from "../../components/documents/RemoveSavedFileDialog";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
 import { DeleteFolderDialog, FolderActionButtons, NewFolderDialog, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
@@ -635,6 +638,7 @@ export function FolderExplorerPage() {
   const [gapHint, setGapHint] = useState<string | null>(null);
   const [dragKind, setDragKind] = useState<DragKind | null>(null);
   const [search, setSearch] = useState("");
+  const [explorerView, setExplorerView] = useExplorerView("folders");
   const dragRef = useRef<{ id: number; kind: DragKind } | null>(null);
   const dragKindRef = useRef<DragKind | null>(null);
   const [explorerEl, setExplorerEl] = useState<HTMLElement | null>(null);
@@ -1222,6 +1226,7 @@ export function FolderExplorerPage() {
           }}
           actions={
             <>
+              <ExplorerViewSwitcher view={explorerView} onChange={setExplorerView} />
               {canManageFolders && (
                 <button
                   type="button"
@@ -1379,6 +1384,7 @@ export function FolderExplorerPage() {
               onGapOver={hoverGap}
               onGapLeave={leaveGap}
               onGapDrop={dropGap}
+              view={explorerView}
             />
           ) : (
           <>
@@ -1399,6 +1405,7 @@ export function FolderExplorerPage() {
           >
             <FolderContentsList
               items={detailItems(activeDept.id)}
+              view={explorerView}
               testId="folder-details"
               empty={<EmptyFolder filtered={query.length > 0} />}
               onOpen={(item) => {
@@ -1509,6 +1516,7 @@ export function FolderExplorerPage() {
             ) : (
             <FolderContentsList
               items={detailItems(poolFolder.id)}
+              view={explorerView}
               testId="library-pool-details"
               empty={<span className="block px-2 py-3 text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
               leading={
@@ -1901,6 +1909,7 @@ function FolderBrowser({
   onGapOver,
   onGapLeave,
   onGapDrop,
+  view,
 }: {
   folder: DocumentFolder;
   folders: DocumentFolder[];
@@ -1921,6 +1930,7 @@ function FolderBrowser({
   onGapOver: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
   onGapLeave: (key: string) => void;
   onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
+  view: ExplorerView;
 }) {
   const chain = folderChain(folders, folder.id);
   const items = folderContents(folders, folder.id).filter((item) => !query || `${item.label} ${item.node.name}`.toLowerCase().includes(query));
@@ -1947,6 +1957,7 @@ function FolderBrowser({
       >
         <FolderContentsList
           items={items}
+          view={view}
           testId="folder-details"
           empty={<EmptyFolder filtered={query.length > 0} />}
           onOpen={(item) => {
