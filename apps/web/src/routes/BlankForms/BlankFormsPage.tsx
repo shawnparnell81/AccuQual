@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FileText } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTemplatesQuery";
+import { ExplorerCatalog } from "../../components/documents/ExplorerCatalog";
+import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
 import { blankTemplateTopic, templatesOnBlankShelf } from "../../lib/blankFormsList";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
+import { useExplorerView } from "../../hooks/useExplorerView";
 
 /**
  * The same blanks as Folder Explorer → Blank Forms Templates.
@@ -11,6 +15,7 @@ import { blankFormsFolderHref } from "../../lib/folderBrowse";
  */
 export function BlankFormsListPage() {
   const navigate = useNavigate();
+  const [view, setView] = useExplorerView("blank-forms");
   const templates = useFormTemplates();
   const blanks = templatesOnBlankShelf(templates.data ?? []);
   const byTopic = new Map<string, FormTemplateCacheRow[]>();
@@ -29,14 +34,17 @@ export function BlankFormsListPage() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="blank-forms-list">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Blank Forms</h1>
-        <p className="text-sm text-muted-foreground">
-          These are the blank templates from Blank Forms Templates. Open one to start a filled copy. The blank itself stays in that folder.
-        </p>
-        <Link to={blankFormsFolderHref()} className="mt-1 inline-block text-sm text-primary hover:underline">
-          Open Blank Forms Templates
-        </Link>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Blank Forms</h1>
+          <p className="text-sm text-muted-foreground">
+            These are the blank templates from Blank Forms Templates. Open one to start a filled copy. The blank itself stays in that folder.
+          </p>
+          <Link to={blankFormsFolderHref()} className="mt-1 inline-block text-sm text-primary hover:underline">
+            Open Blank Forms Templates
+          </Link>
+        </div>
+        <ExplorerViewSwitcher view={view} onChange={setView} />
       </div>
       {templates.isLoading && <p className="text-sm text-muted-foreground">Loading blank forms…</p>}
       {templates.isError && <p className="text-sm text-destructive">Couldn't load the blank forms.</p>}
@@ -44,21 +52,20 @@ export function BlankFormsListPage() {
       {[...byTopic.entries()].map(([topic, forms]) => (
         <div key={topic} className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold text-foreground">{topic}</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {forms.map((form) => (
-              <button
-                key={form.formKey}
-                type="button"
-                data-testid="blank-form"
-                data-form-key={form.formKey}
-                onClick={() => openForm(form)}
-                className="flex items-start justify-between gap-2 rounded-md border border-border bg-background p-3 text-left text-sm text-foreground hover:bg-muted"
-              >
-                <span className="font-medium">{form.title}</span>
-                {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
-              </button>
-            ))}
-          </div>
+          <ExplorerCatalog
+            items={forms}
+            view={view}
+            title={(form) => form.title}
+            icon={() => <FileText size={view === "small" ? 28 : 16} className="text-primary" aria-hidden />}
+            largeVisual={() => <FileText size={40} className="text-primary" aria-hidden />}
+            onOpen={(form) => openForm(form)}
+            itemTestId={() => "blank-form"}
+            itemAttrs={(form) => ({ "data-form-key": form.formKey })}
+            columns={[
+              { key: "formId", label: "Form ID", render: (form) => form.formId || "—" },
+              { key: "topic", label: "Topic", render: () => topic },
+            ]}
+          />
         </div>
       ))}
     </div>

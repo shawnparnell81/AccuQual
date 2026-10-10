@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { File, FileText, Folder, LayoutTemplate, List, MoreHorizontal } from "lucide-react";
 import { StatusBadge } from "../tables/StatusBadge";
 import { formatDate } from "../../lib/dates";
+import { fileThumbnailKind, storedFileName, type ExplorerView } from "../../lib/explorerView";
 import {
   sortFolderDetails,
   type FolderDetailItem,
@@ -11,6 +12,8 @@ import {
   type FolderDetailSortKey,
   type FolderItemType,
 } from "../../lib/folderDetails";
+import { FileThumbnail } from "./FileThumbnail";
+import "./explorerView.css";
 
 export interface FolderRowAction {
   id: string;
@@ -29,13 +32,22 @@ const COLUMNS: { key: FolderDetailSortKey; label: string; className: string }[] 
   { key: "modifiedBy", label: "Modified by", className: "" },
 ];
 
-function ItemIcon({ type }: { type: FolderItemType }) {
+function ItemIcon({ type, size = 15 }: { type: FolderItemType; size?: number }) {
   const className = type === "file" ? "shrink-0 text-muted-foreground" : "shrink-0 text-primary";
-  if (type === "folder") return <Folder size={15} className={className} aria-hidden />;
-  if (type === "controlled list") return <List size={15} className={className} aria-hidden />;
-  if (type === "template") return <LayoutTemplate size={15} className={className} aria-hidden />;
-  if (type === "form") return <FileText size={15} className={className} aria-hidden />;
-  return <File size={15} className={className} aria-hidden />;
+  if (type === "folder") return <Folder size={size} className={className} aria-hidden />;
+  if (type === "controlled list") return <List size={size} className={className} aria-hidden />;
+  if (type === "template") return <LayoutTemplate size={size} className={className} aria-hidden />;
+  if (type === "form") return <FileText size={size} className={className} aria-hidden />;
+  return <File size={size} className={className} aria-hidden />;
+}
+
+function LargeMark<T extends FolderDetailNode>({ item }: { item: FolderDetailItem<T> }) {
+  const fallback = <ItemIcon type={item.type} size={40} />;
+  const stored = item.node.pdfPath;
+  const mime = "pdfMimeType" in item.node ? (item.node as { pdfMimeType?: string | null }).pdfMimeType : undefined;
+  const fileName = storedFileName(item.node.name, stored);
+  if (!stored || fileThumbnailKind(fileName, mime) === "none") return <div className="explorer-tile-visual">{fallback}</div>;
+  return <FileThumbnail folderId={item.node.id} fileName={fileName} mimeType={mime} fallback={fallback} />;
 }
 
 function RowMenu({ name, actions }: { name: string; actions: FolderRowAction[] }) {
@@ -90,14 +102,46 @@ function RowMenu({ name, actions }: { name: string; actions: FolderRowAction[] }
   );
 }
 
+function ItemName<T extends FolderDetailNode>({ item, onOpen, className }: { item: FolderDetailItem<T>; onOpen?: (item: FolderDetailItem<T>) => void; className: string }) {
+  if (item.href) {
+    return (
+      <Link
+        to={item.href}
+        data-testid={item.type === "folder" ? undefined : "saved-file"}
+        data-open-id={item.node.id}
+        className={className}
+        title={item.label}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {item.label}
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      data-testid={item.type === "folder" ? "folder-title" : "saved-file"}
+      title={item.label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen?.(item);
+      }}
+    >
+      {item.label}
+    </button>
+  );
+}
+
 /**
- * One folder's children as a details list: one item per row.
- * Subfolders stay above saved items. Column headers sort within those two groups.
+ * One folder's children. List is icon and name. Details adds every column.
+ * Small and large icons keep the same drag and move actions. Nothing here scrolls on its own.
  */
 export function FolderContentsList<T extends FolderDetailNode>({
   items,
   empty,
   testId = "folder-details",
+  view = "list",
   onOpen,
   leading,
   actions,
@@ -108,6 +152,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
   items: FolderDetailItem<T>[];
   empty?: ReactNode;
   testId?: string;
+  view?: ExplorerView;
   onOpen?: (item: FolderDetailItem<T>) => void;
   leading?: (item: FolderDetailItem<T>) => ReactNode;
   actions?: (item: FolderDetailItem<T>) => FolderRowAction[];
@@ -119,8 +164,8 @@ export function FolderContentsList<T extends FolderDetailNode>({
   const [sort, setSort] = useState<FolderDetailSort>({ key: "name", direction: "asc" });
   const rows = useMemo(() => sortFolderDetails(items, sort), [items, sort]);
   const grid = leading
-    ? "grid-cols-[1.75rem_minmax(14rem,1.8fr)_8.5rem_3.75rem_9rem_8rem_2rem]"
-    : "grid-cols-[minmax(14rem,1.8fr)_8.5rem_3.75rem_9rem_8rem_2rem]";
+    ? "grid-cols-[1.75rem_minmax(0,1.8fr)_minmax(0,8.5rem)_minmax(0,3.75rem)_minmax(0,9rem)_minmax(0,8rem)_2rem]"
+    : "grid-cols-[minmax(0,1.8fr)_minmax(0,8.5rem)_minmax(0,3.75rem)_minmax(0,9rem)_minmax(0,8rem)_2rem]";
 
   function toggleSort(key: FolderDetailSortKey) {
     setSort((current) => (current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" }));
@@ -131,9 +176,99 @@ export function FolderContentsList<T extends FolderDetailNode>({
     else onOpen?.(item);
   }
 
+  function rowShell(item: FolderDetailItem<T>) {
+    const extra = rowProps?.(item) ?? {};
+    const { className: extraClass = "", ...rest } = extra;
+    const status = item.node.documentExpirationStatus ?? item.node.documentStatus;
+    return { extraClass, rest, status };
+  }
+
+  if (view === "small" || view === "large") {
+    return (
+      <div className="explorer-icons" data-testid={testId} data-explorer-view={view} role="list" aria-label="Folder contents">
+        {rows.length === 0 && empty}
+        {rows.map((item) => {
+          const { extraClass, rest, status } = rowShell(item);
+          return (
+            <div
+              key={item.node.id}
+              role="listitem"
+              data-testid={item.type === "folder" ? "folder-row" : "folder-detail-row"}
+              data-folder-id={item.node.id}
+              data-item-type={item.type}
+              data-item-label={item.label}
+              title={item.label}
+              {...rest}
+              className={`explorer-tile ${view === "large" ? "explorer-tile-large" : "explorer-tile-small"} cursor-pointer rounded-lg border border-border bg-card px-2 py-2 text-foreground hover:bg-muted ${extraClass}`}
+              onClick={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("[data-row-chrome]") || target.closest("a,button")) return;
+                openItem(item);
+              }}
+            >
+              {leading && (
+                <span data-row-chrome="" className="absolute left-1 top-1">
+                  {leading(item)}
+                </span>
+              )}
+              <span data-row-chrome="" className="absolute right-1 top-1">
+                <RowMenu name={item.label} actions={actions?.(item) ?? []} />
+              </span>
+              {view === "large" ? <LargeMark item={item} /> : <div className="explorer-tile-visual"><ItemIcon type={item.type} size={28} /></div>}
+              <ItemName item={item} onOpen={onOpen} className="explorer-tile-title text-xs font-medium text-primary hover:underline" />
+              {status && <StatusBadge value={status} />}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (view === "list") {
+    return (
+      <div className="explorer-list rounded-lg border border-border bg-card text-sm text-foreground" data-testid={testId} data-explorer-view="list" role="list" aria-label="Folder contents">
+        {rows.length === 0 && empty}
+        {rows.map((item, index) => {
+          const { extraClass, rest, status } = rowShell(item);
+          return (
+            <div key={item.node.id} className="border-b border-border last:border-b-0">
+              {renderBefore?.(item, index)}
+              <div
+                role="listitem"
+                data-testid={item.type === "folder" ? "folder-row" : "folder-detail-row"}
+                data-folder-id={item.node.id}
+                data-item-type={item.type}
+                data-item-label={item.label}
+                title={item.label}
+                {...rest}
+                className={`flex min-w-0 cursor-pointer items-center gap-2 px-2 py-1.5 hover:bg-muted ${extraClass}`}
+                onClick={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest("[data-row-chrome]") || target.closest("a,button")) return;
+                  openItem(item);
+                }}
+              >
+                {leading && (
+                  <span data-row-chrome="" className="flex justify-center">
+                    {leading(item)}
+                  </span>
+                )}
+                <ItemIcon type={item.type} />
+                <ItemName item={item} onOpen={onOpen} className="explorer-name min-w-0 flex-1 text-left font-medium text-primary hover:underline" />
+                {status && <StatusBadge value={status} />}
+                <RowMenu name={item.label} actions={actions?.(item) ?? []} />
+              </div>
+              {renderAfter?.(item, index)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card text-foreground" data-testid={testId}>
-      <div className="min-w-[44rem]" role="table" aria-label="Folder contents">
+    <div className="overflow-visible rounded-lg border border-border bg-card text-foreground" data-testid={testId} data-explorer-view="details">
+      <div className="min-w-0" role="table" aria-label="Folder contents">
         <div role="row" className={`grid ${grid} items-center gap-2 border-b border-border bg-muted/40 px-2 py-1.5 text-xs font-medium text-muted-foreground`}>
           {leading && <span role="columnheader" />}
           {COLUMNS.map((column) => {
@@ -162,7 +297,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
           const { className: extraClass = "", ...rest } = extra;
           const status = item.node.documentExpirationStatus ?? item.node.documentStatus;
           return (
-            <div key={item.node.id}>
+            <div key={item.node.id} className="border-b border-border last:border-b-0">
               {renderBefore?.(item, index)}
               <div
                 role="row"
@@ -170,8 +305,9 @@ export function FolderContentsList<T extends FolderDetailNode>({
                 data-folder-id={item.node.id}
                 data-item-type={item.type}
                 data-item-label={item.label}
+                title={item.label}
                 {...rest}
-                className={`grid ${grid} cursor-pointer items-center gap-2 border-b border-border px-2 py-1.5 text-sm last:border-b-0 hover:bg-muted ${extraClass}`}
+                className={`grid ${grid} cursor-pointer items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted ${extraClass}`}
                 onClick={(event) => {
                   const target = event.target as HTMLElement;
                   if (target.closest("[data-row-chrome]")) return;

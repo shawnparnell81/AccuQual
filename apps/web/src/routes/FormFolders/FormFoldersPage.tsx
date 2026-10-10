@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Folder } from "lucide-react";
+import { FileText, Folder } from "lucide-react";
 import { apiClient } from "../../api/client";
+import { ExplorerCatalog } from "../../components/documents/ExplorerCatalog";
+import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
+import { FileThumbnail } from "../../components/documents/FileThumbnail";
 import { DeleteFolderDialog, FolderActionButtons, RenameFolderDialog } from "../../components/documents/FolderNameDialogs";
 import { useToast } from "../../components/shared/ToastProvider";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { documentsFolderHref, type BrowseFolder } from "../../lib/folderBrowse";
+import { fileThumbnailKind } from "../../lib/explorerView";
 import { formatDateTime } from "../../lib/dates";
+import { useExplorerView } from "../../hooks/useExplorerView";
 
 interface FormFolderSummary {
   formKey: string;
@@ -51,6 +56,7 @@ function useFolderPermissions() {
 
 /** Form-name folders. Each one opens the saved copies of that form. */
 export function FormFoldersPage() {
+  const [view, setView] = useExplorerView("form-folders");
   const [query, setQuery] = useState("");
   const [editingMode, setEditingMode] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -134,7 +140,8 @@ export function FormFoldersPage() {
             One folder for each form you can fill in. Open a folder to see the saved copies of that form. Blank templates are in Blank Forms Templates in Folder Explorer.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExplorerViewSwitcher view={view} onChange={setView} />
           <button
             type="button"
             data-testid="edit-folders"
@@ -171,54 +178,37 @@ export function FormFoldersPage() {
       {!folders.isLoading && !folders.isError && visible.length === 0 && <p className="text-sm text-muted-foreground">No forms match.</p>}
 
       {visible.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card" data-testid="form-folders-list">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-3 py-1.5 font-medium">Form</th>
-                <th className="px-3 py-1.5 text-right font-medium">Saved</th>
-                {editingMode && <th className="px-3 py-1.5 text-right font-medium"> </th>}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((folder) => {
-                const picked = selectedKey === folder.formKey;
-                return (
-                  <tr
-                    key={folder.formKey}
-                    data-selected={picked ? "true" : "false"}
-                    className={`border-b border-border last:border-b-0 ${picked ? "bg-primary/10" : ""}`}
-                    onClick={() => setSelectedKey(folder.formKey)}
-                  >
-                    <td className="px-3 py-1.5">
-                      <Link
-                        to={`/form-folders/${encodeURIComponent(folder.formKey)}`}
-                        data-testid="form-folder"
-                        data-form-key={folder.formKey}
-                        className="inline-flex min-w-0 items-center gap-2 font-medium text-primary hover:underline"
-                      >
-                        <Folder size={16} className="shrink-0 text-muted-foreground" />
-                        <span className="truncate" title={folder.name}>{folder.name}</span>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-1.5 text-right text-muted-foreground">{savedLabel(folder.savedCount)}</td>
-                    {editingMode && (
-                      <td className="px-3 py-1.5 text-right">
-                        <FolderActionButtons
-                          canRename={canRename}
-                          canDelete={canDelete}
-                          pending={pending}
-                          onEdit={() => setRenameTarget(folder)}
-                          onDelete={() => setDeleteTarget(folder)}
-                        />
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ExplorerCatalog
+          items={visible}
+          view={view}
+          testId="form-folders-list"
+          title={(folder) => folder.name}
+          icon={() => <Folder size={view === "small" ? 28 : 16} className="text-primary" aria-hidden />}
+          largeVisual={() => <Folder size={40} className="text-primary" aria-hidden />}
+          href={(folder) => `/form-folders/${encodeURIComponent(folder.formKey)}`}
+          onRowClick={(folder) => setSelectedKey(folder.formKey)}
+          selected={(folder) => selectedKey === folder.formKey}
+          itemTestId={() => "form-folder"}
+          itemAttrs={(folder) => ({ "data-form-key": folder.formKey, "data-selected": selectedKey === folder.formKey ? "true" : "false" })}
+          columns={[
+            { key: "formId", label: "Form ID", render: (folder) => folder.formId || "—" },
+            { key: "title", label: "Title", render: (folder) => <span title={folder.title}>{folder.title}</span> },
+            { key: "saved", label: "Saved", align: "right", render: (folder) => savedLabel(folder.savedCount) },
+          ]}
+          trailing={
+            editingMode
+              ? (folder) => (
+                  <FolderActionButtons
+                    canRename={canRename}
+                    canDelete={canDelete}
+                    pending={pending}
+                    onEdit={() => setRenameTarget(folder)}
+                    onDelete={() => setDeleteTarget(folder)}
+                  />
+                )
+              : undefined
+          }
+        />
       )}
 
       <RenameFolderDialog
@@ -255,6 +245,7 @@ export function FormFoldersPage() {
 export function FormFolderDetailPage() {
   const { formKey = "" } = useParams();
   const navigate = useNavigate();
+  const [view, setView] = useExplorerView("form-folder");
   const [query, setQuery] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -333,7 +324,8 @@ export function FormFolderDetailPage() {
           <h1 className="text-2xl font-semibold">{folder.data?.name ?? "Folder"}</h1>
           <p className="text-sm text-muted-foreground">Saved copies of this form, newest first. Blank templates are not listed here.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ExplorerViewSwitcher view={view} onChange={setView} />
           <FolderActionButtons
             canRename={canRename}
             canDelete={canDelete}
@@ -356,40 +348,40 @@ export function FormFolderDetailPage() {
       {!folder.isLoading && !folder.isError && fills.length === 0 && <p className="text-sm text-muted-foreground">No saved copies of this form yet.</p>}
 
       {fills.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <table className="w-full text-sm" data-testid="saved-fills">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-3 py-1.5 font-medium">File name</th>
-                <th className="px-3 py-1.5 font-medium">Saved</th>
-                <th className="px-3 py-1.5 font-medium">Documents</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fills.map((fill) => (
-                <tr key={`${fill.recordId}-${fill.fileName}`} data-testid="saved-fill" data-file-name={fill.fileName} className="border-b border-border last:border-b-0">
-                  <td className="px-3 py-1.5">
-                    <Link to={fill.openPath} title={fill.fileName} className="block max-w-full truncate font-medium text-primary hover:underline">
-                      {fill.fileName}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    <time dateTime={fill.savedAt}>{formatDateTime(fill.savedAt)}</time>
-                  </td>
-                  <td className="px-3 py-1.5">
-                    {fill.documentsFolderId != null ? (
-                      <Link to={documentsFolderHref(fill.documentsFolderId)} className="text-primary hover:underline">
-                        In Documents
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ExplorerCatalog
+          items={fills}
+          view={view}
+          testId="saved-fills"
+          title={(fill) => fill.fileName}
+          icon={() => <FileText size={view === "small" ? 28 : 16} className="text-primary" aria-hidden />}
+          largeVisual={(fill) => {
+            const fallback = <FileText size={40} className="text-primary" aria-hidden />;
+            if (fill.documentsFolderId == null || fileThumbnailKind(fill.fileName) === "none") return fallback;
+            return <FileThumbnail folderId={fill.documentsFolderId} fileName={fill.fileName} fallback={fallback} />;
+          }}
+          href={(fill) => fill.openPath}
+          itemTestId={() => "saved-fill"}
+          itemAttrs={(fill) => ({ "data-file-name": fill.fileName })}
+          columns={[
+            {
+              key: "saved",
+              label: "Saved",
+              render: (fill) => <time dateTime={fill.savedAt}>{formatDateTime(fill.savedAt)}</time>,
+            },
+            {
+              key: "documents",
+              label: "Documents",
+              render: (fill) =>
+                fill.documentsFolderId != null ? (
+                  <Link to={documentsFolderHref(fill.documentsFolderId)} className="text-primary hover:underline" data-row-chrome="">
+                    In Documents
+                  </Link>
+                ) : (
+                  "—"
+                ),
+            },
+          ]}
+        />
       )}
 
       <RenameFolderDialog
