@@ -22,6 +22,8 @@ import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 import { GridClipboard } from "../shared/GridClipboard";
+import { isSectionPathCommitted } from "../../lib/sectionKeepAlive";
+import { useDirtyPathStore } from "../../store/dirtyPathStore";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -134,6 +136,19 @@ export function AppLayout() {
   // created again; the strip's neighbor replaces that URL.
   useEffect(() => {
     if (isSupplierPortal) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const pending = Object.values(useDirtyPathStore.getState().paths).some(Boolean);
+      if (!pending) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSupplierPortal]);
+
+  useEffect(() => {
+    if (isSupplierPortal) return;
+    if (!isSectionPathCommitted(location.pathname)) return;
     const { title, icon } = deriveTabMeta(location.pathname);
     const redirectTo = syncActiveTabLocation(location.pathname, title, icon);
     document.title = title && title !== location.pathname ? `${title} · AccuQual` : "AccuQual";

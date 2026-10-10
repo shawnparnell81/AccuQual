@@ -7,6 +7,7 @@ import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { isFullAccessRole } from "../../lib/fullAccess";
+import { UnsavedDot } from "../../components/layout/sectionDraft";
 
 interface ConsoleSection {
   key: string;
@@ -92,6 +93,7 @@ export function AdminConsoleLayout() {
             <>
               <section.icon size={14} className="shrink-0" />
               <span>{section.label}</span>
+              {section.path ? <UnsavedDot path={`/admin/${section.path}`} /> : null}
             </>
           );
           return section.externalPath ? (
