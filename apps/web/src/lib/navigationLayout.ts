@@ -95,6 +95,27 @@ export function folderMenuEntries(node: SidebarFolder): SidebarNode[] {
   return [page, ...node.children];
 }
 
+/**
+ * A group whose menu would contain one link is that link.
+ * The row keeps the group name and opens the only destination.
+ * A nested folder is left alone so a real submenu can still open.
+ */
+export function collapseSingleItemMenus(node: SidebarNode): SidebarNode {
+  if (!isFolder(node)) return node;
+  const folder: SidebarFolder = { ...node, children: node.children.map(collapseSingleItemMenus) };
+  const entries = folderMenuEntries(folder);
+  const only = entries[0];
+  if (entries.length !== 1 || !only || isFolder(only)) return folder;
+  return {
+    key: folder.key,
+    label: folder.label,
+    path: only.path,
+    icon: folder.icon,
+    adminOnly: folder.adminOnly,
+    external: only.external,
+  };
+}
+
 export function menuLabels(nodes: SidebarNode[]): string[] {
   const out: string[] = [];
   for (const node of nodes) {
