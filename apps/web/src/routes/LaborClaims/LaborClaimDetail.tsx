@@ -6,6 +6,7 @@ import { useModuleFormLock } from "../../hooks/useSavedFormMode";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { RecordNumberField } from "../../components/forms/RecordNumberField";
 import { SelectField, TextAreaField, TextField } from "../../components/forms/Field";
@@ -44,7 +45,7 @@ export function LaborClaimDetail() {
   const { id } = useParams();
   const claimId = Number(id);
   const toast = useToast();
-  const { data: claim, isLoading, isError } = claimHooks.useOne(claimId);
+  const { data: claim, isLoading, isError, error } = claimHooks.useOne(claimId);
   const updateClaim = claimHooks.useUpdate();
   const canEdit = useWorkflowAccessLevel("labor_claims") === "edit";
   const formLock = useModuleFormLock(claimId, canEdit, `/labor-claims/${claimId}/begin-edit`);
@@ -55,7 +56,7 @@ export function LaborClaimDetail() {
     if (claim) setDraft(draftFrom(claim));
   }, [claim]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this labor claim" />;
   if (isLoading || !claim || !draft) return <LoadingPlaceholder />;
 
   const locked = !formLock.fieldsEditable;

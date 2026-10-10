@@ -13,6 +13,7 @@ import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
@@ -76,7 +77,7 @@ export function ValidationReportDetailPage() {
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.documents === "edit";
   const queryClient = useQueryClient();
-  const { data: report, isLoading, isError } = hooks.useOne(reportId);
+  const { data: report, isLoading, isError, error } = hooks.useOne(reportId);
   const updateReport = hooks.useUpdate();
   const signReport = hooks.useAction("sign");
   const beginEdit = hooks.useAction("begin-edit");
@@ -114,7 +115,7 @@ export function ValidationReportDetailPage() {
   const dirty = report == null || cells == null ? false : sheetIsDirty(report.id, liveSnap, savedSnap);
   useReportTabDirty(dirty);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this validation report. Refresh the page and try again.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this validation report. Refresh the page and try again." noun="this validation form" />;
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
   const fieldsEditable = savedFieldsEditable(mode, canEdit);

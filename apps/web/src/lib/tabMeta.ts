@@ -16,6 +16,8 @@ interface RoutePattern {
 }
 
 const ROUTE_PATTERNS: RoutePattern[] = [
+  { test: /^\/executive\/list\/?$/, icon: "dashboard", title: () => "Records" },
+  { test: /^\/executive\/?$/, icon: "dashboard", title: () => "Executive dashboard" },
   { test: /^\/ncr\/(\d+)$/, icon: "ncr", title: () => "NCR" },
   { test: /^\/ncr\/?$/, icon: "ncr", title: () => "NCR" },
   { test: /^\/capa\/(\d+)$/, icon: "capa", title: () => "CAPA" },

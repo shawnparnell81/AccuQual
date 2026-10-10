@@ -53,6 +53,7 @@ import {
   CrarListPage,
   DashboardPage,
   ExecutiveDashboardPage,
+  ExecutiveDrillListPage,
   DigitalTwinPage,
   DocumentCategoryPage,
   DocumentChangeRequestDetailPage,
@@ -149,6 +150,7 @@ export function workspaceRouteElements() {
   return [
     <Route key="/" path="/" element={<HomeRoute />} />,
     <Route key="/executive" path="/executive" element={<ExecutiveDashboardPage />} />,
+    <Route key="/executive/list" path="/executive/list" element={<ExecutiveDrillListPage />} />,
     <Route key="/home" path="/home" element={<HomePage />} />,
     <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsListPage />} />,
     <Route key="/blank-forms/start" path="/blank-forms/start/:formKey" element={<StartBlankFormPage />} />,

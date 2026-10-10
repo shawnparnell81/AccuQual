@@ -42,6 +42,12 @@ describe("saved tabs for removed pages", () => {
     assert.equal(isLiveTabPath("/inventory/lots/4/label"), false);
     assert.equal(isLiveTabPath("/work-orders/4"), true);
     assert.equal(isLiveTabPath("/notifications"), true);
+    assert.equal(isLiveTabPath("/executive"), true);
+    assert.equal(isLiveTabPath("/executive/list?kind=fai&bucket=open&dateRange=90d&siteId=6"), true);
+    assert.equal(isLiveTabPath("/complaints/4"), true);
+    assert.equal(isLiveTabPath("/iso-forms/record/8"), true);
+    assert.equal(isLiveTabPath("/8d/3"), true);
+    assert.equal(isLiveTabPath("/labor-claims/2"), true);
     assert.equal(isLiveTabPath("/admin/users"), true);
     assert.equal(isLiveTabPath("/admin/users/new"), true);
     assert.equal(isLiveTabPath("/admin/users/12"), true);

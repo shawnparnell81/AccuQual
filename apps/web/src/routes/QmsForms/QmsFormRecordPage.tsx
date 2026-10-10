@@ -11,6 +11,7 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { getQmsFormDefinition, isRetiredQmsFormType } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import type { SignatureChoice } from "../../components/forms/signatureRequired";
@@ -81,7 +82,7 @@ export function QmsFormRecordPage() {
     };
   }, [formId, canEdit, formLock.openedFresh]);
 
-  const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);
+  const { data: record, isLoading, isError, error } = qmsFormHooks.useOne(formId);
   const drafts = useRef(new Map<string, string>());
   const savers = useRef(new Map<string, (value: string) => Promise<unknown>>());
   const saveQueue = useRef(Promise.resolve());
@@ -125,7 +126,7 @@ export function QmsFormRecordPage() {
   });
 
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this form" />;
   if (isLoading || !record) return <LoadingPlaceholder />;
   const loadedRecord = record;
 

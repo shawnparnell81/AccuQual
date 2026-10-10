@@ -19,6 +19,7 @@ import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { formatDate } from "../../lib/dates";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
 
@@ -60,7 +61,7 @@ const TRANSITION_DEPARTMENTS: Record<string, string[]> = {
 export function WarrantyClaimDetail() {
   const { id } = useParams();
   const claimId = Number(id);
-  const { data: claim, isLoading, isError } = claimHooks.useOne(claimId);
+  const { data: claim, isLoading, isError, error } = claimHooks.useOne(claimId);
   const updateClaim = claimHooks.useUpdate();
   const currentUser = useCurrentUser();
   const warrantyAccessLevel = useWorkflowAccessLevel("warranty");
@@ -69,7 +70,7 @@ export function WarrantyClaimDetail() {
     successMessage: "Warranty claim status updated.",
   });
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this record — try refreshing the page." noun="this warranty claim" />;
   if (isLoading || !claim) return <LoadingPlaceholder />;
 
   const isAdmin = isFullAccessRole(currentUser?.roleName);

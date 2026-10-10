@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa, Ncr } from "../../api/types";
@@ -54,7 +55,7 @@ export function CapaDetailPage() {
   const formLock = useModuleFormLock(capaId, permitted, `/capa/${capaId}/begin-edit`);
   const canEdit = formLock.fieldsEditable;
   const { label, people } = usePersonDirectory();
-  const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
+  const { data: capa, isLoading, isError, error } = capaHooks.useOne(capaId);
   const { data: linkedNcr } = ncrHooks.useOne(capa?.ncrId ?? undefined);
   useSetAssistantContext("capa", capaId, capa ? recordHeading("CAPA", capa.recordNumber) : "CAPA");
   const updateCapa = capaHooks.useUpdate();
@@ -83,7 +84,7 @@ export function CapaDetailPage() {
     setVerificationTouched(false);
   }, [capa?.verification]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this CAPA. Refresh the page and try again.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this CAPA. Refresh the page and try again." noun="this CAPA" />;
   if (isLoading || !capa) return <LoadingPlaceholder />;
 
   const owner = label(capa.ownerId);

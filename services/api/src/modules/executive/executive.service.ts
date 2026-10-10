@@ -126,7 +126,7 @@ function categoryFigures(rows: Fact[]): Figure[] {
     for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3);
-  if (top.length === 0) return [{ label: "No category recorded", value: 0, bucket: "category:" }];
+  if (top.length === 0) return [{ label: "No category recorded", value: rows.length, bucket: "category:" }];
   return top.map(([name, value]) => ({ label: name, value, bucket: `category:${encodeURIComponent(name)}` }));
 }
 
@@ -146,6 +146,8 @@ function overdueFigures(rows: Fact[]): Figure[] {
     complaint: "Complaints",
     warranty: "Warranty",
     fai: "FAI",
+    labor: "Labor claims",
+    eightd: "8D",
   };
   return (["ncr", "capa", "audit"] as const).map((group) => ({
     label: labels[group],
@@ -174,6 +176,20 @@ export function figuresFor(widget: DashboardWidget, rows: Fact[], now: Date): Fi
   if (widget.kind === "open_ncrs") summary.push(...agingFigures(open, now), ...statusFigures(open), ...categoryFigures(open));
   else summary.push(...statusFigures(open));
   return summary;
+}
+
+/** Extra counts that sit on a summary card but are not that card's main record type. */
+export function supplementFigures(widget: DashboardWidget, figures: Figure[], facts: Fact[], siteId: number | null, now: Date): Figure[] {
+  if (widget.metric !== "summary") return figures;
+  if (widget.kind === "warranty") {
+    const labor = facts.filter((fact) => fact.group === "labor" && onSite(fact, siteId) && fact.outcome === "open" && inWindow(fact.createdAt, widget.dateRange, now));
+    return [...figures, { label: "Labor claims", value: labor.length, bucket: "labor" }];
+  }
+  if (widget.kind === "open_ncrs") {
+    const reports = facts.filter((fact) => fact.group === "eightd" && onSite(fact, siteId) && fact.outcome === "open" && inWindow(fact.createdAt, widget.dateRange, now));
+    return [...figures, { label: "8D", value: reports.length, bucket: "eightd" }];
+  }
+  return figures;
 }
 
 export function matchesBucket(fact: Fact, bucket: string, now: Date): boolean {
@@ -241,7 +257,7 @@ export async function buildDashboard(db: Db, userId: number, sites: { id: number
         metric: widget.metric,
         dateRange: widget.dateRange,
         dateRangeLabel: dateRangeLabel(widget.dateRange),
-        figures: figuresFor(widget, selected(visible, widget, column.siteId, now), now),
+        figures: supplementFigures(widget, figuresFor(widget, selected(visible, widget, column.siteId, now), now), visible, column.siteId, now),
       })),
     })),
   };
@@ -259,25 +275,26 @@ export async function drillRecords(
   const widget: DashboardWidget = { id: "drill", kind: input.kind, metric: "summary", dateRange: input.dateRange };
   const names = new Map(sites.map((site) => [site.id, site.name]));
   const rows = facts.filter((fact) => {
-    if (fact.siteId == null) {
-      if (!includeUnassigned || input.siteId != null) return false;
-    } else if (!allowed.has(fact.siteId) || fact.siteId !== input.siteId) {
-      if (input.siteId != null || fact.siteId == null) return false;
-      if (input.siteId == null && fact.siteId != null) return false;
-    }
-    if (input.siteId != null && fact.siteId !== input.siteId) return false;
-    if (input.siteId == null && fact.siteId != null) return false;
+    const onThisSite = input.siteId == null ? fact.siteId == null : fact.siteId === input.siteId;
+    if (!onThisSite) return false;
+    if (fact.siteId != null && !allowed.has(fact.siteId)) return false;
+    if (fact.siteId == null && !includeUnassigned) return false;
+    if (input.bucket === "labor") return fact.group === "labor" && fact.outcome === "open" && inWindow(fact.createdAt, input.dateRange, now);
+    if (input.bucket === "eightd") return fact.group === "eightd" && fact.outcome === "open" && inWindow(fact.createdAt, input.dateRange, now);
     return selected([fact], widget, input.siteId, now).length === 1 && matchesBucket(fact, input.bucket, now);
   });
+  const listed = rows.slice(0, 1000);
   return {
     title: widgetLabel(input.kind),
     siteName: input.siteId == null ? "Unassigned" : names.get(input.siteId) ?? "Unassigned",
-    rows: rows.slice(0, 200).map((fact) => ({
+    total: rows.length,
+    rows: listed.map((fact) => ({
       recordNumber: showNumber(fact.recordNumber),
       title: fact.title,
       status: fact.statusLabel,
       ageLabel: fact.createdAt ? `${Math.max(0, Math.floor((now.getTime() - fact.createdAt.getTime()) / DAY_MS))} days` : "—",
       href: fact.href,
+      module: fact.module,
     })),
   };
 }

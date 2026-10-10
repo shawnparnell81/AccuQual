@@ -18,6 +18,7 @@ import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { EightDWorkbook } from "./EightDSheets";
 import { blank8dFromData, buildSaveData, previousFields, type Blank8DValues } from "../../lib/blank8d";
 import { classifyStepSaveError, eightDNextLabel, eightDStepIsSaved, missingEightDFields, type StepSaveNotice } from "../../lib/eightDProgress";
@@ -125,7 +126,7 @@ export function EightDDetailPage() {
   const permitted = useCanEditWorkflow("8d");
   const formLock = useModuleFormLock(reportId, permitted, `/8d/${reportId}/begin-edit`);
   const canEdit = formLock.fieldsEditable;
-  const { data: report, isLoading, isError } = eightDHooks.useOne(reportId);
+  const { data: report, isLoading, isError, error } = eightDHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const completeStep = useMutation({
     mutationFn: async ({ step, data, pin }: { step: number; data: Record<string, unknown>; pin?: string }) =>
@@ -182,7 +183,7 @@ export function EightDDetailPage() {
     if (payload) updateReport.mutate(payload);
   }
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
+  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this 8D report. Refresh the page and try again." noun="this 8D report" />;
   if (isLoading || !report || !values) return <LoadingPlaceholder />;
 
   const loaded = report;

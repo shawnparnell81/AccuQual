@@ -16,6 +16,9 @@ interface SavedTab {
 const EXACT = new Set([
   "/",
   "/home",
+  "/executive",
+  "/executive/list",
+  "/complaints",
   "/blank-forms",
   "/form-folders",
   "/calendar",
@@ -68,6 +71,8 @@ const EXACT = new Set([
 /** One dynamic segment: a number, or (for a few list filters) any single path piece. */
 const ONE_SEGMENT: RegExp[] = [
   /^\/ncr\/\d+$/,
+  /^\/complaints\/\d+$/,
+  /^\/iso-forms\/record\/\d+$/,
   /^\/capa\/\d+$/,
   /^\/8d\/\d+$/,
   /^\/validation-reports\/\d+$/,
