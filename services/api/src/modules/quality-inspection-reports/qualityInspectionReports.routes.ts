@@ -14,6 +14,7 @@ import {
   createItemHandler,
   updateItemHandler,
   deleteItemHandler,
+  createReportNcrHandler,
 } from "./qualityInspectionReports.controller.js";
 
 export const qualityInspectionReportsRouter = Router();
@@ -25,6 +26,7 @@ qualityInspectionReportsRouter.use(requireAuth, withDb, requireDepartmentAccess(
 qualityInspectionReportsRouter.get("/", listReportsHandler);
 qualityInspectionReportsRouter.post("/", validate(createQualityInspectionReportSchema), createReportHandler);
 qualityInspectionReportsRouter.get("/:id", getReportHandler);
+qualityInspectionReportsRouter.post("/:id/ncr", createReportNcrHandler);
 qualityInspectionReportsRouter.patch("/:id", validate(updateQualityInspectionReportSchema), updateReportHandler);
 qualityInspectionReportsRouter.post("/:id/sign", validate(signQualityInspectionReportSchema), signReportHandler);
 qualityInspectionReportsRouter.delete("/:id", deleteReportHandler);

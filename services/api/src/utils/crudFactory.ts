@@ -211,7 +211,8 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     });
     // Queues the record for semantic embedding (see AI Engine Spec §2 "Embedding Engine")
     // so it becomes retrievable by the AI pipelines' similarity search.
-    await publishEvent(AI_STREAM, {
+    // Don't wait on Redis. A slow or down event bus used to hold the HTTP response until the gateway returned 502.
+    void publishEvent(AI_STREAM, {
       job: "embed",
       entityType: options.entityName,
       entityId: createdId,
@@ -223,6 +224,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   });
 
   const update = asyncHandler(async (req: Request, res: Response) => {
+    const started = Date.now();
     const { db } = requireDb(req);
     const id = Number(req.params.id);
     const sitePredicate = siteRecordPredicate(req);
@@ -252,17 +254,23 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       : { ...(req.body as Record<string, unknown>) };
     const withCells = existing && patch.data && typeof patch.data === "object" ? withFormEdits(rawChanges, existing.data, patch.data) : rawChanges;
     const changes = withScalarEdits(existing, patch, withCells);
-    await recordAuditTrail(req.db!, {
-      entityType: options.entityName,
-      entityId: id,
-      action: "update",
-      changes,
-      performedBy: req.user?.id,
-    });
+    const dataEdits = Array.isArray(changes.edits) ? changes.edits.length : 0;
+    const patchKeys = Object.keys(patch).filter((key) => key !== "updatedAt");
+    const dataOnly = patchKeys.length > 0 && patchKeys.every((key) => key === "data");
+    if (!(dataOnly && dataEdits === 0)) {
+      await recordAuditTrail(req.db!, {
+        entityType: options.entityName,
+        entityId: id,
+        action: "update",
+        changes,
+        performedBy: req.user?.id,
+      });
+    }
     if (options.blankCreatePath) {
       await fileOnFirstSave(req.db!, options.blankCreatePath, existing, updated as Record<string, unknown>, patch, req.user?.id);
     }
     if (options.afterUpdate) await options.afterUpdate(updated as Record<string, unknown>, req);
+    res.setHeader("Server-Timing", `update;dur=${Date.now() - started}`);
     res.json(updated);
   });
 

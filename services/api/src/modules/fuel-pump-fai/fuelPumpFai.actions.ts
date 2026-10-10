@@ -3,9 +3,6 @@ import type { Db } from "../../lib/requestDb.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { registerActionHandler, type WorkflowNode } from "../workflow/workflow-engine.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { syncNcrFormData, ncrIsoDate } from "../ncr/ncr.formSync.js";
-import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 import {
   FPM_NODE,
   archiveState,
@@ -25,7 +22,6 @@ import {
   type SlaEvaluation,
 } from "./fuelPumpFai.logic.js";
 import { emailForUser, emailsForAssigneeLabel, emailsForDepartment, notifyInApp, persistFpm } from "./fuelPumpFai.persist.js";
-import { requirePlantId } from "../sites/siteAccess.js";
 
 function dbOf(context: Record<string, unknown>): Db | undefined {
   return context.__db as Db | undefined;
@@ -66,12 +62,12 @@ async function notifyEmails(context: Record<string, unknown>, emails: string[], 
   context.notices = [...((context.notices as unknown[]) ?? []), { subject, recipients: count, channel: "in_app", targets }];
 }
 
-async function ensureNcr(node: WorkflowNode, context: Record<string, unknown>, state: FpmState, dryRun: boolean, reason: "failure" | "critical"): Promise<FpmState> {
+async function noteFailure(_node: WorkflowNode, context: Record<string, unknown>, state: FpmState, dryRun: boolean, reason: "failure" | "critical"): Promise<FpmState> {
   const description = ncrDescription(state);
   const critical = reason === "critical" || hasCriticalFailure(state);
   let next: FpmState = {
     ...state,
-    ncrRequired: "Yes",
+    ncrRequired: state.ncrId ? "Yes" : "No",
     productionRelease: "No",
     failureDetected: "Yes",
     correctiveActionReady: false,
@@ -79,7 +75,7 @@ async function ensureNcr(node: WorkflowNode, context: Record<string, unknown>, s
     stage: "NCR and Corrective Action",
   };
   if (dryRun) {
-    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "fpm_create_ncr", simulated: true, description, critical }];
+    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "fpm_create_ncr", simulated: true, description, critical, created: false }];
   }
   const db = dbOf(context);
   if (!dryRun && next.ncrId && db) {
@@ -91,39 +87,13 @@ async function ensureNcr(node: WorkflowNode, context: Record<string, unknown>, s
       performedBy: actorId(context),
     });
   }
-  if (!dryRun && db && !next.ncrId) {
-    const [created] = await db
-      .insert(ncr)
-      .values({
-        title: `Fuel pump FAI ${state.number} failed`,
-        description,
-        status: "ncr_created",
-        severity: critical ? "critical" : null,
-        supplierId: state.supplierId,
-        createdBy: actorId(context),
-        siteId: requirePlantId(state.siteId),
-      })
-      .returning();
-    next = { ...next, ncrId: created!.id, ncrStatus: "ncr_created" };
-    await recordAuditTrail(db, {
-      entityType: "NCR",
-      entityId: created!.id,
-      action: "create",
-      changes: { message: "NCR opened from fuel pump first article inspection.", workflowNode: node.id, faiNumber: state.number },
-      performedBy: actorId(context),
-    });
-    await syncNcrFormData(db, created!.id, { dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
-    await noteRepeatNcr(db, created!.id);
-    await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: created!.id });
-  }
-  if (!next.ncrStatus) next = { ...next, ncrStatus: next.ncrStatus ?? "ncr_created" };
   if (critical && !next.criticalNoticeSent) {
     const emails: string[] = [];
     if (db) {
       emails.push(...(await emailsForAssigneeLabel(db, "Quality Manager")));
       emails.push(...(await emailsForAssigneeLabel(db, "Engineering Manager")));
     }
-    await notifyEmails(context, emails, `${state.number} critical failure`, `${state.number} has a critical failure. An NCR is open and production release is blocked.`, ["Quality Manager", "Engineering Manager"]);
+    await notifyEmails(context, emails, `${state.number} critical failure`, `${state.number} has a critical failure. Production release is blocked.`, ["Quality Manager", "Engineering Manager"]);
     next = { ...next, criticalNoticeSent: true };
   }
   return next;
@@ -147,7 +117,7 @@ registerActionHandler("fpm_inspect", async (node, context, dryRun) => {
     return;
   }
   let next: FpmState = { ...state, stage: "Fuel Pump Validation Testing" };
-  if (hasCriticalFailure(next)) next = await ensureNcr(node, context, next, dryRun, "critical");
+  if (hasCriticalFailure(next)) next = await noteFailure(node, context, next, dryRun, "critical");
   await save(context, next);
 });
 
@@ -160,7 +130,7 @@ registerActionHandler("fpm_open_attempt", async (_node, context) => {
 });
 
 registerActionHandler("fpm_create_ncr", async (node, context, dryRun) => {
-  await save(context, await ensureNcr(node, context, readFpm(context), dryRun, "failure"));
+  await save(context, await noteFailure(node, context, readFpm(context), dryRun, "failure"));
 });
 
 registerActionHandler("fpm_corrective_action", async (_node, context) => {

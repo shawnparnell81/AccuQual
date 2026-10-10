@@ -114,6 +114,7 @@ describe("print document", () => {
     const frame = readFileSync(join(srcRoot, "components/records/RecordFrame.tsx"), "utf8");
     const button = readFileSync(join(srcRoot, "components/records/PrintRecordButton.tsx"), "utf8");
     const chrome = readFileSync(join(srcRoot, "components/records/PrintChrome.tsx"), "utf8");
+    const kept = readFileSync(join(srcRoot, "components/layout/KeptSection.tsx"), "utf8");
     const split = readFileSync(join(srcRoot, "components/layout/SplitWorkspace.tsx"), "utf8");
     const validation = readFileSync(join(srcRoot, "routes/ValidationReports/ValidationReportDetailPage.tsx"), "utf8");
     const preview = readFileSync(join(srcRoot, "components/shared/InAppFilePreview.tsx"), "utf8");
@@ -122,7 +123,8 @@ describe("print document", () => {
     assert.match(button, /data-testid="print-record"/);
     assert.match(button, /canPrintAccess/);
     assert.match(chrome, /PrintRecordButton/);
-    assert.match(split, /PrintChrome/);
+    assert.match(kept, /<PrintChrome\b/);
+    assert.match(split, /KeptSectionStack/);
     assert.match(validation, /RecordFrame/);
     assert.match(editor, /PrintRecordButton/);
     assert.match(preview, /data-testid="print-file"/);

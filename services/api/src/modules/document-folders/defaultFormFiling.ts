@@ -4,7 +4,7 @@ import { formFilings } from "../../drizzle/schema/formFilings.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
-import { blankFormKeyForCreate, fileNamePatternFor, FORM_TEMPLATES, type FormTemplateSeed } from "./formFiling.js";
+import { blankFormKeyForCreate, explicitFileFormKeys, fileNamePatternFor, FORM_TEMPLATES, requiresExplicitFile, type FormTemplateSeed } from "./formFiling.js";
 import { ensureSavedFormFolder, isoStamp, RETIRED_FORM_FOLDER_KEYS, savedFillFileName } from "./formFolders.js";
 import { fileFormRecord, snapshotFormNumber } from "./formRecordFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
@@ -79,6 +79,12 @@ async function fileModuleCopy(db: Db, formKey: string, recordId: number, created
   });
 }
 
+/** Save as for a QMS copy. It goes in that form's folder, not an arbitrary Documents folder. */
+export async function fileExplicitModuleCopy(db: Db, formKey: string, recordId: number, performedBy?: number): Promise<void> {
+  if (!explicitFileFormKeys().has(formKey) || FILEABLE_FORM_KEYS.has(formKey)) return;
+  await fileModuleCopy(db, formKey, recordId, { id: recordId }, performedBy);
+}
+
 /** A Report No. edit is not a Save. Any other field is. */
 export function patchIsNumberOnly(patch: Record<string, unknown>): boolean {
   const keys = Object.keys(patch).filter((key) => key !== "updatedAt");
@@ -94,7 +100,7 @@ export async function fileOnFirstSave(
   patch: Record<string, unknown>,
   performedBy?: number,
 ): Promise<void> {
-  if (patchIsNumberOnly(patch)) return;
+  if (requiresExplicitFile(createPath) || patchIsNumberOnly(patch)) return;
   // The first save can rename the blank. The folder is the one that was opened, not the new name.
   const started = before as Record<string, unknown>;
   const formKey = blankFormKeyForCreate(createPath, { ...after, ...started }) ?? blankFormKeyForCreate(createPath, after);

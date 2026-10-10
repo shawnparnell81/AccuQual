@@ -120,12 +120,12 @@ function Cell({
           ? `Rev: ${revision}`
           : documentIdText(raw, documentNumber, spec.documentSlot === true);
   const fill = spec.paint || (spec.kind === "select" ? resultFill(text) : "");
-  const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", spec.kind === "signature" ? "sig" : "", fill].filter(Boolean).join(" ");
+  const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", spec.kind === "signature" ? "sig" : "", spec.kind === "calc" ? "calc" : "", fill].filter(Boolean).join(" ");
   const style: CSSProperties = {};
   const inputValue = stored == null || typeof stored === "boolean" ? "" : String(stored);
 
   return (
-    <td className={className || undefined} style={style} colSpan={spec.span > 1 ? spec.span : undefined} data-addr={spec.addr}>
+    <td className={className || undefined} style={style} colSpan={spec.span > 1 ? spec.span : undefined} data-addr={spec.addr} title={spec.kind === "calc" ? "calc" : undefined}>
       {spec.kind === "input" && (
         <input className="iso-in" aria-label={spec.addr} placeholder={spec.placeholder} value={inputValue} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.value)} />
       )}

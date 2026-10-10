@@ -29,6 +29,12 @@
   border: 1px solid hsl(var(--border));
 }
 
+.iso td.calc {
+  background: #d0d0d0;
+  color: #333;
+  cursor: default;
+}
+
 .iso tr.blank td {
   height: 12px;
   min-height: 12px;

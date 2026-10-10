@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Columns2, Pin, AlertTriangle,
   ClipboardCheck,
@@ -22,8 +21,11 @@ import { useTabStore } from "../../store/useTabStore";
 import { TruncatedName } from "../shared/TruncatedName";
 import { useSplitStore } from "../../store/useSplitStore";
 import { useDirtyPathStore } from "../../store/dirtyPathStore";
+import { dirtyKeysInSection, dirtySubtabs, shouldWarnOnClose, shouldWarnOnNavigate, skipNextLeaveWarning } from "../../lib/sectionKeepAlive";
+import { canSaveDirtySection, saveDirtySection, useAskUnsavedChanges } from "./unsavedChanges";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
-import { claimTabClosePrompt, consumeTabUserGesture, releaseTabClosePrompt, resolveTabClose, UNSAVED_TAB_TITLE, unsavedTabMessage } from "../../lib/tabSession";
+import { consumeTabUserGesture } from "../../lib/workspaceTab";
+import { UNSAVED_TAB_TITLE, unsavedTabMessage } from "../../lib/tabSession";
 
 // Same icon-per-module choices as navConfig.ts, reused here for visual
 // consistency between the top nav and the tab strip.
@@ -64,48 +66,51 @@ export function TabBar() {
   const togglePin = useTabStore((s) => s.togglePin);
   const dirtyPaths = useDirtyPathStore((s) => s.paths);
   const openSplit = useSplitStore((s) => s.openSplit);
-  const [prompt, setPrompt] = useState<{ label: string; resolve: (choice: "discard" | "cancel") => void } | null>(null);
-
-  useEffect(() => () => releaseTabClosePrompt(), []);
+  const askUnsaved = useAskUnsavedChanges();
 
   // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
   if (tabs.length < 2) return null;
 
-  function handleActivate(id: string) {
+  function forgetSection(path: string) {
+    for (const key of dirtyKeysInSection(useDirtyPathStore.getState().paths, path)) {
+      useDirtyPathStore.getState().setDirtyPath(key, false);
+    }
+  }
+
+  async function confirmLeave(path: string): Promise<boolean> {
+    const labels = dirtySubtabs(useDirtyPathStore.getState().paths, path).map((item) => item.label);
+    const choice = await askUnsaved({
+      labels,
+      canSave: canSaveDirtySection(path),
+      save: () => saveDirtySection(path),
+    });
+    if (choice === "cancel") return false;
+    if (choice === "discard") forgetSection(path);
+    return true;
+  }
+
+  async function handleActivate(id: string) {
     consumeTabUserGesture();
     if (id === activeId) return;
+    const current = tabs.find((tab) => tab.id === activeId);
+    const next = tabs.find((tab) => tab.id === id);
+    if (current && next && shouldWarnOnNavigate(dirtyPaths, current.path, next.path)) {
+      if (!(await confirmLeave(current.path))) return;
+      skipNextLeaveWarning();
+    }
     const path = activateTab(id);
     if (path) navigate(path);
   }
 
-  function finishPrompt(choice: "discard" | "cancel") {
-    prompt?.resolve(choice);
-    setPrompt(null);
-  }
-
   async function handleClose(e: React.MouseEvent, id: string) {
-    e.preventDefault();
     e.stopPropagation();
-    const tab = useTabStore.getState().tabs.find((item) => item.id === id);
-    if (!tab) return;
-    const dirty = Boolean(useDirtyPathStore.getState().paths[tab.path]);
-    const plan = resolveTabClose(dirty, null);
-    if (plan === "ask") {
-      if (!claimTabClosePrompt()) return;
-      let choice: "discard" | "cancel";
-      try {
-        choice = await new Promise<"discard" | "cancel">((resolve) => {
-          setPrompt({ label: tab.title, resolve });
-        });
-      } finally {
-        releaseTabClosePrompt();
-      }
-      if (resolveTabClose(true, choice) === "stay") return;
-      useDirtyPathStore.getState().setDirtyPath(tab.path, false);
+    const tab = tabs.find((item) => item.id === id);
+    if (tab && shouldWarnOnClose(dirtyPaths, tab.path)) {
+      if (!(await confirmLeave(tab.path))) return;
+      if (id === activeId) skipNextLeaveWarning();
     }
-    const wasActive = useTabStore.getState().activeId === id;
     const nextPath = closeTab(id);
-    if (wasActive && nextPath) navigate(nextPath, { replace: true });
+    if (id === activeId && nextPath) navigate(nextPath, { replace: true });
   }
 
   const compress = tabs.length >= 6;
@@ -116,7 +121,7 @@ export function TabBar() {
       {tabs.map((tab) => {
         const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
         const isActive = tab.id === activeId;
-        const dirty = Boolean(dirtyPaths[tab.path]);
+        const dirty = shouldWarnOnClose(dirtyPaths, tab.path);
         const compact = compress && !isActive;
         const titleLimit = compact ? "max-w-[2.5rem]" : "max-w-[9rem]";
         return (
@@ -203,7 +208,6 @@ export function TabBar() {
         );
       })}
     </div>
-    {prompt && <UnsavedTabDialog label={prompt.label} onDiscard={() => finishPrompt("discard")} onCancel={() => finishPrompt("cancel")} />}
     </>
   );
 }

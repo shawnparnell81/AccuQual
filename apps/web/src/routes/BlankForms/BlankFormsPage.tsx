@@ -6,6 +6,7 @@ import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTempl
 import { ExplorerCatalog } from "../../components/documents/ExplorerCatalog";
 import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
+import { blankDraftState, unsavedBlankPath } from "../../lib/blankDraft";
 import { blankTemplateTopic, templatesOnBlankShelf } from "../../lib/blankFormsList";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { useExplorerView } from "../../hooks/useExplorerView";
@@ -94,7 +95,22 @@ export function StartBlankFormPage() {
       setError("That blank is not in Blank Forms Templates.");
       return;
     }
-    if (!form.start) navigate(form.subjectRoute, { replace: true });
+    if (!form.start) {
+      navigate(form.subjectRoute, { replace: true });
+      return;
+    }
+    const start = form.start;
+    const deferred = blankDraftState(start);
+    if (deferred) {
+      navigate(unsavedBlankPath(start.openPath), { replace: true, state: deferred });
+      return;
+    }
+    void apiClient.post<{ id: number }>(start.createPath, start.body).then(
+      (created) => {
+        navigate(start.openPath.replaceAll("{id}", String(created.data.id)), { replace: true, state: { freshForm: true } });
+      },
+      () => setError(`Couldn't start ${form.title}.`),
+    );
   }, [form, formKey, navigate, templates.data, templates.isError, templates.isLoading]);
 
   async function saveCopy() {

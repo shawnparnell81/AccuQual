@@ -137,6 +137,14 @@ describe("every saved form opens locked, keeps an audit, and leaves no ghost aft
         const saved = await write().set(auth(adminToken)).send(edit.patch);
         expect(saved.status, `${seed.formKey} save ${JSON.stringify(saved.body)}`).toBe(200);
 
+        const explicitFile = new Set(["/validation-reports", "/iso-quality-forms", "/qms-forms"]);
+        if (explicitFile.has(start.createPath)) {
+          const draftFolder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(seed.formKey)}`).set(auth(adminToken));
+          expect((draftFolder.body.fills as { recordId: number }[]).some((fill) => fill.recordId === id), `${seed.formKey} filed by plain save`).toBe(false);
+          const filed = await request(app).post("/document-folders/form-filings").set(auth(adminToken)).send({ formKey: seed.formKey, recordId: id, formFolderKey: seed.formKey });
+          expect(filed.status, `${seed.formKey} save as ${JSON.stringify(filed.body)}`).toBe(201);
+        }
+
         const folder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(seed.formKey)}`).set(auth(adminToken));
         expect(folder.status, `${seed.formKey} folder ${JSON.stringify(folder.body)}`).toBe(200);
         const fills = folder.body.fills as { recordId: number; openPath: string; fileName: string }[];

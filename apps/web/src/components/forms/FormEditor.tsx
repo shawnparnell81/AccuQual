@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { apiClient } from "../../api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateFormVersion, exportFormPdf, exportFormPdfResult, useFormTemplate } from "../../api/formHooks";
 import { PdfExportActions } from "../records/PdfExportActions";
@@ -22,6 +23,7 @@ import { FormHeader } from "../brand/DmaLogo";
 import { focusFirstEditable } from "../shared/GridClipboard";
 import { RecordEditButton } from "../shared/RecordEditButton";
 import { PrintRecordButton } from "../records/PrintRecordButton";
+import { collectInspectionFailures } from "../../lib/inspectionFailures";
 
 interface FormEditorProps {
   formType: string;
@@ -32,6 +34,7 @@ interface FormEditorProps {
 /** The actual data-entry surface for one form: fields, auto-save, versioning, export, preview. */
 export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const layout = getFormLayout(formType);
+  const navigate = useNavigate();
   const CustomComponent = getCustomFormComponent(formType);
   const fields = FORM_FIELD_SPECS[formType] ?? [];
   const queryClient = useQueryClient();
@@ -112,6 +115,31 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
         />
         <span>{`Rev ${formData?.templateRevision ?? templateQuery.data?.templateRevision ?? "A"}`}</span>
         <span className="ml-auto">{isSaving || pending ? "Saving…" : saveNote == null ? "Auto-saved" : ""}</span>
+        {(formType === "final_inspection_release_checklist" || formType === "dimensional_report") && collectInspectionFailures(values).length > 0 && !Array.isArray(values.linkedNcrs) && (
+          <button
+            type="button"
+            className="rounded-md border border-border px-2 py-1 text-sm text-foreground"
+            data-testid="create-ncr"
+            onClick={() => {
+              const rows = collectInspectionFailures(values);
+              const part = [values.customerPartNo, values.internalPartNo, values.partNumber, values.partDescription].find((value) => typeof value === "string" && value.trim());
+              void apiClient.post<{ id: number }>("/ncr/from-inspection", {
+                sourceKind: "form",
+                formType,
+                sourceId: entityId,
+                formTitle: layout?.title || "Inspection",
+                path: pictureRecord.entityType === "ppap" ? `/ppap/${entityId}` : `/${pictureRecord.entityType}/${entityId}`,
+                part: typeof part === "string" ? part : "",
+                rows,
+              }).then((response) => {
+                toast.success("NCR created. Type the NCR number on that record.");
+                navigate(`/ncr/${response.data.id}`);
+              }).catch((err) => toast.error(extractErrorMessage(err, "Couldn't create the NCR.")));
+            }}
+          >
+            Create NCR
+          </button>
+        )}
         <SaveResult result={saveNote} />
         {formType === "gage_rr" && (
           <button

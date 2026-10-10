@@ -139,7 +139,7 @@ describe("Fuel Pump Module FAI workflow", () => {
     expect(targets).toEqual(expect.arrayContaining(["Quality", "Engineering", "Purchasing", "Operations"]));
   });
 
-  it("opens an NCR for a failed fuel pump and does not release it", async () => {
+  it("does not open an NCR for a failed fuel pump and does not release it", async () => {
     const failed = seedResults(emptyState("2026-10-05T12:00:00.000Z"), (criterion, entry) =>
       criterion.key === "leak_check" ? { ...entry, result: "Fail", comments: "Leak at the outlet", critical: true } : entry,
     );
@@ -148,7 +148,8 @@ describe("Fuel Pump Module FAI workflow", () => {
     expect(state.productionRelease).toBe("No");
     expect(state.failureDetected).toBe("Yes");
     expect(state.overallResult).toBe("Failed");
-    expect(state.ncrRequired).toBe("Yes");
+    expect(state.ncrRequired).toBe("No");
+    expect(state.ncrId).toBeNull();
     expect(state.criticalNoticeSent).toBe(true);
     const notices = (execution.context.notices as { targets?: string[]; channel?: string }[]) ?? [];
     expect(notices.some((notice) => notice.channel === "in_app" && notice.targets?.includes("Quality Manager") && notice.targets?.includes("Engineering Manager"))).toBe(true);
@@ -261,10 +262,10 @@ describe("Fuel Pump Module FAI workflow", () => {
     });
     const state = readFpm(execution.context);
     expect(state.attempt.overall).toBe("Passed");
-    expect(state.ncrRequired).toBe("Yes");
-    expect(state.ncrStatus).not.toBe("closed");
+    expect(state.ncrRequired).toBe("No");
+    expect(state.ncrId).toBeNull();
     expect(state.productionRelease).toBe("No");
-    expect(() => assertCanRelease(state, { finalApprovalRecorded: true })).toThrow(/linked NCR is not done/);
+    expect(() => assertCanRelease({ ...state, ncrRequired: "Yes", ncrStatus: "ncr_created" }, { finalApprovalRecorded: true })).toThrow(/linked NCR is not done/);
     expect((execution.context.steps as { kind: string }[]).map((step) => step.kind)).not.toContain("fpm_release");
   });
 

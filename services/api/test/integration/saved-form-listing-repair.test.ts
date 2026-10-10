@@ -183,6 +183,10 @@ describe("folder listing and search do not delete a saved form", () => {
       .set(auth(adminToken))
       .send({ data: { cells: { F2: "Maxwell Tollefson", D5: "Shawn Parnell", B6: "Saved" } } });
     expect(saved.status).toBe(200);
+    const stillDraft = await request(app).get("/document-folders/form-folders/frm-pcr-001").set(auth(adminToken));
+    expect((stillDraft.body.fills as { recordId: number }[]).some((fill) => fill.recordId === id)).toBe(false);
+    const filed = await request(app).post("/document-folders/form-filings").set(auth(adminToken)).send({ formKey: "frm-pcr-001", recordId: id, formFolderKey: "frm-pcr-001" });
+    expect(filed.status).toBe(201);
     const after = await request(app).get("/document-folders/form-folders/frm-pcr-001").set(auth(adminToken));
     expect((after.body.fills as { recordId: number; openPath: string }[]).some((fill) => fill.recordId === id && fill.openPath === openPath)).toBe(true);
     const afterTree = await request(app).get("/document-folders").set(auth(adminToken));

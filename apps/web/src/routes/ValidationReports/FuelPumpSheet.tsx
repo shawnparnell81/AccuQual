@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
-import { BLOCKED_FILL, YN_OPTIONS, conditionalFill, evaluate, parseInput, showValue, type CellValue } from "../../lib/fuelPumpReport";
+import { BLOCKED_FILL, FORMULA_TEXT, YN_OPTIONS, conditionalFill, evaluate, parseInput, showValue, type CellValue } from "../../lib/fuelPumpReport";
 import { buildFuelPumpRows, type FuelCell } from "../../lib/fuelPumpSheet";
 import "./validationReport.css";
 
@@ -9,6 +9,8 @@ interface FuelPumpSheetProps {
   onChange: (addr: string, value: CellValue) => void;
   documentNumber?: string;
   revision?: string;
+  failedAddrs?: string[];
+  onCreateNcr?: (addr: string) => void;
 }
 
 type Slot = FuelCell | "covered" | "empty" | "gap";
@@ -36,7 +38,7 @@ function shownText(spec: FuelCell, cells: Record<string, CellValue>, calculated:
   return showValue(value ?? "");
 }
 
-export function FuelPumpSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C" }: FuelPumpSheetProps) {
+export function FuelPumpSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C", failedAddrs = [], onCreateNcr }: FuelPumpSheetProps) {
   const rows = useMemo(() => buildFuelPumpRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
@@ -70,7 +72,7 @@ export function FuelPumpSheet({ cells, readOnly = false, onChange, documentNumbe
             const place: CSSProperties = { gridColumn: colIndex + 1, gridRow: rowIndex + 1 };
             if (slot === "empty") return <div key={`e-${rowIndex}-${colIndex}`} className="fp-cell" style={place} />;
             if (slot.kind === "spacer") return null;
-            return <Cell key={slot.addr} spec={slot} place={place} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} />;
+            return <Cell key={slot.addr} spec={slot} place={place} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} failed={failedAddrs.includes(slot.addr)} onCreateNcr={onCreateNcr} />;
           }),
         )}
       </div>
@@ -87,6 +89,8 @@ function Cell({
   onChange,
   documentNumber,
   revision,
+  failed = false,
+  onCreateNcr,
 }: {
   spec: FuelCell;
   place: CSSProperties;
@@ -96,6 +100,8 @@ function Cell({
   onChange: (addr: string, value: CellValue) => void;
   documentNumber: string;
   revision: string;
+  failed?: boolean;
+  onCreateNcr?: (addr: string) => void;
 }) {
   const text = shownText(spec, cells, calculated, documentNumber, revision);
   const cf = spec.kind === "blocked" || spec.kind === "check" || spec.kind === "spacer" ? null : conditionalFill(spec.addr, text);
@@ -107,6 +113,7 @@ function Cell({
     spec.size === "note" ? "note" : "",
     spec.size === "result" ? "result" : "",
     spec.kind === "blocked" ? "blocked" : "",
+    spec.kind === "calc" ? "calc" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -122,7 +129,7 @@ function Cell({
   const inputValue = value === undefined || value === null || typeof value === "boolean" ? "" : String(value);
 
   return (
-    <div className={className} style={style} role="cell" data-addr={spec.addr}>
+    <div className={className} style={style} role="cell" data-addr={spec.addr} title={spec.kind === "calc" && FORMULA_TEXT[spec.addr] ? `calc: ${FORMULA_TEXT[spec.addr]}` : undefined}>
       {spec.kind === "input" && (
         <input
           className="fp-in"
@@ -167,7 +174,16 @@ function Cell({
           onChange={(event) => onChange(spec.addr, event.target.checked)}
         />
       )}
-      {spec.kind === "calc" && <span data-result={spec.addr === "J2" || spec.addr === "B51" ? text : undefined}>{text}</span>}
+      {spec.kind === "calc" && (
+        <span data-result={spec.addr === "J2" || spec.addr === "B51" ? text : undefined}>
+          {text}
+          {failed && onCreateNcr && spec.addr !== "J2" && spec.addr !== "B51" && (
+            <button type="button" className="no-print ml-1 text-[10px] underline" data-testid={`create-ncr-${spec.addr}`} onClick={() => onCreateNcr(spec.addr)}>
+              Create NCR
+            </button>
+          )}
+        </span>
+      )}
       {(spec.kind === "label" || spec.kind === "blocked" || spec.kind === "spacer") && text}
     </div>
   );

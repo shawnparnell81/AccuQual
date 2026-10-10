@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import { formData } from "../../drizzle/schema/forms.js";
 import type { Db } from "../../lib/requestDb.js";
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "../forms/templateRevision.js";
+import { mergeStageIntoDocument } from "./ncr.document.js";
 
 const FORM_TYPE = "ncr";
 const ENTITY_TYPE = "ncr";
@@ -19,6 +20,8 @@ export interface NcrFormSyncPatch {
   identifiedRootCauseSummary?: string;
   containmentActionText?: string;
   correctiveActionText?: string;
+  dispositionNote?: string;
+  verificationText?: string;
   ncrClosureDate?: string;
   finalDispositionConfirmed?: "Yes" | "No";
 }
@@ -54,26 +57,15 @@ function setSingleCheckboxRow(existing: unknown, columnKey: string, value: strin
   return [row, ...rows.slice(1)];
 }
 
-/** An addableRows table (containmentActions, correctiveActions) — only ever touches row 0's own column, so a user's own additional rows in the rich form are never overwritten. */
-function setFirstRowField(existing: unknown, columnKey: string, value: string, minRows: number): Row[] {
-  const rows = Array.isArray(existing) && existing.length > 0 ? [...(existing as Row[])] : Array.from({ length: minRows }, () => ({}));
-  rows[0] = { ...rows[0], [columnKey]: value };
-  return rows;
-}
-
 /**
  * The bare NCR columns and the official form (`layouts/ncr.ts`) do not share a table.
  * This copies the bare fields into the form so a filled NCR is not a blank document.
  *
- * This is a deliberate ONE-WAY sync, bare -> form, not a merge into a
- * single table: the two field sets are almost entirely disjoint (~50 fields
- * across 9 fixed sections vs. 7 bare columns), and the bare fields drive
- * real status-gated workflow logic (ncr.service.ts's patchNcr) that
- * shouldn't be second-guessed by whatever a quality engineer typed
- * directly into the richer document. Every call here does a TARGETED
- * partial merge of `data` — it only ever touches the specific field(s)
- * passed in `patch`, never the RCA method, 5-Why table, closure
- * signatures, or any other section a user has filled in directly.
+ * Stage text is one source of truth with the document: containment, the
+ * root-cause summary and 5-Why, disposition, corrective action, and
+ * verification are written here, and a document save writes those same
+ * fields back onto the NCR. Every call still only touches the fields in
+ * `patch`. Closure signatures and the rest of the document stay put.
  */
 export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncPatch, createdBy?: number): Promise<void> {
   const [existing] = await db
@@ -92,9 +84,23 @@ export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncP
   if (patch.documentStatus !== undefined) data.documentStatus = setSingleCheckboxRow(data.documentStatus, "status", patch.documentStatus);
   if (patch.nonconformanceDescription !== undefined) data.nonconformanceDescription = patch.nonconformanceDescription;
   if (patch.ncrClassification !== undefined) data.ncrClassification = setSingleCheckboxRow(data.ncrClassification, "classification", patch.ncrClassification);
-  if (patch.identifiedRootCauseSummary !== undefined) data.identifiedRootCauseSummary = patch.identifiedRootCauseSummary;
-  if (patch.containmentActionText !== undefined) data.containmentActions = setFirstRowField(data.containmentActions, "action", patch.containmentActionText, 3);
-  if (patch.correctiveActionText !== undefined) data.correctiveActions = setFirstRowField(data.correctiveActions, "description", patch.correctiveActionText, 5);
+  const stagePatch = mergeStageIntoDocument(data, {
+    ...(patch.containmentActionText !== undefined ? { containment: patch.containmentActionText } : {}),
+    ...(patch.identifiedRootCauseSummary !== undefined ? { rootCause: patch.identifiedRootCauseSummary } : {}),
+    ...(patch.correctiveActionText !== undefined ? { correctiveAction: patch.correctiveActionText } : {}),
+    ...(patch.dispositionNote !== undefined ? { disposition: patch.dispositionNote } : {}),
+    ...(patch.verificationText !== undefined ? { verification: patch.verificationText } : {}),
+  });
+  if (patch.containmentActionText !== undefined) data.containmentActions = stagePatch.containmentActions;
+  if (patch.identifiedRootCauseSummary !== undefined) {
+    data.identifiedRootCauseSummary = stagePatch.identifiedRootCauseSummary;
+    data.fiveWhyAnalysis = stagePatch.fiveWhyAnalysis;
+  }
+  if (patch.correctiveActionText !== undefined) data.correctiveActions = stagePatch.correctiveActions;
+  if (patch.verificationText !== undefined) data.effectivenessVerification = stagePatch.effectivenessVerification;
+  if (patch.dispositionNote !== undefined && stagePatch.suspectMaterialDisposition !== undefined) {
+    data.suspectMaterialDisposition = stagePatch.suspectMaterialDisposition;
+  }
   if (patch.ncrClosureDate !== undefined) data.ncrClosureDate = patch.ncrClosureDate;
   if (patch.finalDispositionConfirmed !== undefined) data.finalDispositionConfirmed = patch.finalDispositionConfirmed;
 

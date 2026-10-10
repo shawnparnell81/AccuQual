@@ -80,6 +80,13 @@ export async function changeRecordSite(
   if (rows == null) throw new AppError("Site isn't stored on this record until the database update runs.", 503);
   if (rows.length === 0) throw AppError.notFound(spec.audit);
   const siteNameNext = plantDisplayName(target);
+  if (entity === "validation_report") {
+    await db.execute(sql`
+      UPDATE validation_reports
+      SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{siteName}', to_jsonb(${siteNameNext}::text), true)
+      WHERE id = ${id}
+    `);
+  }
   await recordAuditTrail(db, {
     entityType: spec.audit,
     entityId: id,

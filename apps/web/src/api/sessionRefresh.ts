@@ -87,6 +87,24 @@ export function classifyRefreshFailure(status: number | undefined, retryAfterHea
 }
 
 /**
+ * A 5xx on a normal API call is not a session problem.
+ * Only /auth/refresh returning 401 ends the session.
+ * A 5xx on the refresh call itself retries, and the reconnect screen is only
+ * for a tab that does not already have an access token.
+ */
+export function sessionEffectForStatus(status: number | undefined, url: string): "none" | "refresh" | "end" | "retry-auth" {
+  const path = url.split("?")[0] ?? "";
+  const refresh = path.includes("/auth/refresh");
+  if (refresh) {
+    if (status === 401) return "end";
+    if (status == null || status === 429 || status >= 500) return "retry-auth";
+    return "none";
+  }
+  if (status === 401) return "refresh";
+  return "none";
+}
+
+/**
  * How long to wait before the next renewal.
  * Retry-After is the earliest time. Without it, the wait doubles each failure.
  * Jitter is added on top, never subtracted, so a 429 is not retried early and

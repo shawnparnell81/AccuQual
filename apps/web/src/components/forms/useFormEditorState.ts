@@ -34,7 +34,7 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   const valuesRef = useRef(values);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout>>();
   const hydrated = useRef(false);
-  const lastServerVersion = useRef<number | undefined>(undefined);
+  const lastServerStamp = useRef("");
   // True from the first keystroke of an edit until its autosave settles —
   // guards the re-hydrate below from clobbering an in-progress local edit.
   const isDirty = useRef(false);
@@ -50,14 +50,15 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   // as there's no unsaved local edit in flight that a re-hydrate would wipe.
   useEffect(() => {
     if (!formData) return;
-    if (!hydrated.current || (formData.version !== lastServerVersion.current && !isDirty.current)) {
+    const stamp = `${formData.updatedAt ?? ""}:${formData.version ?? ""}`;
+    if (!hydrated.current || (stamp !== lastServerStamp.current && !isDirty.current)) {
       const next = { ...(formData.data ?? {}) };
       delete next._formTemplate;
       valuesRef.current = next;
       setValues(next);
       hydrated.current = true;
     }
-    lastServerVersion.current = formData.version;
+    lastServerStamp.current = stamp;
   }, [formData]);
 
   function flushSave() {
@@ -88,7 +89,11 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
 
   /** Show a server-owned value in the document immediately, without starting another save. */
   function previewField(name: string, value: unknown) {
-    const next = { ...valuesRef.current, [name]: value };
+    previewPatch({ [name]: value });
+  }
+
+  function previewPatch(patch: Record<string, unknown>) {
+    const next = { ...valuesRef.current, ...patch };
     valuesRef.current = next;
     setValues(next);
   }
@@ -114,5 +119,5 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
     await flushSave();
   }
 
-  return { formData, isLoading, values, updateField, previewField, saveNow, isSaving: saveForm.isPending };
+  return { formData, isLoading, values, updateField, previewField, previewPatch, saveNow, isSaving: saveForm.isPending };
 }

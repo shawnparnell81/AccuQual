@@ -26,6 +26,7 @@ import {
   updateRecordNumberHandler,
   pdfHandler,
   queueHandler,
+  createRecordNcrHandler,
   rejectRecordHandler,
   retirePlanHandler,
   saveResultsHandler,
@@ -61,6 +62,7 @@ faiRouter.post("/records/:id/assign", validate(assignFaiSchema), assignRecordHan
 faiRouter.post("/records/:id/submit", submitRecordHandler);
 faiRouter.post("/records/:id/approve", validate(faiDecisionSchema), approveRecordHandler);
 faiRouter.post("/records/:id/reject", validate(faiDecisionSchema), rejectRecordHandler);
+faiRouter.post("/records/:id/ncr", createRecordNcrHandler);
 
 faiRouter.use("/csa", csaFaiRouter);
 faiRouter.use("/fuel-pump", fuelPumpFaiRouter);

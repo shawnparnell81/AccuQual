@@ -10,6 +10,8 @@ import { writeStepDocuments } from "./ncrStepDocuments.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import * as ncrService from "./ncr.service.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "./ncr.formSync.js";
+import { scheduleAfterCommit } from "../../lib/requestDb.js";
+import { db as backgroundDb } from "../../db/index.js";
 import * as quarantineService from "../quarantine/quarantine.service.js";
 import { noteRepeatNcr, repeatReport } from "../quality-automation/qualityAutomation.service.js";
 import { canonicalNcrStep, decorateNcrBody, ncrStatusAliases } from "./ncr.workflow.js";
@@ -45,7 +47,12 @@ export const baseHandlers = crudFactory(ncr, {
       },
       req.user?.id
     );
-    await noteRepeatNcr(req.db!, row.id);
+    const ncrId = row.id;
+    scheduleAfterCommit(req, async () => {
+      setImmediate(() => {
+        void noteRepeatNcr(backgroundDb, ncrId);
+      });
+    });
   },
   enrichList: (rows, req) => enrichNcrList(req.db!, rows),
   afterUpdate: async (updated, req) => {
@@ -58,7 +65,12 @@ export const baseHandlers = crudFactory(ncr, {
       patch.forceNcrNumber = true;
     }
     if (Object.keys(patch).length > 0) await syncNcrFormData(req.db!, row.id, patch, req.user?.id);
-    await noteRepeatNcr(req.db!, row.id);
+    const ncrId = row.id;
+    scheduleAfterCommit(req, async () => {
+      setImmediate(() => {
+        void noteRepeatNcr(backgroundDb, ncrId);
+      });
+    });
   },
 });
 
@@ -200,6 +212,14 @@ export const setNcrStepDocumentsHandler = asyncHandler(async (req: Request, res:
 export const completeNcrDispositionHandler = asyncHandler(async (req: Request, res: Response) => {
   const actor = { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null };
   const concession = req.body.disposition === "use_as_is" ? req.body.concession : undefined;
-  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor, concession, req.body.release);
-  res.json(result);
+  const ncrId = Number(req.params.id);
+  const result = await quarantineService.completeNcrDisposition(req.db!, ncrId, req.body.disposition, actor, concession, req.body.release);
+  if (!result.released) {
+    res.json({ ...result, advanced: false });
+    return;
+  }
+  const label = quarantineService.DISPOSITION_LABEL[req.body.disposition] ?? String(req.body.disposition);
+  const note = concession === "with" ? `${label} with concession` : concession === "none" ? `${label}, no concession` : label;
+  const moved = await ncrService.advanceToDisposition(req.db!, ncrId, note, req.user?.id, req.allowedSiteIds);
+  res.json({ ...result, advanced: moved.advanced, ncr: moved.row });
 });

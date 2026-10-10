@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { ToastProvider } from "./components/shared/ToastProvider";
 import { ConfirmProvider } from "./components/shared/ConfirmDialog";
+import { UnsavedChangesProvider } from "./components/layout/unsavedChanges";
 import "@fontsource/roboto/latin-400.css";
 import "@fontsource/roboto/latin-500.css";
 import "@fontsource/roboto/latin-700.css";
@@ -49,7 +50,9 @@ if (!isMarketingHost(window.location.hostname)) {
           <BrowserRouter>
             <ToastProvider>
               <ConfirmProvider>
-                <App />
+                <UnsavedChangesProvider>
+                  <App />
+                </UnsavedChangesProvider>
               </ConfirmProvider>
             </ToastProvider>
           </BrowserRouter>

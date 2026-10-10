@@ -390,7 +390,7 @@ export function noticeApproved(number: string | null, part: string, supplier: st
 }
 
 export function noticeRejected(number: string | null, part: string, supplier: string): string {
-  return `${faiLabel(number)} was not approved. A nonconformance was opened. ${part} from ${supplier} is not approved.`;
+  return `${faiLabel(number)} was not approved. ${part} from ${supplier} is not approved.`;
 }
 
 export function noticeDueSoon(part: string, supplier: string, due: string): string {

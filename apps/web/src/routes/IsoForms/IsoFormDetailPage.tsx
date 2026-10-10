@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -16,7 +16,7 @@ import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
-import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { canEditFormStructure } from "../../lib/formStructureAccess";
 import { changeRequestByFormType } from "../../lib/changeRequestKinds";
@@ -53,6 +53,9 @@ import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
+import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
+import { readBlankDraft } from "../../lib/blankDraft";
+import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 
 interface IsoFormData {
   cells?: Record<string, CellValue>;
@@ -79,14 +82,28 @@ const WIDE = new Set<IsoFormType>(["customer_scorecard", "failure_effectiveness"
 
 export function IsoFormDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const blank = useMemo(() => (id === "new" ? readBlankDraft(location.state, "/iso-quality-forms") : null), [id, location.state]);
   const recordId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.documents === "edit";
-  const { data: record, isLoading, isError, error } = hooks.useOne(recordId);
+  const loaded = hooks.useOne(blank ? undefined : recordId);
+  const draftRecord = useMemo(() => {
+    if (!blank) return null;
+    const body = blank.body as { formType?: IsoFormType; data?: IsoFormData };
+    return { id: 0, formType: body.formType ?? "process_change", data: body.data ?? { cells: {} }, recordNumber: null } satisfies IsoQualityForm;
+  }, [blank]);
+  const record = loaded.data ?? draftRecord;
+  const isLoading = blank ? false : loaded.isLoading;
+  const isError = blank ? false : loaded.isError;
+  const error = loaded.error;
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
-  const beginEdit = hooks.useAction("begin-edit");
+  const draftNumber = useRef("");
+  const [opening, setOpening] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const formLock = useSavedFormMode(recordId, Boolean(canEdit));
   const mode = formLock.mode;
   const queryClient = useQueryClient();
@@ -145,6 +162,7 @@ export function IsoFormDetailPage() {
     setLoadedFor(record.id);
   }, [loadedFor, record]);
 
+  if (id === "new" && !blank) return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this form. Refresh the page and try again." noun="this form" />;
   if (unreadable) return <p className="text-sm text-destructive">Couldn't load this form. Refresh the page and try again.</p>;
   if (isLoading || !record || !cells) return <LoadingPlaceholder />;
@@ -152,7 +170,8 @@ export function IsoFormDetailPage() {
   const meta = formByType(record.formType);
   if (!meta) return <p className="text-sm text-destructive">This form type isn't recognized.</p>;
 
-  const formType = meta.formType;
+  const savedRecord = record;
+  const formType = savedRecord.formType;
   const scoredLines = (rows: FaiLine[]) => rows.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) }));
   const currentLines = formType === "first_article" ? scoredLines(lines) : lines;
   const liveSnap = sheetSnap({ cells, photos, lines: currentLines, customers, problems, months });
@@ -209,19 +228,31 @@ export function IsoFormDetailPage() {
 
   async function saveRecord() {
     const data = payload();
+    if (savedRecord.id === 0) {
+      const created = (await apiClient.post<IsoQualityForm>("/iso-quality-forms", { formType, data, recordNumber: draftNumber.current.trim() || null })).data;
+      navigate(`/iso-forms/record/${created.id}`, { replace: true, state: { freshForm: true } });
+      return;
+    }
     const saved = (await apiClient.patch<IsoQualityForm>(`/iso-quality-forms/${recordId}`, { data })).data;
     setSavedSnap({ id: recordId, snap: liveSnap });
-    formLock.lock();
     queryClient.setQueryData(["iso-quality-forms", recordId], saved);
     void queryClient.invalidateQueries({ queryKey: ["iso-quality-forms"] });
     void queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
   }
 
   async function startEdit() {
-    if (!canEdit) return;
-    await beginEdit.mutateAsync({ id: recordId });
-    formLock.unlock();
-    await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+    if (!canEdit || savedRecord.id === 0) return;
+    setOpening(true);
+    setEditError(null);
+    try {
+      await postBeginEdit(`/iso-quality-forms/${recordId}/begin-edit`);
+      formLock.unlock();
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+    } catch {
+      setEditError(BEGIN_EDIT_ERROR);
+    } finally {
+      setOpening(false);
+    }
   }
 
   function cancelEdit() {
@@ -247,7 +278,6 @@ export function IsoFormDetailPage() {
     formLock.lock();
   }
 
-  const savedRecord = record;
   async function setSignatureRequired(path: string, choice: SignatureChoice) {
     await updateRecord.mutateAsync({ id: recordId, data: { ...payload(), _signatureRequired: withChoice(savedRecord.data, path, choice) } });
     setSavedSnap({ id: recordId, snap: liveSnap });
@@ -275,6 +305,9 @@ export function IsoFormDetailPage() {
       mode={mode}
       fieldsEditable={fieldsEditable}
       onEdit={() => startEdit()}
+      opening={opening}
+      editError={editError}
+      onLock={() => formLock.lock()}
       onCancel={cancelEdit}
       onDone={() => {
         if (dirty) void saveRecord();
@@ -283,7 +316,13 @@ export function IsoFormDetailPage() {
       dirty={dirty}
       saving={updateRecord.isPending}
       onSave={saveRecord}
-      onSaveNumber={(next) => updateRecord.mutateAsync({ id: recordId, recordNumber: next.trim() || null })}
+      onSaveNumber={(next) => {
+        if (savedRecord.id === 0) {
+          draftNumber.current = next.trim();
+          return Promise.resolve();
+        }
+        return updateRecord.mutateAsync({ id: recordId, recordNumber: next.trim() || null });
+      }}
       sheet={sheet}
       setSheet={setSheet}
       cells={cells}
@@ -330,6 +369,9 @@ function IsoFormDetailBody({
   mode,
   fieldsEditable,
   onEdit,
+  opening = false,
+  editError = null,
+  onLock,
   onCancel,
   onDone,
   dirty,
@@ -369,6 +411,9 @@ function IsoFormDetailBody({
   mode: SavedFormMode;
   fieldsEditable: boolean;
   onEdit: () => void;
+  opening?: boolean;
+  editError?: string | null;
+  onLock: () => void;
   onCancel: () => void;
   onDone: () => void;
   dirty: boolean;
@@ -401,6 +446,7 @@ function IsoFormDetailBody({
   onEcrTransition?: (action: string, note?: string) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const toast = useToast();
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
@@ -415,7 +461,7 @@ function IsoFormDetailBody({
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : liveFormId;
   const revision = ecrView?.revision || instanceRevision(record.data, meta.rev);
 
-  async function save() {
+  async function save(lock: boolean) {
     setPending(true);
     setSaveNote(null);
     try {
@@ -424,11 +470,9 @@ function IsoFormDetailBody({
       if (formType === "quarantine_notice") {
         void queryClient.invalidateQueries({ queryKey: ["quarantine"] });
       }
-      if (formKey) {
-        void fileChosenFolder(queryClient, formKey, recordId)
-          .then((filed) => setSaveNote(filed ?? "unfiled"))
-          .catch(() => setSaveNote("file-error"));
-      }
+      const filed = (filing.data?.parentId ?? null) != null;
+      if (record.id !== 0 && (lock || saveShouldLock(filed))) onLock();
+      if (record.id !== 0) setSaveNote(filed ? "saved" : "unfiled");
     } catch (err) {
       setSaveNote("error");
       toast.error(extractErrorMessage(err, "Couldn't save this form."));
@@ -457,7 +501,43 @@ function IsoFormDetailBody({
                 Filled records
               </Link>
             </p>
-            {formKey && <RecordFolderField formKey={formKey} recordId={recordId} prepare={onSave} />}
+            {formType === "first_article" && record.id > 0 && lines.some((line) => line.result === "Fail") && !(Array.isArray((record.data as { linkedNcrs?: { id: number }[] }).linkedNcrs) && (record.data as { linkedNcrs?: { id: number }[] }).linkedNcrs?.length) && (
+              <button
+                type="button"
+                className="w-fit rounded-md border border-border px-2 py-1 text-sm"
+                data-testid="create-ncr"
+                onClick={() => {
+                  const rows = lines
+                    .filter((line) => line.result === "Fail")
+                    .map((line) => ({ measurement: line.characteristic || line.balloon || "Characteristic", spec: [line.nominal, line.tolerance].filter(Boolean).join(" ") || "(blank)", actual: line.actual || "(blank)" }));
+                  void apiClient.post<{ id: number }>("/ncr/from-inspection", {
+                    sourceKind: "iso",
+                    formType: "first_article",
+                    sourceId: record.id,
+                    formTitle: meta.title,
+                    path: `/iso-forms/record/${record.id}`,
+                    part: "",
+                    rows,
+                  }).then((response) => {
+                    toast.success("NCR created. Type the NCR number on that record.");
+                    navigate(`/ncr/${response.data.id}`);
+                  }).catch((err) => toast.error(extractErrorMessage(err, "Couldn't create the NCR.")));
+                }}
+              >
+                Create NCR
+              </button>
+            )}
+            {formKey && record.id > 0 && (
+              <RecordFolderField
+                formKey={formKey}
+                recordId={recordId}
+                prepare={onSave}
+                onFiled={(folder) => {
+                  onLock();
+                  toast.success(filedToast(folder));
+                }}
+              />
+            )}
           </div>
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} allowed={canEdit} assignedOnly />
@@ -467,15 +547,17 @@ function IsoFormDetailBody({
               mode={mode}
               canEdit={canEdit}
               pending={saving || pending}
+              opening={opening}
               onEdit={onEdit}
-              onSave={() => void save()}
+              onSave={() => void save(false)}
               onCancel={onCancel}
               onDone={() => {
-                if (dirty) void save();
+                if (dirty) void save(true);
                 else onDone();
               }}
             />
             <SaveResult result={saveNote} />
+            {editError && <p className="text-xs text-destructive">{editError}</p>}
           </div>
         </div>
         {meta.photos && (

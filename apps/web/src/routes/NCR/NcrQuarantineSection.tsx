@@ -113,9 +113,15 @@ export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: 
           ...(disposition === "use_as_is" && concession ? { concession } : {}),
         })
       ).data,
-    onSuccess: () => {
+    onSuccess: (data: { advanced?: boolean; ncr?: { status?: string } }) => {
       refresh();
-      toast.success("Disposition completed. Those items are no longer on the active quarantine list.");
+      if (data?.ncr) {
+        void queryClient.cancelQueries({ queryKey: ["ncr", ncrId] });
+        queryClient.setQueryData(["ncr", ncrId], data.ncr);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ["ncr", ncrId] });
+      }
+      toast.success(data?.advanced ? "Disposition completed. This NCR moved to Disposition." : "Disposition completed. Those items are no longer on the active quarantine list.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't complete the disposition.")),
   });

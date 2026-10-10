@@ -5,12 +5,12 @@ import { siteHeaderValue, useSiteStore } from "../store/siteStore";
 import {
   classifyRefreshFailure,
   createSessionRefresher,
-  routeNotFoundTriggersReconnect,
   nextProactiveDelayMs,
   readRetryAfterHeader,
   refreshDecision,
   refreshWhileBackingOff,
   runWithRefreshLock,
+  sessionEffectForStatus,
   settleAfterRefresh,
   type RefreshLockStorage,
   type RefreshReason,
@@ -179,7 +179,7 @@ function settleRefreshResult(result: RefreshResult): RefreshResult {
     endSession();
   } else {
     nextRetryAt = Date.now() + result.retryAfterMs;
-    useAuthStore.getState().setReconnecting(true);
+    if (!useAuthStore.getState().accessToken) useAuthStore.getState().setReconnecting(true);
     scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
   }
   return result;
@@ -249,7 +249,7 @@ export function refreshSession(reason: RefreshReason = "proactive"): Promise<Ref
       const retryAfterMs = 2_000;
       const failed: RefreshResult = { ok: false, logout: false, retryAfterMs };
       nextRetryAt = Date.now() + retryAfterMs;
-      useAuthStore.getState().setReconnecting(true);
+      if (!useAuthStore.getState().accessToken) useAuthStore.getState().setReconnecting(true);
       scheduleProactiveRefresh(useAuthStore.getState().accessToken, retryAfterMs);
       return failed;
     })
@@ -300,11 +300,13 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
     const status = error.response?.status;
-
-    // A missing route or a missing record must not renew the session.
-    if (status === 404 && !routeNotFoundTriggersReconnect(status)) {
+    // A 5xx, a 404, or any other non-auth failure is not a session renewal.
+    const effect = sessionEffectForStatus(status, original?.url ?? "");
+    if (effect === "none") {
+      if (useAuthStore.getState().accessToken) useAuthStore.getState().setReconnecting(false);
       return Promise.reject(error);
     }
+    if (effect !== "refresh") return Promise.reject(error);
 
     if (status === 401 && original && !original._retried && !isRefreshRequest(original)) {
       original._retried = true;
