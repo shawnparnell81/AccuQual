@@ -10,6 +10,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { BUILT_FILL_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 import { BLANK_FORMS_FOLDER } from "../document-folders/formFiling.js";
 import { folderLocationLabel, folderPathParts, joinFolderPath } from "../document-folders/mainIsoFolders.js";
 import { FORM_BUILDER_PERMISSION } from "../roles/roleAccess.js";
@@ -356,7 +357,7 @@ export async function deleteBuiltForm(db: Db, actor: Actor, id: number) {
   await db.delete(builtForms).where(eq(builtForms.id, id));
 }
 
-export async function openBuiltFill(db: Db, actor: Actor, formId: number, recordNumber?: unknown) {
+export async function openBuiltFill(db: Db, actor: Actor, formId: number, recordNumber?: unknown, siteId?: number | null) {
   await requireFiller(db, actor);
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
   if (!form) throw AppError.notFound("Form");
@@ -389,6 +390,7 @@ export async function openBuiltFill(db: Db, actor: Actor, formId: number, record
     })
     .returning();
   if (!created) throw new Error("Could not open a copy");
+  await stampRecordSite(db, "built_form_fills", created.id, siteId);
   const [after] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
   if (!after || after.revision !== form.revision || JSON.stringify(after.publishedStructure) !== JSON.stringify(form.publishedStructure) || after.updatedAt?.getTime() !== form.updatedAt?.getTime()) {
     throw new Error("Opening a copy changed the template");

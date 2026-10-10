@@ -8,8 +8,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        display: ["Montserrat", "system-ui", "sans-serif"],
+        sans: ["Roboto", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Roboto", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "Consolas", "monospace"],
       },
       colors: {

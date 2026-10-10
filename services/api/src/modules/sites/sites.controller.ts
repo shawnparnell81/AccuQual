@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
+import { changeRecordSite, isRecordSiteEntity, readRecordSite } from "./recordSite.js";
 import * as sitesService from "./sites.service.js";
 
 export const getContextHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -8,8 +10,26 @@ export const getContextHandler = asyncHandler(async (req: Request, res: Response
 });
 
 export const switchHandler = asyncHandler(async (req: Request, res: Response) => {
-  const context = await sitesService.switchSite(req.db!, req.user!.id, req.user?.roleName ?? null, req.body.siteId);
+  const context = await sitesService.applySiteSwitch(req.db!, req.user!.id, req.user?.roleName ?? null, req.body);
   res.json(context);
+});
+
+export const getRecordSiteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const entity = String(req.query.entity ?? "");
+  const id = Number(req.query.id);
+  if (!isRecordSiteEntity(entity) || !Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a record.");
+  res.json(await readRecordSite(req.db!, entity, id));
+});
+
+export const changeRecordSiteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await changeRecordSite(
+    req.db!,
+    { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null },
+    req.body.entity,
+    req.body.id,
+    req.body.siteId,
+  );
+  res.json(updated);
 });
 
 export const createHandler = asyncHandler(async (req: Request, res: Response) => {

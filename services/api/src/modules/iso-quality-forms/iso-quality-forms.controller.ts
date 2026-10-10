@@ -14,6 +14,7 @@ import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcr
 import { CHANGE_REQUEST_KINDS, changeRequestByFormType } from "../change-requests/changeRequestKinds.js";
 import { stampNewEcr } from "../change-requests/ecr.controller.js";
 import { syncQuarantineNotice } from "../quarantine/quarantineNotice.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -56,6 +57,7 @@ export const baseHandlers = crudFactory(isoQualityForms, {
   },
   afterCreate: async (created, req) => {
     if (!req.db) return;
+    await stampRecordSite(req.db, "iso_quality_forms", Number(created.id), req.siteId);
     await snapshotIsoFormNumber(req.db, created);
     await stampNewEcr(req.db, created);
     const blocks = signatureBlocksFor(`iso:${String(created.formType ?? "")}`);

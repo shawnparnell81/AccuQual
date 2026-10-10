@@ -3,6 +3,7 @@ import { NotFoundPage } from "./NotFoundPage";
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
+import { useSites } from "../hooks/useSites";
 import {
   AdminAiSettingsPage,
   AdminAiUsagePage,
@@ -38,6 +39,7 @@ import {
   CrarDetailPage,
   CrarListPage,
   DashboardPage,
+  ExecutiveDashboardPage,
   DigitalTwinPage,
   DocumentCategoryPage,
   DocumentChangeRequestDetailPage,
@@ -118,6 +120,9 @@ import {
 
 function HomeRoute() {
   const user = useCurrentUser();
+  const sites = useSites();
+  if (sites.isLoading && !sites.data) return null;
+  if (sites.data?.executiveDashboard) return <Navigate to="/executive" replace />;
   return homeKind(user?.roleName) === "lead" ? <DashboardPage /> : <HomePage />;
 }
 
@@ -125,6 +130,7 @@ function HomeRoute() {
 export function workspaceRouteElements() {
   return [
     <Route key="/" path="/" element={<HomeRoute />} />,
+    <Route key="/executive" path="/executive" element={<ExecutiveDashboardPage />} />,
     <Route key="/home" path="/home" element={<HomePage />} />,
     <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsListPage />} />,
     <Route key="/blank-forms/start" path="/blank-forms/start/:formKey" element={<StartBlankFormPage />} />,

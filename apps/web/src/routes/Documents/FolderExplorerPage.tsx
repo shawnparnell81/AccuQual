@@ -28,6 +28,7 @@ import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialo
 import { documentFolderHasContents, folderPathLabel } from "../../lib/folderActions";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import "./folderExplorer.css";
+import { FilterBar, PageHeader, SummaryCards } from "../../components/layout/PageHeader";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
@@ -1124,6 +1125,9 @@ export function FolderExplorerPage() {
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
+  const folderTotal = visibleFolders.filter((folder) => isFolderEntry(visibleFolders, folder)).length;
+  const fileTotal = visibleFolders.length - folderTotal;
+
   return (
     <div className="folder-explorer">
       <input
@@ -1151,16 +1155,28 @@ export function FolderExplorerPage() {
         }}
       />
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Document Folders</h1>
-          <p className="text-sm text-muted-foreground">
-            Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank templates are in Blank Forms Templates.
-          </p>
-        </div>
-        <div className="w-56">
-          <TextField label="" placeholder="Filter documents…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+      <div className="flex shrink-0 flex-col gap-4">
+      <PageHeader
+        crumbs={[{ label: "Home", to: "/" }, { label: "Documents", to: "/documents" }, { label: "Folder Explorer" }]}
+        title="Folder Explorer"
+        description="Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank templates are in Blank Forms Templates."
+      />
+      <SummaryCards
+        items={[
+          { label: "Departments", value: departments.length, accent: true },
+          { label: "Folders", value: folderTotal },
+          { label: "Saved items", value: fileTotal },
+        ]}
+      />
+      <FilterBar>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter documents…"
+          aria-label="Filter documents"
+          className="w-64 border border-border bg-background px-3 py-1.5 text-sm"
+        />
+      </FilterBar>
       </div>
 
       <div data-testid="explorer-toolbar" className="flex shrink-0 flex-col gap-2">

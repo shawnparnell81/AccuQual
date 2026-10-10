@@ -19,6 +19,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
@@ -107,6 +108,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
         <div>
           <h1 className="text-2xl font-semibold">{audit.name}</h1>
           <RecordNumberEditor label="Audit No." value={audit.recordNumber} canEdit={canEdit} onSave={(next) => updateAudit.mutateAsync({ id: audit.id, recordNumber: next.trim() || null })} />
+          <RecordSiteField entity="audit" id={audit.id} canEdit={canEdit} />
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">

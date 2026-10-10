@@ -11,6 +11,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -84,6 +85,7 @@ export function ComplaintDetailPage() {
             {recordHeading("Complaint", complaint.recordNumber)} {complaint.customerName && <span className="text-muted-foreground">— {complaint.customerName}</span>}
           </h1>
           <RecordNumberEditor label="Complaint No." value={complaint.recordNumber} canEdit={canEdit} onSave={(next) => updateComplaint.mutateAsync({ id: complaint.id, recordNumber: next.trim() || null })} />
+          <RecordSiteField entity="complaint" id={complaint.id} canEdit={canEdit} />
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={complaint.status} />
             <StatusBadge value={complaint.severity} />

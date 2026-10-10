@@ -1,4 +1,4 @@
-import { FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, isFullAccessRole } from "./roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, SITES_VIEW_ALL_PERMISSION, isFullAccessRole } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -45,6 +45,7 @@ export interface RoleSeed {
 export const ROLE_SEEDS: RoleSeed[] = [
   { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION] },
   { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION] },
+  { name: "executive", description: "Executive — view every site and the executive dashboard. Does not grant editing.", hierarchyLevel: 18, isProtected: true, permissions: [SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
   { name: "director", description: "Director — can view the quality system and approve work", hierarchyLevel: 40, isProtected: true, permissions: [] },
@@ -64,6 +65,7 @@ export const PROTECTED_ROLE_NAMES = new Set(ROLE_SEEDS.map((role) => role.name))
 const ROLE_DISPLAY_NAMES: Record<string, string> = {
   owner: "Owner",
   admin: "Administrator",
+  executive: "Executive",
   president: "President",
   vice_president: "Vice President",
   director: "Director",

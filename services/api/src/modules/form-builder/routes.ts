@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import {
   createHandler,
   deleteHandler,
@@ -21,7 +22,7 @@ import {
 } from "./controller.js";
 
 export const formBuilderRouter = Router();
-formBuilderRouter.use(requireAuth, withDb);
+formBuilderRouter.use(requireAuth, withDb, withSiteContext);
 
 formBuilderRouter.get("/", listHandler);
 formBuilderRouter.post("/", createHandler);

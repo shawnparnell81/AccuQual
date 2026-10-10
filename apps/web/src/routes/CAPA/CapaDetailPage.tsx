@@ -16,6 +16,7 @@ import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
@@ -87,12 +88,15 @@ export function CapaDetailPage() {
         ]}
         title={recordHeading("CAPA", capa.recordNumber)}
         numberControl={
-          <RecordNumberEditor
-            label="CAPA No."
-            value={capa.recordNumber}
-            canEdit={canEdit}
-            onSave={(next) => updateCapa.mutateAsync({ id: capaId, recordNumber: next.trim() || null })}
-          />
+          <>
+            <RecordNumberEditor
+              label="CAPA No."
+              value={capa.recordNumber}
+              canEdit={canEdit}
+              onSave={(next) => updateCapa.mutateAsync({ id: capaId, recordNumber: next.trim() || null })}
+            />
+            <RecordSiteField entity="capa" id={capaId} canEdit={canEdit} />
+          </>
         }
         standard="CAPA"
         stateValue={capa.status}

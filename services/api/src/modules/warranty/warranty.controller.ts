@@ -18,6 +18,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { WARRANTY_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
@@ -169,6 +170,7 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
     })
     .returning();
 
+  await stampRecordSite(req.db!, "warranty_claims", created!.id, req.siteId);
   await req.db!.insert(warrantyClaimWorkflow).values({ claimId: created!.id, fromStatus: null, toStatus: "new", performedByUserId: req.user?.id });
   await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);

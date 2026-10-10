@@ -524,7 +524,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false, canViewLoginHistory: false });
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false, canRenameFolders: false, canDeleteFolders: false, canDeletePlants: false, canViewLoginHistory: false, canViewAllSites: false, canExecutiveDashboard: false });
   const [replacing, setReplacing] = useState<AppRole | null>(null);
   const [replacementId, setReplacementId] = useState("");
 
@@ -591,6 +591,8 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                       canDeleteFolders: (r.permissions ?? []).includes("folders.delete"),
                       canDeletePlants: (r.permissions ?? []).includes("plants.delete"),
                       canViewLoginHistory: (r.permissions ?? []).includes("login_history"),
+                      canViewAllSites: (r.permissions ?? []).includes("sites.view_all"),
+                      canExecutiveDashboard: (r.permissions ?? []).includes("executive.dashboard"),
                     });
                   }}
                   className="text-primary hover:underline"
@@ -664,6 +666,10 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             else permissions.delete("plants.delete");
             if (editForm.canViewLoginHistory) permissions.add("login_history");
             else permissions.delete("login_history");
+            if (editForm.canViewAllSites) permissions.add("sites.view_all");
+            else permissions.delete("sites.view_all");
+            if (editForm.canExecutiveDashboard) permissions.add("executive.dashboard");
+            else permissions.delete("executive.dashboard");
             updateRole.mutate(
               {
                 id: editing.id,
@@ -716,6 +722,16 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             Can view login history
           </label>
           <p className="text-xs text-muted-foreground">Who signed in, when, from where, and on what device. An administrator assigns this on the role. Owner and Administrator start with it.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canViewAllSites} onChange={(e) => setEditForm({ ...editForm, canViewAllSites: e.target.checked })} />
+            View all sites
+          </label>
+          <p className="text-xs text-muted-foreground">Shows every plant, including All sites in the header. People without this only see plants they are assigned to.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canExecutiveDashboard} onChange={(e) => setEditForm({ ...editForm, canExecutiveDashboard: e.target.checked })} />
+            Executive dashboard
+          </label>
+          <p className="text-xs text-muted-foreground">Opens the executive dashboard after sign-in. Viewing does not grant permission to edit records.</p>
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
           </button>

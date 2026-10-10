@@ -1,4 +1,4 @@
-/* Inter, Montserrat, JetBrains Mono — SIL OFL 1.1, vendored in public/fonts. */
+/* Inter and Montserrat stay on form sheets. Roboto (self-hosted) is the UI face. JetBrains Mono stays for codes. SIL OFL 1.1. */
 @font-face {
   font-family: "Inter";
   src: url("/fonts/inter.woff2") format("woff2");
@@ -98,7 +98,7 @@
   --fh: "Montserrat", system-ui, sans-serif;
   --fb: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --fm: "JetBrains Mono", ui-monospace, Consolas, monospace;
-  --side-w: 252px;
+  --side-w: 0px;
   --top-h: 62px;
   --r: 14px;
 }
@@ -237,9 +237,11 @@ body {
   margin: 0;
   background: hsl(var(--background));
   color: hsl(var(--text));
-  font-family: var(--fb);
+  /* UI chrome. One step under the 16px root (16 → 14) via --ui-step on the type utilities. */
+  font-family: "Roboto", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  --ui-step: 0.875;
   -webkit-font-smoothing: antialiased;
 }
 body::before {
@@ -256,9 +258,95 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--fh);
+  font-family: "Roboto", system-ui, sans-serif;
   color: hsl(var(--foreground));
   letter-spacing: -0.01em;
+}
+/* Form sheets, blank templates, filled viewers, Office preview, and LST grids keep the faces they had. */
+:is(
+  .aq-form-copy,
+  .aq-print-sheet,
+  .iso,
+  .csa,
+  .csa-sheet,
+  .fp,
+  .fp-sheet,
+  .insp,
+  .e8-sheet,
+  .e8-grid,
+  .b8,
+  .fb-grid,
+  .fb-sheet,
+  .sheet-grid,
+  .aq-paper,
+  .office-docx
+) {
+  --ui-step: 1;
+  font-family: var(--fb);
+}
+:is(.controlled-list-sheet, .controlled-list-print) {
+  --ui-step: 1;
+}
+:is(
+  .aq-form-copy,
+  .aq-print-sheet,
+  .iso,
+  .csa,
+  .csa-sheet,
+  .fp,
+  .fp-sheet,
+  .insp,
+  .e8-sheet,
+  .e8-grid,
+  .b8,
+  .fb-grid,
+  .fb-sheet,
+  .sheet-grid,
+  .aq-paper,
+  .office-docx,
+  .controlled-list-sheet,
+  .controlled-list-print
+) :is(h1, h2, h3, h4) {
+  font-family: inherit;
+}
+/* The UI type ramp, one step down. A form surface sets --ui-step back to 1, so these sizes stay put inside it. */
+body .text-xs {
+  font-size: calc(0.75rem * var(--ui-step));
+  line-height: calc(1rem * var(--ui-step));
+}
+body .text-sm {
+  font-size: calc(0.875rem * var(--ui-step));
+  line-height: calc(1.25rem * var(--ui-step));
+}
+body .text-base {
+  font-size: calc(1rem * var(--ui-step));
+  line-height: calc(1.5rem * var(--ui-step));
+}
+body .text-lg {
+  font-size: calc(1.125rem * var(--ui-step));
+  line-height: calc(1.75rem * var(--ui-step));
+}
+body .text-xl {
+  font-size: calc(1.25rem * var(--ui-step));
+  line-height: calc(1.75rem * var(--ui-step));
+}
+body .text-2xl {
+  font-size: calc(1.5rem * var(--ui-step));
+  line-height: calc(2rem * var(--ui-step));
+}
+body .text-3xl {
+  font-size: calc(1.875rem * var(--ui-step));
+  line-height: calc(2.25rem * var(--ui-step));
+}
+body .text-4xl {
+  font-size: calc(2.25rem * var(--ui-step));
+  line-height: calc(2.5rem * var(--ui-step));
+}
+body .text-\[2rem\] {
+  font-size: calc(2rem * var(--ui-step));
+}
+body .text-\[1\.6rem\] {
+  font-size: calc(1.6rem * var(--ui-step));
 }
 code,
 kbd,
@@ -322,21 +410,12 @@ kbd,
 .hero-surface {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(90% 150% at 0% 0%, hsl(var(--primary) / 0.08), transparent 58%),
-    radial-gradient(70% 130% at 100% 100%, hsl(var(--accent) / 0.05), transparent 62%),
-    hsl(var(--card));
-  border: 1px solid hsl(var(--primary) / 0.28);
-  box-shadow: 0 18px 50px -28px hsl(var(--primary) / 0.55);
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04), 0 18px 36px -28px hsl(222 40% 10% / 0.45);
 }
 .hero-surface::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 35%;
-  background: linear-gradient(100deg, transparent, hsl(var(--foreground) / 0.06), transparent);
-  animation: sheen 6s ease-in-out 1.2s infinite;
-  pointer-events: none;
+  content: none;
 }
 
 .kpi-tile {
@@ -351,25 +430,21 @@ kbd,
     border-color 0.22s ease;
 }
 .kpi-tile::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(120% 90% at 0% 0%, hsl(var(--tone) / 0.16), transparent 62%);
-  pointer-events: none;
+  content: none;
 }
 .kpi-tile::after {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: linear-gradient(90deg, hsl(var(--tone)), hsl(var(--tone) / 0));
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: hsl(var(--tone));
   pointer-events: none;
 }
 a.kpi-tile:hover,
 .kpi-tile.kpi-hover:hover {
-  transform: translateY(-3px);
-  border-color: hsl(var(--tone) / 0.55);
-  box-shadow: 0 16px 34px -18px hsl(var(--tone) / 0.7);
+  transform: none;
+  border-color: hsl(var(--tone) / 0.45);
+  box-shadow: 0 10px 24px -18px hsl(222 40% 10% / 0.4);
 }
 
 .live-dot {
@@ -534,45 +609,35 @@ a.kpi-tile:hover,
   animation: row-in 0.4s ease both;
 }
 
-/* Every page title gets the brand accent bar. */
-main h1.text-2xl {
-  position: relative;
-  padding-left: 0.9rem;
-  letter-spacing: -0.015em;
-}
-main h1.text-2xl::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.2em;
-  bottom: 0.2em;
-  width: 4px;
-  border-radius: 9999px;
-  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--accent)));
+/* Titles carry the hierarchy. DMA Blue is reserved for the one accent number and the primary action. */
+main h1.text-2xl,
+.aq-page-title {
+  letter-spacing: -0.02em;
+  font-weight: 700;
 }
 
-/* Cards read as raised surfaces instead of flat boxes. */
-.border.bg-card:is(.rounded-lg, .rounded-xl, .rounded-2xl) {
-  background-image: linear-gradient(180deg, hsl(var(--foreground) / 0.035), transparent 60%);
-  box-shadow:
-    inset 0 1px 0 hsl(var(--foreground) / 0.05),
-    0 10px 28px -22px hsl(var(--primary) / 0.5);
+/* Cards are soft surfaces: a hairline border and a neutral shadow, not a colored wash. */
+.border.bg-card:is(.rounded-lg, .rounded-xl, .rounded-2xl),
+.aq-panel,
+.aq-summary-card,
+.aq-filter-bar,
+.aq-list-table {
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04), 0 16px 32px -24px hsl(222 40% 10% / 0.4);
 }
 
-/* Primary buttons: cyan-to-accent gradient, same treatment as the prototype. */
+/* Primary actions are a solid brand button. The rest of the page stays quiet. */
 button.bg-primary,
 a.bg-primary {
-  background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.85) 45%, hsl(var(--accent)));
-  box-shadow: 0 8px 22px -10px hsl(var(--primary) / 0.85);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.15s ease;
+  background-image: none;
+  background-color: hsl(var(--button));
+  color: hsl(var(--button-foreground));
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.08);
+  transition: filter 0.15s ease;
 }
 button.bg-primary:not(:disabled):hover,
 a.bg-primary:hover {
   filter: brightness(1.08);
-  transform: translateY(-1px);
+  transform: none;
 }
 button.bg-primary:not(:disabled):active {
   transform: none;
@@ -618,7 +683,7 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px hsl(var(--tone) / 0.2);
 }
 :root[data-theme="light"] .hero-surface {
-  box-shadow: 0 18px 40px -28px hsl(var(--primary) / 0.35);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04), 0 16px 32px -24px hsl(222 40% 10% / 0.18);
 }
 :root[data-theme="light"] .cc-orbs::before,
 :root[data-theme="light"] .cc-orbs::after {
@@ -658,10 +723,139 @@ a.border.border-border:hover {
 
 main table thead th {
   font-family: var(--fm);
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--ui-step));
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* List pages: a breadcrumb, a title, a few counts, then a compact table. */
+.aq-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.aq-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.15rem;
+  color: hsl(var(--muted-foreground));
+  font-size: calc(0.78rem * var(--ui-step));
+}
+.aq-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.aq-crumbs a {
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+}
+.aq-crumbs a:hover {
+  color: hsl(var(--button));
+}
+.aq-page-title {
+  margin: 0;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: calc(1.65rem * var(--ui-step));
+  line-height: 1.15;
+  color: hsl(var(--foreground));
+}
+.aq-page-desc {
+  margin-top: 0.35rem;
+  max-width: 40rem;
+  color: hsl(var(--muted-foreground));
+  font-size: calc(0.9rem * var(--ui-step));
+  line-height: 1.45;
+}
+.aq-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.aq-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+}
+.aq-summary-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+  padding: 0.85rem 1rem 0.95rem;
+}
+.aq-summary-card.accent .aq-summary-value {
+  color: hsl(var(--button));
+}
+.aq-summary-label {
+  color: hsl(var(--muted-foreground));
+  font-size: calc(0.75rem * var(--ui-step));
+  font-weight: 500;
+}
+.aq-summary-value {
+  margin-top: 0.15rem;
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: calc(1.5rem * var(--ui-step));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: hsl(var(--foreground));
+}
+.aq-summary-detail {
+  margin-top: 0.2rem;
+  color: hsl(var(--muted-foreground));
+  font-size: calc(0.72rem * var(--ui-step));
+}
+.aq-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+}
+.aq-filter-bar input,
+.aq-filter-bar select {
+  background: hsl(var(--background));
+}
+.aq-list-table {
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
+}
+.aq-list-table table {
+  width: 100%;
+  min-width: 36rem;
+  font-size: calc(0.8125rem * var(--ui-step));
+}
+.aq-list-table thead th {
+  font-family: "Roboto", system-ui, sans-serif;
+  font-size: calc(0.75rem * var(--ui-step));
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.aq-list-table td {
+  padding: 0.45rem 0.85rem;
+  vertical-align: middle;
+}
+.aq-list-table tbody tr + tr {
+  border-top: 1px solid hsl(var(--border) / 0.7);
+}
+.aq-panel {
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--card));
 }
 
 /* Roles tables on Admin fill the page width. Cells wrap so a desktop
@@ -837,11 +1031,17 @@ body.aq-side-resizing .app-main {
   transition: none;
 }
 
-.aq-topbar {
+.aq-chrome {
   position: fixed;
-  inset: 0 0 auto 0;
-  height: var(--top-h);
+  top: 0;
+  right: 0;
+  left: 0;
   z-index: 40;
+}
+.aq-topbar {
+  position: relative;
+  height: 62px;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -851,24 +1051,149 @@ body.aq-side-resizing .app-main {
   backdrop-filter: blur(14px) saturate(1.3);
   border-bottom: 1px solid hsl(var(--border));
 }
+.aq-site-caption {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.aq-topnav-wrap {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.aq-topnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 2px;
+  min-height: 34px;
+  padding: 2px 8px;
+  overflow: visible;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.aq-topnav-root-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.aq-topnav-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 11rem;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+.aq-topnav-root-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aq-topnav-root:hover,
+.aq-topnav-root:focus-visible,
+.aq-topnav-root.active {
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--foreground));
+}
+.aq-topnav-caret {
+  flex: 0 0 auto;
+  transition: transform 0.15s ease;
+}
+.aq-topnav-caret.open {
+  transform: rotate(180deg);
+}
+.aq-topnav-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 14rem;
+  max-width: 20rem;
+  max-height: min(70vh, 28rem);
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 12px 32px hsl(222 47% 4% / 0.28);
+}
+.aq-topnav-fly {
+  top: 0;
+  left: calc(100% - 4px);
+}
+.aq-topnav-fly[data-flip="1"] {
+  left: auto;
+  right: calc(100% - 4px);
+}
+.aq-topnav-branch {
+  position: relative;
+}
+.aq-topnav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--foreground));
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.aq-topnav-item:hover,
+.aq-topnav-item:focus-visible,
+.aq-topnav-item.active {
+  background: hsl(var(--primary) / 0.14);
+  color: hsl(var(--foreground));
+}
+.aq-topnav-label {
+  min-width: 0;
+}
+.aq-topnav-customize .aq-topnav-root {
+  max-width: none;
+}
+body.nav-top {
+  --side-w: 0px;
+}
+body.nav-top .aq-sidebar,
+body.nav-top .aq-scrim,
+body.nav-top .aq-menu-btn {
+  display: none;
+}
 .aq-brand {
   display: flex;
   align-items: center;
   gap: 10px;
   color: #fff;
-  font: 800 1rem/1 var(--fh);
+  font: 800 calc(1rem * var(--ui-step))/1 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.06em;
   white-space: nowrap;
   text-decoration: none;
   min-width: 0;
 }
 .aq-product-line {
-  font: 700 0.78rem/1.2 var(--fh);
+  font: 700 calc(0.78rem * var(--ui-step))/1.2 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .aq-product-line-signin {
-  font: 800 1.05rem/1.3 var(--fh);
+  font: 800 calc(1.05rem * var(--ui-step))/1.3 "Roboto", system-ui, sans-serif;
   letter-spacing: 0.01em;
   white-space: normal;
 }
@@ -1078,7 +1403,7 @@ a:focus-visible {
   border-radius: 999px;
   background: hsl(var(--destructive));
   color: #fff;
-  font: 700 0.66rem/18px var(--fb);
+  font: 700 0.66rem/18px "Roboto", system-ui, sans-serif;
   text-align: center;
 }
 .aq-avatar {
@@ -1087,12 +1412,16 @@ a:focus-visible {
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
-  font: 700 0.72rem/1 var(--fb);
+  font: 700 0.72rem/1 "Roboto", system-ui, sans-serif;
   color: hsl(var(--primary-foreground));
   background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
 }
 .aq-menu-btn {
   display: none;
+}
+.aq-sidebar,
+.aq-topbar {
+  font-size: calc(14px * var(--ui-step));
 }
 .aq-sidebar {
   position: fixed;
@@ -1269,7 +1598,7 @@ body.aq-side-resizing * {
 }
 .aq-nav-count {
   margin-left: 6px;
-  font: 700 0.66rem/1 var(--fb);
+  font: 700 0.66rem/1 "Roboto", system-ui, sans-serif;
   background: hsl(var(--warning) / 0.15);
   color: hsl(var(--warning));
   padding: 3px 6px;
@@ -1457,7 +1786,7 @@ body.side-collapsed .aq-nav-folder-link {
     --side-w: 0px;
   }
   .aq-menu-btn {
-    display: inline-grid;
+    display: none;
   }
   .aq-sidebar {
     /* Drawer width follows the saved size. --side-w stays 0 so the page is not pushed. */
@@ -1516,7 +1845,7 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-topbar {
     flex-wrap: nowrap;
     align-items: center;
-    height: var(--top-h);
+    height: 62px;
     padding: 0 10px;
     gap: 6px;
   }
@@ -1681,7 +2010,9 @@ body.side-collapsed .aq-nav-folder-link {
   }
   .aq-split-bar,
   .aq-split-divider,
+  .aq-chrome,
   .aq-topbar,
+  .aq-topnav-wrap,
   .aq-sidebar,
   .aq-scrim,
   .aq-skip,

@@ -21,6 +21,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { groupDrafts } from "../../lib/formDrafts";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -276,6 +277,7 @@ export function QmsFormRecordPage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <HeaderField field="formNo" label="Form No." value={record.formNo} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("formNo", value, saveHeader("formNo"))} onCommit={() => void commitDrafts()} />
+          <RecordSiteField entity="qms_form" id={formId} canEdit={fieldsEditable} />
           <HeaderField label="Revision" value={record.revision || "A"} readOnly />
           <HeaderField field="effectiveDate" label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("effectiveDate", value, saveHeader("effectiveDate"))} onCommit={() => void commitDrafts()} />
           <HeaderField field="preparedBy" label="Prepared By" value={record.preparedBy} readOnly={!fieldsEditable} onDraft={(value) => noteDraft("preparedBy", value, saveHeader("preparedBy"))} onCommit={() => void commitDrafts()} />

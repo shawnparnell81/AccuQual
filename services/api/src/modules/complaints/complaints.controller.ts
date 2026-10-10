@@ -12,6 +12,7 @@ import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "../ncr/ncr.formSync.js";
 import { syncComplaintRecordToForm } from "./complaints.formSync.js";
 import { COMPLAINT_NUMBER } from "../records/recordNumberSpecs.js";
+import { stampRecordSite } from "../sites/recordSite.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 
 export const baseHandlers = crudFactory(complaints, {
@@ -20,6 +21,7 @@ export const baseHandlers = crudFactory(complaints, {
   recordNumber: COMPLAINT_NUMBER,
   afterCreate: async (created, req) => {
     await syncComplaintRecordToForm(req.db!, created as unknown as Complaint, req.user?.id);
+    if (req.db) await stampRecordSite(req.db, "complaints", Number(created.id), req.siteId);
   },
 });
 

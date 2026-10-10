@@ -5,6 +5,7 @@ import { duplicateNumberError } from "../forms/RecordNumberField";
 import { useToast } from "../shared/ToastProvider";
 import { useSavedViews } from "../../hooks/useSavedViews";
 import { DataTable, type Column } from "../tables/DataTable";
+import { FilterBar, PageHeader, SummaryCards, summarizeRecords } from "./PageHeader";
 import { Modal } from "../modals/Modal";
 import { GenericCreateForm, type FieldSpec } from "../forms/GenericCreateForm";
 import { Search, Bookmark, X } from "lucide-react";
@@ -84,42 +85,48 @@ export function ResourceListPage<T extends { id: number }>({
   }, [rows, search, searchable, rowPredicate]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {headerActions}
-          {createFields && canCreate !== false && (
-            <button onClick={() => { setCreateError(null); setCreateOpen(true); }} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
-              + New
-            </button>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        crumbs={[{ label: "Home", to: "/" }, { label: title }]}
+        title={title}
+        description={accessNote}
+        actions={
+          <>
+            {headerActions}
+            {createFields && canCreate !== false && (
+              <button onClick={() => { setCreateError(null); setCreateOpen(true); }} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+                New
+              </button>
+            )}
+          </>
+        }
+      />
+      <SummaryCards items={summarizeRecords(visibleRows)} />
+      {(searchable || extraFilters) && (
+        <FilterBar>
+          {searchable && (
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={`Search ${title.toLowerCase()}…`}
+                aria-label={`Search ${title}`}
+                className="w-64 border border-border bg-background py-1.5 pl-8 pr-3 text-sm"
+              />
+            </div>
           )}
-        </div>
-      </div>
-      {accessNote && <p className="text-sm text-muted-foreground">{accessNote}</p>}
-      {extraFilters}
-
-      {searchable && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${title.toLowerCase()}…`}
-              className="w-64 rounded-md border border-border bg-background py-1.5 pl-8 pr-3 text-sm"
-            />
-          </div>
-          {search.trim() && (
+          {extraFilters}
+          {searchable && search.trim() && (
             <button
               onClick={() => {
                 const label = window.prompt("Save this search as:");
                 if (label?.trim()) saveView({ label: label.trim(), searchText: search });
               }}
               title="Save current search"
-              className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-secondary"
+              className="rounded-md border border-border px-2 py-1.5 text-sm hover:bg-secondary"
             >
-              <Bookmark size={13} /> Save view
+              <Bookmark size={13} className="mr-1 inline" /> Save view
             </button>
           )}
           {views.map((v) => (
@@ -132,10 +139,10 @@ export function ResourceListPage<T extends { id: number }>({
               </button>
             </span>
           ))}
-        </div>
+        </FilterBar>
       )}
 
-      <DataTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} emptyMessage={searchable && search.trim() ? "No records match this search." : undefined} />
+      <DataTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} listChrome={false} emptyMessage={searchable && search.trim() ? "No records match this search." : undefined} />
 
       {createFields && (
         <Modal title={createTitle ?? `Create ${title}`} isOpen={createOpen} onClose={() => { setCreateError(null); setCreateOpen(false); }}>

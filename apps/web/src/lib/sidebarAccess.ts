@@ -136,6 +136,7 @@ const ROUTE_PATTERNS = [
   /^\/documents\/master-list$/,
   /^\/documents\/internal-audit-schedule$/,
   /^\/documents\/engineering-request-log$/,
+  /^\/documents\/development-log$/,
   /^\/documents\/import$/,
   /^\/documents\/folders$/,
   /^\/documents\/uploads$/,

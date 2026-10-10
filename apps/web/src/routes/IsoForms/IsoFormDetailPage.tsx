@@ -6,6 +6,7 @@ import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { sheetIsDirty, sheetSnap } from "../../lib/sheetDirty";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
@@ -432,6 +433,7 @@ function IsoFormDetailBody({
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold">{recordHeading(meta.title, record.recordNumber)}</h1>
             <RecordNumberEditor label="Record No." value={record.recordNumber} canEdit={fieldsEditable} onSave={onSaveNumber} />
+            <RecordSiteField entity="iso_form" id={recordId} canEdit={fieldsEditable} />
             <p className="text-sm text-muted-foreground">
               {revisionLabel(documentNumber, revision)}
               {" · "}

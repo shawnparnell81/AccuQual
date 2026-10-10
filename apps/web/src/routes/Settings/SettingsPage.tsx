@@ -100,7 +100,7 @@ export function SettingsPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-medium">Navigation</h3>
             <p className="text-sm text-muted-foreground">
-              Your sidebar shortcuts are under Navigation.{" "}
+              Your menu is under Navigation.{" "}
               <button onClick={() => setTab("Navigation")} className="text-accent hover:underline">
                 See how the menu works
               </button>

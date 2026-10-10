@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { parseLimitOffset } from "./listQuery.js";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
@@ -116,7 +116,16 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
 
   function siteListPredicate(req: Request) {
     if (!options.siteScoped) return undefined;
-    if (!req.siteId || siteCol == null) return null;
+    if (siteCol == null) return null;
+    if (req.allSites) {
+      const allowed = req.allowedSiteIds ?? [];
+      const parts: SQL[] = [];
+      if (allowed.length > 0) parts.push(inArray(siteCol as never, allowed));
+      if (req.allowUnassigned) parts.push(isNull(siteCol as never));
+      if (parts.length === 0) return null;
+      return parts.length === 1 ? parts[0]! : or(...parts)!;
+    }
+    if (!req.siteId) return null;
     return eq(siteCol as never, req.siteId);
   }
 
