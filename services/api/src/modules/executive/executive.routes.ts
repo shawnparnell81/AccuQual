@@ -15,7 +15,7 @@ executiveRouter.use(requireAuth, withDb);
 const requireExecutive = asyncHandler(async (req, _res, next) => {
   if (!req.db || !req.user) return next(AppError.unauthorized("Not signed in"));
   const allowed = await roleHasExecutiveDashboard(req.db, req.user.roleName);
-  if (!allowed) return next(AppError.forbidden("You don't have permission to open the executive dashboard."));
+  if (!allowed) return next(AppError.forbidden("You don't have access to the executive dashboard."));
   next();
 });
 

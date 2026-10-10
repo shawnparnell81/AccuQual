@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -142,6 +143,9 @@ export function ExecutiveDashboardPage() {
   const catalogByKind = useMemo(() => new Map(catalog.map((item) => [item.kind, item])), [catalog]);
 
   if (dashboard.isLoading) return <LoadingPlaceholder />;
+  if (dashboard.isError && axios.isAxiosError(dashboard.error) && dashboard.error.response?.status === 403) {
+    return <p className="rounded-lg border border-border bg-card p-4 text-sm text-foreground">You don't have access to the executive dashboard.</p>;
+  }
   if (dashboard.isError || !dashboard.data || !layout) {
     return <p className="text-sm text-destructive">Couldn't load the executive dashboard.</p>;
   }
