@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AIR_SPRING_CERTIFY, evaluate } from "../../lib/airSpringReport";
+import { AIR_SPRING_CERTIFY, evaluate, FORMULA_TEXT } from "../../lib/airSpringReport";
 import { AIR_SPRING_ROWS, buildAirSpringRows } from "../../lib/airSpringSheet";
 import type { CellValue } from "../../lib/validationReport";
 import { DenseAirSheet } from "./AirStrutSheet";
@@ -26,6 +26,7 @@ export function AirSpringSheet(props: AirSpringSheetProps) {
       testId="air-spring-sheet"
       label="AIR SPRING VALIDATION DOCUMENT"
       resultAddrs={["G7", "B48"]}
+      formulaText={FORMULA_TEXT}
     />
   );
 }

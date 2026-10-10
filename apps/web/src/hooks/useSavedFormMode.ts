@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
-import { apiClient } from "../api/client";
+import { BEGIN_EDIT_ERROR, postBeginEdit } from "../lib/beginEdit";
 import { afterEditClick, afterSaveOrCancel, isFreshFormOpen, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../lib/savedFormLock";
 
 /**
@@ -57,16 +57,23 @@ export function useModuleFormLock(recordId: number, canEdit: boolean, beginPath:
   const session = useSavedFormMode(recordId, canEdit);
   const queryClient = useQueryClient();
   const openingRef = useRef(false);
+  const [opening, setOpening] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   async function onEdit() {
     if (!canEdit || openingRef.current || session.mode === "editing") return;
     openingRef.current = true;
+    setOpening(true);
+    setEditError(null);
     try {
-      await apiClient.post(beginPath);
+      await postBeginEdit(beginPath);
       session.unlock();
       void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
+    } catch {
+      setEditError(BEGIN_EDIT_ERROR);
     } finally {
       openingRef.current = false;
+      setOpening(false);
     }
   }
-  return { ...session, onEdit };
+  return { ...session, onEdit, opening, editError };
 }

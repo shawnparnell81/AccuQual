@@ -38,7 +38,7 @@ export function SiteSwitcher() {
       >
         {data.canViewAllSites && <option value="all">All sites</option>}
         {choices.map((site) => (
-          <option key={site.id} value={site.id}>
+          <option key={site.id} value={String(site.id)}>
             {site.name}
             {site.isDefault ? " (main)" : ""}
           </option>

@@ -15,7 +15,9 @@ import {
   retryDelayMs,
   runWithRefreshLock,
   settleAfterRefresh,
+  sessionEffectForStatus,
   shouldRedirectToLogin,
+  showSessionReconnect,
   tokenNearExpiry,
   type RefreshAttempt,
 } from "./sessionRefresh.ts";
@@ -169,6 +171,21 @@ describe("single-flight session refresh", () => {
   });
 });
 
+describe("a normal API failure never starts session reconnect", () => {
+  it("ignores a 5xx on POST /ncr and only ends the session on /auth/refresh 401", () => {
+    assert.equal(sessionEffectForStatus(502, "/api/ncr"), "none");
+    assert.equal(sessionEffectForStatus(500, "/ncr"), "none");
+    assert.equal(sessionEffectForStatus(503, "/api/ncr/4/close"), "none");
+    assert.equal(sessionEffectForStatus(undefined, "/api/ncr"), "none");
+    assert.equal(sessionEffectForStatus(401, "/api/ncr"), "refresh");
+    assert.equal(sessionEffectForStatus(401, "/api/auth/refresh"), "end");
+    assert.equal(sessionEffectForStatus(502, "/api/auth/refresh"), "retry-auth");
+    assert.equal(showSessionReconnect({ accessToken: "token", reconnecting: true, knownPath: true }), false);
+    assert.equal(showSessionReconnect({ accessToken: null, reconnecting: false, knownPath: true }), false);
+    assert.equal(showSessionReconnect({ accessToken: null, reconnecting: true, knownPath: false }), false);
+  });
+});
+
 describe("when a renewal failure should end the session", () => {
   it("treats a definitive 401 as signed out and a 429 or 5xx as a wait", () => {
     const noJitter = () => 0;
@@ -205,6 +222,8 @@ describe("when a renewal failure should end the session", () => {
       assert.equal(bootstrapSessionDecision(await gate.refresh()), "retry");
       assert.equal(shouldRedirectToLogin({ accessToken: "still-here", reconnecting: true }), false);
       assert.equal(shouldRedirectToLogin({ accessToken: null, reconnecting: true }), false);
+      assert.equal(showSessionReconnect({ accessToken: "still-here", reconnecting: true, knownPath: true }), false);
+      assert.equal(showSessionReconnect({ accessToken: null, reconnecting: true, knownPath: true }), true);
     }
 
     const expired = classifyRefreshFailure(401, null, 0);

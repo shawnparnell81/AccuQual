@@ -29,11 +29,13 @@ import { isTombstoned, rememberDeletedDocumentFolder, deletedDocumentFolderToken
 import { FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION } from "../roles/roleAccess.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit, itemFolderPath } from "./mainIsoFolders.js";
-import { FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
+import { explicitFileFormKeys, FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
 import { LIST_KEYS } from "../controlled-lists/logic.js";
 import { collapseDuplicateLivingListNodes, ensureLivingControlledLists } from "../controlled-lists/service.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
-import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
+import { fileExplicitModuleCopy } from "./defaultFormFiling.js";
+import { FILEABLE_FORM_KEYS } from "./editableForms.js";
+import { describeFormFiling, fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { getFormFolder, listFormFolders, renameFormFolder, retireFormFolder } from "./formFolders.js";
 import { liveRecordPaths, repairSavedFormListings } from "./savedFormLinks.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
@@ -316,6 +318,11 @@ export const formFiling = asyncHandler(async (req: Request, res: Response) => {
 /** Files a filled copy into the chosen Documents folder, or moves it there. */
 export const fileForm = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { formKey: string; recordId: number; folderId?: number; formFolderKey?: string; partNumber?: string };
+  if (!FILEABLE_FORM_KEYS.has(body.formKey) && explicitFileFormKeys().has(body.formKey)) {
+    await fileExplicitModuleCopy(req.db!, body.formKey, body.recordId, req.user?.id);
+    res.status(201).json(await describeFormFiling(req.db!, body.formKey, body.recordId));
+    return;
+  }
   res.status(201).json(await fileFormRecord(req.db!, body, req.user?.id));
 });
 

@@ -59,110 +59,34 @@ async function listingsNeedRepair(db: Db): Promise<boolean> {
       OR EXISTS (
         SELECT 1 FROM validation_reports vr
         WHERE vr.updated_at IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM form_filings f
-            WHERE f.record_id = vr.id
-              AND f.folder_node_id IS NOT NULL
-              AND f.form_key = CASE coalesce(vr.data->>'formType', '')
-                WHEN 'fuel_pump' THEN 'frm-val-007'
-                WHEN 'air_strut' THEN 'frm-val-010'
-                WHEN 'air_spring' THEN 'frm-val-011'
-                WHEN 'fuel_injector' THEN 'frm-val-008'
-                WHEN 'brake_wear' THEN 'frm-val-009'
-                WHEN 'shock' THEN 'frm-val-002'
-                WHEN 'air_compressor' THEN 'frm-val-003'
-                WHEN 'electric_lift' THEN 'frm-val-004'
-                WHEN 'gas_lift' THEN 'frm-val-005'
-                WHEN 'coil_spring' THEN 'frm-val-006'
-                ELSE 'frm-val-001'
-              END
+          AND NOT EXISTS (SELECT 1 FROM form_filings f WHERE f.record_id = vr.id AND f.form_key LIKE 'frm-val-%')
+          AND EXISTS (
+            SELECT 1 FROM audit_trail at
+            WHERE at.entity_type = 'DocumentFolder'
+              AND at.changes->>'event' IN ('orphan_removed', 'filed')
+              AND at.changes->>'linkedPath' = '/validation-reports/' || vr.id::text
           )
       )
       OR EXISTS (
         SELECT 1 FROM iso_quality_forms i
         WHERE i.updated_at IS NOT NULL
-          AND CASE i.form_type
-            WHEN 'psw' THEN 'frm-psw-001'
-            WHEN 'turtle_diagram' THEN 'frm-prc-001'
-            WHEN 'quality_alert' THEN 'frm-qa-001'
-            WHEN 'customer_scorecard' THEN 'frm-cus-001'
-            WHEN 'failure_effectiveness' THEN 'frm-fae-001'
-            WHEN 'audit_summary' THEN 'frm-gen-002'
-            WHEN 'visitor_log' THEN 'lst-vis-001'
-            WHEN 'monthly_engineering' THEN 'rpt-eng-001'
-            WHEN 'salt_spray' THEN 'frm-trp-002'
-            WHEN 'volume_water' THEN 'frm-tst-001'
-            WHEN 'volume_heptane' THEN 'frm-tst-002'
-            WHEN 'prototype_strut' THEN 'frm-trp-001'
-            WHEN 'dev_csa' THEN 'frm-dev-001'
-            WHEN 'dev_fuel_pump' THEN 'frm-dev-002'
-            WHEN 'dev_gas_lift' THEN 'frm-dev-003'
-            WHEN 'dev_coil' THEN 'frm-dev-004'
-            WHEN 'dev_air_spring' THEN 'frm-dev-005'
-            WHEN 'dev_air_strut' THEN 'frm-dev-006'
-            WHEN 'dev_brake_wear' THEN 'frm-dev-007'
-            WHEN 'dev_electronic_shock' THEN 'frm-dev-008'
-            WHEN 'dev_air_compressor' THEN 'frm-dev-009'
-            WHEN 'dev_fuel_injector' THEN 'frm-dev-010'
-            WHEN 'dev_electric_lift' THEN 'frm-dev-011'
-            WHEN 'dev_electronic_csa' THEN 'frm-dev-012'
-            WHEN 'dev_shock' THEN 'frm-dev-013'
-            WHEN 'engineering_change' THEN 'frm-ecr-001'
-            WHEN 'drawing_change' THEN 'frm-dwg-001'
-            WHEN 'process_change' THEN 'frm-pcr-001'
-            WHEN 'document_change' THEN 'frm-doc-001'
-            WHEN 'scar_request' THEN 'frm-car-001'
-            WHEN 'ncr_report' THEN 'frm-ncr-001'
-            WHEN 'quarantine_notice' THEN 'frm-ncr-002'
-            WHEN 'concession' THEN 'frm-ncr-003'
-            WHEN 'internal_audit' THEN 'frm-gen-001'
-            WHEN 'competency_training' THEN 'frm-trn-001'
-            WHEN 'cross_training' THEN 'frm-trn-002'
-            ELSE NULL
-          END IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM form_filings f
-            WHERE f.record_id = i.id
-              AND f.folder_node_id IS NOT NULL
-              AND f.form_key = CASE i.form_type
-                WHEN 'psw' THEN 'frm-psw-001'
-                WHEN 'turtle_diagram' THEN 'frm-prc-001'
-                WHEN 'quality_alert' THEN 'frm-qa-001'
-                WHEN 'customer_scorecard' THEN 'frm-cus-001'
-                WHEN 'failure_effectiveness' THEN 'frm-fae-001'
-                WHEN 'audit_summary' THEN 'frm-gen-002'
-                WHEN 'visitor_log' THEN 'lst-vis-001'
-                WHEN 'monthly_engineering' THEN 'rpt-eng-001'
-                WHEN 'salt_spray' THEN 'frm-trp-002'
-                WHEN 'volume_water' THEN 'frm-tst-001'
-                WHEN 'volume_heptane' THEN 'frm-tst-002'
-                WHEN 'prototype_strut' THEN 'frm-trp-001'
-                WHEN 'dev_csa' THEN 'frm-dev-001'
-                WHEN 'dev_fuel_pump' THEN 'frm-dev-002'
-                WHEN 'dev_gas_lift' THEN 'frm-dev-003'
-                WHEN 'dev_coil' THEN 'frm-dev-004'
-                WHEN 'dev_air_spring' THEN 'frm-dev-005'
-                WHEN 'dev_air_strut' THEN 'frm-dev-006'
-                WHEN 'dev_brake_wear' THEN 'frm-dev-007'
-                WHEN 'dev_electronic_shock' THEN 'frm-dev-008'
-                WHEN 'dev_air_compressor' THEN 'frm-dev-009'
-                WHEN 'dev_fuel_injector' THEN 'frm-dev-010'
-                WHEN 'dev_electric_lift' THEN 'frm-dev-011'
-                WHEN 'dev_electronic_csa' THEN 'frm-dev-012'
-                WHEN 'dev_shock' THEN 'frm-dev-013'
-                WHEN 'engineering_change' THEN 'frm-ecr-001'
-                WHEN 'drawing_change' THEN 'frm-dwg-001'
-                WHEN 'process_change' THEN 'frm-pcr-001'
-                WHEN 'document_change' THEN 'frm-doc-001'
-                WHEN 'scar_request' THEN 'frm-car-001'
-                WHEN 'ncr_report' THEN 'frm-ncr-001'
-                WHEN 'quarantine_notice' THEN 'frm-ncr-002'
-                WHEN 'concession' THEN 'frm-ncr-003'
-                WHEN 'internal_audit' THEN 'frm-gen-001'
-                WHEN 'competency_training' THEN 'frm-trn-001'
-                WHEN 'cross_training' THEN 'frm-trn-002'
-                ELSE NULL
-              END
+          AND NOT EXISTS (SELECT 1 FROM form_filings f WHERE f.record_id = i.id)
+          AND EXISTS (
+            SELECT 1 FROM audit_trail at
+            WHERE at.entity_type = 'DocumentFolder'
+              AND at.changes->>'event' IN ('orphan_removed', 'filed')
+              AND at.changes->>'linkedPath' = '/iso-forms/record/' || i.id::text
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM qms_forms q
+        WHERE q.updated_at IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM form_filings f WHERE f.record_id = q.id)
+          AND EXISTS (
+            SELECT 1 FROM audit_trail at
+            WHERE at.entity_type = 'DocumentFolder'
+              AND at.changes->>'event' IN ('orphan_removed', 'filed')
+              AND at.changes->>'linkedPath' ~ ('/qms-forms/[^/]+/' || q.id::text || '$')
           )
       )
       OR EXISTS (
@@ -239,11 +163,6 @@ async function listingsNeedRepair(db: Db): Promise<boolean> {
           OR EXISTS (SELECT 1 FROM audit_items item WHERE item.audit_id = a.id)
         )
           AND NOT EXISTS (SELECT 1 FROM form_filings f WHERE f.record_id = a.id AND f.folder_node_id IS NOT NULL AND f.form_key IN ('audit-plan', 'audit-report'))
-      )
-      OR EXISTS (
-        SELECT 1 FROM qms_forms q
-        WHERE q.updated_at IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM form_filings f WHERE f.record_id = q.id AND f.folder_node_id IS NOT NULL AND f.form_key = q.form_type)
       )
     ) AS needed
   `);

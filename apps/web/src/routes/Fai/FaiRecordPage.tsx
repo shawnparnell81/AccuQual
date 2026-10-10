@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useFaiLookups, useFaiRecord, useInvalidateFai, type FaiRecordDetail } from "../../api/fai";
@@ -7,6 +7,7 @@ import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { useToast } from "../../components/shared/ToastProvider";
 import { canApproveFai, judgeFrozen, type PassFailWord } from "../../lib/faiLogic";
 import { faiFill } from "../../lib/qualitySheetLogic";
 import { peopleForAssignment, personLabel } from "../../lib/opsLanguage";
@@ -28,6 +29,8 @@ interface DraftLine {
 export function FaiRecordPage() {
   const params = useParams();
   const id = Number(params.id);
+  const navigate = useNavigate();
+  const toast = useToast();
   const record = useFaiRecord(id);
   const lookups = useFaiLookups();
   const invalidate = useInvalidateFai();
@@ -206,7 +209,7 @@ export function FaiRecordPage() {
             {data.ncrId && (
               <tr>
                 <td>Nonconformance</td>
-                <td colSpan={5}><Link to={`/ncr/${data.ncrId}`} className="text-primary hover:underline">{data.ncrNumber}</Link></td>
+                <td colSpan={5}><Link to={`/ncr/${data.ncrId}`} className="text-primary hover:underline">{data.ncrNumber || `NCR ${data.ncrId}`}</Link></td>
               </tr>
             )}
           </tbody>
@@ -218,6 +221,21 @@ export function FaiRecordPage() {
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted" disabled={!assignee || assign.isPending} onClick={() => assign.mutate()}>Assign</button>
           <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60" disabled={submit.isPending} onClick={() => submit.mutate()}>Submit for Quality review</button>
         </div>
+      )}
+      {data && !data.ncrId && (data.status === "rejected" || data.lines.some((line) => line.result === "Fail")) && (
+        <button
+          type="button"
+          className="no-print w-fit rounded-md border border-border px-2 py-1 text-sm"
+          data-testid="create-ncr"
+          onClick={() => {
+            void apiClient.post<{ id: number }>(`/fai/records/${data.id}/ncr`).then((response) => {
+              toast.success("NCR created. Type the NCR number on that record.");
+              navigate(`/ncr/${response.data.id}`);
+            }).catch((err) => setError(extractErrorMessage(err, "Couldn't create the NCR.")));
+          }}
+        >
+          Create NCR
+        </button>
       )}
       {mayDecide && (
         <div className="no-print grid gap-3 md:grid-cols-2">

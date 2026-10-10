@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { criteriaForBranch, judgeCriterion, type CsaCriterion } from "../../../../../services/api/src/modules/csa-fai/csaFai.logic";
@@ -239,6 +240,8 @@ function draftFrom(criterion: CsaCriterion, existing: CsaResultRow | undefined) 
 
 export function CsaFaiRecordPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
   const queryClient = useQueryClient();
   const record = useQuery({
     queryKey: ["csa-fai", id],
@@ -352,7 +355,25 @@ export function CsaFaiRecordPage() {
           {data.overallResult ? ` Overall ${data.overallResult}.` : ""}
         </p>
       )}
-      {data.ncrId && <p className="text-sm">Linked NCR #{data.ncrId}. NCR required: {data.ncrRequired}. Failure detected: {data.failureDetected}.</p>}
+      {data.ncrId ? (
+        <p className="text-sm">
+          Linked NCR <Link to={`/ncr/${data.ncrId}`} className="text-primary hover:underline">#{data.ncrId}</Link>. NCR required: {data.ncrRequired}. Failure detected: {data.failureDetected}.
+        </p>
+      ) : (data.failureDetected === "Yes" || data.overallResult === "Failed" || data.status === "Failed" || data.status === "Rejected") && (
+        <button
+          type="button"
+          className="w-fit rounded-md border border-border px-2 py-1 text-sm"
+          data-testid="create-ncr"
+          onClick={() => {
+            void apiClient.post<{ id: number }>(`/fai/csa/${data.id}/ncr`).then((response) => {
+              toast.success("NCR created. Type the NCR number on that record.");
+              navigate(`/ncr/${response.data.id}`);
+            }).catch((err) => setError(extractErrorMessage(err, "Couldn't create the NCR.")));
+          }}
+        >
+          Create NCR
+        </button>
+      )}
       {pending && (
         <section className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-4">
           <h2 className="text-sm font-medium">{pending.label || "Waiting"}</h2>

@@ -130,6 +130,7 @@ export function ActionFields({ node, onChange }: { node: WorkflowNode; onChange:
     case "create_ncr":
       return (
         <div className="grid grid-cols-2 gap-2">
+          <p className="col-span-2 text-xs text-muted-foreground">This step does not open an NCR. Create NCR stays on the failed inspection, and the number stays blank until someone types it.</p>
           <TextField label="Title (supports {{field}})" value={config.title ?? ""} onChange={(e) => set("title", e.target.value)} />
           <TextField label="Description" value={config.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           <SelectField label="Severity" value={config.severity ?? ""} onChange={(e) => set("severity", e.target.value)}>

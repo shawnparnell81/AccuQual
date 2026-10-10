@@ -18,6 +18,7 @@ import {
   updateQmsFormRowHandler,
   signQmsFormRowHandler,
   deleteQmsFormRowHandler,
+  createQmsNcrHandler,
 } from "./qmsForms.controller.js";
 
 export const qmsFormsRouter = Router();
@@ -39,6 +40,7 @@ qmsFormsRouter.get("/types", listQmsFormTypesHandler);
 qmsFormsRouter.get("/", listQmsFormsHandler);
 qmsFormsRouter.post("/", validate(createQmsFormSchema), createQmsFormHandler);
 qmsFormsRouter.get("/:id", getQmsFormHandler);
+qmsFormsRouter.post("/:id/ncr", createQmsNcrHandler);
 qmsFormsRouter.post("/:id/begin-edit", beginQmsEditHandler);
 qmsFormsRouter.post("/:id/cancel-edit", cancelQmsEditHandler);
 qmsFormsRouter.patch("/:id", validate(updateQmsFormSchema), updateQmsFormHandler);

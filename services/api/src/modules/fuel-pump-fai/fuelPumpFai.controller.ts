@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { fuelPumpFaiRecords } from "../../drizzle/schema/fuelPumpFai.js";
-import { copyFuelPump, getFuelPump, listFuelPump, listPreviousFuelPump, saveFuelPumpResults, submitFuelPump, updateFuelPumpNumber } from "./fuelPumpFai.service.js";
+import { copyFuelPump, createFuelPumpNcr, getFuelPump, listFuelPump, listPreviousFuelPump, saveFuelPumpResults, submitFuelPump, updateFuelPumpNumber } from "./fuelPumpFai.service.js";
+import { requireNcrEdit } from "../ncr/inspectionNcr.js";
 import { renderFuelPumpPdf } from "./fuelPumpFai.pdf.js";
 import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
 import { emptyFrame } from "../forms/controlledPdf.js";
@@ -27,6 +28,14 @@ export const copyFuelPumpHandler = asyncHandler(async (req: Request, res: Respon
 export const submitFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {
   const created = await submitFuelPump(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, req.body as Record<string, unknown>, req.siteId ?? null);
   res.status(201).json(created);
+});
+
+export const createFuelPumpNcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a fuel pump first article.");
+  await requireNcrEdit(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null });
+  const created = await createFuelPumpNcr(req.db!, id, req.user!.id, req.siteId ?? null);
+  res.status(created.existing ? 200 : 201).json(created);
 });
 
 export const updateFuelPumpNumberHandler = asyncHandler(async (req: Request, res: Response) => {

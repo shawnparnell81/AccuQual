@@ -12,10 +12,7 @@ import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
 import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
-import { setContainment } from "../ncr/ncr.service.js";
-import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
-import { ncr } from "../../drizzle/schema/ncr.js";
-import { eq } from "drizzle-orm";
+import { syncDocumentToRecord } from "../ncr/ncr.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { writeSignatureValue } from "../signatures/signaturePin.js";
 import { reasonableDate } from "../../utils/validation.js";
@@ -65,12 +62,13 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   if (req.params.type === COMPLAINT_FORM_TYPE && savedEntityId != null && req.body.data && typeof req.body.data === "object") {
     await syncComplaintFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
-  if (req.params.type === "ncr" && savedEntityId != null) await noteRepeatNcr(req.db!, Number(savedEntityId));
   if (req.params.type === "audit_checklist" && savedEntityId != null && data && typeof data === "object" && !Array.isArray(data)) {
     await syncAuditChecklist(req.db!, Number(savedEntityId), data as Record<string, unknown>, req.user?.id);
   }
-  if (req.params.type === "ncr" && savedEntityId != null && data && typeof data === "object" && !Array.isArray(data)) {
-    await copyNcrContainment(req, Number(savedEntityId), data as Record<string, unknown>);
+  if (req.params.type === "ncr" && savedEntityId != null) {
+    const savedData = saved && typeof saved === "object" && "data" in saved && saved.data && typeof saved.data === "object" ? (saved.data as Record<string, unknown>) : null;
+    if (savedData) await syncDocumentToRecord(req.db!, Number(savedEntityId), savedData, req.user?.id);
+    await noteRepeatNcr(req.db!, Number(savedEntityId));
   }
 
   res.json(saved);
@@ -143,20 +141,6 @@ export const createVersion = asyncHandler(async (req: Request, res: Response) =>
 
   res.json(updated);
 });
-
-async function copyNcrContainment(req: Request, ncrId: number, data: Record<string, unknown>): Promise<void> {
-  const rows = data.containmentActions;
-  const first = Array.isArray(rows) ? rows[0] : null;
-  const action = first && typeof first === "object" ? String((first as { action?: unknown }).action ?? "").trim() : "";
-  if (!action) return;
-  const [row] = await req.db!.select({ containment: ncr.containment, status: ncr.status }).from(ncr).where(eq(ncr.id, ncrId));
-  if (!row || row.containment?.trim()) return;
-  if (canonicalNcrStep(row.status) === "ncr_created") {
-    await setContainment(req.db!, ncrId, action, req.user?.id, req.allowedSiteIds);
-    return;
-  }
-  await req.db!.update(ncr).set({ containment: action, updatedAt: new Date() }).where(eq(ncr.id, ncrId));
-}
 
 function formCalendarDate(value: unknown): Date | null {
   const parsed = reasonableDate.safeParse(value);

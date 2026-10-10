@@ -7,7 +7,7 @@ import { validationReports } from "../../drizzle/schema/validationReport.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
-import { filedRecordName, fileNamePatternFor, folderIsBlankLibrary, FORM_TEMPLATES } from "./formFiling.js";
+import { explicitFileFormKeys, filedRecordName, fileNamePatternFor, folderIsBlankLibrary, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureSavedFormFolder } from "./formFolders.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { folderMoveAudit, itemFolderPath } from "./mainIsoFolders.js";
@@ -174,11 +174,15 @@ async function assertRecord(db: Db, formKey: string, recordId: number): Promise<
   return record.createdAt ? record.createdAt.toISOString().slice(0, 10) : null;
 }
 
-export async function getFormFiling(db: Db, formKey: string, recordId: number): Promise<FormFilingView> {
-  if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form is not filed from here");
+export async function describeFormFiling(db: Db, formKey: string, recordId: number): Promise<FormFilingView> {
   if (!Number.isInteger(recordId) || recordId <= 0) throw AppError.badRequest("Record is required");
   await ensureFormTemplates(db);
   return presentFiling(db, formKey, recordId, await loadFolders(db));
+}
+
+export async function getFormFiling(db: Db, formKey: string, recordId: number): Promise<FormFilingView> {
+  if (!FILEABLE_FORM_KEYS.has(formKey) && !explicitFileFormKeys().has(formKey)) throw AppError.badRequest("This form is not filed from here");
+  return describeFormFiling(db, formKey, recordId);
 }
 
 export async function fileFormRecord(
@@ -312,7 +316,7 @@ async function markFiledRecordSaved(db: Db, formKey: string, recordId: number): 
 }
 
 export function filingQuery(formKey: unknown, recordId: unknown): { formKey: string; recordId: number } {
-  if (typeof formKey !== "string" || !FILEABLE_FORM_KEYS.has(formKey)) {
+  if (typeof formKey !== "string" || (!FILEABLE_FORM_KEYS.has(formKey) && !explicitFileFormKeys().has(formKey))) {
     throw AppError.badRequest("This form is not filed from here");
   }
   const id = Number(recordId);

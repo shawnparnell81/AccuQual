@@ -43,6 +43,9 @@ import { RepeatNcrBanner } from "./RepeatNcrBanner";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { FormSignProvider } from "../../components/forms/formSign";
 import { ncrRecordedSteps } from "../../lib/ncrRecord";
+import { stagePreviewPatch, missingClosureSignatures, type NcrStageText } from "../../lib/ncrDocument";
+import { NcrClosureSignoff } from "./NcrClosureSignoff";
+import { NcrSourceLink } from "./NcrSourceLink";
 
 const FORM_TYPE = "ncr";
 
@@ -96,8 +99,9 @@ export function NcrWorkspacePage() {
   const workflowInvalidateKeys = [...historyKey, ...formDataKey];
   const queryClient = useQueryClient();
   const { data: history } = useWorkflowHistory("ncr", ncrId);
-  function rememberStep(data: unknown) {
+  async function rememberStep(data: unknown) {
     if (!data || typeof data !== "object" || !("status" in data)) return;
+    await queryClient.cancelQueries({ queryKey: ["ncr", ncrId] });
     queryClient.setQueryData(["ncr", ncrId], data);
   }
   const stepOptions = { invalidateKeys: workflowInvalidateKeys };
@@ -109,7 +113,10 @@ export function NcrWorkspacePage() {
   const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", ...stepOptions });
 
   const layout = getFormLayout(FORM_TYPE);
-  const { isLoading: formLoading, values, updateField, previewField, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  const { isLoading: formLoading, values, updateField, previewField, previewPatch, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  function reflectStage(stage: NcrStageText) {
+    previewPatch(stagePreviewPatch(values, stage));
+  }
   const [formSaveNote, setFormSaveNote] = useState<string | null>(null);
   const [exportId, setExportId] = useState<string | null>(null);
   const { data: linkedCapaRows = [] } = capaHooks.useList({ ncrId });
@@ -142,6 +149,7 @@ export function NcrWorkspacePage() {
   const recorded = ncrRecordedSteps(ncr, history);
   const stepsReadOnly = closed || !canEdit;
   const description = firstLine(values.nonconformanceDescription) || firstLine(ncr.description);
+  const validationSource = ncr.processData && typeof ncr.processData.validationSource === "object" ? (ncr.processData.validationSource as { path?: string; formTitle?: string }) : null;
   function saveForm() {
     setFormSaveNote(null);
     void saveNow()
@@ -184,9 +192,19 @@ export function NcrWorkspacePage() {
               aria-label="Owner"
               value={ncr.assignedTo ?? ""}
               onChange={(e) => {
-                if (!e.target.value) return;
-                updateNcr.mutate({ id: ncrId, assignedTo: Number(e.target.value) });
+                const assignedTo = Number(e.target.value);
+                if (!assignedTo) return;
+                const previous = ncr;
+                queryClient.setQueryData(["ncr", ncrId], { ...ncr, assignedTo });
+                updateNcr.mutate(
+                  { id: ncrId, assignedTo },
+                  {
+                    onSuccess: (row) => queryClient.setQueryData(["ncr", ncrId], row),
+                    onError: () => queryClient.setQueryData(["ncr", ncrId], previous),
+                  },
+                );
               }}
+              data-testid="ncr-owner"
               className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
             >
               {!ncr.assignedTo && <option value="">Unassigned</option>}
@@ -239,12 +257,23 @@ export function NcrWorkspacePage() {
                   toast.error(ON_HOLD_BLOCK_MESSAGE);
                   return;
                 }
-                closeAction.mutate({ id: ncrId }, { onSuccess: rememberStep });
+                const missing = missingClosureSignatures(values);
+                if (missing.length > 0) {
+                  toast.error(`Sign these before closing: ${missing.map((item) => item.label).join(", ")}`);
+                  return;
+                }
+                closeAction.mutate({ id: ncrId }, { onSuccess: (data) => void rememberStep(data) });
               }}
               visible={step === "verify"}
               variant="primary"
-              disabled={quarantineOnHold}
-              title={quarantineOnHold ? ON_HOLD_BLOCK_MESSAGE : undefined}
+              disabled={quarantineOnHold || missingClosureSignatures(values).length > 0}
+              title={
+                quarantineOnHold
+                  ? ON_HOLD_BLOCK_MESSAGE
+                  : missingClosureSignatures(values).length > 0
+                    ? `Still needed: ${missingClosureSignatures(values).map((item) => item.label).join(", ")}`
+                    : undefined
+              }
             />
           </>
         }
@@ -266,12 +295,13 @@ export function NcrWorkspacePage() {
         {/* Left pane — status/linking controls + the real editable form. */}
         <div className="no-print flex flex-col gap-4">
           <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+            <NcrSourceLink ncrId={ncrId} canEdit={canEdit} source={validationSource} />
             {description ? <p className="text-sm">{description}</p> : null}
             <ActionForm
               label="Containment"
               readOnly={stepsReadOnly}
               value={recorded.containment}
-              onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value }, { onSuccess: rememberStep })}
+              onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value }, { onSuccess: (data) => { reflectStage({ containment: value }); void rememberStep(data); } })}
               assistant={{
                 module: "ncr",
                 recordId: ncrId,
@@ -289,7 +319,7 @@ export function NcrWorkspacePage() {
                   label="Cause"
                   readOnly={stepsReadOnly}
                   value={recorded.cause}
-                  onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value }, { onSuccess: rememberStep })}
+                  onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value }, { onSuccess: (data) => { reflectStage({ rootCause: value }); void rememberStep(data); } })}
                   structuredRootCause={stepsReadOnly ? undefined : { ncrId: ncr.id, title: ncr.title, description: ncr.description, containment: ncr.containment }}
                 />
               </div>
@@ -300,7 +330,7 @@ export function NcrWorkspacePage() {
                   label="Disposition"
                   readOnly={stepsReadOnly || stepIndex !== 1}
                   value={recorded.disposition}
-                  onSubmit={(value) => dispositionStepAction.mutate({ id: ncrId, note: value.trim() }, { onSuccess: rememberStep })}
+                  onSubmit={(value) => dispositionStepAction.mutate({ id: ncrId, note: value.trim() }, { onSuccess: (data) => { reflectStage({ disposition: value.trim() }); void rememberStep(data); } })}
                 />
                 {stepIndex === 1 && !closed ? (
                   <p className="text-xs text-muted-foreground">This moves the NCR to Disposition. Quarantine decisions stay in the section above.</p>
@@ -313,7 +343,7 @@ export function NcrWorkspacePage() {
                   label="Fix"
                   readOnly={stepsReadOnly}
                   value={recorded.fix}
-                  onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value }, { onSuccess: rememberStep })}
+                  onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value }, { onSuccess: (data) => { reflectStage({ correctiveAction: value }); void rememberStep(data); } })}
                 />
               </div>
             )}
@@ -323,11 +353,15 @@ export function NcrWorkspacePage() {
                   label="Verify"
                   readOnly={stepsReadOnly || stepIndex !== 3}
                   value={recorded.verify}
-                  onSubmit={(value) => verifyAction.mutate({ id: ncrId, verification: value }, { onSuccess: rememberStep })}
+                  onSubmit={(value) => verifyAction.mutate({ id: ncrId, verification: value }, { onSuccess: (data) => { reflectStage({ verification: value }); void rememberStep(data); } })}
                 />
               </div>
             )}
           </div>
+
+          {step === "verify" && (
+            <NcrClosureSignoff data={values} canEdit={canEdit} onChange={updateField} onPreview={previewField} />
+          )}
 
           <div className="rounded-lg border border-border bg-card p-4">
             {formLoading || !layout ? (

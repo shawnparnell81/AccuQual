@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useSites } from "../../hooks/useSites";
+import { plantSelectOptions } from "../../lib/plantOptions";
 
 interface RecordSite {
   siteId: number | null;
@@ -29,7 +30,7 @@ export function RecordSiteField({ entity, id, canEdit }: { entity: string; id: n
 
   if (!query.data) return null;
   const name = query.data.siteName || "Unassigned";
-  const choices = (plants?.sites ?? []).filter((site) => site.status === "active");
+  const choices = plantSelectOptions(plants?.sites ?? [], query.data);
   if (!canEdit || choices.length === 0) {
     return (
       <p className="truncate text-xs text-muted-foreground" title={name} data-print-site={name}>
@@ -45,7 +46,7 @@ export function RecordSiteField({ entity, id, canEdit }: { entity: string; id: n
         aria-label="Plant"
         title={name}
         className="truncate rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-        value={query.data.siteId ?? ""}
+        value={query.data.siteId == null ? "" : String(query.data.siteId)}
         disabled={save.isPending}
         onChange={(e) => {
           const siteId = Number(e.target.value);
@@ -54,8 +55,8 @@ export function RecordSiteField({ entity, id, canEdit }: { entity: string; id: n
       >
         {query.data.siteId == null && <option value="">Unassigned</option>}
         {choices.map((site) => (
-          <option key={site.id} value={site.id} title={site.name}>
-            {site.name}
+          <option key={site.value} value={site.value} title={site.title}>
+            {site.label}
           </option>
         ))}
       </select>

@@ -3,9 +3,6 @@ import type { Db } from "../../lib/requestDb.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { registerActionHandler, type WorkflowNode } from "../workflow/workflow-engine.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { syncNcrFormData, ncrIsoDate } from "../ncr/ncr.formSync.js";
-import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 import {
   CSA_NODE,
   archiveState,
@@ -20,7 +17,6 @@ import {
   type CsaState,
 } from "./csaFai.logic.js";
 import { emailForUser, emailsForAssigneeLabel, emailsForDepartment, notifyInApp, persistCsa } from "./csaFai.persist.js";
-import { requirePlantId } from "../sites/siteAccess.js";
 
 function dbOf(context: Record<string, unknown>): Db | undefined {
   return context.__db as Db | undefined;
@@ -92,16 +88,14 @@ registerActionHandler("csa_open_attempt", async (_node, context) => {
   await save(context, beginAttempt(readCsa(context), new Date().toISOString()));
 });
 
-registerActionHandler("csa_create_ncr", async (node, context, dryRun) => {
+registerActionHandler("csa_create_ncr", async (_node, context, dryRun) => {
   const state = readCsa(context);
   const description = ncrDescription(state);
   if (dryRun) {
-    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "csa_create_ncr", simulated: true, description }];
-    await save(context, { ...state, ncrRequired: "Yes", productionRelease: "No", failureDetected: "Yes", status: "Failed", stage: "NCR and Corrective Action" });
-    return;
+    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "csa_create_ncr", simulated: true, description, created: false }];
   }
   const db = dbOf(context);
-  if (state.ncrId && db) {
+  if (!dryRun && state.ncrId && db) {
     await recordAuditTrail(db, {
       entityType: "NCR",
       entityId: state.ncrId,
@@ -109,39 +103,10 @@ registerActionHandler("csa_create_ncr", async (node, context, dryRun) => {
       changes: { message: "Another CSA FAI attempt was linked to this NCR.", faiNumber: state.number, attempt: state.attempt.number, description },
       performedBy: actorId(context),
     });
-    await save(context, { ...state, ncrRequired: "Yes", productionRelease: "No", failureDetected: "Yes", status: "Failed", stage: "NCR and Corrective Action" });
-    return;
-  }
-  let ncrId = state.ncrId;
-  if (db && !ncrId) {
-    const [created] = await db
-      .insert(ncr)
-      .values({
-        title: `CSA FAI ${state.number} failed`,
-        description,
-        status: "ncr_created",
-        supplierId: state.supplierId,
-        createdBy: actorId(context),
-        siteId: requirePlantId(state.siteId),
-      })
-      .returning();
-    ncrId = created!.id;
-    await recordAuditTrail(db, {
-      entityType: "NCR",
-      entityId: ncrId,
-      action: "create",
-      changes: { message: "NCR opened from CSA first article inspection.", workflowNode: node.id, faiNumber: state.number },
-      performedBy: actorId(context),
-    });
-    await syncNcrFormData(db, ncrId, { dateIssued: ncrIsoDate(created!.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: description }, actorId(context));
-    await noteRepeatNcr(db, ncrId);
-    await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: ncrId });
   }
   await save(context, {
     ...state,
-    ncrId,
-    ncrStatus: state.ncrStatus ?? "ncr_created",
-    ncrRequired: "Yes",
+    ncrRequired: state.ncrId ? "Yes" : "No",
     productionRelease: "No",
     failureDetected: "Yes",
     status: "Failed",

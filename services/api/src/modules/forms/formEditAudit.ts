@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
+import { sql } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
 import { FORM_LAYOUTS } from "./layouts/index.js";
+import { baselineOnly } from "./templateBaseline.js";
 
 /** Record fields whose on-screen heading is not the camelCase name. */
 const RECORD_FIELD_LABELS: Record<string, string> = {
@@ -70,10 +72,18 @@ export function scalarEdits(before: Record<string, unknown>, after: Record<strin
   return edits;
 }
 
-function diffCells(before: unknown, after: unknown): FormEdit[] {
+function diffCells(before: unknown, after: unknown, formType?: string): FormEdit[] {
   const left = asRecord(before) ?? {};
   const right = asRecord(after) ?? {};
-  return scalarEdits(left, right);
+  const edits = scalarEdits(left, right);
+  const kept: FormEdit[] = [];
+  for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+    if (baselineOnly(formType, key, left[key], right[key])) continue;
+    const label = cellLabel(key);
+    const edit = edits.find((item) => item.label === label);
+    if (edit && !kept.some((item) => item.label === label && item.from === edit.from && item.to === edit.to)) kept.push(edit);
+  }
+  return kept;
 }
 
 function blankish(value: unknown): boolean {
@@ -228,7 +238,8 @@ const FORM_DIFF_SKIP = new Set(["cells", "lines", "customers", "problems", "mont
 export function formDataEdits(previousData: unknown, nextData: unknown, formType?: string): FormEdit[] {
   const prev = asRecord(previousData) ?? {};
   const next = asRecord(nextData) ?? {};
-  const edits = diffCells(prev.cells, next.cells);
+  const kind = formType ?? (typeof next.formType === "string" ? next.formType : typeof prev.formType === "string" ? prev.formType : undefined);
+  const edits = diffCells(prev.cells, next.cells, kind);
   const monthNames = Array.isArray(next.months) ? next.months : Array.isArray(prev.months) ? prev.months : undefined;
   edits.push(...diffList("Line", prev.lines, next.lines));
   edits.push(...diffList("Customer", prev.customers, next.customers));
@@ -259,9 +270,11 @@ export function formDataEdits(previousData: unknown, nextData: unknown, formType
 /** Audit body for a form save. Drops the raw data blob once the cell list is known. */
 export function withFormEdits(changes: Record<string, unknown>, previousData: unknown, nextData: unknown): Record<string, unknown> {
   const edits = formDataEdits(previousData, nextData);
-  if (edits.length === 0) return changes;
-  const next: Record<string, unknown> = { ...changes, event: typeof changes.event === "string" ? changes.event : "form_saved", edits };
+  const next: Record<string, unknown> = { ...changes };
   delete next.data;
+  if (edits.length === 0) return next;
+  next.event = typeof changes.event === "string" ? changes.event : "form_saved";
+  next.edits = edits;
   return next;
 }
 
@@ -282,20 +295,33 @@ export function shouldRepairFiledLink(input: { linkedPath: string | null; expect
   return (input.linkedPath ?? "") !== input.expected;
 }
 
+function lockTimeout(err: unknown): boolean {
+  const code = typeof err === "object" && err && "code" in err ? String((err as { code?: string }).code) : "";
+  const message = err instanceof Error ? err.message : "";
+  return code === "55P03" || /lock timeout/i.test(message);
+}
+
 /** POST /:id/begin-edit — records that someone unlocked a saved form. The route's department gate decides who may write. */
 export function beginFormEditHandler(entityType: string, load: (db: Db, id: number) => Promise<unknown>) {
   return asyncHandler(async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Record is required");
-    const row = await load(req.db!, id);
-    if (!row) throw AppError.notFound(entityType);
-    await recordAuditTrail(req.db!, {
-      entityType,
-      entityId: id,
-      action: "update",
-      changes: { event: "edit_started" },
-      performedBy: req.user?.id,
-    });
+    try {
+      await req.db!.execute(sql`SELECT set_config('lock_timeout', '3s', true)`);
+      const row = await load(req.db!, id);
+      if (!row) throw AppError.notFound(entityType);
+      await recordAuditTrail(req.db!, {
+        entityType,
+        entityId: id,
+        action: "update",
+        changes: { event: "edit_started" },
+        performedBy: req.user?.id,
+      });
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      if (lockTimeout(err)) throw new AppError("Couldn't open this form for editing. Try again.", 409);
+      throw err;
+    }
     res.json({ editing: true });
   });
 }

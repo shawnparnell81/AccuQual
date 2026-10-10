@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
-import { conditionalFill, evaluate, parseInput, showValue, type CellValue } from "../../lib/validationReport";
+import { conditionalFill, evaluate, FORMULA_TEXT, parseInput, showValue, type CellValue } from "../../lib/validationReport";
 import { buildSheetRows, type SheetCell } from "../../lib/validationReportSheet";
 import "./validationReport.css";
 
@@ -9,6 +9,8 @@ interface ValidationReportSheetProps {
   onChange: (addr: string, value: CellValue) => void;
   documentNumber?: string;
   revision?: string;
+  failedAddrs?: string[];
+  onCreateNcr?: (addr: string) => void;
 }
 
 type Slot = SheetCell | "covered" | "empty" | "gap";
@@ -37,7 +39,7 @@ function shownText(spec: SheetCell, cells: Record<string, CellValue>, calculated
   return showValue(spec.addr, cells[spec.addr] ?? "");
 }
 
-export function ValidationReportSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C" }: ValidationReportSheetProps) {
+export function ValidationReportSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C", failedAddrs = [], onCreateNcr }: ValidationReportSheetProps) {
   const rows = useMemo(() => buildSheetRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
@@ -78,6 +80,8 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange, docum
                 onChange={onChange}
                 documentNumber={documentNumber}
                 revision={revision}
+                failed={failedAddrs.includes(slot.addr)}
+                onCreateNcr={onCreateNcr}
               />
             );
           }),
@@ -96,6 +100,8 @@ function Cell({
   onChange,
   documentNumber,
   revision,
+  failed = false,
+  onCreateNcr,
 }: {
   spec: SheetCell;
   place: CSSProperties;
@@ -105,6 +111,8 @@ function Cell({
   onChange: (addr: string, value: CellValue) => void;
   documentNumber: string;
   revision: string;
+  failed?: boolean;
+  onCreateNcr?: (addr: string) => void;
 }) {
   const text = shownText(spec, cells, calculated, documentNumber, revision);
   const cf = conditionalFill(spec.addr, spec.kind === "calc" || spec.kind === "label" || spec.kind === "input" ? text : "");
@@ -116,6 +124,7 @@ function Cell({
     spec.size === "result" ? "result" : "",
     spec.size === "section" ? "section" : "",
     spec.kind === "gray" ? "gray" : "",
+    spec.kind === "calc" ? "calc" : "",
     pastel && spec.col === 9 ? "swatch" : "",
     spec.wrap ? "wrap" : "",
   ]
@@ -136,7 +145,7 @@ function Cell({
   const inputValue = value === undefined || value === null ? "" : typeof value === "boolean" ? "" : String(value);
 
   return (
-    <div className={className} style={style} role="cell" data-addr={spec.addr}>
+    <div className={className} style={style} role="cell" data-addr={spec.addr} title={spec.kind === "calc" && FORMULA_TEXT[spec.addr] ? `calc: ${FORMULA_TEXT[spec.addr]}` : undefined}>
       {spec.kind === "input" && (
         <input
           className="csa-in"
@@ -181,7 +190,16 @@ function Cell({
           onChange={(event) => onChange(spec.addr, event.target.checked)}
         />
       )}
-      {spec.kind === "calc" && <span data-result={spec.addr === "A1" ? text : undefined}>{text}</span>}
+      {spec.kind === "calc" && (
+        <span data-result={spec.addr === "A1" ? text : undefined}>
+          {text}
+          {failed && onCreateNcr && spec.addr !== "A1" && (
+            <button type="button" className="no-print ml-1 text-[10px] underline" data-testid={`create-ncr-${spec.addr}`} onClick={() => onCreateNcr(spec.addr)}>
+              Create NCR
+            </button>
+          )}
+        </span>
+      )}
       {(spec.kind === "label" || spec.kind === "gray" || spec.kind === "empty") && text}
     </div>
   );

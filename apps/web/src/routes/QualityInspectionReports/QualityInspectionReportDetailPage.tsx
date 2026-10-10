@@ -81,6 +81,26 @@ export function QualityInspectionReportDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
+          {(report.linkedNcrs ?? []).map((link) => (
+            <button key={link.id} type="button" className="text-sm text-primary hover:underline" onClick={() => navigate(`/ncr/${link.id}`)}>
+              NCR {link.recordNumber?.trim() || link.id}
+            </button>
+          ))}
+          {(report.linkedNcrs ?? []).length === 0 && (items.some((item) => /^fail/i.test(item.result ?? "")) || report.finalStatus === "rejected" || report.finalStatus === "rework_required") && (
+            <button
+              type="button"
+              className="rounded-md border border-border px-2 py-1 text-sm"
+              data-testid="create-ncr"
+              onClick={() => {
+                void apiClient.post<{ id: number }>(`/quality-inspection-reports/${reportId}/ncr`).then((response) => {
+                  toast.success("NCR created. Type the NCR number on that record.");
+                  navigate(`/ncr/${response.data.id}`);
+                }).catch((err) => toast.error(extractErrorMessage(err, "Couldn't create the NCR.")));
+              }}
+            >
+              Create NCR
+            </button>
+          )}
           <DeleteRecordButton resource="quality-inspection-reports" id={reportId} kind="Quality inspection" title={report.partMaterialNo} number={report.recordNumber} ownerIds={[report.createdBy]} navigateTo="/quality-inspection-reports" />
         </div>
       </div>

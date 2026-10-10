@@ -1,4 +1,5 @@
 import { formatDateTime } from "./dates";
+import { baselineCell } from "./templateBaseline";
 
 /**
  * One audit line, in the order an auditor reads it.
@@ -379,7 +380,7 @@ function diffRecord(valueFrom: unknown, valueTo: unknown): string[] {
       else if (hadBefore && hasAfter) bits.push(`${name} changed from ${beforeShown} to ${afterShown}.`);
       else if (hasAfter) bits.push(`${name} set to ${afterShown}.`);
       else bits.push(`${name} was ${beforeShown}.`);
-    } else {
+    } else if (child !== "cells" && child !== "data") {
       bits.push(`${name} changed.`);
     }
     if (bits.length === 4) break;
@@ -456,8 +457,10 @@ function describeIsoData(before: unknown, after: unknown): string[] {
   const lines: string[] = [];
   const leftCells = asRecord(left.cells) ?? {};
   const rightCells = asRecord(right.cells) ?? {};
+  const formType = typeof right.formType === "string" ? right.formType : typeof left.formType === "string" ? left.formType : undefined;
   for (const key of new Set([...Object.keys(leftCells), ...Object.keys(rightCells)])) {
     if (isoSame(leftCells[key], rightCells[key])) continue;
+    if (baselineCell(formType, key, leftCells[key], rightCells[key])) continue;
     if ((leftCells[key] && typeof leftCells[key] === "object") || (rightCells[key] && typeof rightCells[key] === "object")) continue;
     lines.push(`Cell ${key} changed from ${isoShown(leftCells[key])} to ${isoShown(rightCells[key])}.`);
   }
@@ -671,7 +674,8 @@ function auditDescription(action: string, changes: Record<string, unknown> | nul
   }
   if (numberLine) parts.unshift(numberLine);
   const unique = dedupe(parts);
-  return unique.length > 0 ? unique.join(" ") : AUDIT_DETAIL_FALLBACK;
+  const text = unique.length > 0 ? unique.join(" ") : AUDIT_DETAIL_FALLBACK;
+  return text.replace(/\.\.(?!\.)/g, ".").replace(/\s+\./g, ".");
 }
 
 export function formatAuditLine(entry: AuditEntryLike): AuditLine {

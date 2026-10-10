@@ -410,7 +410,7 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
         number: row.formNo,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-        saved: row.updatedAt != null,
+        saved: filedUnder([seed.formKey], row.id),
       });
     }
   }

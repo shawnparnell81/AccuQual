@@ -1091,6 +1091,7 @@ export interface QualityInspectionReport {
   qaLeadSignature: string | null;
   qaLeadSignatureDate: string | null;
   signatureRequired?: Record<string, "yes" | "no"> | null;
+  linkedNcrs?: { id: number; recordNumber: string | null }[];
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;

@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
-import { AIR_STRUT_CERTIFY, evaluate as evaluateAirStrut, parseInput, showValue, statusFill, type CellValue } from "../../lib/airStrutReport";
+import { AIR_STRUT_CERTIFY, evaluate as evaluateAirStrut, FORMULA_TEXT as strutFormulas, parseInput, showValue, statusFill, type CellValue } from "../../lib/airStrutReport";
 import { AIR_STRUT_ROWS, buildAirStrutRows, type AirCell } from "../../lib/airStrutSheet";
 import "./validationReport.css";
 
@@ -23,6 +23,7 @@ interface DenseAirSheetProps extends AirStrutSheetProps {
   label: string;
   resultAddrs: string[];
   sheetClass?: string;
+  formulaText?: Record<string, string>;
 }
 
 type Slot = AirCell | "covered" | "empty";
@@ -81,6 +82,7 @@ export function DenseAirSheet({
   label,
   resultAddrs,
   sheetClass = "as-sheet",
+  formulaText = strutFormulas,
 }: DenseAirSheetProps) {
   const calculated = useMemo(() => evaluateCells(cells), [cells, evaluateCells]);
   const grid = useMemo(() => {
@@ -114,6 +116,7 @@ export function DenseAirSheet({
                 onSign={onSign}
                 certify={certify}
                 resultAddrs={resultAddrs}
+                formulaText={formulaText}
               />
             );
           }),
@@ -136,6 +139,7 @@ function Cell({
   onSign,
   certify,
   resultAddrs,
+  formulaText,
 }: {
   spec: AirCell;
   place: CSSProperties;
@@ -149,6 +153,7 @@ function Cell({
   onSign?: (pin: string) => Promise<unknown>;
   certify: string;
   resultAddrs: string[];
+  formulaText: Record<string, string>;
 }) {
   const text = shownText(spec, cells, calculated, documentNumber, revision);
   const fill = spec.kind === "calc" ? statusFill(text) : null;
@@ -160,6 +165,7 @@ function Cell({
     spec.size === "section" ? "section" : "",
     spec.size === "note" ? "note" : "",
     spec.size === "result" ? "result" : "",
+    spec.kind === "calc" ? "calc" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -172,7 +178,7 @@ function Cell({
   const inputValue = value === undefined || value === null || typeof value === "boolean" ? "" : String(value);
 
   return (
-    <div className={className} style={style} role="cell" data-addr={spec.addr}>
+    <div className={className} style={style} role="cell" data-addr={spec.addr} title={spec.kind === "calc" ? `calc: ${formulaText[spec.addr] ?? ""}`.replace(/:\s*$/, "") : undefined}>
       {spec.kind === "input" && (
         <input
           className="fp-in"

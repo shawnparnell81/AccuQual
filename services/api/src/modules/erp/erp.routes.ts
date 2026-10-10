@@ -10,6 +10,7 @@ import {
   createReceivingDocumentHandler,
   getReceivingDocumentHandler,
   transitionReceivingLineItemHandler,
+  createReceivingNcrHandler,
 } from "./erp.controller.js";
 
 export const erpRouter = Router();
@@ -24,3 +25,4 @@ erpRouter.get("/receiving-documents/:id", getReceivingDocumentHandler);
 // varies by target status, enforced inside transitionReceivingLineItem
 // itself (see that file's own comment), not by this router's fixed gate.
 erpRouter.post("/receiving-line-items/:id/status", validate(transitionReceivingLineItemSchema), transitionReceivingLineItemHandler);
+erpRouter.post("/receiving-line-items/:id/ncr", createReceivingNcrHandler);

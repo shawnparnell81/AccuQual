@@ -82,7 +82,7 @@ A nonconformance is opened on the existing NCR record. The first article links t
 
 The people involved receive:
 
-> FAI-2026-000184 was not approved. A nonconformance was opened. 4400-12 from Northline Metals is not approved.
+> FAI-2026-000184 was not approved. 4400-12 from Northline Metals is not approved.
 
 ## 7. What the source list shows
 

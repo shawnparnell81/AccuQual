@@ -58,6 +58,11 @@ export const addNcrQuarantineItemSchema = z.object({
   serialNumber: z.string().trim().max(200).optional(),
 });
 
+export const linkNcrSourceSchema = z.object({
+  kind: z.enum(["validation", "iso", "qms"]),
+  id: z.number().int().positive(),
+});
+
 export const completeNcrDispositionSchema = z.object({
   disposition: z.enum(NCR_ITEM_DISPOSITIONS),
   concession: z.enum(["with", "none"]).optional(),

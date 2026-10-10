@@ -19,6 +19,19 @@
  */
 export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
 
+/** Validation, ISO, and QMS copies are filed only from Save as. A plain Save stays a draft. */
+const EXPLICIT_FILE_PATHS = new Set(["/validation-reports", "/iso-quality-forms", "/qms-forms"]);
+
+export function requiresExplicitFile(createPath: string): boolean {
+  return EXPLICIT_FILE_PATHS.has(createPath);
+}
+
+export function explicitFileFormKeys(): Set<string> {
+  return new Set(
+    FORM_TEMPLATES.filter((seed) => seed.start != null && requiresExplicitFile(seed.start.createPath)).map((seed) => seed.formKey),
+  );
+}
+
 /** Top Documents folder. */
 export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 
