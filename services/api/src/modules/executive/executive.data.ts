@@ -190,7 +190,7 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
       statusLabel: labelStatus({ open: "Open", investigating: "Investigating", resolved: "Resolved", closed: "Closed" }, row.status),
       recordNumber: text(row.record_number),
       title: text(row.customer_name) ?? text(row.description) ?? "Customer complaint",
-      href: null,
+      href: `/complaints/${row.id}`,
       outcome,
       categories: [],
       overdue: false,

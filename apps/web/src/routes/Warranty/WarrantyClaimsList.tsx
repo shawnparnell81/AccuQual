@@ -6,6 +6,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { useSiteStore } from "../../store/siteStore";
 import { WarrantyClaimCreateForm } from "./WarrantyClaimCreateForm";
+import { formatDate } from "../../lib/dates";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -69,7 +70,7 @@ export function WarrantyClaimsList() {
           { header: "Claim #", accessor: (c) => c.claimNumber?.trim() || "" },
           { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
           { header: "Serial #", accessor: (c) => c.serialNumber ?? "—" },
-          { header: "Failure Date", accessor: (c) => (c.failureDate ? new Date(c.failureDate).toLocaleDateString() : "—") },
+          { header: "Failure Date", accessor: (c) => formatDate(c.failureDate) },
           { header: "Est. Cost", accessor: (c) => (c.warrantyCostEstimate ? `$${Number(c.warrantyCostEstimate).toFixed(2)}` : "—") },
           { header: "Actual Cost", accessor: (c) => (c.warrantyActualCost ? `$${Number(c.warrantyActualCost).toFixed(2)}` : "—") },
         ]}

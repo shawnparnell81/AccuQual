@@ -39,7 +39,12 @@ export function mapSeverityToClassification(severity: string | null): NcrFormSyn
 }
 
 export function ncrIsoDate(d: Date | string): string {
-  return (typeof d === "string" ? new Date(d) : d).toISOString().slice(0, 10);
+  if (typeof d === "string") {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(d.trim());
+    if (match) return match[1]!;
+  }
+  const date = d instanceof Date ? d : new Date(d);
+  return date.toISOString().slice(0, 10);
 }
 
 /** A fixedRowLabels table with one checkboxGroup column (documentStatus, ncrClassification) — see layouts/ncr.ts. Single-select in practice even though the renderer's data shape technically allows multiple. */

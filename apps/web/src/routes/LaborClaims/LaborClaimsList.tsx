@@ -5,6 +5,7 @@ import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { useSiteStore } from "../../store/siteStore";
+import { formatDate } from "../../lib/dates";
 import { LaborClaimCreateForm } from "./LaborClaimCreateForm";
 import type { LaborClaim, LaborClaimStatus } from "./laborClaim";
 
@@ -69,7 +70,7 @@ export function LaborClaimsList() {
           { header: "Status", accessor: (row) => <StatusBadge value={row.status} /> },
           { header: "Customer", accessor: (row) => row.customerName ?? "—" },
           { header: "Part", accessor: (row) => row.partName ?? "—" },
-          { header: "Date", accessor: (row) => (row.claimDate ? new Date(row.claimDate).toLocaleDateString() : "—") },
+          { header: "Date", accessor: (row) => formatDate(row.claimDate) },
           { header: "Hours", accessor: (row) => row.laborHours ?? "—" },
           { header: "Labor Cost", accessor: (row) => money(row.totalLaborCost) },
         ]}

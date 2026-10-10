@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { SelectField, TextField } from "../../components/forms/Field";
 import { showRecordNumber } from "../../lib/userRecordNumber";
+import { formatDate } from "../../lib/dates";
 import type { RmaLogRecord, RmaLogStatus } from "../../api/types";
 
 const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
@@ -74,14 +75,14 @@ export function RmaLogListPage() {
       <DataTable<RmaLogRecord>
         columns={[
           { header: "RMA #", accessor: (r) => showRecordNumber(r.rmaNumber) },
-          { header: "Date Issued", accessor: (r) => new Date(r.dateIssued).toLocaleDateString() },
+          { header: "Date Issued", accessor: (r) => formatDate(r.dateIssued) },
           { header: "Customer", accessor: (r) => r.customerName ?? "—" },
           { header: "Part #", accessor: (r) => r.partNumber ?? "—" },
           { header: "Part Description", accessor: (r) => r.partDescription ?? "—" },
           { header: "Qty Returned", accessor: (r) => r.quantityReturned ?? "—" },
           { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
           { header: "Disposition", accessor: (r) => r.dispositionAction ?? "—" },
-          { header: "Date Closed", accessor: (r) => (r.dateClosed ? new Date(r.dateClosed).toLocaleDateString() : "—") },
+          { header: "Date Closed", accessor: (r) => formatDate(r.dateClosed) },
         ]}
         rows={rows}
         rowKey={(r) => r.id}

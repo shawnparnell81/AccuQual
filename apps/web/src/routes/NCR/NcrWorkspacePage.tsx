@@ -385,7 +385,8 @@ function ActionForm({
 }) {
   const [draft, setDraft] = useState(value ?? "");
   useEffect(() => {
-    setDraft(value ?? "");
+    if (!value) return;
+    setDraft(value);
   }, [value]);
   return (
     <form

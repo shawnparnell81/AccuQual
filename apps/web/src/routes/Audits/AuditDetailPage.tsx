@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +35,7 @@ interface AuditItem {
   finding: string | null;
   severity: string | null;
   evidence: string | null;
+  discrepancyInvestigationId?: number | null;
 }
 
 interface AuditPrepSuggestion {
@@ -195,7 +196,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             navKey="audit"
             action={startAction}
             onClick={() => startAction.mutate({ id: auditId })}
-            visible={canEdit && audit.status === "scheduled"}
+            visible={permitted && audit.status === "scheduled"}
             variant="primary"
           />
           <WorkflowActionButton
@@ -203,13 +204,26 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
             navKey="audit"
             action={completeAction}
             onClick={() => completeAction.mutate({ id: auditId })}
-            visible={canEdit && audit.status === "in_progress"}
+            visible={permitted && audit.status === "in_progress"}
           />
         </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-medium">Audit Items</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">Audit Items</h2>
+          {items.some((row) => row.discrepancyInvestigationId) && (
+            <span className="text-xs text-muted-foreground">
+              {items
+                .filter((row) => row.discrepancyInvestigationId)
+                .map((row) => (
+                  <Link key={row.id} to={`/quality/${row.discrepancyInvestigationId}`} className="mr-3 text-primary hover:underline">
+                    Discrepancy Investigation
+                  </Link>
+                ))}
+            </span>
+          )}
+        </div>
         <ul className="mb-4 flex flex-col gap-2 text-sm">
           {items.length === 0 && <li className="text-muted-foreground">No items yet.</li>}
           {items.map((i) => (
@@ -260,7 +274,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
 
         {autoOpened !== null && (
           <div className="mb-3 flex items-center justify-between rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
-            <span>Nonconformance logged — Discrepancy Investigation #{autoOpened} was opened automatically.</span>
+            <span>Nonconformance logged — a Discrepancy Investigation was opened.</span>
             <button onClick={() => navigate(`/quality/${autoOpened}`)} className="font-medium hover:underline">
               View investigation
             </button>
@@ -423,7 +437,16 @@ function AuditItemRow({
               <button type="button" onClick={() => setEditing(true)} className="text-sm text-primary hover:underline">
                 Edit
               </button>
-              <button type="button" disabled={saving} onClick={() => void remove()} className="text-sm text-destructive hover:underline disabled:opacity-60">
+              <button
+                type="button"
+                disabled={saving}
+                aria-label={`Remove ${item.question || "checklist row"}`}
+                onClick={() => {
+                  if (!window.confirm(`Remove "${item.question || "this row"}"?`)) return;
+                  void remove();
+                }}
+                className="text-sm text-destructive hover:underline disabled:opacity-60"
+              >
                 Remove
               </button>
             </>
@@ -431,6 +454,11 @@ function AuditItemRow({
         </span>
       </div>
       {item.finding && <p className="mt-1 text-muted-foreground">{item.finding}</p>}
+      {item.discrepancyInvestigationId && (
+        <Link to={`/quality/${item.discrepancyInvestigationId}`} className="mt-1 inline-block text-xs text-primary hover:underline">
+          Discrepancy Investigation
+        </Link>
+      )}
     </>
   );
 }

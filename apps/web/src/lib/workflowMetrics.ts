@@ -9,27 +9,51 @@
  * calibrationStatusFromDueDate (components/forms/formulas.ts) already does.
  */
 
+import { calendarDate } from "./dates";
+
 export type ExpirationStatus = "expired" | "expiring_soon" | null;
 
+/** Local calendar day for a real timestamp, or the stored calendar day for a date-only value. */
+function localDay(value: string): number | null {
+  const ymd = calendarDate(value);
+  const parts = ymd
+    ? ymd.split("-").map(Number)
+    : Number.isNaN(new Date(value).getTime())
+      ? null
+      : [new Date(value).getFullYear(), new Date(value).getMonth() + 1, new Date(value).getDate()];
+  if (!parts) return null;
+  const [year, month, day] = parts;
+  if (!year || !month || !day) return null;
+  return Date.UTC(year, month - 1, day);
+}
+
+function todayUtc(now = new Date()): number {
+  return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 /** Same thresholds as documents.controller.ts's expirationStatus() / DocumentRetentionPanel's local copy — kept here as the one shared version instead of a third copy. */
-export function documentExpirationStatus(expirationDate: string | null, warningDays: number): ExpirationStatus {
+export function documentExpirationStatus(expirationDate: string | null, warningDays: number, now = new Date()): ExpirationStatus {
   if (!expirationDate) return null;
-  const now = new Date();
-  const expiresAt = new Date(expirationDate);
-  if (now >= expiresAt) return "expired";
-  const warnAt = new Date(expiresAt);
-  warnAt.setDate(warnAt.getDate() - warningDays);
-  return now >= warnAt ? "expiring_soon" : null;
+  const expires = localDay(expirationDate);
+  if (expires == null) return null;
+  const today = todayUtc(now);
+  if (today > expires) return "expired";
+  const warnAt = expires - warningDays * 86_400_000;
+  return today >= warnAt ? "expiring_soon" : null;
 }
 
 /** Training has a real `dueAt` and an "overdue" status value in its schema's enum comment, but nothing server-side ever writes it (see the Outputs Dictionary) — computed here from the one real date that exists. */
-export function isTrainingOverdue(dueAt: string | null, status: string): boolean {
-  return status !== "completed" && !!dueAt && new Date(dueAt) < new Date();
+export function isTrainingOverdue(dueAt: string | null, status: string, now = new Date()): boolean {
+  if (status === "completed" || !dueAt) return false;
+  const due = localDay(dueAt);
+  return due != null && todayUtc(now) > due;
 }
 
 /** Same situation as training: Audit has no server-computed "overdue" for a missed scheduled date (see the Rules Dictionary). */
-export function isAuditOverdue(scheduledAt: string | null, status: string): boolean {
-  return status === "scheduled" && !!scheduledAt && new Date(scheduledAt) < new Date();
+export function isAuditOverdue(scheduledAt: string | null, status: string, now = new Date()): boolean {
+  if (status !== "scheduled" || !scheduledAt) return false;
+  const scheduled = localDay(scheduledAt);
+  return scheduled != null && todayUtc(now) > scheduled;
 }
 
 export interface MonthBucket {
@@ -53,9 +77,10 @@ export function bucketByMonth(dates: (string | null | undefined)[], months = 6):
   const byKey = new Map(buckets.map((b) => [b.key, b]));
   for (const raw of dates) {
     if (!raw) continue;
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) continue;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const ymd = calendarDate(raw);
+    const d = ymd ? null : new Date(raw);
+    if (!ymd && (d == null || Number.isNaN(d.getTime()))) continue;
+    const key = ymd ? ymd.slice(0, 7) : `${d!.getFullYear()}-${String(d!.getMonth() + 1).padStart(2, "0")}`;
     const bucket = byKey.get(key);
     if (bucket) bucket.count += 1;
   }

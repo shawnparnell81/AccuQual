@@ -8,6 +8,7 @@ import { PictureBoundText } from "../../components/forms/PictureText";
 import { CompanyLogo } from "../../components/brand/DmaLogo";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
+import { formatDate } from "../../lib/dates";
 
 /** Printed identity of paper form DCR-F-001. These are not record answers. */
 const DOCUMENT_ID = "DCR-F-001";
@@ -273,7 +274,7 @@ function SignRow({
   onSign: (pin: string) => Promise<unknown>;
   requirement?: { value: SignatureChoice; onChange: (next: SignatureChoice) => void };
 }) {
-  const shown = date ? new Date(date).toLocaleDateString() : "";
+  const shown = date ? formatDate(date) : "";
   return (
     <tr>
       <th scope="row" className={labelCell}>

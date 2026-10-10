@@ -7,6 +7,7 @@ import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import type { Audit } from "../../api/types";
 import { showRecordNumber } from "../../lib/userRecordNumber";
+import { formatDate } from "../../lib/dates";
 
 export function AuditsPage() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export function AuditsPage() {
         { header: "Name", accessor: (a) => a.name },
         { header: "Type", accessor: (a) => a.type ?? "—" },
         { header: "Status", accessor: (a) => <StatusBadge value={a.status} /> },
-        { header: "Scheduled", accessor: (a) => (a.scheduledAt ? new Date(a.scheduledAt).toLocaleDateString() : "—") },
+        { header: "Scheduled", accessor: (a) => formatDate(a.scheduledAt) },
         {
           header: "",
           accessor: (a) => <OpenWindowButton type="audit" entityId={a.id} title={`${showRecordNumber(a.recordNumber) ? `Audit ${showRecordNumber(a.recordNumber)} — ` : "Audit — "}${a.name}`} />,

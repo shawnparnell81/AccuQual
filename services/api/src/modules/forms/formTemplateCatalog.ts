@@ -108,9 +108,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "4c99c50dfac5b36048141663d5a477b8064fe74c74a130539100a31e9b899488"
   },
   "form:fmea": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "3f5c7f58ae66b9303d92cc7d1e4d640fff3a279934724b32fdc0c20713fb2975"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "1d3b8522dcdbb386e3e665099707a057299981f4aaff8ff6cedf54fd119fded4"
   },
   "form:gage_rr": {
     "version": 2,

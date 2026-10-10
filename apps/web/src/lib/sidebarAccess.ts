@@ -162,6 +162,9 @@ const ROUTE_PATTERNS = [
   /^\/audit-log$/,
   /^\/ncr$/,
   /^\/ncr\/\d+$/,
+  /^\/complaints$/,
+  /^\/complaints\/\d+$/,
+  /^\/quality\/\d+$/,
   /^\/capa$/,
   /^\/capa\/\d+$/,
   /^\/8d$/,
@@ -307,8 +310,7 @@ export function acceptSidebarPath(path: string): string | null {
   if (next === LEGACY_VALIDATION_REPORTS_PATH) return faiValidationDocumentsHref();
   if (next === "/reports" || next.startsWith("/reports/")) return "/reporting";
   if (next === "/onboarding" || next.startsWith("/onboarding/")) return "/settings";
-  if (next === "/quality" || next.startsWith("/quality/")) return FRM_NCR_PATH;
-  if (next === "/complaints" || next.startsWith("/complaints/")) return FRM_NCR_PATH;
+  if (next === "/quality") return FRM_NCR_PATH;
   if (next === "/sales" || next.startsWith("/sales/") || next === "/customers" || next.startsWith("/customers/")) return null;
 
   const queryAt = next.indexOf("?");

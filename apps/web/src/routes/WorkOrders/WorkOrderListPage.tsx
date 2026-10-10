@@ -12,6 +12,7 @@ import { Modal } from "../../components/modals/Modal";
 import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { SelectField, TextField, TextAreaField } from "../../components/forms/Field";
 import { recordHeading } from "../../lib/userRecordNumber";
+import { formatDate } from "../../lib/dates";
 import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 import type { WorkOrder, InventoryItem, AiSuggestion } from "../../api/types";
 
@@ -202,7 +203,7 @@ export function WorkOrderListPage() {
           { header: "Qty Planned", accessor: (wo) => wo.quantityPlanned },
           { header: "Qty Completed", accessor: (wo) => wo.quantityCompleted },
           { header: "Status", accessor: (wo) => <StatusBadge value={wo.status} /> },
-          { header: "Due", accessor: (wo) => (wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "—") },
+          { header: "Due", accessor: (wo) => formatDate(wo.dueDate) },
         ]}
         rows={rows}
         rowKey={(wo) => wo.id}

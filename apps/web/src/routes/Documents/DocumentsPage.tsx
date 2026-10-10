@@ -4,6 +4,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
 import type { AccuQualDocument } from "../../api/types";
 import { listRevisionLabel } from "../../lib/documentRevision";
+import { formatDate } from "../../lib/dates";
 
 /**
  * Document Control. The live register is LST-GEN-001 Master Document List.
@@ -51,8 +52,8 @@ export function DocumentsPage() {
           { header: "Title", accessor: (d) => d.title },
           { header: "Category", accessor: (d) => d.category ?? "—" },
           { header: "Revision", accessor: (d) => listRevisionLabel(d) },
-          { header: "Effective", accessor: (d) => (d.effectiveDate ? new Date(d.effectiveDate).toLocaleDateString() : "—") },
-          { header: "Expires", accessor: (d) => (d.expirationDate ? new Date(d.expirationDate).toLocaleDateString() : "—") },
+          { header: "Effective", accessor: (d) => formatDate(d.effectiveDate) },
+          { header: "Expires", accessor: (d) => formatDate(d.expirationDate) },
           { header: "Status", accessor: (d) => <StatusBadge value={d.status} /> },
           {
             header: "",

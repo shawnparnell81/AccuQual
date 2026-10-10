@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
@@ -390,6 +390,8 @@ function IsoFormDetailBody({
   const toast = useToast();
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
+  const [queuedAction, setQueuedAction] = useState(false);
+  const followUp = useRef<(() => void) | null>(null);
   const filing = useFormFiling(formKey, record.id);
   useReportTabDirty(dirty);
   const templates = useFormTemplates({ enabled: !!formKey });
@@ -404,24 +406,24 @@ function IsoFormDetailBody({
     setSaveNote(null);
     try {
       await onSave();
+      setSaveNote("saved");
       if (formType === "quarantine_notice") {
         void queryClient.invalidateQueries({ queryKey: ["quarantine"] });
       }
-      if (!formKey) {
-        setSaveNote("saved");
-        return;
-      }
-      try {
-        const filed = await fileChosenFolder(queryClient, formKey, recordId);
-        setSaveNote(filed ?? "unfiled");
-      } catch {
-        setSaveNote("file-error");
+      if (formKey) {
+        void fileChosenFolder(queryClient, formKey, recordId)
+          .then((filed) => setSaveNote(filed ?? "unfiled"))
+          .catch(() => setSaveNote("file-error"));
       }
     } catch (err) {
       setSaveNote("error");
       toast.error(extractErrorMessage(err, "Couldn't save this form."));
     } finally {
       setPending(false);
+      setQueuedAction(false);
+      const next = followUp.current;
+      followUp.current = null;
+      if (next) queueMicrotask(next);
     }
   }
 
@@ -446,6 +448,7 @@ function IsoFormDetailBody({
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} allowed={canEdit} assignedOnly />
             <SaveStatus saving={saving || pending} unsaved={dirty && !saving && !pending} />
+            {queuedAction && <span className="text-xs text-muted-foreground">That action will run when the save finishes.</span>}
             <SavedFormLockBar
               mode={mode}
               canEdit={canEdit}
@@ -477,7 +480,16 @@ function IsoFormDetailBody({
             view={ecrView}
             canEditStructure={canEditStructure === true}
             busy={ecrBusy === true}
-            onTransition={onEcrTransition}
+            onTransition={async (action, note) => {
+              if (saving || pending) {
+                followUp.current = () => {
+                  void onEcrTransition(action, note);
+                };
+                setQueuedAction(true);
+                return;
+              }
+              await onEcrTransition(action, note);
+            }}
             structureSlug={requestKind.slug}
             structureCertify={requestKind.structureCertify}
             labelDefaults={requestKind.labels}

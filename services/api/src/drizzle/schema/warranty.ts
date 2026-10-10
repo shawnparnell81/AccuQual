@@ -36,6 +36,8 @@ export const warrantyClaims = pgTable("warranty_claims", {
   status: text("status").notNull().default("new"),
   customerId: integer("customer_id").references(() => customers.id),
   productId: integer("product_id").references(() => inventoryItems.id),
+  /** Typed part or product number when the plant has no inventory row to pick. */
+  productNumber: text("product_number"),
   serialNumber: text("serial_number"),
   purchaseDate: timestamp("purchase_date"),
   failureDate: timestamp("failure_date"),

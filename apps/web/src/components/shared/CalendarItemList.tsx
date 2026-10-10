@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { StatusBadge } from "../tables/StatusBadge";
 import type { CalendarItem, CalendarModule } from "../../hooks/useCalendarItems";
+import { formatDate } from "../../lib/dates";
 
 const MODULE_LABELS: Record<CalendarModule, string> = {
   ncr: "Issue",
@@ -11,16 +12,9 @@ const MODULE_LABELS: Record<CalendarModule, string> = {
   crar: "Return",
 };
 
-/**
- * Same formatting the User Dashboard's Workflow Inbox uses: every due-date
- * field in this app is a plain `type="date"` input serialized as UTC
- * midnight (see calendarGrid.ts's utcDayKey), so reading it back with
- * `timeZone: "UTC"` avoids `toLocaleDateString`'s default local-timezone
- * shift landing a day early for anyone west of UTC.
- */
 function formatDueDate(dueDate: string | null): string {
   if (!dueDate) return "No due date";
-  return `Due ${new Date(dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
+  return `Due ${formatDate(dueDate)}`;
 }
 
 /**

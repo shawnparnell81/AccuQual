@@ -158,8 +158,34 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       )}
 
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-        <button onClick={() => createVersion.mutate()} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-          {formType === "calibration" ? "Log Calibration Event" : formType === "training" ? "Complete Training" : "Save version"}
+        <button
+          type="button"
+          disabled={createVersion.isPending}
+          onClick={() => {
+            if (createVersion.isPending) return;
+            createVersion.mutate(undefined, {
+              onSuccess: () => {
+                if (formType === "calibration") {
+                  toast.success("Calibration event logged.");
+                  void queryClient.invalidateQueries({ queryKey: ["equipment"] });
+                } else if (formType === "training") {
+                  toast.success("Training completed.");
+                } else {
+                  toast.success("Version saved.");
+                }
+              },
+              onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save this version.")),
+            });
+          }}
+          className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60"
+        >
+          {createVersion.isPending
+            ? "Saving…"
+            : formType === "calibration"
+              ? "Log Calibration Event"
+              : formType === "training"
+                ? "Complete Training"
+                : "Save version"}
         </button>
         <button onClick={() => setShowHistory((s) => !s)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
           {showHistory ? "Hide" : "Show"} version history

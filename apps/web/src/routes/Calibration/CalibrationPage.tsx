@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { AttentionStrip, EquipmentStatusBadge, type EquipmentState } from "../../components/calibration/EquipmentPanels";
+import { formatDate } from "../../lib/dates";
 
 interface Equipment extends EquipmentState {
   serialNumber: string | null;
@@ -43,8 +44,8 @@ export function CalibrationPage() {
           { header: "Serial #", accessor: (e) => e.serialNumber ?? "—" },
           { header: "Location", accessor: (e) => e.location ?? "—" },
           { header: "Interval (days)", accessor: (e) => e.calibrationIntervalDays },
-          { header: "Next Due", accessor: (e) => (e.nextDueAt ? new Date(e.nextDueAt).toLocaleDateString() : "—") },
-          { header: "Scheduled", accessor: (e) => (e.nextScheduledAt ? `${new Date(e.nextScheduledAt).toLocaleDateString()}${e.scheduleOverdue ? " (late)" : ""}` : "—") },
+          { header: "Next Due", accessor: (e) => formatDate(e.nextDueAt) },
+          { header: "Scheduled", accessor: (e) => (e.nextScheduledAt ? `${formatDate(e.nextScheduledAt)}${e.scheduleOverdue ? " (late)" : ""}` : "—") },
           // Out of service / inactive outrank the due date; otherwise coloured by the server's due status (60 / 30 day bands, past due, failed).
           { header: "Status", accessor: (e) => <EquipmentStatusBadge status={e.status} dueStatus={e.dueStatus} /> },
         ]}

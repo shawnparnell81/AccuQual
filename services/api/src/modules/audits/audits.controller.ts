@@ -71,7 +71,7 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     [discrepancy] = await req
       .db!.insert(discrepancyInvestigations)
       .values({
-        title: `Nonconformance — ${audit.name}: ${item.question ?? `Finding #${item.id}`}`,
+        title: `Nonconformance — ${audit.name}: ${item.question ?? "Finding"}`,
         description: item.finding ?? undefined,
         severity: item.severity,
         status: "open",
@@ -94,6 +94,13 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     // Seed the investigation form (title/severity/description/source) so it
     // opens pre-filled instead of blank.
     await syncDiRecordToForm(req.db!, discrepancy, req.user?.id);
+    await recordAuditTrail(req.db!, {
+      entityType: "Audit",
+      entityId: audit.id,
+      action: "create",
+      changes: { event: "item_added", discrepancyInvestigationId: discrepancy.id },
+      performedBy: req.user?.id,
+    });
   }
 
   res.status(201).json({ ...item, discrepancyInvestigation: discrepancy });
@@ -109,7 +116,12 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
     .where(and(eq(auditItems.auditId, Number(req.params.id))))
     // Reordered checklists follow their saved positions; ones never reordered keep creation order.
     .orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
-  res.json(items);
+  const links = await req
+    .db!.select({ id: discrepancyInvestigations.id, sourceAuditItemId: discrepancyInvestigations.sourceAuditItemId })
+    .from(discrepancyInvestigations)
+    .where(eq(discrepancyInvestigations.sourceAuditId, audit.id));
+  const byItem = new Map(links.filter((row) => row.sourceAuditItemId != null).map((row) => [row.sourceAuditItemId as number, row.id]));
+  res.json(items.map((item) => ({ ...item, discrepancyInvestigationId: byItem.get(item.id) ?? null })));
 });
 
 /** Drag-to-reorder for the audit checklist. Every question must be listed exactly once; the list's order becomes the checklist's order. */
@@ -265,3 +277,90 @@ export const deleteItemHandler = asyncHandler(async (req: Request, res: Response
   await fileAudit(req.db!, audit, req.user?.id);
   res.status(204).send();
 });
+
+function cellText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function checked(value: unknown, option: string): boolean {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>)[option] === true);
+}
+
+function checklistSeverity(response: unknown): string {
+  if (checked(response, "Nonconformity")) return "minor";
+  return "observation";
+}
+
+/** Audit Checklist rows are the same checklist as Audit Items. A save writes the items; it does not delete rows typed on the audit itself. */
+export async function syncAuditChecklist(db: Db, auditId: number, data: Record<string, unknown>, userId?: number): Promise<void> {
+  const [audit] = await db.select().from(audits).where(eq(audits.id, auditId));
+  if (!audit) return;
+  const checklist = Array.isArray(data.checklistItems) ? data.checklistItems : [];
+  const findings = Array.isArray(data.findings) ? data.findings : [];
+  const wanted: { question: string; finding: string; severity: string }[] = [];
+  for (const row of checklist) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as Record<string, unknown>;
+    const question = cellText(record.question);
+    if (!question) continue;
+    wanted.push({ question, finding: cellText(record.evidenceComments), severity: checklistSeverity(record.response) });
+  }
+  for (const row of findings) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as Record<string, unknown>;
+    const description = cellText(record.description);
+    if (!description) continue;
+    wanted.push({
+      question: description,
+      finding: description,
+      severity: checked(record.correctiveActionRequired, "Yes") ? "minor" : "observation",
+    });
+  }
+  if (wanted.length === 0) return;
+  const existing = await db.select().from(auditItems).where(eq(auditItems.auditId, auditId));
+  for (const row of wanted) {
+    const match = existing.find((item) => (item.question ?? "") === row.question);
+    if (match) {
+      if ((match.finding ?? "") === row.finding && (match.severity ?? "") === row.severity) continue;
+      await db.update(auditItems).set({ finding: row.finding || null, severity: row.severity }).where(eq(auditItems.id, match.id));
+      continue;
+    }
+    const [created] = await db
+      .insert(auditItems)
+      .values({ auditId, question: row.question, finding: row.finding || null, severity: row.severity })
+      .returning();
+    if (!created) continue;
+    existing.push(created);
+    await logAuditItem(db, auditId, "item_added", itemFieldEdits({}, created), userId);
+    if (audit.type === "internal" && NONCONFORMANCE_SEVERITIES.includes(row.severity)) {
+      const [discrepancy] = await db
+        .insert(discrepancyInvestigations)
+        .values({
+          title: `Nonconformance — ${audit.name}: ${row.question}`,
+          description: row.finding || undefined,
+          severity: row.severity,
+          status: "open",
+          autoCreated: true,
+          sourceAuditId: audit.id,
+          sourceAuditItemId: created.id,
+        })
+        .returning();
+      if (!discrepancy) continue;
+      await recordAuditTrail(db, {
+        entityType: "Discrepancy investigation",
+        entityId: discrepancy.id,
+        action: "create",
+        changes: { autoCreated: true, sourceAuditId: audit.id, sourceAuditItemId: created.id, severity: row.severity },
+        performedBy: userId,
+      });
+      await syncDiRecordToForm(db, discrepancy, userId);
+      await recordAuditTrail(db, {
+        entityType: "Audit",
+        entityId: audit.id,
+        action: "create",
+        changes: { event: "item_added", discrepancyInvestigationId: discrepancy.id },
+        performedBy: userId,
+      });
+    }
+  }
+}

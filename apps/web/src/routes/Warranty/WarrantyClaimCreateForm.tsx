@@ -25,6 +25,7 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
 
   const [form, setForm] = useState({
     productId: "",
+    productNumber: "",
     serialNumber: "",
     purchaseDate: "",
     failureDate: "",
@@ -36,7 +37,7 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
   const [numberError, setNumberError] = useState<string | null>(null);
 
   const reset = () => {
-    setForm({ productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "", claimNumber: "" });
+    setForm({ productId: "", productNumber: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "", claimNumber: "" });
     setNumberError(null);
   };
 
@@ -49,6 +50,7 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
           createClaim.mutate(
             {
               productId: form.productId ? Number(form.productId) : undefined,
+              productNumber: form.productNumber.trim() || undefined,
               serialNumber: form.serialNumber || undefined,
               purchaseDate: form.purchaseDate || undefined,
               failureDate: form.failureDate || undefined,
@@ -75,14 +77,15 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
         }}
       >
         <RecordNumberField label="Claim No." value={form.claimNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, claimNumber: value }); }} />
-        <SelectField label="Product" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
-          <option value="">Select a product…</option>
+        <SelectField label="Product (optional)" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
+          <option value="">{products.length === 0 ? "No products on file" : "Select a product…"}</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.sku}
             </option>
           ))}
         </SelectField>
+        <TextField label="Part / Product number" value={form.productNumber} onChange={(e) => setForm({ ...form, productNumber: e.target.value })} />
         <TextField label="Serial Number" value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} />
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Purchase Date" type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} />

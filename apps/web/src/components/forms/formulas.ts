@@ -20,10 +20,10 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseDate(v: unknown): Date | null {
-  if (!v) return null;
-  const d = new Date(String(v));
-  return Number.isNaN(d.getTime()) ? null : d;
+function calendarParts(v: unknown): { y: number; m: number; d: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v ?? "").trim());
+  if (!match) return null;
+  return { y: Number(match[1]), m: Number(match[2]), d: Number(match[3]) };
 }
 
 export const FORMULAS: Record<string, FormulaFn> = {
@@ -51,22 +51,20 @@ export const FORMULAS: Record<string, FormulaFn> = {
 
   /** Calibration roster: Next Due = Last Cal Date + Interval (months). */
   nextCalDueDate: (row) => {
-    const last = parseDate(row.lastCalDate);
+    const last = calendarParts(row.lastCalDate);
     const months = num(row.intervalMonths);
     if (!last || !months) return "";
-    const next = new Date(last);
-    next.setMonth(next.getMonth() + months);
-    return next.toISOString().slice(0, 10);
+    return new Date(Date.UTC(last.y, last.m - 1 + months, last.d)).toISOString().slice(0, 10);
   },
 
   /** Calibration roster: whole days between today and the computed due date (negative = past due). */
   daysUntilDue: (row) => {
-    const due = parseDate(row.nextCalDueDate);
+    const due = calendarParts(row.nextCalDueDate);
     if (!due) return "";
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    return Math.round((due.getTime() - today.getTime()) / 86400000);
+    const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueUtc = Date.UTC(due.y, due.m - 1, due.d);
+    return Math.round((dueUtc - todayUtc) / 86400000);
   },
 
   /**
@@ -169,12 +167,10 @@ export const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
  * history) rather than as fields inside one fillable form.
  */
 export function calibrationStatusFromDueDate(nextDueAt: string | Date | null | undefined): string {
-  const due = parseDate(nextDueAt ?? null);
+  const due = calendarParts(nextDueAt instanceof Date ? nextDueAt.toISOString() : nextDueAt);
   if (!due) return "Never Calibrated";
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+  const days = Math.round((Date.UTC(due.y, due.m - 1, due.d) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
   if (days < 0) return "Past Due";
   if (days <= 30) return "Due Within 30 Days";
   if (days <= 60) return "Due Within 60 Days";

@@ -138,6 +138,7 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
   const body = req.body as {
     customerId?: number;
     productId?: number;
+    productNumber?: string;
     serialNumber?: string;
     purchaseDate?: Date;
     failureDate?: Date;

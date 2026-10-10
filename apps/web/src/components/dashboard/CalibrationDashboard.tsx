@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { WorkflowMetricCard } from "./WorkflowMetricCard";
 import { WorkflowTrendChart } from "../charts/WorkflowTrendChart";
 import type { MonthBucket } from "../../lib/workflowMetrics";
+import { calendarDate } from "../../lib/dates";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
@@ -19,8 +20,12 @@ export function CalibrationDashboard({ data }: { data: ReturnType<typeof useWork
 
   const dueThisMonth = equipment.filter((e) => {
     if (!e.nextDueAt) return false;
-    const d = new Date(e.nextDueAt);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d >= now;
+    const ymd = calendarDate(e.nextDueAt);
+    const d = ymd ? null : new Date(e.nextDueAt);
+    if (!ymd && (d == null || Number.isNaN(d.getTime()))) return false;
+    const year = ymd ? Number(ymd.slice(0, 4)) : d!.getFullYear();
+    const month = ymd ? Number(ymd.slice(5, 7)) - 1 : d!.getMonth();
+    return year === now.getFullYear() && month === now.getMonth() && new Date(e.nextDueAt) >= now;
   }).length;
   const overdue = equipment.filter((e) => e.nextDueAt && new Date(e.nextDueAt) < now).length;
 
@@ -35,8 +40,10 @@ export function CalibrationDashboard({ data }: { data: ReturnType<typeof useWork
     const byKey = new Map(buckets.map((b) => [b.key, b]));
     for (const e of equipment) {
       if (!e.nextDueAt) continue;
-      const d = new Date(e.nextDueAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const ymd = calendarDate(e.nextDueAt);
+      const d = ymd ? null : new Date(e.nextDueAt);
+      if (!ymd && (d == null || Number.isNaN(d.getTime()))) continue;
+      const key = ymd ? ymd.slice(0, 7) : `${d!.getFullYear()}-${String(d!.getMonth() + 1).padStart(2, "0")}`;
       const bucket = byKey.get(key);
       if (bucket) bucket.count += 1;
     }

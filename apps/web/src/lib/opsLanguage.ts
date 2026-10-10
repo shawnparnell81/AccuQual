@@ -176,8 +176,12 @@ export function personLabel(
   return formatPerson(person);
 }
 
-/** `due` is an ISO timestamp. Comparison is the calendar day, matching the date inputs that write UTC midnight. */
-export function isPastDue(due: string | null | undefined, terminal: boolean, today = new Date().toISOString().slice(0, 10)): boolean {
+function localToday(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Compare the stored calendar day with the viewer's local today. UTC midnight is still that calendar day, not the previous evening. */
+export function isPastDue(due: string | null | undefined, terminal: boolean, today = localToday()): boolean {
   if (!due || terminal) return false;
   return due.slice(0, 10) < today;
 }

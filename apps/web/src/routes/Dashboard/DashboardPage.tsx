@@ -23,6 +23,8 @@ import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { filterToken } from "../../lib/openWorkFilter";
 import type { OpenWork } from "../../api/dashboard";
 import { useSiteStore } from "../../store/siteStore";
+import { formatDate } from "../../lib/dates";
+import { isPastDue } from "../../lib/opsLanguage";
 import { WorkspaceArrange } from "../../components/home/WorkspaceArrange";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 import { OpenWorkSection } from "../../components/dashboard/OpenWorkSection";
@@ -76,10 +78,10 @@ function headline(data: DashboardOverview): string {
 
 function DueChip({ due }: { due: string | null }) {
   if (!due) return null;
-  const date = new Date(due);
-  if (Number.isNaN(date.getTime())) return null;
-  const late = date.getTime() < Date.now();
-  const label = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const full = formatDate(due);
+  if (full === "—") return null;
+  const late = isPastDue(due, false);
+  const label = full.replace(/, \d{4}$/, "");
   return (
     <span className={`shrink-0 rounded-full border px-2 py-1 text-[0.72rem] font-semibold ${late ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border text-muted-foreground"}`}>
       {late ? `Late ${label}` : label}

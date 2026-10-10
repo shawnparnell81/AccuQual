@@ -1,4 +1,5 @@
 import { StatusBadge } from "../tables/StatusBadge";
+import { formatDateTime } from "../../lib/dates";
 
 const HIDDEN_KEYS = new Set(["action"]); // already shown as the entry's headline, redundant here
 
@@ -18,8 +19,8 @@ function formatValue(key: string, value: unknown): { kind: "date" | "badge" | "p
   if (value === null || value === undefined) return { kind: "plain", content: "—" };
 
   if (DATE_KEY_PATTERN.test(key) && (typeof value === "string" || typeof value === "number")) {
-    const d = new Date(value);
-    if (!Number.isNaN(d.getTime())) return { kind: "date", content: d.toLocaleString() };
+    const content = formatDateTime(value);
+    if (content !== "—") return { kind: "date", content };
   }
   if (SEVERITY_LIKE_KEYS.has(key) && typeof value === "string") return { kind: "badge", content: value };
   if (PATH_KEY_PATTERN.test(key) && typeof value === "string") return { kind: "path", content: value };

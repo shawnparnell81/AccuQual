@@ -5,6 +5,7 @@ import type { OpenWork } from "../../api/dashboard";
 import { cardFilterKeys, filterToken, rowInModuleFilter } from "../../lib/openWorkFilter";
 import { StatusBadge } from "../tables/StatusBadge";
 import { statusPhrase } from "../../lib/opsLanguage";
+import { formatDate } from "../../lib/dates";
 
 const TONE: Record<string, string> = {
   ncr: "primary",
@@ -16,10 +17,7 @@ const TONE: Record<string, string> = {
 };
 
 function when(value: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return formatDate(value);
 }
 
 function CardShell({

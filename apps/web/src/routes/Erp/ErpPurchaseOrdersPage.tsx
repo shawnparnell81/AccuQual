@@ -10,6 +10,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DataTable } from "../../components/tables/DataTable";
 import type { ErpPurchaseOrder, AiSuggestion, ErpAutomationSuggestion } from "../../api/types";
 import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
+import { formatDate } from "../../lib/dates";
 
 const poHooks = createResourceHooks<ErpPurchaseOrder>("erp/purchase-orders");
 
@@ -110,12 +111,7 @@ export function ErpPurchaseOrdersPage() {
           { header: "Supplier", accessor: (po) => po.supplierName ?? "—" },
           { header: "Status", accessor: (po) => <StatusBadge value={po.status} /> },
           { header: "Total Value", accessor: (po) => (po.totalValue ? `$${po.totalValue.toFixed(2)}` : "—") },
-          // timeZone: "UTC" — expectedDeliveryDate is a real date-only value
-          // (stored at exact UTC midnight, see erp.controller.ts), not a
-          // moment in time; letting toLocaleDateString convert it to the
-          // viewer's local timezone can shift it back a calendar day (e.g.
-          // 2026-10-15 rendering as 10/14 for anyone west of UTC).
-          { header: "Expected Delivery", accessor: (po) => (po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—") },
+          { header: "Expected Delivery", accessor: (po) => formatDate(po.expectedDeliveryDate) },
           { header: "Created", accessor: (po) => new Date(po.createdAt).toLocaleDateString() },
           { header: "Notes", accessor: (po) => po.notes ?? "—" },
         ]}

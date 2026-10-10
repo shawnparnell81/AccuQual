@@ -1542,6 +1542,7 @@ export interface WarrantyClaim {
   customerId: number | null;
   customerName?: string; // list endpoint only
   productId: number | null;
+  productNumber?: string | null;
   serialNumber: string | null;
   purchaseDate: string | null;
   failureDate: string | null;

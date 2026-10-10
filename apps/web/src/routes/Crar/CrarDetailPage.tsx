@@ -17,6 +17,7 @@ import { CrarFormRenderer } from "./CrarFormRenderer";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { formatDate } from "../../lib/dates";
 
 const crarHooks = createResourceHooks<CrarClaim>("crar");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -114,7 +115,7 @@ export function CrarDetailPage() {
       <div className="hidden print:block">
         <h1 className="text-2xl font-semibold">Customer Return Analysis Report{record.customerClaim?.trim() ? ` — ${record.customerClaim.trim()}` : ""}</h1>
         <p className="text-sm text-muted-foreground">
-          Status: {record.status.replace(/_/g, " ")} — RMA {record.rmaNumber ?? "n/a"} — Part {record.partNumber ?? "n/a"} — Initiated {record.reportDate ? new Date(record.reportDate).toLocaleDateString() : "n/a"}
+          Status: {record.status.replace(/_/g, " ")} — RMA {record.rmaNumber ?? "n/a"} — Part {record.partNumber ?? "n/a"} — Initiated {record.reportDate ? formatDate(record.reportDate) : "n/a"}
         </p>
       </div>
 

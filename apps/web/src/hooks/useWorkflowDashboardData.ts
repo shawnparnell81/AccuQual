@@ -2,6 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { createResourceHooks } from "../api/resourceHooks";
 import { apiClient } from "../api/client";
 import { documentExpirationStatus, isTrainingOverdue, isAuditOverdue } from "../lib/workflowMetrics";
+import { formatDate } from "../lib/dates";
 import type { Ncr, Capa, Audit, Supplier, AccuQualDocument, TrainingCourse, TrainingAssignment, AuditItem } from "../api/types";
 
 interface Equipment {
@@ -101,7 +102,7 @@ export function useWorkflowDashboardData() {
       .map((e) => ({
         module: "calibration" as const,
         label: e.name,
-        detail: `Past due ${new Date(e.nextDueAt!).toLocaleDateString()}`,
+        detail: `Past due ${formatDate(e.nextDueAt)}`,
         link: `/calibration/${e.id}`,
         daysOverdue: daysSince(e.nextDueAt!),
       })),
@@ -110,7 +111,7 @@ export function useWorkflowDashboardData() {
       .map((d) => ({
         module: "documents" as const,
         label: d.title,
-        detail: `Expired ${new Date(d.expirationDate!).toLocaleDateString()}`,
+        detail: `Expired ${formatDate(d.expirationDate)}`,
         link: `/documents/${d.id}`,
         daysOverdue: daysSince(d.expirationDate!),
       })),
@@ -119,7 +120,7 @@ export function useWorkflowDashboardData() {
       .map((a) => ({
         module: "training" as const,
         label: a.courseTitle ?? courseTitleById.get(a.courseId) ?? "Course",
-        detail: `Due ${new Date(a.dueAt!).toLocaleDateString()} — ${a.userName ?? a.userEmail ?? `User #${a.userId}`}`,
+        detail: `Due ${formatDate(a.dueAt)} — ${a.userName ?? a.userEmail ?? `User #${a.userId}`}`,
         link: `/training/${a.courseId}`,
         daysOverdue: daysSince(a.dueAt!),
       })),
@@ -128,7 +129,7 @@ export function useWorkflowDashboardData() {
       .map((a) => ({
         module: "audit" as const,
         label: a.name,
-        detail: `Scheduled ${new Date(a.scheduledAt!).toLocaleDateString()}`,
+        detail: `Scheduled ${formatDate(a.scheduledAt)}`,
         link: `/audits/${a.id}`,
         daysOverdue: daysSince(a.scheduledAt!),
       })),

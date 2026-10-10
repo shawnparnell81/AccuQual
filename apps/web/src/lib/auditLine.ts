@@ -266,8 +266,11 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       return "Moved the held item.";
     }
     case "item_added":
-    case "row_added":
+    case "row_added": {
+      const investigation = changes?.discrepancyInvestigationId;
+      if (typeof investigation === "number") return `Added a line. Discrepancy Investigation was opened.`;
       return "Added a line.";
+    }
     case "item_updated":
     case "row_updated":
       return "Updated a line.";

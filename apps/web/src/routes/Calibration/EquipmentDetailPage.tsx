@@ -18,6 +18,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { FileDropZone } from "../../components/shared/FileDropZone";
+import { formatDate } from "../../lib/dates";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -163,7 +164,7 @@ export function EquipmentDetailPage() {
             <span>{equipment.serialNumber ?? "No serial #"}</span>
             <span>— {equipment.location ?? "No location"}</span>
             <EquipmentStatusBadge status={equipment.status} dueStatus={equipment.dueStatus} />
-            {equipment.nextDueAt && equipment.status !== "out_of_service" && <span>· next due {new Date(equipment.nextDueAt).toLocaleDateString()}</span>}
+            {equipment.nextDueAt && equipment.status !== "out_of_service" && <span>· next due {formatDate(equipment.nextDueAt)}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -219,7 +220,7 @@ export function EquipmentDetailPage() {
       {equipment.dueStatus === "failed" && equipment.status !== "out_of_service" && <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">The latest calibration failed. It needs a passing calibration.</p>}
       {equipment.nextScheduledAt && (
         <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">
-          Calibration scheduled for <strong>{new Date(equipment.nextScheduledAt).toLocaleDateString()}</strong>
+          Calibration scheduled for <strong>{formatDate(equipment.nextScheduledAt)}</strong>
           {equipment.scheduleOverdue ? " — that date has passed and it has not been logged." : "."} Log it with the Calibration Record to complete it.
         </p>
       )}
@@ -259,10 +260,10 @@ export function EquipmentDetailPage() {
                   onFiles={(dropped) => uploadCertificate.mutate({ calibrationId: c.id, file: dropped[0]! })}
                 >
                 <div className="flex items-center gap-3">
-                  <span className="w-24 flex-none">{c.performedAt ? new Date(c.performedAt).toLocaleDateString() : c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : "—"}</span>
+                  <span className="w-24 flex-none">{c.performedAt ? formatDate(c.performedAt) : c.scheduledAt ? formatDate(c.scheduledAt) : "—"}</span>
                   <span className={`w-20 flex-none capitalize ${c.status === "failed" ? "font-semibold text-destructive" : ""}`}>{c.status === "scheduled" ? "Scheduled" : (c.result ?? "—")}</span>
                   <span className="flex-1 text-muted-foreground">{c.technicianName ?? "No technician recorded"}</span>
-                  <span className="flex-none text-muted-foreground">Next due: {c.nextDueAt ? new Date(c.nextDueAt).toLocaleDateString() : "—"}</span>
+                  <span className="flex-none text-muted-foreground">Next due: {formatDate(c.nextDueAt)}</span>
                   {c.status === "scheduled" ? (
                     mayEdit ? (
                       <button onClick={() => { if (confirm("Cancel this scheduled calibration?")) cancelSchedule.mutate(c.id); }} className="flex-none text-xs text-muted-foreground hover:text-destructive">
