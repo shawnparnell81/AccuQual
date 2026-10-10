@@ -2,21 +2,21 @@ import type { Request, Response } from "express";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { discrepancyInvestigations } from "../../drizzle/schema/quality.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { AUDIT_NUMBER } from "../records/recordNumberSpecs.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { syncDiRecordToForm } from "../quality/quality.formSync.js";
+import { mapSeverityToClassification, ncrIsoDate, syncNcrFormData } from "../ncr/ncr.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { fileOnFirstSave } from "../document-folders/defaultFormFiling.js";
 import type { Db } from "../../lib/requestDb.js";
 
 export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true, recordNumber: AUDIT_NUMBER, blankCreatePath: "/audits" });
-
-/** A logged finding is a real nonconformance once it's rated past a mere observation. */
-const NONCONFORMANCE_SEVERITIES = ["minor", "major", "critical"];
 
 export const addItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const auditId = Number(req.params.id);
@@ -62,48 +62,123 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     await publishEvent(AI_STREAM, { job: "embed", entityType: "audit_finding", entityId: item.id, content: item.finding });
   }
 
-  // Automation: a nonconformance found during an internal audit opens its
-  // own Discrepancy & Inspection investigation immediately, source-linked
-  // back to the audit and this specific finding — no one has to remember to
-  // start it by hand.
-  let discrepancy = null;
-  if (audit.type === "internal" && item.severity && NONCONFORMANCE_SEVERITIES.includes(item.severity)) {
-    [discrepancy] = await req
+  res.status(201).json(item);
+});
+
+function ncrSeverityFromAudit(severity: string | null): string | null {
+  if (severity === "critical") return "critical";
+  if (severity === "major") return "high";
+  if (severity === "minor") return "low";
+  return null;
+}
+
+function investigationSeverity(severity: string | null): string | null {
+  if (severity === "minor" || severity === "major" || severity === "critical") return severity;
+  return null;
+}
+
+function transferredText(item: { question: string | null; finding: string | null; evidence: string | null }): { title: string; description: string } {
+  const title = (item.question?.trim() || item.finding?.trim() || "Audit finding").slice(0, 200);
+  const parts = [item.finding?.trim(), item.evidence?.trim() ? `Evidence: ${item.evidence.trim()}` : ""].filter(Boolean);
+  return { title, description: parts.join("\n") };
+}
+
+/** Opens a Discrepancy Investigation and an NCR from this item. Nothing is created until someone chooses this. */
+export const createFollowUpHandler = asyncHandler(async (req: Request, res: Response) => {
+  const auditId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+  const { audit, item } = await loadAuditItem(req, auditId, itemId);
+  if (!req.user) throw AppError.forbidden("Sign in to create an investigation or NCR.");
+  if ((await getUserAccessLevel(req.db!, req.user, "di")) !== "edit" || (await getUserAccessLevel(req.db!, req.user, "ncr")) !== "edit") {
+    throw AppError.forbidden("Creating an investigation and an NCR needs edit access to both.");
+  }
+
+  const { title, description } = transferredText(item);
+  const existingInvestigations = await req
+    .db!.select()
+    .from(discrepancyInvestigations)
+    .where(and(eq(discrepancyInvestigations.sourceAuditId, audit.id), eq(discrepancyInvestigations.sourceAuditItemId, item.id)));
+  let investigation = existingInvestigations[0] ?? null;
+  let opened = false;
+  if (!investigation) {
+    opened = true;
+    const [created] = await req
       .db!.insert(discrepancyInvestigations)
       .values({
-        title: `Nonconformance — ${audit.name}: ${item.question ?? "Finding"}`,
-        description: item.finding ?? undefined,
-        severity: item.severity,
+        title,
+        description: description || null,
+        severity: investigationSeverity(item.severity),
         status: "open",
-        autoCreated: true,
+        autoCreated: false,
         sourceAuditId: audit.id,
         sourceAuditItemId: item.id,
       })
       .returning();
-    if (!discrepancy) throw new Error("Insert did not return the created discrepancy investigation");
-    // "Discrepancy investigation" — must match quality.controller.ts's
-    // crudFactory entityName exactly, same reasoning as the QA sweep
-    // review's History-tab casing fix.
+    if (!created) throw new Error("Insert did not return the created discrepancy investigation");
+    investigation = created;
     await recordAuditTrail(req.db!, {
       entityType: "Discrepancy investigation",
-      entityId: discrepancy.id,
+      entityId: investigation.id,
       action: "create",
-      changes: { autoCreated: true, sourceAuditId: audit.id, sourceAuditItemId: item.id, severity: item.severity },
-      performedBy: req.user?.id,
+      changes: { openedFrom: "audit item", severity: investigation.severity, title: investigation.title },
+      performedBy: req.user.id,
     });
-    // Seed the investigation form (title/severity/description/source) so it
-    // opens pre-filled instead of blank.
-    await syncDiRecordToForm(req.db!, discrepancy, req.user?.id);
+    await syncDiRecordToForm(req.db!, investigation, req.user.id);
+  }
+
+  const linkedNcrs = await req
+    .db!.select()
+    .from(ncr)
+    .where(and(eq(ncr.isDeleted, false), sql`(${ncr.processData}->>'sourceAuditItemId') = ${String(item.id)}`));
+  let createdNcr = linkedNcrs[0] ?? null;
+  if (!createdNcr) {
+    opened = true;
+    const severity = ncrSeverityFromAudit(item.severity);
+    const [row] = await req
+      .db!.insert(ncr)
+      .values({
+        title,
+        description: description || null,
+        severity,
+        status: "ncr_created",
+        createdBy: req.user.id,
+        ...(audit.siteId ? { siteId: audit.siteId } : {}),
+        processData: { sourceAuditId: audit.id, sourceAuditItemId: item.id },
+      })
+      .returning();
+    if (!row) throw new Error("Insert did not return the created NCR");
+    createdNcr = row;
+    await recordAuditTrail(req.db!, {
+      entityType: "NCR",
+      entityId: createdNcr.id,
+      action: "create",
+      changes: { openedFrom: "audit item", title: createdNcr.title, severity: createdNcr.severity },
+      performedBy: req.user.id,
+    });
+    await syncNcrFormData(
+      req.db!,
+      createdNcr.id,
+      {
+        dateIssued: ncrIsoDate(createdNcr.createdAt ?? new Date()),
+        documentStatus: "Active",
+        nonconformanceDescription: createdNcr.description ?? undefined,
+        ncrClassification: mapSeverityToClassification(createdNcr.severity),
+      },
+      req.user.id,
+    );
+  }
+
+  if (opened) {
     await recordAuditTrail(req.db!, {
       entityType: "Audit",
       entityId: audit.id,
       action: "create",
-      changes: { event: "item_added", discrepancyInvestigationId: discrepancy.id },
-      performedBy: req.user?.id,
+      changes: { event: "follow_up_opened", question: item.question },
+      performedBy: req.user.id,
     });
   }
 
-  res.status(201).json({ ...item, discrepancyInvestigation: discrepancy });
+  res.status(opened ? 201 : 200).json({ discrepancyInvestigation: investigation, ncr: createdNcr });
 });
 
 export const listItemsHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -121,7 +196,16 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
     .from(discrepancyInvestigations)
     .where(eq(discrepancyInvestigations.sourceAuditId, audit.id));
   const byItem = new Map(links.filter((row) => row.sourceAuditItemId != null).map((row) => [row.sourceAuditItemId as number, row.id]));
-  res.json(items.map((item) => ({ ...item, discrepancyInvestigationId: byItem.get(item.id) ?? null })));
+  const ncrLinks = await req
+    .db!.select({ id: ncr.id, processData: ncr.processData })
+    .from(ncr)
+    .where(and(eq(ncr.isDeleted, false), sql`(${ncr.processData}->>'sourceAuditId') = ${String(audit.id)}`));
+  const ncrByItem = new Map<number, number>();
+  for (const row of ncrLinks) {
+    const sourceId = row.processData?.sourceAuditItemId;
+    if (typeof sourceId === "number") ncrByItem.set(sourceId, row.id);
+  }
+  res.json(items.map((item) => ({ ...item, discrepancyInvestigationId: byItem.get(item.id) ?? null, ncrId: ncrByItem.get(item.id) ?? null })));
 });
 
 /** Drag-to-reorder for the audit checklist. Every question must be listed exactly once; the list's order becomes the checklist's order. */
@@ -332,35 +416,5 @@ export async function syncAuditChecklist(db: Db, auditId: number, data: Record<s
     if (!created) continue;
     existing.push(created);
     await logAuditItem(db, auditId, "item_added", itemFieldEdits({}, created), userId);
-    if (audit.type === "internal" && NONCONFORMANCE_SEVERITIES.includes(row.severity)) {
-      const [discrepancy] = await db
-        .insert(discrepancyInvestigations)
-        .values({
-          title: `Nonconformance — ${audit.name}: ${row.question}`,
-          description: row.finding || undefined,
-          severity: row.severity,
-          status: "open",
-          autoCreated: true,
-          sourceAuditId: audit.id,
-          sourceAuditItemId: created.id,
-        })
-        .returning();
-      if (!discrepancy) continue;
-      await recordAuditTrail(db, {
-        entityType: "Discrepancy investigation",
-        entityId: discrepancy.id,
-        action: "create",
-        changes: { autoCreated: true, sourceAuditId: audit.id, sourceAuditItemId: created.id, severity: row.severity },
-        performedBy: userId,
-      });
-      await syncDiRecordToForm(db, discrepancy, userId);
-      await recordAuditTrail(db, {
-        entityType: "Audit",
-        entityId: audit.id,
-        action: "create",
-        changes: { event: "item_added", discrepancyInvestigationId: discrepancy.id },
-        performedBy: userId,
-      });
-    }
   }
 }

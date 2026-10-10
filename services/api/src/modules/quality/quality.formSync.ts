@@ -29,7 +29,7 @@ function reverseLookup(labels: Record<string, string>, label: unknown): string |
  * form can only ever display it). Title/severity/description are only
  * written when the record has a value, so an empty record never blanks
  * something a user already typed into the form. The source reference is a
- * one-time seed for auto-created investigations.
+ * one-time seed when the investigation was opened from an audit item.
  */
 export async function syncDiRecordToForm(db: Db, di: DiscrepancyInvestigation, createdBy?: number): Promise<void> {
   const patch: Record<string, unknown> = {
@@ -42,7 +42,7 @@ export async function syncDiRecordToForm(db: Db, di: DiscrepancyInvestigation, c
 
   const defaults: Record<string, unknown> = {};
   if (di.sourceAuditId) {
-    defaults.sourceReference = di.sourceAuditItemId ? `Audit #${di.sourceAuditId} — Finding #${di.sourceAuditItemId}` : `Audit #${di.sourceAuditId}`;
+    defaults.sourceReference = di.title?.trim() || "Audit finding";
   }
 
   await mergeFormData(db, { formType: DI_FORM_TYPE, entityType: ENTITY_TYPE, entityId: di.id, patch, defaults, createdBy });

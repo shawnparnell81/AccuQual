@@ -73,9 +73,9 @@ export function QualityDetailPage() {
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={discrepancy.status} />
             <StatusBadge value={discrepancy.severity} />
-            {discrepancy.autoCreated && (
+            {discrepancy.sourceAuditId && (
               <button onClick={() => navigate(`/audits/${discrepancy.sourceAuditId}`)} className="text-xs text-primary hover:underline">
-                Auto-opened from an audit
+                Opened from an audit
               </button>
             )}
           </div>

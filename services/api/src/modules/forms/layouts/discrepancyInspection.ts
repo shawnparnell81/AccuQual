@@ -6,10 +6,9 @@ import type { FormLayout } from "./types.js";
  * form type. Structured as a standard Material Review Board-style
  * disposition record, consistent with the real `discrepancy_investigations`
  * table (services/api's drizzle/schema/quality.ts) this attaches to. Most
- * investigations are opened automatically (see audits.controller.ts's
- * addItemHandler) whenever a nonconformance is found on an internal audit;
- * the header fields below get their initial values from that automation and
- * are editable afterward like any other field.
+ * investigations are opened when someone chooses Create investigation / NCR
+ * on an audit item, or starts one by hand. The header fields below are
+ * filled from that item and stay editable afterward.
  */
 export const discrepancyInspectionLayout: FormLayout = {
   formType: "discrepancy_inspection",

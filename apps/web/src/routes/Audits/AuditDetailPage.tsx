@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +36,7 @@ interface AuditItem {
   severity: string | null;
   evidence: string | null;
   discrepancyInvestigationId?: number | null;
+  ncrId?: number | null;
 }
 
 interface AuditPrepSuggestion {
@@ -51,12 +52,14 @@ interface AuditDetailPageProps {
 
 export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const { id } = useParams();
-  const navigate = useNavigate();
   const auditId = entityId ?? Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
   const updateAudit = auditHooks.useUpdate();
   const permitted = useCanEditWorkflow("audit");
+  const canEditNcr = useCanEditWorkflow("ncr");
+  const canEditInvestigation = useCanEditWorkflow("di");
+  const canOpenFollowUp = permitted && canEditNcr && canEditInvestigation;
   const formLock = useModuleFormLock(auditId, permitted, `/audits/${auditId}/begin-edit`);
   const canEdit = formLock.fieldsEditable;
   useSetAssistantContext("audit", auditId, audit ? recordHeading("Audit", audit.recordNumber) : "Audit");
@@ -72,7 +75,6 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const [item, setItem] = useState({ question: "", finding: "", severity: "observation" });
   const [headerSaving, setHeaderSaving] = useState(false);
   const [headerSaved, setHeaderSaved] = useState(false);
-  const [autoOpened, setAutoOpened] = useState<number | null>(null);
   const toast = useToast();
   const [dragItemId, setDragItemId] = useState<number | null>(null);
   const [overItem, setOverItem] = useState<{ id: number; position: "before" | "after" } | null>(null);
@@ -212,15 +214,22 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-medium">Audit Items</h2>
-          {items.some((row) => row.discrepancyInvestigationId) && (
+          {items.some((row) => row.discrepancyInvestigationId || row.ncrId) && (
             <span className="text-xs text-muted-foreground">
-              {items
-                .filter((row) => row.discrepancyInvestigationId)
-                .map((row) => (
-                  <Link key={row.id} to={`/quality/${row.discrepancyInvestigationId}`} className="mr-3 text-primary hover:underline">
-                    Discrepancy Investigation
-                  </Link>
-                ))}
+              {items.map((row) => (
+                <span key={row.id}>
+                  {row.discrepancyInvestigationId && (
+                    <Link to={`/quality/${row.discrepancyInvestigationId}`} className="mr-3 text-primary hover:underline">
+                      Discrepancy Investigation
+                    </Link>
+                  )}
+                  {row.ncrId && (
+                    <Link to={`/ncr/${row.ncrId}`} className="mr-3 text-primary hover:underline">
+                      NCR
+                    </Link>
+                  )}
+                </span>
+              ))}
             </span>
           )}
         </div>
@@ -251,6 +260,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
                 item={i}
                 auditId={auditId}
                 canEdit={canEdit}
+                canOpenFollowUp={canOpenFollowUp}
                 canReorder={audit.status !== "completed" && items.length > 1}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
@@ -272,22 +282,12 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           ))}
         </ul>
 
-        {autoOpened !== null && (
-          <div className="mb-3 flex items-center justify-between rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
-            <span>Nonconformance logged — a Discrepancy Investigation was opened.</span>
-            <button onClick={() => navigate(`/quality/${autoOpened}`)} className="font-medium hover:underline">
-              View investigation
-            </button>
-          </div>
-        )}
-
         {canEdit && <form
           className="grid gap-3 md:grid-cols-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            const { data: created } = await apiClient.post(`/audits/${auditId}/item`, item);
+            await apiClient.post(`/audits/${auditId}/item`, item);
             setItem({ question: "", finding: "", severity: "observation" });
-            setAutoOpened(created.discrepancyInvestigation?.id ?? null);
             queryClient.invalidateQueries({ queryKey: ["audits", auditId, "items"] });
             void queryClient.invalidateQueries({ queryKey: ["workflow-history", "audit", auditId] });
           }}
@@ -335,6 +335,7 @@ function AuditItemRow({
   item,
   auditId,
   canEdit,
+  canOpenFollowUp,
   canReorder,
   onDragStart,
   onDragEnd,
@@ -343,6 +344,7 @@ function AuditItemRow({
   item: AuditItem;
   auditId: number;
   canEdit: boolean;
+  canOpenFollowUp: boolean;
   canReorder: boolean;
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
@@ -352,6 +354,20 @@ function AuditItemRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ question: item.question, finding: item.finding ?? "", severity: item.severity ?? "observation" });
   const [saving, setSaving] = useState(false);
+  const [opening, setOpening] = useState(false);
+
+  async function openFollowUp() {
+    setOpening(true);
+    try {
+      await apiClient.post(`/audits/${auditId}/item/${item.id}/follow-up`);
+      toast.success("Investigation and NCR opened from this item.");
+      onSaved();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't open an investigation and NCR."));
+    } finally {
+      setOpening(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -454,11 +470,23 @@ function AuditItemRow({
         </span>
       </div>
       {item.finding && <p className="mt-1 text-muted-foreground">{item.finding}</p>}
-      {item.discrepancyInvestigationId && (
-        <Link to={`/quality/${item.discrepancyInvestigationId}`} className="mt-1 inline-block text-xs text-primary hover:underline">
-          Discrepancy Investigation
-        </Link>
-      )}
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        {item.discrepancyInvestigationId && (
+          <Link to={`/quality/${item.discrepancyInvestigationId}`} className="text-xs text-primary hover:underline">
+            Discrepancy Investigation
+          </Link>
+        )}
+        {item.ncrId && (
+          <Link to={`/ncr/${item.ncrId}`} className="text-xs text-primary hover:underline">
+            NCR
+          </Link>
+        )}
+        {canOpenFollowUp && (!item.discrepancyInvestigationId || !item.ncrId) && (
+          <button type="button" disabled={opening} onClick={() => void openFollowUp()} className="text-xs text-primary hover:underline disabled:opacity-60">
+            {opening ? "Opening…" : "Create investigation / NCR"}
+          </button>
+        )}
+      </div>
     </>
   );
 }

@@ -188,16 +188,31 @@ describe("Discrepancy & Investigation / quality-DI (real DB + real HTTP path)", 
       expect(record.body.title).toBe("Final title");
     });
 
-    it("a nonconformance found in an internal audit auto-opens a discrepancy whose form is pre-filled with the audit source", async () => {
+    it("adding an audit item does not open an investigation until someone chooses to", async () => {
       const audit = await request(app).post("/audits").set(auth(qualityToken)).send({ name: "Sync Audit", type: "internal" });
       expect(audit.status).toBe(201);
       const item = await request(app).post(`/audits/${audit.body.id}/item`).set(auth(qualityToken)).send({ question: "Is torque logged?", finding: "No torque log", severity: "major" });
       expect(item.status).toBe(201);
+      expect(item.body.discrepancyInvestigation).toBeUndefined();
 
-      const di = item.body.discrepancyInvestigation;
-      const row = await formRow(di.id);
-      expect(row?.data).toMatchObject({ severity: "Major", description: "No torque log", status: "Open" });
-      expect((row?.data as { sourceReference?: string }).sourceReference).toContain(`Audit #${audit.body.id}`);
+      const before = await db.select().from(discrepancyInvestigations).where(eq(discrepancyInvestigations.sourceAuditItemId, item.body.id));
+      expect(before).toHaveLength(0);
+
+      const opened = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/follow-up`).set(auth(qualityToken));
+      expect(opened.status).toBe(201);
+      expect(opened.body.discrepancyInvestigation.title).toBe("Is torque logged?");
+      expect(opened.body.discrepancyInvestigation.description).toBe("No torque log");
+      expect(opened.body.ncr.title).toBe("Is torque logged?");
+      expect(opened.body.ncr.description).toBe("No torque log");
+      expect(opened.body.ncr.severity).toBe("high");
+
+      const row = await formRow(opened.body.discrepancyInvestigation.id);
+      expect(row?.data).toMatchObject({ title: "Is torque logged?", severity: "Major", description: "No torque log", status: "Open", sourceReference: "Is torque logged?" });
+
+      const again = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/follow-up`).set(auth(qualityToken));
+      expect(again.status).toBe(200);
+      expect(again.body.discrepancyInvestigation.id).toBe(opened.body.discrepancyInvestigation.id);
+      expect(again.body.ncr.id).toBe(opened.body.ncr.id);
     });
   });
 });

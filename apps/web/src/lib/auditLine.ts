@@ -265,12 +265,11 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       if (from && to) return `Moved from ${from} to ${to}.`;
       return "Moved the held item.";
     }
+    case "follow_up_opened":
+      return "Opened a Discrepancy Investigation and an NCR from this item.";
     case "item_added":
-    case "row_added": {
-      const investigation = changes?.discrepancyInvestigationId;
-      if (typeof investigation === "number") return `Added a line. Discrepancy Investigation was opened.`;
+    case "row_added":
       return "Added a line.";
-    }
     case "item_updated":
     case "row_updated":
       return "Updated a line.";
