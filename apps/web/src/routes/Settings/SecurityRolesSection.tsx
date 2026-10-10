@@ -650,29 +650,33 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
               </span>
               {r.description && <span className="mt-0.5 block text-xs text-muted-foreground">{r.description}</span>}
             </span>
-            {isAdmin && (
+            {(isAdmin || canManageRoles) && (
               <span className="flex items-center gap-2 text-xs">
-                <button type="button" disabled={index === 0} onClick={() => void move(r, "up")} className="text-primary hover:underline disabled:opacity-40">
-                  Up
-                </button>
-                <button type="button" disabled={index === roles.length - 1} onClick={() => void move(r, "down")} className="text-primary hover:underline disabled:opacity-40">
-                  Down
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(r);
-                    setEditForm({
-                      name: r.name,
-                      description: r.description ?? "",
-                      hierarchyLevel: String(r.hierarchyLevel ?? 80),
-                      permissions: [...(r.permissions ?? [])],
-                    });
-                  }}
-                  className="text-primary hover:underline"
-                >
-                  Edit
-                </button>
+                {isAdmin && (
+                  <>
+                    <button type="button" disabled={index === 0} onClick={() => void move(r, "up")} className="text-primary hover:underline disabled:opacity-40">
+                      Up
+                    </button>
+                    <button type="button" disabled={index === roles.length - 1} onClick={() => void move(r, "down")} className="text-primary hover:underline disabled:opacity-40">
+                      Down
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(r);
+                        setEditForm({
+                          name: r.name,
+                          description: r.description ?? "",
+                          hierarchyLevel: String(r.hierarchyLevel ?? 80),
+                          permissions: [...(r.permissions ?? [])],
+                        });
+                      }}
+                      className="text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
                 {canManageRoles && <RoleDeleteButton role={r} roles={roles} />}
               </span>
             )}
