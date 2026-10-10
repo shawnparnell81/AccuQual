@@ -32,6 +32,7 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  MessageSquareWarning,
   Sparkles,
   Truck,
   Upload,
@@ -182,6 +183,7 @@ const QUALITY_FOLDER: SidebarFolder = {
     doc("product-alerts", FileText),
     doc("recalls", FileText),
     { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
+    { key: "customer-complaints", label: "Customer Complaints", path: "/complaints", icon: MessageSquareWarning },
     { key: "labor-claims", label: "Labor Claims", path: "/labor-claims", icon: Wrench },
     doc("repairs", Hammer),
     {

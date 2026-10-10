@@ -4,12 +4,9 @@ import { audits, auditItems } from "./audits.js";
 
 /**
  * Discrepancy & Inspection investigations — the "Quality" folder's own
- * record type, backing formType "discrepancy_inspection". Most rows are
- * created automatically (see audits.controller.ts's addItemHandler): every
- * non-observation finding (minor/major/critical) logged against an internal
- * audit opens one of these in "open" status, source-linked back to the
- * audit and the specific finding that triggered it. A user can also start
- * one manually with no audit link at all.
+ * record type, backing formType "discrepancy_inspection". A row is opened
+ * when someone chooses Create investigation on an audit item, or starts
+ * one with no audit link. Adding an audit item never inserts one.
  */
 export const discrepancyInvestigations = pgTable("discrepancy_investigations", {
   id: serial("id").primaryKey(),

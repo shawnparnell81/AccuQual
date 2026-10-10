@@ -5,7 +5,7 @@ import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createAuditSchema, updateAuditSchema, addAuditItemSchema, updateAuditItemSchema, reorderAuditItemsSchema } from "./audits.validation.js";
-import { baseHandlers, addItemHandler, updateItemHandler, deleteItemHandler, listItemsHandler, reorderItemsHandler, startHandler, completeHandler, saveAuditHandler } from "./audits.controller.js";
+import { baseHandlers, addItemHandler, updateItemHandler, deleteItemHandler, listItemsHandler, reorderItemsHandler, startHandler, completeHandler, saveAuditHandler, createInvestigationHandler, createNcrHandler } from "./audits.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { beginAuditEdit } from "../forms/moduleBeginEdit.js";
 
@@ -23,6 +23,8 @@ auditsRouter.delete("/:id", deleteRecordHandler("audit"));
 auditsRouter.get("/:id/item", listItemsHandler);
 auditsRouter.post("/:id/item", validate(addAuditItemSchema), addItemHandler);
 auditsRouter.patch("/:id/item/:itemId", validate(updateAuditItemSchema), updateItemHandler);
+auditsRouter.post("/:id/item/:itemId/investigation", createInvestigationHandler);
+auditsRouter.post("/:id/item/:itemId/ncr", createNcrHandler);
 auditsRouter.delete("/:id/item/:itemId", deleteItemHandler);
 auditsRouter.post("/:id/item/reorder", validate(reorderAuditItemsSchema), reorderItemsHandler);
 // Promotes Scheduled -> In Progress from generic-PATCH-only (see the

@@ -12,6 +12,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { RecordNumberEditor, RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
+import { formatDate } from "../../lib/dates";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -375,7 +376,7 @@ function MitigationPanel({ riskId, mitigations, canPropose }: { riskId: number; 
           <li key={m.id} className="flex items-center justify-between gap-3 border-b border-border pb-2 text-sm last:border-0">
             <div>
               <p>{m.action}</p>
-              {m.dueDate && <p className="text-xs text-muted-foreground">Due {new Date(m.dueDate).toLocaleDateString()}</p>}
+              {m.dueDate && <p className="text-xs text-muted-foreground">Due {formatDate(m.dueDate)}</p>}
             </div>
             <select
               value={m.status}

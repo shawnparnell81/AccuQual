@@ -190,7 +190,12 @@ export async function fileFormRecord(
   if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
   let folderId = input.formFolderKey ? await ensureSavedFormFolder(db, formKey, performedBy, input.formFolderKey) : input.folderId;
   if (folderId == null) throw AppError.badRequest("Choose a folder");
-  await ensureFormTemplates(db, performedBy);
+  const [knownTemplate] = await db
+    .select({ id: controlledFormTemplates.id })
+    .from(controlledFormTemplates)
+    .where(eq(controlledFormTemplates.formKey, formKey))
+    .limit(1);
+  if (!knownTemplate) await ensureFormTemplates(db, performedBy);
   const createdOn = await assertRecord(db, formKey, recordId);
   const partNumber = input.partNumber?.trim().replace(/\s+/g, " ") ?? "";
   if (partNumber) {

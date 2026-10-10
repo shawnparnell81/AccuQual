@@ -20,6 +20,7 @@ async function oneStamp(db: Db): Promise<string> {
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(coalesce(updated_at, created_at))::text, '') FROM iso_quality_forms),
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM qms_forms),
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM ncr),
+      (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM complaints),
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM capa),
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM eight_d),
       (SELECT coalesce(max(id)::text, '') || ':' || coalesce(max(updated_at)::text, '') FROM document_change_requests),
@@ -184,7 +185,15 @@ async function listingsNeedRepair(db: Db): Promise<boolean> {
           AND (n.updated_at IS NOT NULL OR coalesce(n.record_number, '') <> '')
           AND NOT EXISTS (
             SELECT 1 FROM form_filings f
-            WHERE f.record_id = n.id AND f.folder_node_id IS NOT NULL AND f.form_key IN ('ncr', 'supplier-ncr', 'complaint')
+            WHERE f.record_id = n.id AND f.folder_node_id IS NOT NULL AND f.form_key IN ('ncr', 'supplier-ncr')
+          )
+      )
+      OR EXISTS (
+        SELECT 1 FROM complaints c
+        WHERE (c.updated_at IS NOT NULL OR coalesce(c.record_number, '') <> '')
+          AND NOT EXISTS (
+            SELECT 1 FROM form_filings f
+            WHERE f.record_id = c.id AND f.folder_node_id IS NOT NULL AND f.form_key = 'complaint'
           )
       )
       OR EXISTS (

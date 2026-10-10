@@ -13,6 +13,7 @@ import { db, pool } from "../../src/db/index.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { discrepancyInvestigations } from "../../src/drizzle/schema/quality.js";
+import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { audits, auditItems } from "../../src/drizzle/schema/audits.js";
 import { formData } from "../../src/drizzle/schema/forms.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -188,16 +189,45 @@ describe("Discrepancy & Investigation / quality-DI (real DB + real HTTP path)", 
       expect(record.body.title).toBe("Final title");
     });
 
-    it("a nonconformance found in an internal audit auto-opens a discrepancy whose form is pre-filled with the audit source", async () => {
+    it("adding an audit item opens an investigation or an NCR only when that action is chosen", async () => {
       const audit = await request(app).post("/audits").set(auth(qualityToken)).send({ name: "Sync Audit", type: "internal" });
       expect(audit.status).toBe(201);
       const item = await request(app).post(`/audits/${audit.body.id}/item`).set(auth(qualityToken)).send({ question: "Is torque logged?", finding: "No torque log", severity: "major" });
       expect(item.status).toBe(201);
+      expect(item.body.discrepancyInvestigation).toBeUndefined();
 
-      const di = item.body.discrepancyInvestigation;
-      const row = await formRow(di.id);
-      expect(row?.data).toMatchObject({ severity: "Major", description: "No torque log", status: "Open" });
-      expect((row?.data as { sourceReference?: string }).sourceReference).toContain(`Audit #${audit.body.id}`);
+      const before = await db.select().from(discrepancyInvestigations).where(eq(discrepancyInvestigations.sourceAuditItemId, item.body.id));
+      expect(before).toHaveLength(0);
+
+      const opened = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/investigation`).set(auth(qualityToken));
+      expect(opened.status).toBe(201);
+      expect(opened.body.title).toBe("Is torque logged?");
+      expect(opened.body.description).toBe("No torque log");
+      const ncrsAfterInvestigation = await db.select().from(ncr).where(eq(ncr.title, "Is torque logged?"));
+      expect(ncrsAfterInvestigation).toHaveLength(0);
+
+      const row = await formRow(opened.body.id);
+      expect(row?.data).toMatchObject({ title: "Is torque logged?", severity: "Major", description: "No torque log", status: "Open", sourceReference: "Is torque logged?" });
+
+      const again = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/investigation`).set(auth(qualityToken));
+      expect(again.status).toBe(200);
+      expect(again.body.id).toBe(opened.body.id);
+
+      const createdNcr = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/ncr`).set(auth(qualityToken));
+      expect(createdNcr.status).toBe(201);
+      expect(createdNcr.body.title).toBe("Is torque logged?");
+      expect(createdNcr.body.description).toBe("No torque log");
+      expect(createdNcr.body.severity).toBe("high");
+      const repeatNcr = await request(app).post(`/audits/${audit.body.id}/item/${item.body.id}/ncr`).set(auth(qualityToken));
+      expect(repeatNcr.status).toBe(200);
+      expect(repeatNcr.body.id).toBe(createdNcr.body.id);
+
+      const trail = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Audit"), eq(auditTrail.entityId, audit.body.id)));
+      const events = trail.map((entry) => (entry.changes as { event?: string } | null)?.event);
+      expect(events).toContain("investigation_opened");
+      expect(events).toContain("ncr_opened");
+      expect(events.filter((event) => event === "investigation_opened")).toHaveLength(1);
+      expect(events.filter((event) => event === "ncr_opened")).toHaveLength(1);
     });
   });
 });

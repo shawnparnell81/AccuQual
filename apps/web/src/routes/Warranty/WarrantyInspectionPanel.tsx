@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { TextField, TextAreaField } from "../../components/forms/Field";
+import { formatDate } from "../../lib/dates";
 import type { WarrantyClaim } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -47,7 +48,7 @@ export function WarrantyInspectionPanel({ claim, canEdit }: { claim: WarrantyCla
       ) : (
         <div className="mt-2 text-sm">
           <p className="text-muted-foreground">{claim.inspectionNotes || "No inspection findings recorded yet."}</p>
-          {claim.inspectionDate && <p className="mt-1 text-xs text-muted-foreground">Inspected {new Date(claim.inspectionDate).toLocaleDateString()}</p>}
+          {claim.inspectionDate && <p className="mt-1 text-xs text-muted-foreground">Inspected {formatDate(claim.inspectionDate)}</p>}
         </div>
       )}
     </div>

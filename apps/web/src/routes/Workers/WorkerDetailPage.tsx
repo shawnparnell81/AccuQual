@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useWorker, useUpsertWorkerProfile, EMPLOYMENT_STATUSES, EMPLOYMENT_STATUS_LABEL, type EmploymentStatus } from "../../api/workers";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { formatDate } from "../../lib/dates";
 
 interface FormState {
   jobTitle: string;
@@ -145,7 +146,7 @@ export function WorkerDetailPage() {
             </div>
             <div>
               <dt className="text-muted-foreground">Hire date</dt>
-              <dd>{profile.hireDate ? new Date(profile.hireDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—"}</dd>
+              <dd>{formatDate(profile.hireDate)}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Employment status</dt>

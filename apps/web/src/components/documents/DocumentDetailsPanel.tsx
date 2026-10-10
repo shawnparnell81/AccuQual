@@ -1,4 +1,5 @@
 import { TextAreaField, TextField } from "../forms/Field";
+import { formatDate } from "../../lib/dates";
 import type { DocumentPayload } from "../../api/documents";
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
 }
 
 const dateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : "—");
+const fmt = (iso: string | null) => formatDate(iso);
 
 /** A revision's title, revision code, dates, retention and body. Read-only text unless it is an editable draft. */
 export function DocumentDetailsPanel({ values, editable, onChange, summary, onSummaryChange, revisionLabel = "Revision code", revisionHint }: Props) {

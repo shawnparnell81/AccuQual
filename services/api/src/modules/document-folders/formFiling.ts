@@ -273,7 +273,7 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "cal-register", formId: "", title: "Calibration Equipment Register", topic: "Calibration", subjectRoute: "/calibration", start: blank("/equipment", "/calibration/{id}", { name: "Calibration Equipment Register" }) },
   { formKey: "cal-record", formId: "", title: "Calibration Record", topic: "Calibration", subjectRoute: "/calibration", start: blank("/equipment", "/calibration/{id}", { name: "Calibration Record" }) },
   { formKey: "training-record", formId: "", title: "Training & Competency Record", topic: "Training", subjectRoute: "/training", start: blank("/training", "/training/{id}", { title: "Training & Competency Record" }) },
-  { formKey: "complaint", formId: "", title: "Customer Complaint Record", topic: "Customer Quality", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Customer Complaint Record" }) },
+  { formKey: "complaint", formId: "", title: "Customer Complaint Record", topic: "Customer Quality", subjectRoute: "/complaints", start: blank("/complaints", "/complaints/{id}", { description: "Customer complaint" }) },
   { formKey: "ecr", formId: "", title: "Engineering Change Request", topic: "Change Control", subjectRoute: "/change", start: blank("/change", "/change/{id}", { title: "Engineering Change Request" }) },
   { formKey: "eco", formId: "", title: "Engineering Change Order", topic: "Change Control", subjectRoute: "/change", start: blank("/change", "/change/{id}", { title: "Engineering Change Order" }) },
 ];
@@ -392,6 +392,7 @@ export function savedFillFileName(input: { formId: string; title: string; record
 
 const FALLBACK_PATH: Record<string, string> = {
   "/ncr": "ncr",
+  "/complaints": "complaint",
   "/capa": "capa",
   "/8d": "8d",
   "/document-change-requests": "dcr",

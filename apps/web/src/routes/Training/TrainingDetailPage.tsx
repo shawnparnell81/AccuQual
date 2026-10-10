@@ -23,6 +23,7 @@ import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { RecordGlance } from "../../components/records/RecordStatus";
 import { TRAINING_MANAGE_REASON, duePhrase, isPastDue } from "../../lib/opsLanguage";
+import { formatDate } from "../../lib/dates";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
 const trainingHooks = createResourceHooks<TrainingCourse>("training");
@@ -207,9 +208,9 @@ export function TrainingDetailPage() {
                 </Link>
                 <StatusBadge value={a.status} />
                 <span className="flex-1 text-xs text-muted-foreground">
-                  {a.completedAt ? `Completed ${new Date(a.completedAt).toLocaleDateString()}` : a.dueAt ? `Due ${new Date(a.dueAt).toLocaleDateString()}` : "No due date"}
+                  {a.completedAt ? `Completed ${formatDate(a.completedAt)}` : a.dueAt ? `Due ${formatDate(a.dueAt)}` : "No due date"}
                 </span>
-                {a.expiresAt && <span className="flex-none text-xs text-muted-foreground">valid to {new Date(a.expiresAt).toLocaleDateString()}</span>}
+                {a.expiresAt && <span className="flex-none text-xs text-muted-foreground">valid to {formatDate(a.expiresAt)}</span>}
                 {a.certificatePath ? (
                   <button onClick={() => viewCertificate(a.id)} className="flex-none text-primary hover:opacity-80" aria-label="View certificate">
                     <FileText size={14} />

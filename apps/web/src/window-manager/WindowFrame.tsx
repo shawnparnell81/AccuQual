@@ -39,14 +39,14 @@ export function WindowFrame({ win, children }: WindowFrameProps) {
         <div className="accuqual-window-titlebar flex cursor-move items-center justify-between border-b border-border bg-muted px-3 py-2">
           <span className="truncate text-sm font-medium">{win.title}</span>
           <div className="flex items-center gap-1">
-            <button onClick={() => minimizeWindow(win.id)} className="rounded p-1 hover:bg-background" aria-label="Minimize">
-              <Minus size={14} />
+            <button type="button" onClick={() => minimizeWindow(win.id)} className="rounded p-1 hover:bg-background" aria-label={`Minimize ${win.title}`}>
+              <Minus size={14} aria-hidden="true" />
             </button>
-            <button onClick={() => toggleMaximize(win.id)} className="rounded p-1 hover:bg-background" aria-label="Maximize">
-              <Square size={12} />
+            <button type="button" onClick={() => toggleMaximize(win.id)} className="rounded p-1 hover:bg-background" aria-label={`Maximize ${win.title}`}>
+              <Square size={12} aria-hidden="true" />
             </button>
-            <button onClick={() => closeWindow(win.id)} className="rounded p-1 hover:bg-destructive/20" aria-label="Close">
-              <X size={14} />
+            <button type="button" onClick={() => closeWindow(win.id)} className="rounded p-1 hover:bg-destructive/20" aria-label={`Close ${win.title}`}>
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         </div>

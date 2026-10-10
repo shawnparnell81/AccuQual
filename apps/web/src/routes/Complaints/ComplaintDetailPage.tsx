@@ -99,7 +99,7 @@ export function ComplaintDetailPage() {
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="complaint" entityId={complaint.id} title={`${recordHeading("Complaint", complaint.recordNumber)} Form`} />
           <WorkflowActionButton
-            label="Escalate to NCR"
+            label="Create NCR"
             navKey="complaints"
             action={escalate}
             onClick={() => escalate.mutate({ id: complaintId }, { onSuccess: (data) => navigate(`/ncr/${(data as { ncr: { id: number } }).ncr.id}`) })}

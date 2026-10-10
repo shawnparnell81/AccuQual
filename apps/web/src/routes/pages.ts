@@ -55,6 +55,9 @@ export const AuditsPage = lazyNamed("/audits", () => import("./Audits/AuditsPage
 export const BlankFormsListPage = lazyNamed("/blank-forms", () => import("./BlankForms/BlankFormsPage"), "BlankFormsListPage");
 export const StartBlankFormPage = lazyNamed("/blank-forms/start", () => import("./BlankForms/BlankFormsPage"), "StartBlankFormPage");
 export const AuditDetailPage = lazyNamed("/audits", () => import("./Audits/AuditDetailPage"), "AuditDetailPage");
+export const ComplaintsPage = lazyNamed("/complaints", () => import("./Complaints/ComplaintsPage"), "ComplaintsPage");
+export const ComplaintDetailPage = lazyNamed("/complaints", () => import("./Complaints/ComplaintDetailPage"), "ComplaintDetailPage");
+export const QualityDetailPage = lazyNamed("/quality", () => import("./Quality/QualityDetailPage"), "QualityDetailPage");
 export const DocumentsPage = lazyNamed("/documents", () => import("./Documents/DocumentsPage"), "DocumentsPage");
 export const QuarantinePage = lazyNamed("/quarantine", () => import("./Quarantine/QuarantinePage"), "QuarantinePage");
 export const QuarantineDetailPage = lazyNamed("/quarantine", () => import("./Quarantine/QuarantineDetailPage"), "QuarantineDetailPage");

@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../tables/StatusBadge";
 import { WorkflowHistoryPanel } from "../shared/WorkflowHistoryPanel";
 import type { TrainingAssignment } from "../../api/types";
+import { formatDate } from "../../lib/dates";
 
 async function viewCertificate(assignmentId: number) {
   const res = await apiClient.get(`/training/assignment/${assignmentId}/certificate`, { responseType: "blob" });
@@ -48,8 +49,8 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
                 )}
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {r.completedAt && <span>Completed {new Date(r.completedAt).toLocaleDateString()}</span>}
-                {r.dueAt && !r.completedAt && <span>Due {new Date(r.dueAt).toLocaleDateString()}</span>}
+                {r.completedAt && <span>Completed {formatDate(r.completedAt)}</span>}
+                {r.dueAt && !r.completedAt && <span>Due {formatDate(r.dueAt)}</span>}
                 {r.trainerName && <span>Trainer: {r.trainerName}</span>}
               </div>
               {r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}

@@ -5,6 +5,7 @@ import { materializeRow, STATUS_COLORS } from "./formulas";
 import { FMEA_TONE_CLASS, FMEA_TONE_NAME, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority";
 import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
+import { dateInputValue, formatDate } from "../../lib/dates";
 import { formAllowsInlinePictures } from "./inlinePictures";
 import { PictureText } from "./PictureText";
 import { usePictureRecord } from "./pictureRecord";
@@ -139,6 +140,13 @@ function StaticValue({ value }: { value: unknown }) {
   return <p className="min-h-[1.25em] whitespace-pre-wrap text-xs text-foreground">{text || " "}</p>;
 }
 
+/** Read-only date cells keep the calendar day. A UTC-midnight timestamp is not shifted into the previous local day. */
+function shownDate(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  const text = formatDate(value as string | number | Date);
+  return text === "—" ? "" : text;
+}
+
 function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlock>) {
   return (
     <div className="grid" style={{ gridTemplateColumns: `repeat(${block.fields.length}, minmax(0, 1fr))` }}>
@@ -166,9 +174,10 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
                 }}
               />
             ) : readOnly || field.readOnly ? (
-              <StaticValue value={data[field.name]} />
+              <StaticValue value={field.kind === "date" ? shownDate(data[field.name]) : data[field.name]} />
             ) : field.kind === "select" ? (
               <select
+                aria-label={field.label}
                 className="w-full bg-transparent text-xs outline-none"
                 value={(data[field.name] as string) ?? ""}
                 onChange={(e) => onChange(field.name, e.target.value)}
@@ -183,8 +192,9 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
             ) : (
               <input
                 type={inputTypeForFieldKind(field.kind)}
+                aria-label={field.label}
                 className="w-full bg-transparent text-xs outline-none"
-                value={(data[field.name] as string) ?? ""}
+                value={field.kind === "date" ? dateInputValue(data[field.name]) : ((data[field.name] as string | number) ?? "")}
                 onChange={(e) => onChange(field.name, field.kind === "number" ? e.target.valueAsNumber : e.target.value)}
               />
             )}
@@ -445,9 +455,10 @@ function TableBlockView({ block, data, onChange, readOnly, pictures }: BlockView
                       />
                     )
                   ) : readOnly ? (
-                    <StaticValue value={row[col.key]} />
+                    <StaticValue value={col.kind === "date" ? shownDate(row[col.key]) : row[col.key]} />
                   ) : col.kind === "select" ? (
                     <select
+                      aria-label={col.label}
                       className="w-full bg-transparent text-xs outline-none"
                       value={(row[col.key] as string) ?? ""}
                       onChange={(e) => updateCell(rowIndex, col.key, e.target.value)}
@@ -462,11 +473,12 @@ function TableBlockView({ block, data, onChange, readOnly, pictures }: BlockView
                   ) : (
                     <input
                       type={inputTypeForFieldKind(col.kind)}
+                      aria-label={col.label}
                       min={col.min}
                       max={col.max}
                       placeholder={col.placeholder}
                       className="w-full bg-transparent text-xs outline-none"
-                      value={(row[col.key] as string | number) ?? ""}
+                      value={col.kind === "date" ? dateInputValue(row[col.key]) : ((row[col.key] as string | number) ?? "")}
                       onChange={(e) =>
                         updateCell(rowIndex, col.key, col.kind === "number" ? e.target.valueAsNumber : e.target.value)
                       }
@@ -476,7 +488,15 @@ function TableBlockView({ block, data, onChange, readOnly, pictures }: BlockView
               ))}
               {block.addableRows && !readOnly && (
                 <td className="border-t border-border px-1 text-center">
-                  <button onClick={() => removeRow(rowIndex)} className="text-muted-foreground hover:text-destructive" aria-label="Remove row">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Remove row ${rowIndex + 1}?`)) return;
+                      removeRow(rowIndex);
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Remove row ${rowIndex + 1}`}
+                  >
                     ×
                   </button>
                 </td>

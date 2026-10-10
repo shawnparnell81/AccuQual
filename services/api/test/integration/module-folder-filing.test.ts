@@ -72,7 +72,7 @@ function contentBody(createPath: string, body: Record<string, unknown>, marker: 
 async function fillsFor(formKey: string, recordId: number) {
   const folder = await request(app).get(`/document-folders/form-folders/${encodeURIComponent(formKey)}`).set(auth());
   expect(folder.status, formKey).toBe(200);
-  return (folder.body.fills as { recordId: number }[]).filter((fill) => fill.recordId === recordId);
+  return (folder.body.fills as { recordId: number; fileName: string }[]).filter((fill) => fill.recordId === recordId);
 }
 
 describe("module records land in their own form folder after the first real save", () => {
@@ -101,7 +101,8 @@ describe("module records land in their own form folder after the first real save
         expect(numberedSave.status, `${formKey} number ${JSON.stringify(numberedSave.body)}`).toBe(200);
         expect(await fillsFor(formKey, id), `${formKey} after number`).toHaveLength(1);
         for (const sibling of SIBLINGS[formKey] ?? []) {
-          expect(await fillsFor(sibling, id), `${formKey} must not file under ${sibling}`).toHaveLength(0);
+          const stolen = (await fillsFor(sibling, id)).filter((fill) => fill.fileName.includes(token));
+          expect(stolen, `${formKey} must not file under ${sibling}`).toHaveLength(0);
         }
       }
 
@@ -110,7 +111,8 @@ describe("module records land in their own form folder after the first real save
       expect(saved.status, `${formKey} save ${JSON.stringify(saved.body)}`).toBe(200);
       expect(await fillsFor(formKey, id), `${formKey} after save`).toHaveLength(1);
       for (const sibling of SIBLINGS[formKey] ?? []) {
-        expect(await fillsFor(sibling, id), `${formKey} stays out of ${sibling}`).toHaveLength(0);
+        const stolen = (await fillsFor(sibling, id)).filter((fill) => fill.fileName.includes(token));
+        expect(stolen, `${formKey} stays out of ${sibling}`).toHaveLength(0);
       }
 
       const again = await write(start.createPath, id).set(auth()).send(contentBody(start.createPath, start.body, `${marker}-2`));

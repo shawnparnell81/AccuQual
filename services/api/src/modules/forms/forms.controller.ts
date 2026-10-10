@@ -7,12 +7,18 @@ import { FORM_AUDIT_ENTITY } from "./forms.service.js";
 import { createCalibrationEvent } from "../calibration/calibration.controller.js";
 import { assertGageUsable, assertInspectionGagesUsable } from "../calibration/calibration.service.js";
 import { completeTrainingAssignment } from "../training/training.controller.js";
+import { syncAuditChecklist } from "../audits/audits.controller.js";
 import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js";
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
 import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
+import { setContainment } from "../ncr/ncr.service.js";
+import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
+import { eq } from "drizzle-orm";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { writeSignatureValue } from "../signatures/signaturePin.js";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const formType = req.params.type!;
@@ -60,6 +66,12 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
     await syncComplaintFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
   if (req.params.type === "ncr" && savedEntityId != null) await noteRepeatNcr(req.db!, Number(savedEntityId));
+  if (req.params.type === "audit_checklist" && savedEntityId != null && data && typeof data === "object" && !Array.isArray(data)) {
+    await syncAuditChecklist(req.db!, Number(savedEntityId), data as Record<string, unknown>, req.user?.id);
+  }
+  if (req.params.type === "ncr" && savedEntityId != null && data && typeof data === "object" && !Array.isArray(data)) {
+    await copyNcrContainment(req, Number(savedEntityId), data as Record<string, unknown>);
+  }
 
   res.json(saved);
 });
@@ -132,9 +144,28 @@ export const createVersion = asyncHandler(async (req: Request, res: Response) =>
   res.json(updated);
 });
 
+async function copyNcrContainment(req: Request, ncrId: number, data: Record<string, unknown>): Promise<void> {
+  const rows = data.containmentActions;
+  const first = Array.isArray(rows) ? rows[0] : null;
+  const action = first && typeof first === "object" ? String((first as { action?: unknown }).action ?? "").trim() : "";
+  if (!action) return;
+  const [row] = await req.db!.select({ containment: ncr.containment, status: ncr.status }).from(ncr).where(eq(ncr.id, ncrId));
+  if (!row || row.containment?.trim()) return;
+  if (canonicalNcrStep(row.status) === "ncr_created") {
+    await setContainment(req.db!, ncrId, action, req.user?.id, req.allowedSiteIds);
+    return;
+  }
+  await req.db!.update(ncr).set({ containment: action, updatedAt: new Date() }).where(eq(ncr.id, ncrId));
+}
+
+function formCalendarDate(value: unknown): Date | null {
+  const parsed = reasonableDate.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data: Record<string, unknown>): Promise<void> {
-  const performedAt = data.performedAt ? new Date(String(data.performedAt)) : null;
-  if (!performedAt || Number.isNaN(performedAt.getTime())) {
+  const performedAt = formCalendarDate(data.performedAt);
+  if (!performedAt) {
     logger.warn(`Skipped auto-creating a calibration event for equipment ${equipmentId}: no valid performedAt in the form yet`);
     return;
   }
@@ -152,8 +183,8 @@ async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data:
 }
 
 async function maybeCompleteTrainingAssignment(req: Request, assignmentId: number, data: Record<string, unknown>): Promise<void> {
-  const completionDate = data.completionDate ? new Date(String(data.completionDate)) : null;
-  if (!completionDate || Number.isNaN(completionDate.getTime())) {
+  const completionDate = formCalendarDate(data.completionDate);
+  if (!completionDate) {
     logger.warn(`Skipped auto-completing training assignment ${assignmentId}: no valid completionDate in the form yet`);
     return;
   }

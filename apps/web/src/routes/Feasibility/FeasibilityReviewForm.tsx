@@ -13,6 +13,7 @@ import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { FEASIBILITY_AREAS, FEASIBILITY_AREA_LABELS } from "../../api/types";
 import type { FeasibilityReview, FeasibleValue, FeasibilityRiskLevel, FeasibilityDetermination, FeasibilitySettings } from "../../api/types";
 import { BrandMark } from "../../components/brand/DmaLogo";
+import { formatDate } from "../../lib/dates";
 
 const ASSESSMENT_QUESTIONS: Record<(typeof FEASIBILITY_AREAS)[number], string> = {
   design: "Are engineering drawings, GD&T, and material specifications clear, complete, and within process capabilities (Cpk ≥ 1.33)?",
@@ -284,7 +285,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
                       }}
                     />
                   </td>
-                  <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground print:border-black print:text-black">{dateValue ? new Date(dateValue).toLocaleDateString() : "—"}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground print:border-black print:text-black">{formatDate(dateValue)}</td>
                 </tr>
               );
             })}

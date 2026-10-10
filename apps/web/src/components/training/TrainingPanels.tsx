@@ -7,6 +7,7 @@ import { Modal } from "../modals/Modal";
 import { SelectField, TextAreaField, TextField } from "../forms/Field";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { formatDate } from "../../lib/dates";
 import {
   DEPARTMENTS,
   QUALIFICATION_LABEL,
@@ -41,7 +42,7 @@ export function QualificationBadge({ status }: { status: QualificationStatus }) 
   return <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[status]}`}>{QUALIFICATION_LABEL[status]}</span>;
 }
 
-const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : "—");
+const dt = (iso: string | null) => formatDate(iso);
 
 function useRefresh() {
   const qc = useQueryClient();
@@ -294,7 +295,7 @@ export function SessionsPanel({ course }: { course: CourseFull }) {
         <ul className="flex flex-col gap-2 text-sm">
           {data.map((s) => (
             <li key={s.id} className="flex flex-wrap items-center gap-3 border-b border-border pb-2 last:border-0">
-              <span className="w-28 flex-none font-medium">{new Date(s.scheduledAt).toLocaleDateString()}</span>
+              <span className="w-28 flex-none font-medium">{formatDate(s.scheduledAt)}</span>
               <span className="flex-1 text-muted-foreground">
                 {[s.title, s.location, s.instructorName ? `with ${s.instructorName}` : null].filter(Boolean).join(" · ") || "Session"} — {s.status === "completed" ? `${s.attended} of ${s.enrolled} attended` : `${s.enrolled} enrolled`}
               </span>

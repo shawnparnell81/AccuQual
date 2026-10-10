@@ -10,6 +10,7 @@ import { eightD } from "../../drizzle/schema/eightD.js";
 import { formData } from "../../drizzle/schema/forms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
+import { complaints } from "../../drizzle/schema/complaints.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { qmsForms } from "../../drizzle/schema/qmsForms.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
@@ -46,6 +47,7 @@ type RecordKind =
   | "qms"
   | "equipment"
   | "ncr"
+  | "complaint"
   | "capa"
   | "eight_d"
   | "dcr"
@@ -60,6 +62,7 @@ const PATH_RULES: { re: RegExp; kind: RecordKind }[] = [
   { re: /^\/qms-forms\/[^/]+\/(\d+)$/, kind: "qms" },
   { re: /^\/calibration\/(\d+)$/, kind: "equipment" },
   { re: /^\/ncr\/(\d+)$/, kind: "ncr" },
+  { re: /^\/complaints\/(\d+)$/, kind: "complaint" },
   { re: /^\/capa\/(\d+)$/, kind: "capa" },
   { re: /^\/8d\/(\d+)$/, kind: "eight_d" },
   { re: /^\/document-change-requests\/(\d+)$/, kind: "dcr" },
@@ -72,7 +75,7 @@ const PATH_RULES: { re: RegExp; kind: RecordKind }[] = [
 const MODULE_KIND: Record<string, RecordKind> = {
   ncr: "ncr",
   "supplier-ncr": "ncr",
-  complaint: "ncr",
+  complaint: "complaint",
   capa: "capa",
   "8d": "eight_d",
   dcr: "dcr",
@@ -142,6 +145,8 @@ async function idsOf(db: Db, kind: RecordKind, ids: number[]): Promise<Set<numbe
         return db.select({ id: equipment.id }).from(equipment).where(inArray(equipment.id, unique));
       case "ncr":
         return db.select({ id: ncr.id }).from(ncr).where(and(inArray(ncr.id, unique), eq(ncr.isDeleted, false)));
+      case "complaint":
+        return db.select({ id: complaints.id }).from(complaints).where(inArray(complaints.id, unique));
       case "capa":
         return db.select({ id: capa.id }).from(capa).where(inArray(capa.id, unique));
       case "eight_d":
@@ -335,6 +340,12 @@ async function collectSavedCopies(db: Db): Promise<SavedCopy[]> {
   const eightSaved = await formSavedIds(db, ["eight_d"]);
   const eightRows = await db.select({ id: eightD.id, recordNumber: eightD.recordNumber, createdAt: eightD.createdAt, updatedAt: eightD.updatedAt }).from(eightD);
   for (const row of eightRows) pushCopy(copies, "8d", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber) || eightSaved.has(row.id), { updatedAt: row.updatedAt });
+  const complaintRows = await db
+    .select({ id: complaints.id, recordNumber: complaints.recordNumber, createdAt: complaints.createdAt, updatedAt: complaints.updatedAt })
+    .from(complaints);
+  for (const row of complaintRows) {
+    pushCopy(copies, "complaint", row.id, row.createdAt, row.recordNumber, moduleRecordKept(row.updatedAt, row.recordNumber), { updatedAt: row.updatedAt });
+  }
   const dcrRows = await db
     .select({
       id: documentChangeRequests.id,
@@ -691,7 +702,7 @@ export async function repairSavedFormListings(db: Db, performedBy?: number): Pro
 /** Record-delete kinds that have a saved-form listing. Unlisted kinds are left alone. */
 const DELETION_LISTING: Record<string, RecordKind> = {
   ncr: "ncr",
-  complaint: "ncr",
+  complaint: "complaint",
   capa: "capa",
   eight_d: "eight_d",
   validation_report: "validation",
@@ -735,6 +746,7 @@ export async function forgetRecordListings(db: Db, kind: string, row: Record<str
       paths.add(`/qms-forms/${formType}/${id}`);
     }
   } else if (kind === "ncr") paths.add(`/ncr/${id}`);
+  else if (kind === "complaint") paths.add(`/complaints/${id}`);
   else if (kind === "capa") paths.add(`/capa/${id}`);
   else if (kind === "eight_d") paths.add(`/8d/${id}`);
   else if (kind === "dcr") paths.add(`/document-change-requests/${id}`);

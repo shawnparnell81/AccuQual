@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { QualityInspectionReport } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { formatDate } from "../../lib/dates";
 
 /** "supplier-facing visibility: inspection notes." A real, direct supplierId FK join (added this phase), unlike NCR/CAPA's derived-link pattern. */
 export function SupplierInspectionList({ supplierId }: { supplierId?: number }) {
@@ -23,7 +24,7 @@ export function SupplierInspectionList({ supplierId }: { supplierId?: number }) 
       <h3 className="mb-3 text-sm font-medium">Inspections</h3>
       <ul className="flex flex-col gap-2">
         {rows.map((r) => {
-          const label = `${r.recordNumber?.trim() || r.partMaterialNo || "Inspection"} — ${new Date(r.inspectionDate ?? r.createdAt ?? Date.now()).toLocaleDateString()}`;
+          const label = `${r.recordNumber?.trim() || r.partMaterialNo || "Inspection"} — ${formatDate(r.inspectionDate ?? r.createdAt)}`;
           const status = r.finalStatus ?? "pending";
           return canOpen ? (
             <li key={r.id}>

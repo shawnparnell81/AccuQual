@@ -14,6 +14,7 @@ import { RmaLogFormRenderer } from "./RmaLogFormRenderer";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import type { RmaLogRecord, RmaLogStatus, WarrantyClaim } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { formatDate } from "../../lib/dates";
 
 const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -108,7 +109,7 @@ export function RmaLogDetailPage() {
       <div className="hidden print:block">
         <h1 className="text-2xl font-semibold">{record.rmaNumber?.trim() ? `RMA Log — ${record.rmaNumber.trim()}` : "RMA Log"}</h1>
         <p className="text-sm text-muted-foreground">
-          Status: {record.status.replace(/_/g, " ")} — {record.customerName ?? "No customer on file"} — Issued {new Date(record.dateIssued).toLocaleDateString()}
+          Status: {record.status.replace(/_/g, " ")} — {record.customerName ?? "No customer on file"} — Issued {formatDate(record.dateIssued)}
         </p>
       </div>
 

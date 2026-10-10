@@ -9,6 +9,7 @@ const QUALITY_LABELS = [
   "Product Alerts",
   "Recalls",
   "Warranty",
+  "Customer Complaints",
   "Labor Claims",
   "Repairs",
   "Audits",

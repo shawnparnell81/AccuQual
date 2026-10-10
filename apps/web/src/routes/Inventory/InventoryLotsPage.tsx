@@ -5,6 +5,7 @@ import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField, TextField } from "../../components/forms/Field";
 import type { InventoryLotSearchResult } from "../../api/types";
+import { formatDate } from "../../lib/dates";
 
 const lotHooks = createResourceHooks<InventoryLotSearchResult>("inventory/lots");
 const STATUSES = ["active", "consumed", "scrapped", "returned", "expired"] as const;
@@ -60,7 +61,7 @@ export function InventoryLotsPage() {
           { header: "Received", accessor: (l) => l.receivedQty, className: "tabular-nums" },
           { header: "Remaining", accessor: (l) => l.remainingQty, className: "tabular-nums" },
           { header: "On hold", accessor: (l) => (Number(l.heldQty) > 0 ? <span className="font-semibold text-destructive">{l.heldQty}</span> : "—"), className: "tabular-nums" },
-          { header: "Expires", accessor: (l) => (l.expirationDate ? new Date(l.expirationDate).toLocaleDateString() : "—") },
+          { header: "Expires", accessor: (l) => formatDate(l.expirationDate) },
           { header: "Status", accessor: (l) => <StatusBadge value={l.status} /> },
         ]}
         rows={rows}

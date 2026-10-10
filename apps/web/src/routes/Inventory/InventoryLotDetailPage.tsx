@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { InventoryLotTraceability, InventoryMovement } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { formatDate } from "../../lib/dates";
 
 function useLotTrace(lotId: number | undefined) {
   return useQuery<InventoryLotTraceability>({
@@ -77,7 +78,7 @@ export function InventoryLotDetailPage() {
           <Field label="Remaining Qty" value={lot.remainingQty} />
           {Number(lot.heldQty) > 0 && <Field label="On quarantine hold" value={`${lot.heldQty} (usable: ${Math.max(Number(lot.remainingQty) - Number(lot.heldQty), 0)})`} />}
           <Field label="Revision Level" value={lot.revisionLevel} />
-          <Field label="Expiration Date" value={lot.expirationDate ? new Date(lot.expirationDate).toLocaleDateString() : null} />
+          <Field label="Expiration Date" value={lot.expirationDate ? formatDate(lot.expirationDate) : null} />
           <Field label="Received On" value={new Date(lot.createdAt).toLocaleDateString()} />
         </dl>
       </div>
@@ -103,7 +104,7 @@ export function InventoryLotDetailPage() {
             <Field label="PO #" value={`PO #${purchaseOrder.id}`} />
             <Field label="PO Status" value={<StatusBadge value={purchaseOrder.status} />} />
             <Field label="Ordered On" value={new Date(purchaseOrder.createdAt).toLocaleDateString()} />
-            <Field label="Expected Delivery" value={purchaseOrder.expectedDeliveryDate ? new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString() : null} />
+            <Field label="Expected Delivery" value={purchaseOrder.expectedDeliveryDate ? formatDate(purchaseOrder.expectedDeliveryDate) : null} />
             {poLineItem && <Field label="PO Line Qty" value={poLineItem.quantity} />}
           </dl>
         )}
@@ -132,7 +133,7 @@ export function InventoryLotDetailPage() {
             />
             <Field label="Inspection Type" value={inspectionReport.inspectionType} />
             <Field label="Final Status" value={<StatusBadge value={inspectionReport.finalStatus} />} />
-            <Field label="Inspected On" value={inspectionReport.inspectionDate ? new Date(inspectionReport.inspectionDate).toLocaleDateString() : null} />
+            <Field label="Inspected On" value={inspectionReport.inspectionDate ? formatDate(inspectionReport.inspectionDate) : null} />
           </dl>
         )}
       </Section>

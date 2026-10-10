@@ -33,10 +33,9 @@ export function dueStatusOf(nextDueAt: Date | null, latestFailed: boolean, now: 
   return "current";
 }
 
+/** Advance a calendar day in UTC so a US plant's local clock cannot cross a DST boundary and land on the wrong date. */
 export function addDays(from: Date, days: number): Date {
-  const d = new Date(from);
-  d.setDate(d.getDate() + days);
-  return d;
+  return new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate() + days, from.getUTCHours(), from.getUTCMinutes(), from.getUTCSeconds(), from.getUTCMilliseconds()));
 }
 
 export interface EquipmentSummary {

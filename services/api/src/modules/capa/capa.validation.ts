@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { recordNumberSchema } from "../records/userRecordNumber.js";
 import { rejectAiStubText, AI_STUB_REJECT_MESSAGE } from "../ai/ai.guardrails.js";
+import { reasonableDate } from "../../utils/validation.js";
 
 /**
  * Data-integrity guardrail (Phase 0, generalized in Phase 4): a real CAPA
@@ -25,7 +26,7 @@ export const createCapaSchema = z.object({
   actionPlan: freeTextField(),
   preventiveAction: freeTextField(),
   ownerId: z.number().int().optional(),
-  dueDate: z.coerce.date().nullable().optional(),
+  dueDate: reasonableDate.nullable().optional(),
   recordNumber: recordNumberSchema,
 });
 

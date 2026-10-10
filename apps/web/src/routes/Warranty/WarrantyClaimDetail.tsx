@@ -16,6 +16,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { RecordSiteField } from "../../components/records/RecordSiteField";
+import { formatDate } from "../../lib/dates";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -138,6 +139,8 @@ export function WarrantyClaimDetail() {
               <p className="text-sm font-medium">{claim.product.sku}</p>
               <p className="text-sm text-muted-foreground">{claim.product.description ?? "No description"}</p>
             </>
+          ) : claim.productNumber ? (
+            <p className="text-sm font-medium">{claim.productNumber}</p>
           ) : (
             <p className="text-sm text-muted-foreground">No product on file.</p>
           )}
@@ -182,7 +185,7 @@ export function WarrantyClaimDetail() {
             />
           </div>
           <p className="text-sm text-muted-foreground">{claim.failureDescription || "No description provided."}</p>
-          {claim.failureDate && <p className="mt-1 text-xs text-muted-foreground">Reported {new Date(claim.failureDate).toLocaleDateString()}</p>}
+          {claim.failureDate && <p className="mt-1 text-xs text-muted-foreground">Reported {formatDate(claim.failureDate)}</p>}
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">Linked Records</h3>

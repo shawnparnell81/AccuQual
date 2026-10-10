@@ -9,6 +9,7 @@ import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
+import { complaints } from "../../drizzle/schema/complaints.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { qmsForms } from "../../drizzle/schema/qmsForms.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
@@ -311,7 +312,7 @@ interface SharedGroup {
 }
 
 const SHARED_GROUPS: SharedGroup[] = [
-  { source: "ncr", keys: ["supplier-ncr", "complaint", "ncr"], field: "title", fallback: "ncr" },
+  { source: "ncr", keys: ["supplier-ncr", "ncr"], field: "title", fallback: "ncr" },
   { source: "audit-plan", keys: ["audit-plan", "audit-report"], field: "name", fallback: null },
   { source: "cal-register", keys: ["cal-register", "cal-record"], field: "name", fallback: null },
   { source: "ecr", keys: ["ecr", "eco"], field: "title", fallback: null },
@@ -448,7 +449,7 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
   const kept = (updatedAt: Date | null, number: string | null, keys: readonly string[], id: number) =>
     moduleRecordKept(updatedAt, number) || filedUnder(keys, id);
   const rowsFor = new Map<string, Stamp[]>([
-    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["supplier-ncr", "complaint", "ncr"], row.id) }))],
+    ["ncr", ncrRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["supplier-ncr", "ncr"], row.id) }))],
     ["capa", capaRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["capa"], row.id) }))],
     ["8d", eightRows.map((row) => ({ id: row.id, label: null, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["8d"], row.id) }))],
     [
@@ -491,6 +492,21 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
     ["training-record", trainingRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: "", createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, null, ["training-record"], row.id) }))],
     ["ecr", changeRows.map((row) => ({ id: row.id, label: row.title, formNumber: null, number: row.recordNumber, createdAt: row.createdAt, updatedAt: row.updatedAt, saved: kept(row.updatedAt, row.recordNumber, ["ecr", "eco"], row.id) }))],
   ]);
+  const complaintRows = await db
+    .select({ id: complaints.id, recordNumber: complaints.recordNumber, createdAt: complaints.createdAt, updatedAt: complaints.updatedAt })
+    .from(complaints);
+  rowsFor.set(
+    "complaint",
+    complaintRows.map((row) => ({
+      id: row.id,
+      label: null,
+      formNumber: null,
+      number: row.recordNumber,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      saved: moduleRecordKept(row.updatedAt, row.recordNumber) || filedUnder(["complaint"], row.id),
+    })),
+  );
 
   for (const group of SHARED_GROUPS) {
     const rows = rowsFor.get(group.source) ?? [];
@@ -512,7 +528,7 @@ async function catalog(db: Db, performedBy?: number): Promise<{ folders: FormFol
     }
   }
 
-  for (const formKey of ["capa", "8d", "dcr"] as const) {
+  for (const formKey of ["capa", "8d", "dcr", "complaint"] as const) {
     for (const row of rowsFor.get(formKey) ?? []) pushModuleFill(fills, templateByKey, seeds, formKey, row);
   }
 
