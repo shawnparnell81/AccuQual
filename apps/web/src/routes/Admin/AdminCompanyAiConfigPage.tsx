@@ -8,6 +8,7 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { CompanyAiConfig } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { aiProviderStatus } from "../../lib/aiFeatures";
 
 // The two real, already-integrated providers (see llm-gateway.ts) — not an
 // open list, so this can never store a provider the app has no code path for.
@@ -15,6 +16,16 @@ const PROVIDERS = ["anthropic", "openai"] as const;
 
 function useAiConfig() {
   return useQuery<CompanyAiConfig>({ queryKey: ["company/ai-config"], queryFn: async () => (await apiClient.get("/company/ai-config")).data });
+}
+
+function AiProviderStatus({ source, featuresEnabled }: { source: CompanyAiConfig["keySource"]; featuresEnabled: boolean }) {
+  const status = aiProviderStatus(source ?? "none", featuresEnabled);
+  return (
+    <div data-testid="ai-provider-key-status" className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground">
+      <p>{status.live}</p>
+      <p>{status.key}</p>
+    </div>
+  );
 }
 
 function AiConfigForm() {
@@ -30,6 +41,7 @@ function AiConfigForm() {
   const [safetyMode, setSafetyMode] = useState<"standard" | "strict">("standard");
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [limitEnforced, setLimitEnforced] = useState(false);
+  const [featuresEnabled, setFeaturesEnabled] = useState(true);
 
   useEffect(() => {
     if (config) {
@@ -41,6 +53,7 @@ function AiConfigForm() {
       setSafetyMode(config.safetyMode ?? "standard");
       setMonthlyLimit(config.monthlyLimit?.toString() ?? "");
       setLimitEnforced(config.limitEnforced);
+      setFeaturesEnabled(config.featuresEnabled !== false);
     }
   }, [config]);
 
@@ -57,6 +70,7 @@ function AiConfigForm() {
           safetyMode,
           monthlyLimit: monthlyLimit ? Number(monthlyLimit) : null,
           limitEnforced,
+          featuresEnabled,
         })
       ).data,
     onSuccess: () => {
@@ -78,25 +92,28 @@ function AiConfigForm() {
         save.mutate();
       }}
     >
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-foreground" data-testid="ai-features-toggle">
+        <span className="text-sm font-medium">AI-assisted features</span>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="radio" name="ai-features" checked={featuresEnabled} onChange={() => setFeaturesEnabled(true)} />
+            On
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="ai-features" checked={!featuresEnabled} onChange={() => setFeaturesEnabled(false)} />
+            Off
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">On is the default. Off hides AI buttons and menus for everyone in this company and refuses AI requests. Saving this page writes the change to the audit log.</p>
+      </div>
+
+      {config && <AiProviderStatus source={config.keySource} featuresEnabled={featuresEnabled} />}
+
       <p className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
         This provider and key are used by the AI Assistant (the chat panel available to every user) and by AccuQual's other AI
         features, whenever a key is set here — falling back to the platform's own configured provider otherwise. Your organization's
         own provider account is billed for this usage, not AccuQual's.
       </p>
-
-      {config && (
-        <p className="text-xs">
-          Key status:{" "}
-          {config.keyStatus === "ready" ? (
-            <span className="font-medium text-success">Ready — AI features will use a real provider.</span>
-          ) : (
-            <span className="font-medium text-warning">
-              Missing — no key configured here. AI features return a clearly-labeled placeholder response
-              until one is set.
-            </span>
-          )}
-        </p>
-      )}
 
       <TextField
         label="Assistant Name"
@@ -116,7 +133,7 @@ function AiConfigForm() {
 
       <div>
         <TextField
-          label={config?.hasApiKey ? `API Key (currently ${config.maskedApiKey}) — leave blank to keep it` : "API Key"}
+          label={config?.hasApiKey ? "API Key — one is already saved. Leave blank to keep it" : "API Key"}
           type="password"
           placeholder={config?.hasApiKey ? "Leave blank to keep the current key" : "sk-…"}
           value={apiKey}

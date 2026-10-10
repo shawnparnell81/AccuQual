@@ -6,6 +6,7 @@ import { useCurrentUser } from "./useAuth";
 import { EMPTY_SIDEBAR_SHORTCUTS, type SidebarShortcutPrefs } from "../lib/sidebarShortcuts";
 import type { SidebarAccess } from "../lib/sidebarAccess";
 import { readSidebarCache, writeSidebarCache } from "../lib/sidebarUserLayout";
+import { useAiFeaturesEnabled } from "./useAssistantName";
 
 export function sidebarPrefsQueryKey(userId: number | undefined) {
   return ["sidebar-shortcuts", userId] as const;
@@ -37,7 +38,8 @@ export function useSidebarPrefs() {
 
   const prefs = query.data ?? cached?.prefs ?? EMPTY_SIDEBAR_SHORTCUTS;
   const levels = !isLoading && effective ? effective : (cached?.levels ?? null);
-  const access = useMemo<SidebarAccess>(() => ({ levels }), [levels]);
+  const aiFeatures = useAiFeaturesEnabled();
+  const access = useMemo<SidebarAccess>(() => ({ levels, aiFeatures }), [levels, aiFeatures]);
 
   const save = useMutation({
     mutationFn: async (next: SidebarShortcutPrefs) => (await apiClient.put<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts", next)).data,

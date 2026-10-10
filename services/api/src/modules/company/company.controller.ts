@@ -9,6 +9,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, decryptSecret, maskSecret } from "./crypto.js";
 import { validateApiKey } from "../ai/llm-gateway.js";
+import { aiFeaturesEnabled, aiKeySource } from "../ai/aiFeatures.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
@@ -111,11 +112,9 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   });
 });
 
-export const getAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
-  const co = await loadCompany(req);
-  const config = co.aiConfig ?? {};
-  const keyStatus: "ready" | "missing" = config.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "ready" : "missing";
-  res.json({
+function aiConfigView(config: NonNullable<typeof company.$inferSelect.aiConfig>, co: { aiMonthlyLimit: number | null; aiLimitEnforced: boolean }) {
+  const keySource = aiKeySource(config, { anthropic: env.ANTHROPIC_API_KEY, openai: env.OPENAI_API_KEY });
+  return {
     provider: config.provider ?? null,
     modelName: config.modelName ?? null,
     temperature: config.temperature ?? null,
@@ -124,15 +123,22 @@ export const getAiConfigHandler = asyncHandler(async (req: Request, res: Respons
     safetyMode: config.safetyMode ?? "standard",
     hasApiKey: !!config.apiKeyEncrypted,
     maskedApiKey: config.apiKeyEncrypted ? maskSecret(decryptSecret(config.apiKeyEncrypted)) : null,
-    keyStatus,
+    keyStatus: keySource === "none" ? ("missing" as const) : ("ready" as const),
+    keySource,
+    featuresEnabled: aiFeaturesEnabled(config),
     monthlyLimit: co.aiMonthlyLimit,
     limitEnforced: co.aiLimitEnforced,
-  });
+  };
+}
+
+export const getAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  res.json(aiConfigView(co.aiConfig ?? {}, co));
 });
 
 export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  const { provider, apiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced } = req.body as {
+  const { provider, apiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced, featuresEnabled } = req.body as {
     provider?: string;
     apiKey?: string;
     modelName?: string;
@@ -142,8 +148,10 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
     safetyMode?: "standard" | "strict";
     monthlyLimit?: number | null;
     limitEnforced?: boolean;
+    featuresEnabled?: boolean;
   };
 
+  const featuresBefore = aiFeaturesEnabled(co.aiConfig);
   const merged = { ...co.aiConfig };
   if (provider !== undefined) merged.provider = provider as "anthropic" | "openai";
   if (modelName !== undefined) merged.modelName = modelName;
@@ -151,6 +159,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   if (maxTokens !== undefined) merged.maxTokens = maxTokens;
   if (assistantName !== undefined) merged.assistantName = assistantName || undefined;
   if (safetyMode !== undefined) merged.safetyMode = safetyMode;
+  if (featuresEnabled !== undefined) merged.featuresEnabled = featuresEnabled;
 
   if (apiKey !== undefined) {
     // A real, minimal call to the provider — see validateApiKey's own
@@ -184,22 +193,12 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
       apiKeyChanged: apiKey !== undefined,
       monthlyLimit: updated!.aiMonthlyLimit,
       limitEnforced: updated!.aiLimitEnforced,
+      featuresEnabled: { from: featuresBefore, to: aiFeaturesEnabled(merged) },
     },
     performedBy: req.user?.id,
   });
 
-  res.json({
-    provider: merged.provider ?? null,
-    modelName: merged.modelName ?? null,
-    temperature: merged.temperature ?? null,
-    maxTokens: merged.maxTokens ?? null,
-    assistantName: merged.assistantName ?? null,
-    safetyMode: merged.safetyMode ?? "standard",
-    hasApiKey: !!merged.apiKeyEncrypted,
-    keyStatus: merged.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "ready" : "missing",
-    monthlyLimit: updated!.aiMonthlyLimit,
-    limitEnforced: updated!.aiLimitEnforced,
-  });
+  res.json(aiConfigView(merged, updated!));
 });
 
 /**
@@ -287,7 +286,7 @@ export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response
  */
 export const getAssistantNameHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  res.json({ assistantName: co.aiConfig?.assistantName ?? null });
+  res.json({ assistantName: co.aiConfig?.assistantName ?? null, featuresEnabled: aiFeaturesEnabled(co.aiConfig) });
 });
 
 /** Who must use multi-factor authentication, and how long a sign-in lasts. Readable by any signed-in user; only an admin changes it. The length is the whole company, not a role. */

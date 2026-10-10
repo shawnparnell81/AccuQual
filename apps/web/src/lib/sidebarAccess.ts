@@ -11,6 +11,8 @@ export type SidebarResource = string;
 export interface SidebarAccess {
   /** Null while permissions have not loaded and there is no cached copy. */
   levels: Record<string, string> | null;
+  /** False hides AI Insights. Omitted means the company still has AI on. */
+  aiFeatures?: boolean;
 }
 
 const KEY_RESOURCE: Record<string, SidebarResource> = {
@@ -277,6 +279,7 @@ export function acceptSidebarPath(path: string): string | null {
 export function filterSidebarByAccess(nodes: SidebarNode[], access: SidebarAccess): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
+    if (node.key === "ai" && access.aiFeatures === false) continue;
     if (isFolder(node)) {
       const children = filterSidebarByAccess(node.children, access);
       const allowed = sidebarAllows(resourceForSidebarNode(node), access);

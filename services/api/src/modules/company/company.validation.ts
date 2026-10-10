@@ -44,6 +44,8 @@ export const updateAiConfigSchema = z.object({
   // ""-clears-a-string convention above, this is a real integer field).
   monthlyLimit: z.coerce.number().int().positive().nullable().optional(),
   limitEnforced: z.boolean().optional(),
+  /** Company-wide On/Off. Omitted leaves the stored value alone. Unset in the database means On. */
+  featuresEnabled: z.boolean().optional(),
 });
 
 /**

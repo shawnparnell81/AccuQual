@@ -12,6 +12,7 @@ import { Modal } from "../../components/modals/Modal";
 import { RecordNumberField, duplicateNumberError } from "../../components/forms/RecordNumberField";
 import { SelectField, TextField, TextAreaField } from "../../components/forms/Field";
 import { recordHeading } from "../../lib/userRecordNumber";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 import type { WorkOrder, InventoryItem, AiSuggestion } from "../../api/types";
 
 const woHooks = createResourceHooks<WorkOrder>("work-orders");
@@ -94,6 +95,7 @@ interface PlanSuggestion {
 }
 
 function AiPlanPanel({ items }: { items: InventoryItem[] }) {
+  const aiOn = useAiFeaturesEnabled();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [suggestion, setSuggestion] = useState<AiSuggestion | null>(null);
@@ -108,6 +110,8 @@ function AiPlanPanel({ items }: { items: InventoryItem[] }) {
   const rawOutput = suggestion?.output as { suggestions?: PlanSuggestion[]; note?: string; raw?: string } | undefined;
   const suggestions = Array.isArray(rawOutput?.suggestions) ? rawOutput!.suggestions! : [];
   const itemById = new Map(items.map((i) => [i.id, i]));
+
+  if (!aiOn) return null;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">

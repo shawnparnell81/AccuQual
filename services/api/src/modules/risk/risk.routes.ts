@@ -19,6 +19,7 @@ import {
   updateMitigationHandler,
 } from "./risk.controller.js";
 import { riskAiAnalysisHandler } from "./risk.ai.js";
+import { requireAiFeatures } from "../ai/aiFeatures.js";
 import { beginRiskEdit } from "../forms/moduleBeginEdit.js";
 
 export const riskRouter = Router();
@@ -47,4 +48,4 @@ riskRouter.post("/:id/fmea", validate(addFmeaItemSchema), addFmeaItemHandler);
 riskRouter.post("/:id/mitigation", validate(createMitigationSchema), createMitigationHandler);
 riskRouter.put("/:id/mitigation/:mid", validate(updateMitigationSchema), updateMitigationHandler);
 
-riskRouter.post("/:id/ai-analysis", riskAiAnalysisHandler);
+riskRouter.post("/:id/ai-analysis", requireAiFeatures, riskAiAnalysisHandler);

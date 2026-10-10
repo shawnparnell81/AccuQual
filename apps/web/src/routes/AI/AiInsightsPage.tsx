@@ -7,6 +7,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import { useAiFeaturesEnabled } from "../../hooks/useAssistantName";
 import { SelectField, TextAreaField, TextField } from "../../components/forms/Field";
 import type { Supplier, SupplierQualityFactors } from "../../api/types";
 
@@ -83,6 +84,7 @@ function Card({ icon, title, description, children }: { icon: ReactNode; title: 
  * record content").
  */
 export function AiInsightsPage() {
+  const aiOn = useAiFeaturesEnabled();
   const toast = useToast();
   const currentUser = useCurrentUser();
   const isAdmin = isFullAccessRole(currentUser?.roleName);
@@ -104,6 +106,15 @@ export function AiInsightsPage() {
     onSuccess: () => toast.success(`Weekly ${REPORT_TYPE_OPTIONS.find((o) => o.value === digestReportType)?.label} digest scheduled for ${digestEmail}.`),
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't schedule this digest.")),
   });
+
+  if (!aiOn) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold text-foreground">AI Insights</h1>
+        <p className="text-sm text-muted-foreground">AI-assisted features are turned off for this company. An admin can turn them on from Admin → AI Settings.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

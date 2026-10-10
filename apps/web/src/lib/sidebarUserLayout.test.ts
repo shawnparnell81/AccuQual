@@ -236,4 +236,11 @@ describe("per-user sidebar layout", () => {
     assert.equal(links.some((link) => link.key === "admin" || link.path === "/admin"), false);
     assert.equal(links.some((link) => link.key === "home"), true);
   });
+
+  it("hides AI Insights when the company turns AI-assisted features off", () => {
+    const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, { ...allowAll, aiFeatures: false }));
+    assert.equal(links.some((link) => link.key === "ai" || link.path === "/ai"), false);
+    const on = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll));
+    assert.equal(on.some((link) => link.key === "ai"), true);
+  });
 });

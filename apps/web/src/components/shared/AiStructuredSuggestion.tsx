@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Sparkles, TriangleAlert, Check, X as XIcon } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { Modal } from "../modals/Modal";
-import { useAssistantName } from "../../hooks/useAssistantName";
+import { useAiFeaturesEnabled, useAssistantName } from "../../hooks/useAssistantName";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
@@ -60,6 +60,7 @@ export function AiStructuredSuggestion<T>({
   title,
 }: AiStructuredSuggestionProps<T>) {
   const toast = useToast();
+  const aiOn = useAiFeaturesEnabled();
   const { data: assistantNameRaw } = useAssistantName();
   const assistantName = assistantNameRaw || "AI";
   const [isOpen, setIsOpen] = useState(false);
@@ -112,6 +113,8 @@ export function AiStructuredSuggestion<T>({
   const reply = generate.data;
   const rawConfidence = reply?.status === "ok" ? (reply.output as Record<string, unknown>).confidence : undefined;
   const confidence = typeof rawConfidence === "number" ? rawConfidence : null;
+
+  if (!aiOn) return null;
 
   return (
     <>
