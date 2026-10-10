@@ -636,11 +636,19 @@ export interface CompanyAiConfig {
   maxTokens: number | null;
   hasApiKey: boolean;
   maskedApiKey?: string | null;
+  /** Last 4 characters when the stored key decrypts. Null when there is no key or it cannot be read. */
+  keyLast4?: string | null;
+  keySetByName?: string | null;
+  keySetAt?: string | null;
+  /** Exact sentence for a key that is stored and readable. */
+  keyOnFileLabel?: string | null;
+  /** Set when ciphertext is stored but this server cannot decrypt it. */
+  keyError?: string | null;
   assistantName: string | null;
   /** "standard" runs every AI pipeline as normal; "strict" refuses to save any output that fails its own schema check (see ai.guardrails.ts) instead of showing a degraded/malformed result. */
   safetyMode: "standard" | "strict";
-  /** "ready" when this company's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
-  keyStatus: "ready" | "missing";
+  /** "ready" when a usable key exists; "missing" when none does; "unreadable" when a company key is stored but the server encryption key cannot open it. */
+  keyStatus: "ready" | "missing" | "unreadable";
   /** Where a provider key exists. "none" means neither a company key nor a server environment key. The key itself is never included. */
   keySource: "company" | "server" | "both" | "none";
   /** Company-wide On/Off. Unset on the server is returned as true. */

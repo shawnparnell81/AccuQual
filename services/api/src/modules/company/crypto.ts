@@ -21,6 +21,15 @@ export function decryptSecret(stored: string): string {
   return Buffer.concat([decipher.update(Buffer.from(ciphertextHex, "hex")), decipher.final()]).toString("utf8");
 }
 
+/** Same decrypt, but a wrong server key or a damaged value is a result, not a thrown error. */
+export function tryDecryptSecret(stored: string): { ok: true; plaintext: string } | { ok: false } {
+  try {
+    return { ok: true, plaintext: decryptSecret(stored) };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** For display only — never return the real key or its plaintext to the client. */
 export function maskSecret(plaintext: string): string {
   if (plaintext.length <= 4) return "••••";

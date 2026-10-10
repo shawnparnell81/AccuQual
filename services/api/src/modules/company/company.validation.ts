@@ -33,11 +33,16 @@ export const updateBrandingSchema = z.object({
  */
 export const updateAiConfigSchema = z.object({
   provider: z.enum(["anthropic", "openai"]).optional(),
-  apiKey: z.string().min(1).optional(), // plaintext in the request only — encrypted before it ever touches the database
+  // Plaintext in the request only. Blank, whitespace, and a masked/redacted
+  // echo are ignored by the handler — they must not replace a stored key.
+  // Only removeApiKey: true clears it.
+  apiKey: z.string().max(2000).optional(),
+  removeApiKey: z.boolean().optional(),
   modelName: z.string().optional(),
   temperature: z.coerce.number().min(0).max(2).optional(),
   maxTokens: z.coerce.number().int().positive().optional(),
   assistantName: z.string().max(80).optional().or(z.literal("")), // "" clears it back to the default label
+  safetyMode: z.enum(["standard", "strict"]).optional(),
   // BYOK usage limit — see companies.aiMonthlyLimit's own schema comment for
   // why this is enforced against real audit trail history, not a stored
   // counter. null clears the limit back to "no limit set" (unlike the
