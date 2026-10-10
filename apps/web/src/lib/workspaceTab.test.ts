@@ -126,6 +126,8 @@ describe("workspace section tabs", () => {
     assert.equal(deriveTabMeta("/suppliers/9").title, "Suppliers");
     assert.equal(deriveTabMeta("/").title, "Dashboard");
     assert.equal(deriveTabMeta("/executive").title, "Home · Executive dashboard");
+    assert.equal(deriveTabMeta("/executive/list").title, "Records");
+    assert.equal(workspaceTabKey("/executive/list"), workspaceTabKey("/executive"));
     assert.equal(isLiveTabPath("/executive"), true);
     assert.equal(isLiveTabPath("/audit-log"), true);
     assert.equal(isLiveTabPath("/documents/engineering-request-log"), true);
@@ -152,6 +154,12 @@ describe("workspace section tabs", () => {
     assert.equal(capa.activeId, "quality");
     assert.equal(capa.tabs.find((row) => row.id === "quality")?.path, "/capa");
     assert.equal(capa.tabs.find((row) => row.id === "admin")?.pinned, true);
+
+    const filtered = followWorkspacePath(quality.tabs, quality.activeId, { path: "/ncr?status=open", title: "Quality · NCR", icon: "quality" }, () => "filter");
+    assert.equal(filtered.tabs.find((row) => row.id === "quality")?.path, "/ncr?status=open");
+    const stillFiltered = followWorkspacePath(filtered.tabs, filtered.activeId, { path: "/ncr", title: "Quality · NCR", icon: "quality" }, () => "stripped");
+    assert.equal(stillFiltered.tabs.find((row) => row.id === "quality")?.path, "/ncr?status=open");
+    assert.equal(stillFiltered.tabs.length, filtered.tabs.length);
 
     const back = followWorkspacePath(capa.tabs, "home", { path: "/admin/login-history", title: "Admin · Login History", icon: "admin" }, () => "again");
     assert.equal(back.tabs.filter((row) => row.path.startsWith("/admin")).length, 1);

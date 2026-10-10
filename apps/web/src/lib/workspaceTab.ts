@@ -222,6 +222,7 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
   }
 
   if (active && workspaceTabKey(active.path) === key) {
+    if (keepsFilteredPath(active.path, next.path)) return { tabs, activeId: active.id };
     if (active.path === next.path && active.title === next.title && active.icon === next.icon) {
       return { tabs, activeId: active.id };
     }
@@ -230,6 +231,7 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
 
   const existing = tabs.find((tab) => workspaceTabKey(tab.path) === key);
   if (existing) {
+    if (keepsFilteredPath(existing.path, next.path)) return { tabs, activeId: existing.id };
     const same = existing.path === next.path && existing.title === next.title && existing.icon === next.icon;
     return {
       tabs: same ? tabs : tabs.map((tab) => (tab.id === existing.id ? rewritten(tab) : tab)),
@@ -239,6 +241,13 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
 
   const created = { id: createId(), path: next.path, title: next.title, icon: next.icon } as T;
   return { tabs: [...tabs, created], activeId: created.id };
+}
+
+/** The router reports a pathname when a list tab is filtered. Keep that query. */
+function keepsFilteredPath(current: string, incoming: string): boolean {
+  if (incoming.includes("?") || incoming.includes("#")) return false;
+  const bare = current.split("?")[0]?.split("#")[0] ?? "";
+  return bare === incoming && current.startsWith(`${incoming}?`);
 }
 
 const SUPPRESSED_LIMIT = 40;

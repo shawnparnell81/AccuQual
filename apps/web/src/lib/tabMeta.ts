@@ -11,6 +11,7 @@ import { getQmsFormDefinition } from "../routes/QmsForms/qmsFormDefinitions";
  * fetched for the results list) and skip this entirely — see openTab callers.
  */
 
+import { normalizeTabPath } from "./tabPaths";
 import { workspaceSectionIcon, workspaceSectionTitle } from "./workspaceTab";
 
 interface RoutePattern {
@@ -108,6 +109,8 @@ const ROUTE_PATTERNS: RoutePattern[] = [
 ];
 
 export function deriveTabMeta(pathname: string): { title: string; icon: string } {
+  // The records list hangs off the executive dashboard. It stays on that Home tab, with its own title.
+  if (normalizeTabPath(pathname) === "/executive/list") return { title: "Records", icon: "dashboard" };
   const sectionTitle = workspaceSectionTitle(pathname);
   const sectionIcon = workspaceSectionIcon(pathname);
   if (sectionTitle && sectionIcon) return { title: sectionTitle, icon: sectionIcon };
