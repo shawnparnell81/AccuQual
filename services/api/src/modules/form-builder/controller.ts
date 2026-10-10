@@ -70,7 +70,7 @@ export const revisionsHandler = asyncHandler(async (req: Request, res: Response)
 
 export const openFillHandler = asyncHandler(async (req: Request, res: Response) => {
   const recordNumber = (req.body as { recordNumber?: unknown } | undefined)?.recordNumber;
-  res.status(201).json(await openBuiltFill(req.db!, actor(req), idOf(req.params.id), recordNumber));
+  res.status(201).json(await openBuiltFill(req.db!, actor(req), idOf(req.params.id), recordNumber, req.siteId));
 });
 
 export const getFillHandler = asyncHandler(async (req: Request, res: Response) => {

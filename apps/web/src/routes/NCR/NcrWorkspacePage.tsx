@@ -24,6 +24,7 @@ import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { RecordFrame } from "../../components/records/RecordFrame";
@@ -158,16 +159,19 @@ export function NcrWorkspacePage() {
         title={ncr.title}
         standard={recordHeading("NCR", ncr.recordNumber)}
         numberControl={
-          <RecordNumberEditor
-            label="NCR No."
-            value={ncr.recordNumber}
-            canEdit={canEdit}
-            onSave={(next) => {
-              const trimmed = next.trim();
-              previewField("ncrNumber", trimmed);
-              return updateNcr.mutateAsync({ id: ncrId, recordNumber: trimmed || null });
-            }}
-          />
+          <>
+            <RecordNumberEditor
+              label="NCR No."
+              value={ncr.recordNumber}
+              canEdit={canEdit}
+              onSave={(next) => {
+                const trimmed = next.trim();
+                previewField("ncrNumber", trimmed);
+                return updateNcr.mutateAsync({ id: ncrId, recordNumber: trimmed || null });
+              }}
+            />
+            <RecordSiteField entity="ncr" id={ncrId} canEdit={canEdit} />
+          </>
         }
         stateValue={step}
         stateLabel={stepLabel}

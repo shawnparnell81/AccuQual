@@ -12,7 +12,13 @@ describe("folder explorer layout", () => {
   it("fills the workspace and scrolls only the panes", () => {
     assert.match(page, /className="folder-explorer"/);
     assert.match(page, /className="folder-explorer-board"/);
-    assert.match(page, /className="folder-explorer-pane flex flex-col gap-1 rounded-lg border border-border bg-card p-2"/);
+    assert.match(page, /className="folder-explorer-pane flex flex-col gap-2 rounded-lg border border-border bg-card p-3"/);
+    assert.match(page, /data-testid="explorer-toolbar"/);
+    assert.match(page, /data-testid="new-folder"/);
+    assert.match(page, /data-testid="upload-files"/);
+    assert.doesNotMatch(page, /New folder name…/);
+    assert.doesNotMatch(page, /New department…/);
+    assert.doesNotMatch(page, /Drag files from your computer/);
     assert.match(page, /folder-explorer-pool/);
     assert.match(css, /div:has\(> \.page-enter > \.folder-explorer\) \{\s*overflow: hidden;/);
     assert.match(css, /\.page-enter:has\(> \.folder-explorer\)[\s\S]*max-width: none;/);

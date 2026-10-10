@@ -3,6 +3,7 @@ import { TextField } from "../forms/Field";
 import { Modal } from "../modals/Modal";
 import { folderChain, type BrowseFolder } from "../../lib/folderBrowse";
 import { defaultRetireDestinationId, isBlankLibraryFolder, retireDestinationChoices } from "../../lib/folderActions";
+import { folderNameTaken } from "../../lib/folderIdentity";
 
 export function FolderActionButtons({
   canRename,
@@ -10,27 +11,100 @@ export function FolderActionButtons({
   pending,
   onEdit,
   onDelete,
+  size = "compact",
 }: {
   canRename: boolean;
   canDelete: boolean;
   pending?: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  size?: "compact" | "toolbar";
 }) {
   if (!canRename && !canDelete) return null;
+  const editClass =
+    size === "toolbar"
+      ? "rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-60"
+      : "rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-60";
+  const deleteClass =
+    size === "toolbar"
+      ? "rounded-md border border-border bg-card px-3 py-1.5 text-sm text-destructive hover:bg-muted disabled:opacity-60"
+      : "rounded-md border border-border bg-card px-2 py-1 text-xs text-destructive hover:bg-muted disabled:opacity-60";
   return (
     <>
       {canRename && (
-        <button type="button" data-testid="edit-folder" disabled={pending} onClick={onEdit} className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground hover:bg-muted disabled:opacity-60">
+        <button type="button" data-testid="edit-folder" disabled={pending} onClick={onEdit} className={editClass}>
           Edit folder
         </button>
       )}
       {canDelete && (
-        <button type="button" data-testid="delete-folder" disabled={pending} onClick={onDelete} className="rounded-md border border-border bg-card px-2 py-1 text-xs text-destructive hover:bg-muted disabled:opacity-60">
+        <button type="button" data-testid="delete-folder" disabled={pending} onClick={onDelete} className={deleteClass}>
           Delete folder
         </button>
       )}
     </>
+  );
+}
+
+export function NewFolderDialog({
+  open,
+  parentName,
+  siblingNames,
+  pending,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  parentName: string;
+  siblingNames: readonly string[];
+  pending: boolean;
+  onClose: () => void;
+  onCreate: (name: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (open) {
+      setValue("");
+      setError(null);
+    }
+  }, [open, parentName]);
+  return (
+    <Modal title="New folder" isOpen={open} onClose={onClose}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const next = value.trim().replace(/\s+/g, " ");
+          if (!next || pending) return;
+          if (folderNameTaken(next, siblingNames)) {
+            setError("A folder with that name is already here.");
+            return;
+          }
+          setError(null);
+          onCreate(next);
+        }}
+      >
+        <TextField
+          label="Folder name"
+          value={value}
+          autoFocus
+          onChange={(event) => {
+            setValue(event.target.value);
+            setError(null);
+          }}
+        />
+        <p className="text-xs text-muted-foreground">Creates a folder in {parentName}.</p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex items-center gap-2">
+          <button type="submit" disabled={pending || value.trim().length === 0} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {pending ? "Creating…" : "Create"}
+          </button>
+          <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

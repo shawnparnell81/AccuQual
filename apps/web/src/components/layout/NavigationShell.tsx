@@ -1,9 +1,7 @@
 import { TopNav } from "./TopNav";
 
 /**
- * The app's top-level navigation: a fixed top bar (brand, search, plant,
- * theme, notifications, account) and a sidebar of the modules this person
- * can open. TopNav owns both.
+ * The app's top-level navigation. TopNav owns the header and the top menu.
  */
 export function NavigationShell() {
   return <TopNav />;

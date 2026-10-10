@@ -1,27 +1,23 @@
 import { useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Calendar,
   Check,
   ClipboardCheck,
   Clock,
-  Command,
   Factory,
   FileText,
   Gauge,
   GitBranch,
   GraduationCap,
   Layers,
-  Plus,
   Sparkles,
   Wrench,
 } from "lucide-react";
 import { apiClient } from "../../api/client";
 import type { DashboardOverview } from "../../api/dashboard";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { useSites, useSwitchPlant } from "../../hooks/useSites";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { filterToken } from "../../lib/openWorkFilter";
@@ -76,10 +72,6 @@ function headline(data: DashboardOverview): string {
   const sentence = `${bits.join(", ").replace(/, ([^,]*)$/, " and $1")} ${where}.`;
   if (gages.access && data.scope.label !== "All plants") return `${sentence} Gage counts cover the whole company.`;
   return sentence;
-}
-
-function openCommands() {
-  window.dispatchEvent(new Event("accuqual-open-palette"));
 }
 
 function DueChip({ due }: { due: string | null }) {
@@ -210,12 +202,9 @@ function EmptyNote({ children }: { children: string }) {
 /** Signed-in home for quality leads: the prototype dashboard, filled from live records. */
 export function DashboardPage() {
   const user = useCurrentUser();
-  const navigate = useNavigate();
   const { data: plants } = useSites();
   const siteId = useSiteStore((s) => s.currentSiteId);
   const switchPlant = useSwitchPlant();
-  const reportIssue = usePlantWrite("ncr");
-  const scheduleAudit = usePlantWrite("audit");
   const activePlants = (plants?.sites ?? []).filter((site) => site.status === "active");
   const multi = activePlants.length > 1;
   const [allPlants, setAllPlants] = useState(true);
@@ -254,49 +243,35 @@ export function DashboardPage() {
   const { shown } = useWorkspaceSurface("dashboard", dashAllowed);
 
   return (
-    <div className="flex flex-col gap-4 pb-8">
+    <div className="flex flex-col gap-6 pb-8">
       <WorkspaceArrange surface="dashboard" labels={DASHBOARD_LABELS} allowed={dashAllowed} />
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
       <OrderedBlock id="hero" shown={shown}>
-      <section className="hero-surface rounded-[14px] px-5 py-5 md:px-6">
-        <div className="cc-grid" aria-hidden />
+      <section className="hero-surface rounded-2xl px-5 py-5 md:px-6">
         <div className="relative z-[1] flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span className="led" style={{ ["--tone" as string]: "var(--success)" }} />
-              Live · {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
+            <nav aria-label="Breadcrumb" className="aq-crumbs">
+              <span>Home</span>
+            </nav>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
             </p>
-            <h1 className="glow-text mt-2 font-display text-[1.6rem] font-extrabold tracking-tight">
+            <h1 className="aq-page-title mt-1">
               {greeting()}
               {first ? `, ${first}` : ""}.
             </h1>
             <p className="mt-1.5 max-w-xl text-muted-foreground">{data ? headline(data) : query.isError ? "The dashboard couldn't load." : "Loading today's numbers…"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {multi && (
-              <div className="inline-flex overflow-hidden rounded-[10px] border border-border bg-card/70 text-xs font-semibold">
-                <button type="button" aria-pressed={allPlants} onClick={() => setAllPlants(true)} className={`px-3 py-2 ${allPlants ? "bg-primary/15 text-foreground" : "text-muted-foreground"}`}>
-                  All plants
-                </button>
-                <button type="button" aria-pressed={!allPlants} onClick={() => setAllPlants(false)} className={`px-3 py-2 ${!allPlants ? "bg-primary/15 text-foreground" : "text-muted-foreground"}`}>
-                  This plant
-                </button>
-              </div>
-            )}
-            {reportIssue.canEdit && (
-              <button type="button" onClick={() => navigate(FRM_NCR_PATH)} className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-primary to-[hsl(var(--brand-purple))] px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_8px_22px_-10px_hsl(var(--primary)/0.85)]">
-                <Plus size={16} /> Report issue
+          {multi && (
+            <div className="inline-flex overflow-hidden rounded-[10px] border border-border bg-card/70 text-xs font-semibold">
+              <button type="button" aria-pressed={allPlants} onClick={() => setAllPlants(true)} className={`px-3 py-2 ${allPlants ? "bg-primary/15 text-foreground" : "text-muted-foreground"}`}>
+                All plants
               </button>
-            )}
-            {scheduleAudit.canEdit && (
-              <button type="button" onClick={() => navigate("/audits?new=1")} className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-card/80 px-3.5 py-2 text-sm font-semibold hover:border-primary/50">
-                <Calendar size={16} /> Schedule audit
+              <button type="button" aria-pressed={!allPlants} onClick={() => setAllPlants(false)} className={`px-3 py-2 ${!allPlants ? "bg-primary/15 text-foreground" : "text-muted-foreground"}`}>
+                This plant
               </button>
-            )}
-            <button type="button" onClick={openCommands} className="hidden items-center gap-1.5 rounded-[10px] border border-border bg-card/80 px-3.5 py-2 text-sm font-semibold hover:border-primary/50 sm:inline-flex">
-              <Command size={16} /> Commands <kbd className="rounded border border-border bg-background/60 px-1.5 py-0.5 font-mono text-[0.68rem] text-muted-foreground">Ctrl K</kbd>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </section>
       </OrderedBlock>

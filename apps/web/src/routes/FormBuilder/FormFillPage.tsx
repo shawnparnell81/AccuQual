@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { RecordNumberEditor, RecordNumberField } from "../../components/forms/RecordNumberField";
+import { RecordSiteField } from "../../components/records/RecordSiteField";
 import { recordHeading } from "../../lib/userRecordNumber";
 import { SaveAsFolderDialog } from "../../components/forms/SaveAsFolderDialog";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -98,6 +99,7 @@ export function FormFillPage() {
               await queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
             }}
           />
+          <RecordSiteField entity="built_fill" id={id} canEdit={formLock.fieldsEditable} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SavedFormLockBar
