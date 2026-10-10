@@ -52,11 +52,29 @@ export function developmentMenu(): SidebarFolder {
   };
 }
 
-/** Inserts Development just before Reports. An empty list leaves the shared menu unchanged. */
+function withoutDevelopment(nodes: SidebarNode[]): SidebarNode[] {
+  const out: SidebarNode[] = [];
+  for (const node of nodes) {
+    if (node.key === "development") continue;
+    if (isFolder(node)) out.push({ ...node, children: withoutDevelopment(node.children) });
+    else out.push(node);
+  }
+  return out;
+}
+
+/**
+ * Wellman and All sites get Development inside Engineering.
+ * A menu that has no Engineering group gets it just before Reports.
+ * An empty list leaves the shared menu unchanged.
+ */
 export function withDevelopment(nodes: SidebarNode[], development: SidebarNode[]): SidebarNode[] {
-  const rest = nodes.filter((node) => node.key !== "development");
+  const rest = withoutDevelopment(nodes);
   if (development.length === 0) return rest;
   const folder = development[0]!;
+  const engineering = rest.find((node) => node.key === "engineering");
+  if (engineering && isFolder(engineering)) {
+    return rest.map((node) => (node.key === "engineering" && isFolder(node) ? { ...node, children: [...node.children, folder] } : node));
+  }
   const at = rest.findIndex((node) => node.key === "reporting");
   if (at < 0) return [...rest, folder];
   return [...rest.slice(0, at), folder, ...rest.slice(at)];

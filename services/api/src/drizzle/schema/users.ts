@@ -92,6 +92,7 @@ export const users = pgTable("users", {
     layout?: { key: string; children?: { key: string; children?: unknown[] }[] }[] | null;
     groups?: { key: string; label: string }[];
     offered?: string[];
+    menuEdition?: number;
   } | null>(),
   // Which home and dashboard sections this person shows, and in what order.
   // Null means the built-in arrangement. Another user's row is never read for this.

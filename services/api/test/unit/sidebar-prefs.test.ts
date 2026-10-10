@@ -58,4 +58,11 @@ describe("sidebar shortcut normalization", () => {
     expect(hidden.layout?.some((node) => node.key === "blank-forms")).toBe(false);
     expect(hidden.layout?.[0]?.key).toBe("home");
   });
+
+  it("keeps a menu edition and drops one that is not a small number", () => {
+    const kept = normalizeSidebarShortcuts({ hidden: [], pinned: [], layout: null, groups: [], menuEdition: 2 });
+    expect(kept.menuEdition).toBe(2);
+    const dropped = normalizeSidebarShortcuts({ hidden: [], pinned: [], layout: null, groups: [], menuEdition: 99 });
+    expect(dropped.menuEdition).toBeUndefined();
+  });
 });

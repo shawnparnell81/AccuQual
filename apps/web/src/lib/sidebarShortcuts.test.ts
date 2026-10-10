@@ -14,14 +14,14 @@ describe("per-user sidebar shortcuts", () => {
         .map((link) => link.path),
       ["/iso-forms/frm-ncr-001"],
     );
-    assert.equal(flattenSidebarLinks(next).some((link) => link.path === "/ncr"), false);
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path === "/ncr"), true);
     assert.equal(PINNABLE_SHORTCUTS.some((item) => item.label === "FMEA"), true);
   });
 
   it("keeps Home first when a pin would otherwise lead the menu", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: ["home"],
-      pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
+      pinned: [{ key: "pin-warranty-dashboard", label: "Warranty dashboard", path: "/warranty/dashboard" }],
     });
     assert.equal(next[0]?.key, "home");
     assert.equal(next[1]?.key, "my-shortcuts");
@@ -30,7 +30,7 @@ describe("per-user sidebar shortcuts", () => {
 
   it("hides a shared item and pins a page that is not already showing", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
-      hidden: ["pareto"],
+      hidden: ["pareto", "risk"],
       pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
     });
     assert.equal(flattenSidebarLinks(next).some((link) => link.key === "pareto"), false);
@@ -63,7 +63,7 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(links.some((link) => link.key === "capa"), true);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms"), true);
     assert.equal(links.some((link) => link.label === "First Article" || link.path === "/fai"), false);
-    assert.equal(links.some((link) => link.path === "/ncr"), false);
+    assert.equal(links.some((link) => link.path === "/ncr"), true);
   });
 
   it("keeps one Blank Forms entry when a pin points at the same page", () => {
@@ -101,16 +101,12 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(PINNABLE_SHORTCUTS.some((item) => item.path === "/documents/master-list"), true);
   });
 
-  it("can pin the live NCR module because it is not on the shared menu", () => {
+  it("keeps the live NCR module on the shared menu and does not pin a second copy", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: [],
       pinned: [{ key: "pin-ncr", label: "NCR", path: "/ncr" }],
     });
-    const shortcuts = next.find((node) => node.key === "my-shortcuts");
-    assert.ok(shortcuts && isFolder(shortcuts));
-    assert.deepEqual(
-      shortcuts.children.map((child) => child.path),
-      ["/ncr"],
-    );
+    assert.equal(next.some((node) => node.key === "my-shortcuts"), false);
+    assert.equal(flattenSidebarLinks(next).filter((link) => link.path === "/ncr").length, 1);
   });
 });

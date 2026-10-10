@@ -25,6 +25,11 @@ export interface SidebarShortcutPrefs {
   layout?: SidebarPlacement[] | null;
   /** Sections this person added. Keys look like `group:shop-floor`. */
   groups?: { key: string; label: string }[];
+  /**
+   * 2 is the ERP group menu. Older saved menus hid whole groups, so those
+   * group hides are cleared once. A later hide of a group stays hidden.
+   */
+  menuEdition?: number;
 }
 
 export const EMPTY_SIDEBAR_SHORTCUTS: SidebarShortcutPrefs = { hidden: [], pinned: [], layout: null, groups: [] };

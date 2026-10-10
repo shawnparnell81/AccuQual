@@ -32,7 +32,7 @@ describe("per-user sidebar layout", () => {
     const shown = resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll);
     assert.deepEqual(
       shown.map((node) => node.label),
-      ["Home", "Documents", "Blank Forms", "Quality", "Folders", "Reports", "Admin"],
+      ["Home", "Documents", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"],
     );
     const links = flattenSidebarLinks(shown);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
@@ -67,7 +67,7 @@ describe("per-user sidebar layout", () => {
     assert.equal(paths(allowAll, custom).some((row) => row.startsWith("training|")), false);
     assert.deepEqual(paths(allowAll, EMPTY_SIDEBAR_SHORTCUTS), paths(allowAll, { hidden: [], pinned: [], layout: null, groups: [] }));
     assert.equal(paths(allowAll, EMPTY_SIDEBAR_SHORTCUTS).some((row) => row.startsWith("training|")), true);
-    assert.equal(paths(allowAll, EMPTY_SIDEBAR_SHORTCUTS).some((row) => row.includes("|NCR|")), false);
+    assert.equal(paths(allowAll, EMPTY_SIDEBAR_SHORTCUTS).some((row) => row.includes("|NCR|/ncr")), true);
   });
 
   it("hides a pinned page when that module is forbidden", () => {
@@ -127,8 +127,9 @@ describe("per-user sidebar layout", () => {
     assert.equal(section.label, "Shop floor");
     assert.equal(section.children.some((child) => child.key === "training"), true);
 
-    const removed = draftToPrefs(removePin(addPin(moved, { key: "pin-ncr", label: "NCR", path: "/ncr" }), "pin-ncr"));
-    assert.equal(flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, removed, allowAll)).some((link) => link.path === "/ncr"), false);
+    const removed = draftToPrefs(removePin(addPin(moved, { key: "pin-warranty-dashboard", label: "Warranty dashboard", path: "/warranty/dashboard" }), "pin-warranty-dashboard"));
+    assert.equal(flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, removed, allowAll)).some((link) => link.path === "/warranty/dashboard"), false);
+    assert.equal(flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, removed, allowAll)).some((link) => link.path === "/ncr"), true);
 
     const memory = new Map<string, string>();
     const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => void memory.set(key, value) };
@@ -165,6 +166,14 @@ describe("per-user sidebar layout", () => {
     assert.ok(shown.findIndex((node) => node.key === "my-shortcuts") > 0);
     assert.equal(shown.some((node) => node.key === "fai"), false);
     assert.equal(flattenSidebarLinks(shown).some((link) => link.key === "blank-forms"), true);
+    assert.equal(shown.some((node) => node.key === "quality"), true);
+    assert.equal(shown.some((node) => node.key === "document-control"), true);
+    assert.equal(shown.some((node) => node.key === "engineering"), true);
+    assert.equal(shown.some((node) => node.key === "equipment"), true);
+    assert.equal(shown.some((node) => node.key === "reporting"), true);
+    assert.equal(flattenSidebarLinks(shown).some((link) => link.path === "/ncr"), true);
+    assert.equal(flattenSidebarLinks(shown).some((link) => link.path === "/documents/folders"), true);
+    assert.equal(flattenSidebarLinks(shown).some((link) => link.path === "/executive"), true);
 
     const unread = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, { levels: null });
     assert.equal(unread[0]?.key, "home");
@@ -197,7 +206,7 @@ describe("per-user sidebar layout", () => {
     };
     const prefs = {
       hidden: [],
-      pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
+      pinned: [{ key: "pin-warranty-dashboard", label: "Warranty dashboard", path: "/warranty/dashboard" }],
       groups: [],
       layout: [{ key: "quality", children: [{ key: "home", children: [{ key: "calendar" }] }, { key: "fai" }] }, { key: "admin" }],
     };
@@ -235,6 +244,31 @@ describe("per-user sidebar layout", () => {
     const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, staff));
     assert.equal(links.some((link) => link.key === "admin" || link.path === "/admin"), false);
     assert.equal(links.some((link) => link.key === "home"), true);
+  });
+
+  it("keeps a later hide of a group after the ERP menu edition", () => {
+    const prefs = {
+      hidden: ["quality"],
+      pinned: [],
+      groups: [],
+      layout: [{ key: "home" }, { key: "quality" }, { key: "document-control" }],
+      menuEdition: 2,
+    };
+    const shown = resolveUserSidebar(SIDEBAR_FOLDERS, prefs, allowAll);
+    assert.equal(shown.some((node) => node.key === "quality"), false);
+    assert.equal(shown.some((node) => node.key === "document-control"), true);
+    const saved = draftToPrefs(draftFromPrefs(SIDEBAR_FOLDERS, prefs));
+    assert.equal(saved.menuEdition, 2);
+    assert.equal(saved.hidden.includes("quality"), true);
+  });
+
+  it("hides the executive dashboard when the role does not have it", () => {
+    const staff: SidebarAccess = {
+      levels: new Proxy({} as Record<string, string>, { get: (_target, prop) => (prop === "executive.dashboard" ? "none" : "edit") }),
+    };
+    const links = flattenSidebarLinks(resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, staff));
+    assert.equal(links.some((link) => link.path === "/executive"), false);
+    assert.equal(links.some((link) => link.path === "/ncr"), true);
   });
 
   it("hides AI Insights when the company turns AI-assisted features off", () => {

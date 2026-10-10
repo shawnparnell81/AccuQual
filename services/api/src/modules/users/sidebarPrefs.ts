@@ -17,6 +17,8 @@ export interface SidebarShortcutPrefs {
   groups: { key: string; label: string }[];
   /** Catalog rows already offered to this saved menu. A later hide of one of these keys stays hidden. */
   offered: string[];
+  /** 2 is the ERP group menu. Missing means a menu saved before those groups. */
+  menuEdition?: number;
 }
 
 export const BLANK_FORMS_SIDEBAR_KEY = "blank-forms";
@@ -84,12 +86,20 @@ function layoutHasKey(nodes: { key: string; children?: { key: string }[] }[] | n
   return false;
 }
 
+function readMenuEdition(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const edition = Math.floor(value);
+  if (edition < 0 || edition > 20) return undefined;
+  return edition;
+}
+
 function normalizeSidebarShortcuts(raw: {
   hidden?: string[];
   pinned?: { key: string; label: string; path: string }[];
   layout?: { key: string; children?: unknown }[] | null;
   groups?: { key: string; label: string }[];
   offered?: string[];
+  menuEdition?: number;
 } | null | undefined): SidebarShortcutPrefs {
   const alreadyOffered = (raw?.offered ?? []).includes(BLANK_FORMS_SIDEBAR_KEY);
   const hidden = [
@@ -133,7 +143,8 @@ function normalizeSidebarShortcuts(raw: {
     groups.push(group);
   }
   const offered = [...new Set([...(raw?.offered ?? []).filter((key) => typeof key === "string" && key.length > 0), BLANK_FORMS_SIDEBAR_KEY])];
-  return { hidden, pinned, layout: layout ?? null, groups, offered };
+  const menuEdition = readMenuEdition(raw?.menuEdition);
+  return menuEdition === undefined ? { hidden, pinned, layout: layout ?? null, groups, offered } : { hidden, pinned, layout: layout ?? null, groups, offered, menuEdition };
 }
 
 export { normalizeSidebarShortcuts };

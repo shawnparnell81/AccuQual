@@ -122,6 +122,7 @@ export const updateMySidebarShortcutsSchema = z.object({
     )
     .max(40),
   layout: z.array(sidebarPlacementSchema).max(80).nullable().optional(),
+  menuEdition: z.number().int().min(0).max(20).optional(),
   groups: z
     .array(
       z.object({

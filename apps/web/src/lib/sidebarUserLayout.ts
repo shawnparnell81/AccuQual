@@ -1,5 +1,5 @@
 import { Folder, Pin } from "lucide-react";
-import { isFolder, isLockedSidebarKey, LOCKED_SIDEBAR_KEYS, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
+import { isFolder, isLockedSidebarKey, LOCKED_SIDEBAR_KEYS, SIDEBAR_FOLDERS, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
 import { blankFormsFolderHref } from "./folderBrowse";
 import { acceptSidebarPath, filterSidebarByAccess, type SidebarAccess } from "./sidebarAccess";
 import { defaultPlacements, findPlacement, moveSidebarItem, nudgeSidebarItem, placementParent, type SidebarPlacement } from "./sidebarLayout";
@@ -21,11 +21,15 @@ export interface SidebarGroupPref {
   label: string;
 }
 
+/** ERP groups. A saved menu from before this edition gets its group hides cleared once. */
+export const MENU_EDITION = 2;
+
 export interface SidebarDraft {
   layout: SidebarPlacement[];
   hidden: string[];
   pinned: PinnedShortcut[];
   groups: SidebarGroupPref[];
+  menuEdition: number;
 }
 
 export interface SidebarCacheBlob {
@@ -178,6 +182,20 @@ function withoutLockedHidden(hidden: string[]): string[] {
   return hidden.filter((key) => !isLockedSidebarKey(key));
 }
 
+function catalogFolderKeys(nodes: SidebarNode[], into = new Set<string>()): Set<string> {
+  for (const node of nodes) {
+    if (!isFolder(node)) continue;
+    into.add(node.key);
+    catalogFolderKeys(node.children, into);
+  }
+  return into;
+}
+
+function readMenuEdition(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
 /** Pulls locked rows out of whatever section they were saved in and puts them first. A missing Home is inserted. */
 export function hoistLockedPlacements(layout: SidebarPlacement[]): SidebarPlacement[] {
   const found = new Map<string, SidebarPlacement>();
@@ -235,11 +253,16 @@ function hoistLockedNodes(nodes: SidebarNode[]): SidebarNode[] {
  * that means the built-in menu, which already starts with Home.
  */
 export function normalizeSidebarPrefs(prefs: SidebarShortcutPrefs | null | undefined): SidebarShortcutPrefs {
-  const hidden = withoutLockedHidden(prefs?.hidden ?? []);
+  const edition = readMenuEdition(prefs?.menuEdition);
+  let hidden = withoutLockedHidden(prefs?.hidden ?? []);
+  if (edition < MENU_EDITION) {
+    const folders = catalogFolderKeys(SIDEBAR_FOLDERS);
+    hidden = hidden.filter((key) => !folders.has(key));
+  }
   const pinned = prefs?.pinned ?? [];
   const groups = prefs?.groups ?? [];
   const layout = prefs?.layout ? hoistLockedPlacements(prefs.layout) : (prefs?.layout ?? null);
-  return { hidden, pinned, layout, groups };
+  return { hidden, pinned, layout, groups, menuEdition: Math.max(edition, MENU_EDITION) };
 }
 
 function settle(draft: SidebarDraft): SidebarDraft {
@@ -311,7 +334,7 @@ export function draftFromPrefs(catalog: SidebarNode[], rawPrefs: SidebarShortcut
   const base = prefs.layout ? rewriteBlankPlacements(prefs.layout) : defaultPlacements(catalog);
   const withPins = prefs.layout ? base : ensurePinsPlaced(base, pinned);
   const layout = hoistLockedPlacements(ensureGroupsPlaced(ensurePinsPlaced(ensureCatalogPlaced(withPins, catalog, new Set()), pinned), groups));
-  return { layout, hidden, pinned: withBlankPin(layout, pinned), groups };
+  return { layout, hidden, pinned: withBlankPin(layout, pinned), groups, menuEdition: prefs.menuEdition ?? MENU_EDITION };
 }
 
 export function draftToPrefs(draft: SidebarDraft): SidebarShortcutPrefs {
@@ -320,6 +343,7 @@ export function draftToPrefs(draft: SidebarDraft): SidebarShortcutPrefs {
     pinned: cleanPins(draft.pinned),
     layout: draft.layout,
     groups: [...draft.groups],
+    menuEdition: draft.menuEdition,
   });
 }
 
