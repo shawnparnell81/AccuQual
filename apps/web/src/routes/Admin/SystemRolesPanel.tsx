@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import type { AppRole } from "../../api/types";
 import { RolePermissionFields } from "../../components/admin/RolePermissionFields";
+import { RestoreDeletedRoles, RoleDeleteButton, roleManagesRoles } from "../../components/admin/RoleLifecycle";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -24,6 +26,7 @@ function grantedLabels(role: AppRole): string[] {
  * edits the list here. A role name does not grant a permission by itself.
  */
 export function SystemRolesPanel() {
+  const currentUser = useCurrentUser();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -49,6 +52,8 @@ export function SystemRolesPanel() {
     setEditingId(role.id);
     setDraft([...(role.permissions ?? [])]);
   }
+
+  const canManageRoles = roleManagesRoles(roles.find((role) => role.name === currentUser?.roleName));
 
   return (
     <section className="flex flex-col gap-3">
@@ -77,15 +82,18 @@ export function SystemRolesPanel() {
                     </h3>
                     {role.description ? <p className="text-xs text-muted-foreground">{role.description}</p> : null}
                   </div>
-                  {editing ? (
-                    <button type="button" onClick={() => setEditingId(null)} className="text-xs text-muted-foreground hover:underline">
-                      Cancel
-                    </button>
-                  ) : (
-                    <button type="button" onClick={() => startEdit(role)} className="text-xs text-primary hover:underline">
-                      Edit permissions
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {canManageRoles ? <RoleDeleteButton role={role} roles={roles} /> : null}
+                    {editing ? (
+                      <button type="button" onClick={() => setEditingId(null)} className="text-xs text-muted-foreground hover:underline">
+                        Cancel
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => startEdit(role)} className="text-xs text-primary hover:underline">
+                        Edit permissions
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {editing ? (
                   <form
@@ -110,6 +118,7 @@ export function SystemRolesPanel() {
           })}
         </div>
       )}
+      {canManageRoles ? <RestoreDeletedRoles /> : null}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { EXECUTIVE_DASHBOARD_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, SITES_VIEW_ALL_PERMISSION, isFullAccessRole } from "./roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, ROLES_MANAGE_PERMISSION, SITES_VIEW_ALL_PERMISSION, isFullAccessRole } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -43,8 +43,8 @@ export interface RoleSeed {
 
 /** Built-in roles. Names are what sign-in and the permission checks use, so they stay fixed. */
 export const ROLE_SEEDS: RoleSeed[] = [
-  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
-  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
+  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION, ROLES_MANAGE_PERMISSION] },
+  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, PLANTS_DELETE_PERMISSION, LOGIN_HISTORY_PERMISSION, SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION, ROLES_MANAGE_PERMISSION] },
   { name: "executive", description: "Executive — view every site and the executive dashboard. Does not grant editing.", hierarchyLevel: 18, isProtected: true, permissions: [SITES_VIEW_ALL_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION] },
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
@@ -159,44 +159,43 @@ export function moveRank(sorted: RankedRole[], id: number, direction: "up" | "do
 }
 
 export interface RoleDeletionInput {
-  roleName: string;
-  isProtected: boolean;
+  displayName: string;
   userCount: number;
   replacementRoleId?: number | null;
   replacementExists: boolean;
   replacementIsSameRole: boolean;
-  roleIsFullAccess: boolean;
-  replacementIsFullAccess: boolean;
-  /** Active Owner or Administrator accounts that do not hold this role. */
-  otherActiveFullAccessUsers: number;
+  replacementIsDeleted: boolean;
+  /** This role's permission list includes role management. */
+  roleManagesRoles: boolean;
+  /** Some other role that is still in use also includes role management. */
+  otherRoleManagesRoles: boolean;
+  replacementManagesRoles: boolean;
+  /** The person deleting is assigned to this role. */
+  callerHoldsRole: boolean;
 }
 
 export function decideRoleDeletion(input: RoleDeletionInput): { ok: true; reassign: boolean } | { ok: false; status: number; message: string } {
-  if (input.isProtected) {
-    const label = input.roleName === "owner" ? "The Owner role" : "This role";
-    return { ok: false, status: 409, message: `${label} is built in and can't be deleted.` };
-  }
-  if (input.userCount > 0 && (input.replacementRoleId == null || input.replacementRoleId === 0)) {
-    const people = input.userCount === 1 ? "1 person still has" : `${input.userCount} people still have`;
+  const replacing = input.replacementRoleId != null && input.replacementRoleId !== 0;
+  if (input.userCount > 0 && !replacing) {
+    const people = input.userCount === 1 ? "1 person is" : `${input.userCount} people are`;
     return {
       ok: false,
       status: 409,
-      message: `${people} the "${input.roleName}" role. Choose another role for them before deleting it.`,
+      message: `${people} assigned to ${input.displayName}. Choose another role for them before deleting it.`,
     };
   }
-  if (input.replacementRoleId != null && input.replacementRoleId !== 0) {
+  if (replacing) {
     if (input.replacementIsSameRole) return { ok: false, status: 400, message: "Choose a different role to move people to." };
-    if (!input.replacementExists) return { ok: false, status: 400, message: "That replacement role doesn't exist." };
-    if (input.roleIsFullAccess && !input.replacementIsFullAccess && input.otherActiveFullAccessUsers === 0) {
-      return {
-        ok: false,
-        status: 409,
-        message: "Moving these people would leave no Owner or Administrator. Choose an Owner or Administrator role for them first.",
-      };
-    }
-    return { ok: true, reassign: true };
+    if (!input.replacementExists || input.replacementIsDeleted) return { ok: false, status: 400, message: "That replacement role doesn't exist." };
   }
-  return { ok: true, reassign: false };
+  const replacementKeepsManagement = replacing && input.replacementManagesRoles;
+  if (input.roleManagesRoles && !input.otherRoleManagesRoles && !replacementKeepsManagement) {
+    return { ok: false, status: 409, message: "This is the last role that can manage roles. Give that permission to another role first." };
+  }
+  if (input.callerHoldsRole && !replacementKeepsManagement) {
+    return { ok: false, status: 409, message: "You can't remove your own access to manage roles. Move yourself to another role that can manage roles first." };
+  }
+  return { ok: true, reassign: input.userCount > 0 };
 }
 
 /**

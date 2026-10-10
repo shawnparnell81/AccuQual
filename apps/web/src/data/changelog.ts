@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-10.4",
+    date: "2026-10-10",
+    items: [
+      "Someone with the role-management permission can delete a built-in role, including President, Operator, Supplier, and Executive. People still on that role have to be moved first. The last role that can manage roles stays, and you can't remove your own access. Deleted roles can be restored, and a later update does not create them again.",
+    ],
+  },
+  {
     version: "2026-10-10.3",
     date: "2026-10-10",
     items: [

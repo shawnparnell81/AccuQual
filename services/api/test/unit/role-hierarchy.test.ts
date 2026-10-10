@@ -48,14 +48,18 @@ describe("role hierarchy", () => {
     expect(moveRank(roles, 3, "down")).toEqual([]);
   });
 
-  it("refuses to delete a built-in role, a role people still hold, or the last full-access role", () => {
-    expect(decideRoleDeletion({ roleName: "owner", isProtected: true, userCount: 0, replacementExists: true, replacementIsSameRole: false, roleIsFullAccess: true, replacementIsFullAccess: false, otherActiveFullAccessUsers: 1 }).ok).toBe(false);
-    const held = decideRoleDeletion({ roleName: "Floor Helper", isProtected: false, userCount: 2, replacementExists: true, replacementIsSameRole: false, roleIsFullAccess: false, replacementIsFullAccess: false, otherActiveFullAccessUsers: 1 });
+  it("allows a built-in role to be deleted, and blocks a role people still hold, the last role-management role, and the caller's own access", () => {
+    const base = { replacementExists: true, replacementIsSameRole: false, replacementIsDeleted: false, roleManagesRoles: false, otherRoleManagesRoles: true, replacementManagesRoles: false, callerHoldsRole: false };
+    expect(decideRoleDeletion({ ...base, displayName: "Executive", userCount: 0 })).toEqual({ ok: true, reassign: false });
+    const held = decideRoleDeletion({ ...base, displayName: "Operator", userCount: 2 });
     expect(held.ok).toBe(false);
-    if (!held.ok) expect(held.message).toMatch(/2 people still have/);
-    const moved = decideRoleDeletion({ roleName: "Floor Helper", isProtected: false, userCount: 2, replacementRoleId: 9, replacementExists: true, replacementIsSameRole: false, roleIsFullAccess: false, replacementIsFullAccess: false, otherActiveFullAccessUsers: 1 });
-    expect(moved).toEqual({ ok: true, reassign: true });
-    const last = decideRoleDeletion({ roleName: "Custom Admin", isProtected: false, userCount: 1, replacementRoleId: 4, replacementExists: true, replacementIsSameRole: false, roleIsFullAccess: true, replacementIsFullAccess: false, otherActiveFullAccessUsers: 0 });
+    if (!held.ok) expect(held.message).toMatch(/2 people are assigned to Operator/);
+    expect(decideRoleDeletion({ ...base, displayName: "Operator", userCount: 2, replacementRoleId: 9 })).toEqual({ ok: true, reassign: true });
+    const last = decideRoleDeletion({ ...base, displayName: "Administrator", userCount: 0, roleManagesRoles: true, otherRoleManagesRoles: false });
     expect(last.ok).toBe(false);
+    if (!last.ok) expect(last.message).toMatch(/last role that can manage roles/);
+    const own = decideRoleDeletion({ ...base, displayName: "Administrator", userCount: 1, replacementRoleId: 4, roleManagesRoles: true, otherRoleManagesRoles: true, callerHoldsRole: true, replacementManagesRoles: false });
+    expect(own.ok).toBe(false);
+    if (!own.ok) expect(own.message).toMatch(/your own access/);
   });
 });

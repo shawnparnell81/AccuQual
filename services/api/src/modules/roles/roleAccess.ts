@@ -26,6 +26,9 @@ export const SITES_VIEW_ALL_PERMISSION = "sites.view_all";
 /** Open the executive dashboard. Viewing does not grant editing. */
 export const EXECUTIVE_DASHBOARD_PERMISSION = "executive.dashboard";
 
+/** Delete and restore roles, including built-in ones. Owner and Administrator start with this. A role name does not grant it. */
+export const ROLES_MANAGE_PERMISSION = "roles.manage";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 
