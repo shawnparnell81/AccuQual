@@ -100,5 +100,9 @@ export function formByKey(formKey: string | undefined): IsoFormMeta | undefined 
 }
 
 export function formByType(formType: string | undefined): IsoFormMeta | undefined {
-  return ISO_FORMS.find((form) => form.formType === formType);
+  if (!formType) return undefined;
+  const direct = ISO_FORMS.find((form) => form.formType === formType);
+  if (direct) return direct;
+  const key = formType.trim().toLowerCase();
+  return ISO_FORMS.find((form) => form.formKey === key || form.formId.toLowerCase() === key);
 }

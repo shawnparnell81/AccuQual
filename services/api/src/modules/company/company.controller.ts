@@ -16,6 +16,7 @@ import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
 import { digitalTwinEnabled } from "./digitalTwinFlag.js";
+import { fetchPublicImage } from "./logoFetch.js";
 
 /**
  * Self-service settings for the company
@@ -34,6 +35,24 @@ async function loadCompany(req: Request) {
 export const getBrandingHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
   res.json(co.branding ?? {});
+});
+
+/** The stored logo, fetched here so the browser image does not need the access token. */
+export const getCompanyLogoHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  const logoUrl = co.branding?.logoUrl?.trim();
+  if (!logoUrl) {
+    res.status(204).end();
+    return;
+  }
+  try {
+    const image = await fetchPublicImage(logoUrl);
+    res.setHeader("Content-Type", image.type);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(image.bytes);
+  } catch {
+    throw AppError.badRequest("The company logo didn't load.");
+  }
 });
 
 export const updateBrandingHandler = asyncHandler(async (req: Request, res: Response) => {

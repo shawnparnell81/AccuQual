@@ -1,4 +1,5 @@
-import { formatDate, formatDateTime } from "./dates";
+import { currentCompanyLogo } from "./companyLogoCache";
+import { formatDate } from "./dates";
 import { bandHtmlForPage, bandHasContent, bandVaries, printBandChoice, resolveDocumentFields, type DocumentBand } from "./documentBands";
 import type { PreviewKind } from "./filePreview";
 import { recordSurface } from "./recordSurface";
@@ -70,16 +71,54 @@ export function uploadedPrintChoice(kind: PreviewKind, hasPdfRendition: boolean)
   return "download";
 }
 
+const REV_WORDS = new Set(["date", "issued", "number", "no", "id", "code", "level", "status", "revision", "rev", "draft", "active", "closed"]);
+const ID_RANK: Record<string, number> = { FRM: 1, TMP: 2, LST: 3, DCR: 4, ECR: 5, DOC: 6, NCR: 7 };
+
+/** A revision token such as A, C, or 1.2. A neighboring label ("Date Issued") is not a revision. */
+export function revisionToken(value: unknown): string {
+  const text = typeof value === "string"
+    ? value.trim().replace(/^rev(?:ision)?[:\s]*/i, "")
+    : typeof value === "number" && Number.isFinite(value)
+      ? String(value)
+      : "";
+  if (!text || text.length > 12 || REV_WORDS.has(text.toLowerCase())) return "";
+  if (!/^[A-Za-z0-9][A-Za-z0-9.]*$/.test(text)) return "";
+  return text;
+}
+
+/** Printed at, on the Eastern clock, with the zone written out. */
+export function formatPrintStamp(now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("month")} ${part("day")}, ${part("year")}, ${part("hour")}:${part("minute")} ${part("dayPeriod").toUpperCase()} ET`;
+}
+
 /** Doc ID and Rev as the form already shows them. Review notes are not a revision. */
 export function readFormIdentity(text: string): PrintIdentity {
   const flat = text.replace(/\s+/g, " ");
-  const doc =
-    flat.match(/\bDoc(?:ument)?\s*(?:ID|No\.?|Number)\s*[:#]?\s*([A-Z0-9][A-Z0-9._-]*)/i) ??
-    flat.match(/\b((?:FRM|DCR|LST|ECR|NCR)-[A-Z0-9-]+)\b/i);
-  const rev = flat.match(/\bRev(?:ision)?\s*:\s*([A-Za-z0-9.]+)/i) ?? flat.match(/\bRev(?:ision)?\s+([A-Za-z0-9.]{1,6})\b/);
+  const labeled = flat.match(/\bDoc(?:ument)?\s*(?:ID|No\.?|Number)\s*[:#]?\s*([A-Z0-9][A-Z0-9._-]*)/i);
+  const found = [...flat.matchAll(/\b((?:[A-Z0-9]+-)*(?:FRM|DCR|LST|ECR|TMP|DOC|NCR)-[A-Z0-9-]*\d[A-Z0-9-]*)\b/gi)].map((match) => match[1]!.replace(/[.,;]+$/, ""));
+  const unique: string[] = [];
+  for (const id of found) {
+    if (!unique.some((item) => item.toLowerCase() === id.toLowerCase())) unique.push(id);
+  }
+  const kept = unique.filter((id) => !unique.some((other) => other.length > id.length && other.toLowerCase().endsWith(`-${id.toLowerCase()}`)));
+  kept.sort((a, b) => {
+    const rank = (id: string) => ID_RANK[id.slice(0, 3).toUpperCase()] ?? 9;
+    return rank(a) - rank(b) || b.length - a.length;
+  });
+  const rev = flat.match(/\bRev(?:ision)?\s*:\s*([A-Za-z0-9.]+)/i) ?? flat.match(/\bRev(?:ision)?\s+([A-Za-z0-9.]{1,6})\b/i);
   return {
-    docId: doc?.[1]?.replace(/[.,;]+$/, "") ?? "",
-    rev: rev?.[1]?.replace(/[.,;]+$/, "") ?? "",
+    docId: (labeled?.[1] ?? kept[0] ?? "").replace(/[.,;]+$/, ""),
+    rev: revisionToken(rev?.[1] ?? ""),
   };
 }
 
@@ -142,8 +181,9 @@ function storedBand(root: ParentNode, name: "header" | "footer"): DocumentBand |
 
 function printIdentity(root: HTMLElement): { docId: string; rev: string } {
   const shown = readFormIdentity(root.innerText || "");
-  const docId = root.querySelector("[data-doc-id]")?.getAttribute("data-doc-id") || shown.docId;
-  const rev = root.querySelector("[data-doc-rev]")?.getAttribute("data-doc-rev") || shown.rev;
+  const docId = root.querySelector("[data-doc-id]")?.getAttribute("data-doc-id")?.trim() || shown.docId;
+  const revNode = root.querySelector("[data-doc-rev]");
+  const rev = revNode ? revisionToken(revNode.getAttribute("data-doc-rev")) : shown.rev;
   return { docId, rev };
 }
 
@@ -242,17 +282,123 @@ function mountDocumentPrint(root: HTMLElement, now: Date): () => void {
   };
 }
 
+const PRINT_ROOT_ID = "aq-print-root";
+
+function outermostSheets(root: HTMLElement): HTMLElement[] {
+  const all = [
+    ...(root.classList.contains("aq-print-sheet") ? [root] : []),
+    ...root.querySelectorAll<HTMLElement>(".aq-print-sheet"),
+  ].filter((sheet) => sheet === root || !sheet.closest(".no-print"));
+  return all.filter((sheet) => !all.some((other) => other !== sheet && other.contains(sheet)));
+}
+
+function syncControls(from: ParentNode, to: ParentNode) {
+  const live = from.querySelectorAll("input, textarea, select");
+  const copy = to.querySelectorAll("input, textarea, select");
+  const count = Math.min(live.length, copy.length);
+  for (let index = 0; index < count; index += 1) {
+    const source = live[index];
+    const dest = copy[index];
+    if (source instanceof HTMLInputElement && dest instanceof HTMLInputElement) {
+      dest.value = source.value;
+      dest.checked = source.checked;
+      if (source.type === "checkbox" || source.type === "radio") {
+        if (source.checked) dest.setAttribute("checked", "");
+        else dest.removeAttribute("checked");
+      } else dest.setAttribute("value", source.value);
+    } else if (source instanceof HTMLTextAreaElement && dest instanceof HTMLTextAreaElement) {
+      dest.value = source.value;
+      dest.textContent = source.value;
+    } else if (source instanceof HTMLSelectElement && dest instanceof HTMLSelectElement) {
+      dest.value = source.value;
+      const selected = source.selectedOptions[0]?.value;
+      for (const option of dest.options) option.selected = option.value === selected;
+    }
+  }
+}
+
+function pruneChrome(node: HTMLElement) {
+  node.querySelectorAll("button, .no-print, .folder-path-bar, .aq-step-trail, .record-glance, .record-related, .aq-split-bar").forEach((el) => el.remove());
+}
+
+function compactBanner(root: ParentNode): HTMLElement | null {
+  const read = (name: string) => root.querySelector(`[${name}]`)?.getAttribute(name)?.trim() ?? "";
+  const parts = [read("data-print-number"), read("data-print-title"), read("data-print-site")].filter(Boolean);
+  const unique = parts.filter((part, index) => parts.indexOf(part) === index);
+  if (!unique.length) return null;
+  const banner = document.createElement("p");
+  banner.className = "aq-print-banner";
+  banner.textContent = unique.join(" · ");
+  return banner;
+}
+
+function markWide(root: HTMLElement, host: HTMLElement) {
+  const wide = root.classList.contains("validation-report-print")
+    || root.classList.contains("aq-print-wide")
+    || root.querySelector(".validation-report-print, .aq-print-wide") != null;
+  if (wide) host.classList.add("aq-print-wide");
+}
+
+async function settleImages(root: ParentNode) {
+  const cached = currentCompanyLogo();
+  const images = [...root.querySelectorAll("img")];
+  await Promise.all(images.map(async (img) => {
+    const logo = img.classList.contains("dma-form-logo") || img.classList.contains("wot-logo") || img.alt === "Company logo" || img.alt === "Logo";
+    if (logo && cached) {
+      img.src = cached;
+      img.alt = "";
+    }
+    if (!img.getAttribute("src")) {
+      if (logo) img.remove();
+      return;
+    }
+    if (typeof img.decode === "function" && !img.complete) {
+      try {
+        await img.decode();
+      } catch {
+        // A missing picture is removed below when it is the company mark.
+      }
+    }
+    if (logo && img.alt === "Company logo") img.alt = "";
+    if (logo && (!img.complete || img.naturalWidth === 0)) img.remove();
+  }));
+}
+
 /**
- * Print the page that is already on screen. The browser dialog is the same
- * path presentPdf uses after a file is ready. Footer text and landscape are
- * applied first so paper matches the open form, including calculated cells.
- * A Word-style document with its own header or footer prints that side instead.
- * Audit history has no client write for "printed", so this does not invent one.
+ * Print the form that is already on screen. Workflow chrome stays on the page
+ * and out of the dialog. Footer text and landscape are applied first so paper
+ * matches the open form, including calculated cells. Images are inlined before
+ * the dialog opens. A Word-style document with its own header or footer prints
+ * that side instead. Audit history has no client write for "printed".
  */
 export function printScreen(root: HTMLElement, meta: { printedBy: string; now?: Date }): void {
-  const choice = printBandChoice(storedBand(root, "header"), storedBand(root, "footer"));
-  const identity = printIdentity(root);
-  const printedAt = formatDateTime(meta.now ?? new Date());
+  void runPrint(root, meta);
+}
+
+async function runPrint(root: HTMLElement, meta: { printedBy: string; now?: Date }): Promise<void> {
+  const now = meta.now ?? new Date();
+  const sheets = outermostSheets(root);
+  let printRoot: HTMLElement | null = null;
+  if (sheets.length > 0) {
+    document.getElementById(PRINT_ROOT_ID)?.remove();
+    printRoot = document.createElement("div");
+    printRoot.id = PRINT_ROOT_ID;
+    const banner = compactBanner(root);
+    if (banner) printRoot.appendChild(banner);
+    for (const sheet of sheets) {
+      const clone = sheet.cloneNode(true) as HTMLElement;
+      syncControls(sheet, clone);
+      pruneChrome(clone);
+      printRoot.appendChild(clone);
+    }
+    markWide(root, printRoot);
+    document.body.appendChild(printRoot);
+  }
+
+  const target = printRoot ?? root;
+  const choice = printBandChoice(storedBand(target, "header"), storedBand(target, "footer"));
+  const identity = printIdentity(target);
+  const printedAt = formatPrintStamp(now);
   let footer: HTMLElement | null = null;
   if (choice.footer === "standard") {
     footer = document.getElementById(PRINT_FOOTER_ID);
@@ -265,24 +411,36 @@ export function printScreen(root: HTMLElement, meta: { printedBy: string; now?: 
     }
     footer.textContent = formatPrintFooter({ ...identity, printedBy: meta.printedBy, printedAt });
   }
-  const landscape = needsLandscape(landscapeMarks(root));
+  const landscape = needsLandscape(landscapeMarks(root)) || target.classList.contains("aq-print-wide");
   document.documentElement.classList.toggle("aq-print-custom-header", choice.header === "custom");
   document.documentElement.classList.toggle("aq-print-custom-footer", choice.footer === "custom");
   document.documentElement.classList.toggle("aq-print-landscape", landscape);
-  const restoreBands = choice.header === "custom" || choice.footer === "custom" ? mountDocumentPrint(root, meta.now ?? new Date()) : () => undefined;
+  const restoreBands = choice.header === "custom" || choice.footer === "custom" ? mountDocumentPrint(target, now) : () => undefined;
 
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
-    document.documentElement.classList.remove("aq-print-landscape", "aq-print-custom-header", "aq-print-custom-footer", "aq-print-paginated");
+    document.documentElement.classList.remove("aq-print-landscape", "aq-print-custom-header", "aq-print-custom-footer", "aq-print-paginated", "aq-print-isolated");
     restoreBands();
     footer?.remove();
+    printRoot?.remove();
     window.removeEventListener("afterprint", cleanup);
   };
-  window.addEventListener("afterprint", cleanup);
-  window.setTimeout(cleanup, 60000);
-  window.print();
+
+  let opened = false;
+  try {
+    await Promise.race([settleImages(target), new Promise((resolve) => window.setTimeout(resolve, 2000))]);
+    const fontsReady = document.fonts?.ready ?? Promise.resolve();
+    await Promise.race([fontsReady, new Promise((resolve) => window.setTimeout(resolve, 1200))]);
+    if (printRoot) document.documentElement.classList.add("aq-print-isolated");
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(cleanup, 60000);
+    opened = true;
+    window.print();
+  } finally {
+    if (!opened) cleanup();
+  }
 }
 
 const FRAME_STYLE = [

@@ -115,10 +115,16 @@ export function filledCopyFolderSentence(formKey: string): string {
   return "A filled copy is stored on this form. It is not saved into a Documents folder.";
 }
 
+function textOf(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
 /** Print and sheet header. A blank number stays a revision with no document id. */
-export function sheetRevision(formNumber: string | undefined, rev = "A"): string {
-  const letter = rev.trim().replace(/^Rev:\s*/i, "") || "A";
-  const number = (formNumber ?? "").trim();
+export function sheetRevision(formNumber: unknown, rev: unknown = "A"): string {
+  const letter = textOf(rev).trim().replace(/^Rev:\s*/i, "") || "A";
+  const number = textOf(formNumber).trim();
   return number ? `Doc ID: ${number} · Rev: ${letter}` : `Rev: ${letter}`;
 }
 
@@ -131,15 +137,16 @@ export function instanceRevision(data: unknown, fallback = "A"): string {
 }
 
 /** Header document-id cell. A hardcoded FRM number is not shown until someone sets one. */
-export function documentIdText(label: string | undefined, documentNumber: string | undefined, slot = false): string {
-  const number = (documentNumber ?? "").trim();
+export function documentIdText(label: string | undefined, documentNumber: unknown, slot = false): string {
+  const number = textOf(documentNumber).trim();
   const text = label ?? "";
   if (slot || /^FRM-[A-Z0-9-]+$/.test(text)) return number;
   if (text === "Doc ID:" || /^Doc ID:\s/.test(text)) return number ? `Doc ID: ${number}` : "Doc ID:";
   return text;
 }
 
-export function revisionLabel(formNumber: string | undefined, rev = "A"): string {
-  const number = (formNumber ?? "").trim();
-  return number ? `${number} Rev ${rev}` : `Rev ${rev}`;
+export function revisionLabel(formNumber: unknown, rev: unknown = "A"): string {
+  const number = textOf(formNumber).trim();
+  const letter = textOf(rev).trim() || "A";
+  return number ? `${number} Rev ${letter}` : `Rev ${letter}`;
 }

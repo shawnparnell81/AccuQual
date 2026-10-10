@@ -17,6 +17,7 @@ import { RecordAccessMessage } from "../../components/shared/RecordAccessMessage
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
+import { revisionToken } from "../../lib/printDocument";
 import { cellsFromBatch, isBatch3, overallBatch } from "../../lib/batch3Reports";
 import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
 import { authorizedSignatureOf, cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
@@ -249,7 +250,13 @@ export function ValidationReportDetailPage() {
       }
       related={<RecordReferences modules={["documents", "validation"]} step={meta.title} entityType="validation_report" entityId={reportId} />}
     >
-      <div className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
+      <div
+        className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4"
+        data-print-title={title}
+        data-print-number={report.recordNumber ?? ""}
+        data-doc-id={documentNumber.trim() || undefined}
+        data-doc-rev={revisionToken(rev) || undefined}
+      >
         <FormHeader />
         {formType === "fuel_pump" ? (
           <FuelPumpSheet

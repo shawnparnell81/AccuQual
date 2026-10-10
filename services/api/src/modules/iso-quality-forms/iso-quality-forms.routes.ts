@@ -8,7 +8,7 @@ import { createIsoQualityFormSchema, signIsoQualityFormSchema, updateIsoQualityF
 import { eq } from "drizzle-orm";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { beginFormEditHandler } from "../forms/formEditAudit.js";
-import { baseHandlers, signIsoQualityForm } from "./iso-quality-forms.controller.js";
+import { baseHandlers, getIsoQualityForm, signIsoQualityForm } from "./iso-quality-forms.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const isoQualityFormsRouter = Router();
@@ -18,7 +18,7 @@ isoQualityFormsRouter.use(requireAuth, withDb, withSiteContext, requireDepartmen
 
 isoQualityFormsRouter.get("/", baseHandlers.list);
 isoQualityFormsRouter.post("/", validate(createIsoQualityFormSchema), baseHandlers.create);
-isoQualityFormsRouter.get("/:id", baseHandlers.getOne);
+isoQualityFormsRouter.get("/:id", getIsoQualityForm);
 isoQualityFormsRouter.patch("/:id", validate(updateIsoQualityFormSchema), baseHandlers.update);
 isoQualityFormsRouter.post("/:id/sign", validate(signIsoQualityFormSchema), signIsoQualityForm);
 isoQualityFormsRouter.post(

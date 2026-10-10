@@ -2,13 +2,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { dropPosition, reorderIds } from "../../lib/listReorder";
 import { apiClient } from "../../api/client";
-import { useAuthStore } from "../../store/authStore";
+import { CompanyLogo } from "../../components/brand/DmaLogo";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
-import { DmaLogo } from "../../components/brand/DmaLogo";
 import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 
 /**
@@ -37,7 +36,6 @@ import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrder }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const canEdit = useCanEditWorkflow("work_orders");
 
   const canEditPlanning = canEdit && workOrder.status === "planned";
@@ -171,7 +169,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
       <div className="wot-work-order">
         <div className="wot-header">
           <div className="wot-header-left">
-            {logoUrl ? <img className="wot-logo" src={logoUrl} alt="Logo" /> : <DmaLogo height={52} />}
+            <CompanyLogo height={52} className="wot-logo" />
             <div className="wot-title-area">
               <h1>PRODUCTION WORK ORDER</h1>
               <p>Shop Floor Controlled Document</p>

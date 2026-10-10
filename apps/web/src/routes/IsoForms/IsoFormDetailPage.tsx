@@ -31,6 +31,8 @@ import { isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
 import { isBatch5, summaryBatch5 } from "../../lib/batch5Reports";
 import { isBatch6, summaryBatch6 } from "../../lib/batch6Reports";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
+import { isoCells, isoDataBag, isoList } from "../../lib/isoFormLoad";
+import { revisionToken } from "../../lib/printDocument";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
@@ -88,7 +90,8 @@ export function IsoFormDetailPage() {
   const formLock = useSavedFormMode(recordId, Boolean(canEdit));
   const mode = formLock.mode;
   const queryClient = useQueryClient();
-  const requestKind = changeRequestByFormType(record?.formType);
+  const resolvedType = formByType(record?.formType)?.formType ?? record?.formType;
+  const requestKind = changeRequestByFormType(resolvedType);
   const ecrView = useQuery({
     queryKey: ["change-request-workflow", recordId],
     enabled: requestKind != null,
@@ -110,17 +113,25 @@ export function IsoFormDetailPage() {
   const [months, setMonths] = useState<string[]>([]);
   const [sheet, setSheet] = useState<"form" | "photos">("form");
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [savedSnap, setSavedSnap] = useState<{ id: number; snap: string } | null>(null);
 
   useEffect(() => {
     if (!record || loadedFor === record.id) return;
-    const nextCells = { ...(record.data?.cells ?? {}) };
-    const nextPhotos = record.data?.photos ?? "";
-    const nextLines = record.data?.lines ?? [];
-    const nextCustomers = record.data?.customers ?? [];
-    const nextProblems = record.data?.problems ?? [];
-    const nextMonths = record.data?.months ?? [];
-    const scored = record.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
+    const bag = isoDataBag(record.data);
+    if (!bag) {
+      setUnreadable(true);
+      setLoadedFor(record.id);
+      return;
+    }
+    setUnreadable(false);
+    const nextCells = isoCells(bag.cells);
+    const nextPhotos = typeof bag.photos === "string" ? bag.photos : "";
+    const nextLines = isoList<FaiLine>(bag.lines).filter((line) => line != null && typeof line === "object");
+    const nextCustomers = isoList<ScorecardRow>(bag.customers).filter((row) => row != null && typeof row === "object");
+    const nextProblems = isoList<FailureRow>(bag.problems).filter((row) => row != null && typeof row === "object");
+    const nextMonths = isoList<unknown>(bag.months).map((item) => (typeof item === "string" ? item : item == null ? "" : String(item)));
+    const scored = formByType(record.formType)?.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
     setCells(nextCells);
     setPhotos(nextPhotos);
     setLines(nextLines);
@@ -135,12 +146,13 @@ export function IsoFormDetailPage() {
   }, [loadedFor, record]);
 
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this form. Refresh the page and try again." noun="this form" />;
+  if (unreadable) return <p className="text-sm text-destructive">Couldn't load this form. Refresh the page and try again.</p>;
   if (isLoading || !record || !cells) return <LoadingPlaceholder />;
 
   const meta = formByType(record.formType);
   if (!meta) return <p className="text-sm text-destructive">This form type isn't recognized.</p>;
 
-  const formType = record.formType;
+  const formType = meta.formType;
   const scoredLines = (rows: FaiLine[]) => rows.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) }));
   const currentLines = formType === "first_article" ? scoredLines(lines) : lines;
   const liveSnap = sheetSnap({ cells, photos, lines: currentLines, customers, problems, months });
@@ -214,13 +226,14 @@ export function IsoFormDetailPage() {
 
   function cancelEdit() {
     if (!record) return;
-    const nextCells = { ...(record.data?.cells ?? {}) };
-    const nextPhotos = record.data?.photos ?? "";
-    const nextLines = record.data?.lines ?? [];
-    const nextCustomers = record.data?.customers ?? [];
-    const nextProblems = record.data?.problems ?? [];
-    const nextMonths = record.data?.months ?? [];
-    const scored = record.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
+    const bag = isoDataBag(record.data) ?? {};
+    const nextCells = isoCells(bag.cells);
+    const nextPhotos = typeof bag.photos === "string" ? bag.photos : "";
+    const nextLines = isoList<FaiLine>(bag.lines).filter((line) => line != null && typeof line === "object");
+    const nextCustomers = isoList<ScorecardRow>(bag.customers).filter((row) => row != null && typeof row === "object");
+    const nextProblems = isoList<FailureRow>(bag.problems).filter((row) => row != null && typeof row === "object");
+    const nextMonths = isoList<unknown>(bag.months).map((item) => (typeof item === "string" ? item : item == null ? "" : String(item)));
+    const scored = formByType(record.formType)?.formType === "first_article" ? nextLines.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) })) : nextLines;
     setCells(nextCells);
     setPhotos(nextPhotos);
     setLines(nextLines);
@@ -396,7 +409,7 @@ function IsoFormDetailBody({
   const filing = useFormFiling(formKey, record.id);
   useReportTabDirty(dirty);
   const templates = useFormTemplates({ enabled: !!formKey });
-  const formType = record.formType;
+  const formType = meta.formType;
   const requestKind = changeRequestByFormType(formType);
   const liveFormId = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : liveFormId;
@@ -429,7 +442,7 @@ function IsoFormDetailBody({
   }
 
   return (
-    <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`}>
+    <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`} data-print-title={meta.title} data-print-number={record.recordNumber ?? ""}>
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: recordHeading(documentNumber || meta.title, record.recordNumber) }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -499,7 +512,11 @@ function IsoFormDetailBody({
         )}
       </div>
 
-      <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
+      <div
+        className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4"
+        data-doc-id={typeof documentNumber === "string" && documentNumber.trim() ? documentNumber.trim() : undefined}
+        data-doc-rev={revisionToken(revision) || undefined}
+      >
         <FormHeader />
         {formType === "cross_training" ? (
           <CrossTrainingSheet cells={cells} readOnly={!fieldsEditable} onChange={changeCell} documentNumber={documentNumber} />

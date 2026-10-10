@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   canPrintAccess,
   formatPrintFooter,
+  formatPrintStamp,
   isPdfBytes,
   needsLandscape,
   offersScreenPrint,
@@ -13,6 +14,7 @@ import {
   PRINT_NOT_DOCUMENT,
   printShouldToast,
   readFormIdentity,
+  revisionToken,
   uploadedPrintChoice,
 } from "./printDocument.ts";
 
@@ -87,6 +89,11 @@ describe("print document", () => {
     assert.deepEqual(readFormIdentity("Doc ID: FRM-VAL-001 · Rev: C"), { docId: "FRM-VAL-001", rev: "C" });
     assert.deepEqual(readFormIdentity("FRM-TST-001 Rev A"), { docId: "FRM-TST-001", rev: "A" });
     assert.deepEqual(readFormIdentity("Review the open items"), { docId: "", rev: "" });
+    assert.deepEqual(readFormIdentity("DEMO-NCR-002 Revision: Date Issued NCR-002"), { docId: "DEMO-NCR-002", rev: "" });
+    assert.deepEqual(readFormIdentity("FRM-NCR-001 DEMO-NCR-002"), { docId: "FRM-NCR-001", rev: "" });
+    assert.equal(revisionToken("Date"), "");
+    assert.equal(revisionToken("C"), "C");
+    assert.equal(formatPrintStamp(new Date("2026-10-10T19:31:00.000Z")), "Oct 10, 2026, 3:31 PM ET");
   });
 
   it("names who printed the record and when", () => {
@@ -171,6 +178,10 @@ describe("print document", () => {
     assert.match(printCss, /html\.aq-print-landscape/);
     assert.match(printCss, /\.aq-print-footer/);
     assert.match(printCss, /counter\(page\)/);
+    assert.match(printCss, /counter\(pages\)/);
+    assert.match(printCss, /aq-print-isolated/);
+    assert.match(printCss, /\.aq-print-stack > \* \{[^}]*break-inside:\s*auto/);
+    assert.match(printCss, /min-height:\s*0 !important/);
     const paper = css.slice(css.indexOf(".aq-paper {"));
     assert.match(paper, /\.aq-paper \{\s*background:\s*#fff !important;\s*color:\s*#1a1a1a;\s*color-scheme:\s*light;/);
     assert.doesNotMatch(paper.slice(0, 400), /invert/);

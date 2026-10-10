@@ -5,13 +5,14 @@ import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { updateBrandingSchema, updateAiConfigSchema, updateCompanyProfileSchema, updateCompanySecuritySchema, updateOnboardingSchema, updateSidebarLayoutSchema } from "./company.validation.js";
-import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler, getProfileHandler, updateProfileHandler, getSecurityHandler, updateSecurityHandler, getOnboardingHandler, updateOnboardingHandler, getSidebarLayoutHandler, updateSidebarLayoutHandler, resetSidebarLayoutHandler, listReleaseNotesHandler, createReleaseNoteHandler, archiveReleaseNoteHandler } from "./company.controller.js";
+import { getBrandingHandler, updateBrandingHandler, getCompanyLogoHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler, getProfileHandler, updateProfileHandler, getSecurityHandler, updateSecurityHandler, getOnboardingHandler, updateOnboardingHandler, getSidebarLayoutHandler, updateSidebarLayoutHandler, resetSidebarLayoutHandler, listReleaseNotesHandler, createReleaseNoteHandler, archiveReleaseNoteHandler } from "./company.controller.js";
 
 /** A company admin's own settings — the settings of the one company. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const companyRouter = Router();
 companyRouter.use(requireAuth, withDb, rejectSupplierReads);
 
 companyRouter.get("/branding", getBrandingHandler);
+companyRouter.get("/logo", getCompanyLogoHandler);
 companyRouter.patch("/branding", requireRole("admin"), validate(updateBrandingSchema), updateBrandingHandler);
 
 // Admin Console "Company Settings" (Phase 10) — GET open like branding above, PATCH admin-only.

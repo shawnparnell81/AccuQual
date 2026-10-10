@@ -102,7 +102,7 @@ export function RecordGlance({
   numberControl?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="record-glance flex flex-col gap-3" data-print-title={title} data-print-number={standard ?? ""}>
       {crumbs && crumbs.length > 0 && <RecordCrumbs items={crumbs} />}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
