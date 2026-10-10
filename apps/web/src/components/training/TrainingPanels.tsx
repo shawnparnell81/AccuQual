@@ -360,7 +360,7 @@ function ScheduleModal({ courseId, onClose }: { courseId: number; onClose: () =>
         </div>
         <SelectField label="Instructor" value={instructor} onChange={(e) => setInstructor(e.target.value)}>
           <option value="">Not chosen</option>
-          {people.map((p) => (
+          {people.filter((p) => p.isActive !== false).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name ?? p.email}
             </option>
@@ -369,7 +369,7 @@ function ScheduleModal({ courseId, onClose }: { courseId: number; onClose: () =>
         <fieldset className="flex flex-col gap-1">
           <legend className="mb-1 text-sm font-medium">Who is coming</legend>
           <ul className="max-h-40 overflow-y-auto rounded-md border border-border p-2 text-sm">
-            {people.map((p) => (
+            {people.filter((p) => p.isActive !== false).map((p) => (
               <li key={p.id}>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={roster.includes(p.id)} onChange={(e) => setRoster((r) => (e.target.checked ? [...r, p.id] : r.filter((x) => x !== p.id)))} />
@@ -408,7 +408,7 @@ function AttendanceModal({ session, onClose }: { session: SessionRow; onClose: (
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't complete the session.")),
   });
-  const addable = people.filter((p) => !rows.some((r) => r.userId === p.id));
+  const addable = people.filter((p) => p.isActive !== false && !rows.some((r) => r.userId === p.id));
   return (
     <Modal title="Attendance" isOpen onClose={onClose}>
       <div className="flex flex-col gap-3">
@@ -592,7 +592,7 @@ function RequestModal({ course, onClose }: { course: CourseFull; onClose: () => 
       <div className="flex flex-col gap-3">
         <SelectField label="Who should be evaluated" value={userId} onChange={(e) => setUserId(e.target.value)}>
           <option value="">Choose…</option>
-          {people.map((p) => (
+          {people.filter((p) => p.isActive !== false).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name ?? p.email}
             </option>

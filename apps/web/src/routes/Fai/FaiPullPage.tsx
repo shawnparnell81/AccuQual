@@ -6,7 +6,7 @@ import { useFaiLookups, useFaiPulls, useFaiRecords, useInvalidateFai } from "../
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { canApproveFai, formalDate } from "../../lib/faiLogic";
-import { personLabel } from "../../lib/opsLanguage";
+import { peopleForAssignment, personLabel } from "../../lib/opsLanguage";
 
 export function FaiPullPage() {
   const pulls = useFaiPulls();
@@ -76,7 +76,7 @@ export function FaiPullPage() {
                   {quality ? (
                     <select className="rounded-md border border-border bg-background px-2 py-1" aria-label={`Assign ${row.partNumber}`} value={chosen} onChange={(event) => setAssignee((current) => ({ ...current, [row.partNumber]: event.target.value }))}>
                       <option value="">Select</option>
-                      {lookups.data?.people.map((person) => (
+                      {peopleForAssignment(lookups.data?.people ?? [], row.assignedTo).map((person) => (
                         <option key={person.id} value={person.id}>{person.name?.trim() || person.email}</option>
                       ))}
                     </select>

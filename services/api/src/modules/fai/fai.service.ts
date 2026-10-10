@@ -24,6 +24,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { FAI_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, claimRecordNumber, showRecordNumber } from "../records/userRecordNumber.js";
 import { formatUserLabel } from "../users/userDisplay.js";
+import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 import { notifyRecipients } from "../notifications/notification.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { mapSeverityToClassification, ncrIsoDate, syncNcrFormData } from "../ncr/ncr.formSync.js";
@@ -251,11 +252,11 @@ async function presentPlan(db: Db, plan: FaiInspectionPlan, revisionNumber?: num
 
 export async function listLookups(db: Db) {
   const supplierRows = await db.select({ id: suppliers.id, name: suppliers.name, status: suppliers.status }).from(suppliers).orderBy(asc(suppliers.name));
-  const people = await db
-    .select({ id: users.id, name: users.name, email: users.email, department: users.department })
+  const peopleRows = await db
+    .select({ id: users.id, name: users.name, email: users.email, department: users.department, isActive: users.isActive })
     .from(users)
-    .where(and(eq(users.isActive, true), inArray(users.department, ["quality", "engineering"])))
-    .orderBy(asc(users.name));
+    .where(inArray(users.department, ["quality", "engineering"]));
+  const people = await sortByDisplayOrder(db, peopleRows, (person) => person.id, (person) => displayName(person.name, person.email));
   const plans = await db
     .select({
       id: faiInspectionPlans.id,

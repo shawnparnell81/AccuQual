@@ -11,6 +11,16 @@ export function rejectSupplierReads(req: Request, _res: Response, next: NextFunc
   next();
 }
 
+/**
+ * Owner and Administrator, the same full-access check that already opens
+ * user administration. The route does not list role names.
+ */
+export function requireFullAccess(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) throw AppError.unauthorized();
+  if (!isFullAccessRole(req.user.roleName)) throw AppError.forbidden("Requires an administrator.");
+  next();
+}
+
 /** Restricts a route to one of the given role names. Must run after `requireAuth`. Owner satisfies every check that names admin. */
 export function requireRole(...allowedRoles: string[]) {
   return (req: Request, _res: Response, next: NextFunction) => {

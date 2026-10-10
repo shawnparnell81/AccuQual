@@ -15,6 +15,7 @@ import {
   ncrNextAction,
   ncrStepLabel,
   NCR_STEPS,
+  peopleForAssignment,
   personLabel,
   plainNav,
   recordPath,
@@ -91,6 +92,16 @@ describe("ownership and dates", () => {
     assert.equal(personLabel(undefined, 9), "Assigned");
     assert.equal(personLabel([{ id: 2, name: "  ", email: "a@b.c" }], 2), "a@b.c");
     assert.equal(personLabel([{ id: 5, name: "Jane Doe", email: "jane@x.com", isActive: false }], 5), "Jane Doe (inactive)");
+  });
+
+  it("offers active people for a new assignment and keeps a deactivated name already on the record", () => {
+    const people = [
+      { id: 1, name: "Ada", email: "ada@plant.test", isActive: true },
+      { id: 2, name: "Bea", email: "bea@plant.test", isActive: false },
+    ];
+    assert.deepEqual(peopleForAssignment(people).map((person) => person.id), [1]);
+    assert.deepEqual(peopleForAssignment(people, 2).map((person) => person.id), [1, 2]);
+    assert.deepEqual(peopleForAssignment(people, null).map((person) => person.id), [1]);
   });
 
   it("treats a past calendar day as late and a closed record as finished", () => {

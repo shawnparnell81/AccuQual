@@ -18,6 +18,7 @@ export interface FaiLookupPerson {
   name: string | null;
   email: string;
   department: string | null;
+  isActive?: boolean;
 }
 
 export interface FaiLookups {

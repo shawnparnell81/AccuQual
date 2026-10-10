@@ -25,6 +25,7 @@ import { deleteUserSchema } from "./users.validation.js";
 import { withTableOwner, type Db } from "../../lib/requestDb.js";
 import { omitUserSecrets } from "./publicUser.js";
 import { emptySidebarShortcuts, normalizeSidebarShortcuts } from "./sidebarPrefs.js";
+import { displayName, movedPerson, saveUserDisplayOrder, sortByDisplayOrder } from "./userDisplayOrder.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -39,14 +40,24 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       mfaEnabled: users.mfaEnabled,
       lockedUntil: users.lockedUntil,
       createdAt: users.createdAt,
+      roleRank: roles.hierarchyLevel,
     })
-    .from(users);
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id));
+  const ordered = await sortByDisplayOrder(
+    req.db!,
+    rows,
+    (person) => person.id,
+    (person) => displayName(person.name, person.email),
+    req.user?.id,
+    (person) => person.roleRank,
+  );
   if (isFullAccessRole(req.user?.roleName)) {
-    res.json(rows);
+    res.json(ordered.map(({ roleRank: _roleRank, ...person }) => person));
     return;
   }
   res.json(
-    rows.map((person) => ({
+    ordered.map((person) => ({
       id: person.id,
       email: person.email,
       name: person.name,
@@ -57,6 +68,43 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       createdAt: person.createdAt,
     })),
   );
+});
+
+export const updateUserDisplayOrder = asyncHandler(async (req: Request, res: Response) => {
+  if (!isFullAccessRole(req.user?.roleName)) throw AppError.forbidden("Requires an administrator.");
+  const { userIds, movedUserId } = req.body as { userIds: number[]; movedUserId?: number };
+  const rows = await req
+    .db!.select({ id: users.id, name: users.name, email: users.email, roleRank: roles.hierarchyLevel })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id));
+  const displayed = await sortByDisplayOrder(
+    req.db!,
+    rows,
+    (person) => person.id,
+    (person) => displayName(person.name, person.email),
+    req.user?.id,
+    (person) => person.roleRank,
+  );
+  const known = new Set(displayed.map((person) => person.id));
+  const unique = new Set(userIds);
+  if (unique.size !== userIds.length || unique.size !== known.size || displayed.some((person) => !unique.has(person.id))) {
+    throw AppError.badRequest("Include each person once.");
+  }
+  if (movedUserId != null && !unique.has(movedUserId)) throw AppError.badRequest("That person is not in the list.");
+  const beforeIds = displayed.map((person) => person.id);
+  const targetId = movedUserId ?? movedPerson(beforeIds, userIds);
+  const person = targetId == null ? undefined : displayed.find((row) => row.id === targetId);
+  const fromPosition = targetId == null ? -1 : beforeIds.indexOf(targetId) + 1;
+  const toPosition = targetId == null ? -1 : userIds.indexOf(targetId) + 1;
+  await saveUserDisplayOrder(
+    req.db!,
+    userIds,
+    req.user?.id,
+    person && fromPosition > 0 && toPosition > 0
+      ? { movedUserId: person.id, movedUserName: displayName(person.name, person.email), fromPosition, toPosition }
+      : null,
+  );
+  res.json({ userIds });
 });
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {
@@ -93,8 +141,9 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     managerId?: number | null;
   };
   if (managerId != null) {
-    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, managerId));
+    const [manager] = await req.db!.select({ id: users.id, isActive: users.isActive }).from(users).where(eq(users.id, managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
+    if (!manager.isActive) throw AppError.badRequest("Choose an active person.");
   }
   // Said together so one submit explains every problem. A duplicate used to hit the unique-email rule and come back as a server error.
   const problems: string[] = [];
@@ -134,7 +183,7 @@ async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<numb
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const [before] = await req
-    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email })
+    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email, managerId: users.managerId })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
     .where(eq(users.id, id));
@@ -144,8 +193,9 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   if (body.isActive === false && id === req.user?.id) throw new AppError("You can't turn off your own account.", 409);
   if (body.managerId != null) {
     if (body.managerId === id) throw AppError.badRequest("A person can't be their own manager.");
-    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, body.managerId));
+    const [manager] = await req.db!.select({ id: users.id, isActive: users.isActive }).from(users).where(eq(users.id, body.managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
+    if (!manager.isActive && body.managerId !== before.managerId) throw AppError.badRequest("Choose an active person.");
   }
   if (body.email !== undefined) {
     const email = body.email.trim().toLowerCase();

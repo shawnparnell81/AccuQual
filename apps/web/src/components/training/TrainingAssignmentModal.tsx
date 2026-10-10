@@ -8,6 +8,7 @@ interface Employee {
   id: number;
   name: string | null;
   email: string;
+  isActive?: boolean;
 }
 
 /** Assigns a course to one or more employees at once (POST /training/:id/assign) — creates a "pending" (schema's "assigned") record per employee, each with its own audit trail entry. */
@@ -55,7 +56,7 @@ export function TrainingAssignmentModal({ courseId, isOpen, onClose }: { courseI
           <label className="mb-1 block text-sm font-medium">Employees</label>
           <div className="max-h-48 overflow-y-auto rounded-md border border-border">
             {employees.length === 0 && <p className="p-3 text-sm text-muted-foreground">No employees found.</p>}
-            {employees.map((emp) => (
+            {employees.filter((emp) => emp.isActive !== false).map((emp) => (
               <label key={emp.id} className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-0 hover:bg-muted">
                 <input type="checkbox" checked={selected.has(emp.id)} onChange={() => toggle(emp.id)} />
                 <span>{emp.name ?? emp.email}</span>

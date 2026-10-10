@@ -9,7 +9,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { canApproveFai, judgeFrozen, type PassFailWord } from "../../lib/faiLogic";
 import { faiFill } from "../../lib/qualitySheetLogic";
-import { personLabel } from "../../lib/opsLanguage";
+import { peopleForAssignment, personLabel } from "../../lib/opsLanguage";
 import { RecordNumberEditor } from "../../components/forms/RecordNumberField";
 import { recordHeading, showRecordNumber } from "../../lib/userRecordNumber";
 import { RecordFrame } from "../../components/records/RecordFrame";
@@ -192,7 +192,7 @@ export function FaiRecordPage() {
                 {editable ? (
                   <select className="iso-in" aria-label="Assigned to" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
                     <option value="">Unassigned</option>
-                    {lookups.data?.people.map((person) => (
+                    {peopleForAssignment(lookups.data?.people ?? [], data.assignedTo).map((person) => (
                       <option key={person.id} value={person.id}>{person.name?.trim() || person.email}</option>
                     ))}
                   </select>

@@ -1,16 +1,17 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireFullAccess, requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withDb } from "../../lib/requestDb.js";
-import { createUserSchema, updateUserSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema, updateMyWorkspaceLayoutSchema } from "./users.validation.js";
-import { listUsers, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts, getMyWorkspaceLayout, updateMyWorkspaceLayout, resetMyWorkspaceLayout } from "./users.controller.js";
+import { createUserSchema, updateUserSchema, updateUserDisplayOrderSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema, updateMyWorkspaceLayoutSchema } from "./users.validation.js";
+import { listUsers, updateUserDisplayOrder, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts, getMyWorkspaceLayout, updateMyWorkspaceLayout, resetMyWorkspaceLayout } from "./users.controller.js";
 
 export const usersRouter = Router();
 
 usersRouter.use(requireAuth, withDb);
 
 usersRouter.get("/", requireRole("admin", "quality_manager"), listUsers);
+usersRouter.put("/display-order", requireFullAccess, validate(updateUserDisplayOrderSchema), updateUserDisplayOrder);
 usersRouter.post("/", requireRole("admin"), validate(createUserSchema), createUser);
 
 // Any authenticated user, own row only — see getMyTheme/updateMyTheme's own

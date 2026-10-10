@@ -15,6 +15,7 @@ import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import { PDF_ONLY_ERROR, sniffPdf } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
+import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 
 // Distinct from "Document" and "DocumentFolder" — see those modules' own
 // comments on why each entity keeps its own entityType.
@@ -187,5 +188,5 @@ export const employeeHistoryHandler = asyncHandler(async (req: Request, res: Res
 /** People for assignment pickers. Inactive accounts stay in the list so their name can be shown with "(inactive)". */
 export const listEmployeesHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive }).from(users);
-  res.json(rows);
+  res.json(await sortByDisplayOrder(req.db!, rows, (person) => person.id, (person) => displayName(person.name, person.email), req.user?.id));
 });
