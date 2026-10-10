@@ -227,30 +227,29 @@ describe("saved tabs stay closed across a reload", () => {
         length: 0,
       },
     });
-    useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedPaths: [] });
+    useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedKeys: [] });
   });
 
-  it("drops a closed NCR tab even when a record and CAPA are still open", () => {
+  it("drops a closed Quality tab and does not open NCR, the record, or CAPA again", () => {
     useTabStore.getState().loadForUser("owner-1");
     useTabStore.getState().openTab({ path: "/", title: "Dashboard", icon: "dashboard" });
     useTabStore.getState().openTab({ path: "/ncr", title: "NCR", icon: "ncr" });
-    useTabStore.getState().openTab({ path: "/ncr/11", title: "NCR", icon: "ncr" });
-    useTabStore.getState().openTab({ path: "/capa/4", title: "CAPA", icon: "capa" });
-    const ncr = useTabStore.getState().tabs.find((row) => row.path === "/ncr");
-    assert.ok(ncr);
-    useTabStore.getState().activateTab(ncr.id);
-    const next = useTabStore.getState().closeTab(ncr.id);
+    useTabStore.getState().openTab({ path: "/documents", title: "Documents", icon: "documents" });
+    const quality = useTabStore.getState().tabs.find((row) => row.path === "/ncr");
+    assert.ok(quality);
+    useTabStore.getState().activateTab(quality.id);
+    const next = useTabStore.getState().closeTab(quality.id);
     assert.equal(next, "/");
-    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr"), false);
-    assert.equal(useTabStore.getState().syncActiveTabLocation("/ncr", "NCR", "ncr"), "/");
-    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr"), false);
-    assert.equal(useTabStore.getState().syncActiveTabLocation("/ncr/11", "NCR", "ncr"), null);
-    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr"), false);
+    assert.equal(useTabStore.getState().activeId === quality.id, false);
+    for (const path of ["/ncr", "/ncr/11", "/capa", "/capa/4", "/8d/2"]) {
+      assert.equal(useTabStore.getState().syncActiveTabLocation(path, "Quality", "quality"), "/");
+      assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr" || row.path.startsWith("/ncr/") || row.path.startsWith("/capa") || row.path.startsWith("/8d")), false, path);
+    }
 
-    useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedPaths: [] });
+    useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedKeys: [] });
     useTabStore.getState().loadForUser("owner-1");
     assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr"), false);
-    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr/11"), true);
+    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/documents"), true);
     const afterReload = useTabStore.getState().syncActiveTabLocation("/ncr", "NCR", "ncr");
     assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr"), false);
     assert.equal(afterReload, useTabStore.getState().tabs.find((row) => row.id === useTabStore.getState().activeId)?.path);
