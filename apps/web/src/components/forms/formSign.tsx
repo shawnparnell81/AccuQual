@@ -11,6 +11,7 @@ export interface FormSignInput {
   path: string;
   description: string;
   pin: string;
+  certified: boolean;
 }
 
 type FormSigner = (input: FormSignInput) => Promise<FormSignResult>;
@@ -24,7 +25,7 @@ export function FormSignProvider({ formType, entityId, children }: { formType: s
     async (input) => {
       const response = await apiClient.post<FormSignResult>(`/forms/${formType}/${entityId}/sign`, {
         pin: input.pin,
-        certified: true,
+        certified: input.certified,
         path: input.path,
         description: input.description,
       });
