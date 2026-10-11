@@ -112,23 +112,19 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
 // on hand — not form_data's own internal id. These two resolve it first.
 
 export const createVersion = asyncHandler(async (req: Request, res: Response) => {
-  let current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
-  if (!current) {
-    // The Training Record form is opened from an assignment row, not from a
-    // saved form. Create the form_data row on first "Complete Training" so
-    // it doesn't fail with "Form not found".
-    if (req.params.type === "training") {
-      const entityId = Number(req.params.id);
-      await formsService.saveData(req.db!, {
-        formType: "training",
-        entityId,
-        data: {},
-        userId: req.user?.id,
-      });
-      current = await formsService.loadData(req.db!, "training", entityId);
+  const current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
+  if (!current) throw AppError.notFound("Form");
+
+  // For training: check the completion date BEFORE creating a version, so a
+  // failed click doesn't add a useless history version. The form must exist
+  // (saved at least once) — we don't create empty records here.
+  if (req.params.type === "training") {
+    const data = (current.data ?? {}) as Record<string, unknown>;
+    if (!formCalendarDate(data.completionDate)) {
+      throw AppError.badRequest("Enter the completion date first.");
     }
-    if (!current) throw AppError.notFound("Form");
   }
+
   const updated = await formsService.createVersion(req.db!, current.id, req.user?.id);
 
   // The "Calibration Record" form is the single source of truth for a

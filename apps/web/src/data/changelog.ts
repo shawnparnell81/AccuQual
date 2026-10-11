@@ -17,7 +17,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "2026-10-11.9",
     date: "2026-10-11",
     items: [
-      "Training course page: removing the old developer note, added a confirm step on Unlink. Complete Training now creates the Training Record form if missing (instead of 'Form not found') and requires the completion date.",
+      "Training course page: removed the old developer note, added a confirm step on Unlink. Complete Training now checks for the completion date before saving a version (no wasted history entries) and requires the date to be entered first.",
     ],
   },
   {
