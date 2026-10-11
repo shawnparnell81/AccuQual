@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dispositionAdvances, mergeStageIntoDocument, missingClosureSignatures, readStageFromDocument, stageColumnPatch } from "../../src/modules/ncr/ncr.document.js";
+import { dispositionAdvances, mergeStageIntoDocument, missingClosureSignatures, readStageFromDocument, stageColumnPatch, stripRowZeroWaiver } from "../../src/modules/ncr/ncr.document.js";
 import { sourceNumberMatches } from "../../src/modules/ncr/ncr.sourceLink.js";
 
 describe("NCR document and the workflow stay one record", () => {
@@ -97,5 +97,48 @@ describe("link existing finds a form number", () => {
     expect(sourceNumberMatches("DEMO-CSA-002", "DEMO-CSA-002")).toBe(true);
     expect(sourceNumberMatches("DEMO-CSA-002", "csa-002")).toBe(true);
     expect(sourceNumberMatches("DEMO-CSA-002", "")).toBe(false);
+  });
+});
+
+describe("NCR closure Not-required marks", () => {
+  it("close succeeds when rows 1+ are Not required and row 0 is signed", () => {
+    const missing = missingClosureSignatures({
+      _signatureRequired: { "closureApprovals.3.signature": "no" },
+      closureApprovals: [
+        { signature: "Ada 2026-10-10 10:00" },
+        { signature: "Not required – Bea 2026-10-10 11:00" },
+        { signature: "Not required – Cam 2026-10-10 12:00" },
+      ],
+    });
+    expect(missing).toEqual([]);
+  });
+
+  it("a plain 'Not required' label without the dash does NOT count as signed", () => {
+    const missing = missingClosureSignatures({
+      closureApprovals: [
+        { signature: "Ada 2026-10-10 10:00" },
+        { signature: "Not required" },
+      ],
+    });
+    expect(missing.length).toBeGreaterThan(0);
+    expect(missing[0]?.path).toBe("closureApprovals.1.signature");
+  });
+
+  it("row 0 with _signatureRequired 'no' is ignored (still required)", () => {
+    const missing = missingClosureSignatures({
+      _signatureRequired: { "closureApprovals.0.signature": "no" },
+      closureApprovals: [{ signature: "" }],
+    });
+    expect(missing.length).toBeGreaterThan(0);
+    expect(missing[0]?.path).toBe("closureApprovals.0.signature");
+  });
+
+  it("stripRowZeroWaiver removes a stored 'no' for row 0", () => {
+    const data = stripRowZeroWaiver({
+      _signatureRequired: { "closureApprovals.0.signature": "no", "closureApprovals.1.signature": "no" },
+    });
+    const map = data._signatureRequired as Record<string, string>;
+    expect(map["closureApprovals.0.signature"]).toBeUndefined();
+    expect(map["closureApprovals.1.signature"]).toBe("no");
   });
 });

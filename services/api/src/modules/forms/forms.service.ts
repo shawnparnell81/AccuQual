@@ -12,6 +12,7 @@ import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js"
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { diffSignatureRequired, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
+import { stripRowZeroWaiver } from "../ncr/ncr.document.js";
 
 export const FORM_AUDIT_ENTITY: Record<string, string> = {
   ncr: "NCR",
@@ -104,10 +105,12 @@ export async function saveData(db: Db, input: SaveInput) {
   const existing = await loadData(db, input.formType, input.entityId);
   const previous = (existing?.data ?? {}) as Record<string, unknown>;
   const blocks = signatureBlocksFor(`form:${input.formType}`);
-  const signed = withSanitizedRequired(
+  let signed = withSanitizedRequired(
     input.trustSignatures ? input.data : (retainSignatureValues(previous, input.data) as Record<string, unknown>),
     blocks,
   );
+  // NCR row 0 (Quality Manager) can never be waived; strip a stored "no".
+  if (input.formType === "ncr") signed = stripRowZeroWaiver(signed);
   const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, signed, !existing);
   const edits = input.entityId != null ? formDataEdits(existing?.data, data, input.formType) : [];
   if (input.entityId != null) {
