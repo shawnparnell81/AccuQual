@@ -161,7 +161,7 @@ test("live CSA copy: ≤ rows pass inside the max, blank tolerance stays blank, 
   cells.D18 = 26;
   result = evaluate(cells);
   assert.equal(result.F18, "Failed");
-  assert.equal(result.A1, "");
+  assert.equal(result.A1, "Failed");
 
   cells.C18 = "≥";
   cells.D18 = 25;
@@ -261,4 +261,22 @@ test("A1 stays blank until every scored row has a pass/fail result", () => {
   const partial = evaluate(cells);
   assert.equal(partial.F12, "");
   assert.equal(partial.A1, "");
+});
+
+test("A1 counts NA rows as graded and shows Failed immediately on any failure", () => {
+  const cells = passingExample();
+  // Mark one row NA — it computes #VALUE! but must not block A1.
+  cells.D30 = "NA";
+  const withNa = evaluate(cells);
+  assert.equal(withNa.A1, "Passed");
+
+  // A single failure shows Failed even with other rows blank.
+  const partial = passingExample();
+  partial.D12 = ""; // blank out a passing row
+  partial.B12 = "";
+  // Force F18 to fail by making the sample out of tolerance
+  partial.D18 = 999;
+  const failed = evaluate(partial);
+  assert.equal(failed.F18, "Failed");
+  assert.equal(failed.A1, "Failed");
 });

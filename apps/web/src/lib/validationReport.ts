@@ -429,12 +429,18 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
     if (seen.has(addr)) continue;
     consider(addr, val);
   }
-  // A1 stays blank until every scored cell has a pass/fail result. An
-  // unfinished form must not read "Passed" — the header pill shows
-  // "In progress" for the same state.
+  // A1 shows "Failed" as soon as any scored row fails. It stays blank
+  // (not "Passed") while rows are still ungraded and there are no failures.
+  // A row counts as graded when its result is Passed/Failed, or when an
+  // input is marked NA (matching headerStatus.ts) — NA rows compute
+  // #VALUE! so they must not block A1 forever.
   const graded = /^(passed|failed)$/i;
-  const allScored = scored.every(([result]) => graded.test(String(computed[result] ?? "")));
-  computed.A1 = !allScored ? "" : failed > 0 ? "Failed" : "Passed";
+  const isNaRow = (_result: string, sample: string, nominal: string, tol: string) =>
+    [sample, nominal, tol].some((addr) => String(inputs[addr] ?? "").trim().toUpperCase() === "NA");
+  const allGraded = scored.every(
+    ([result, sample, nominal, tol]) => graded.test(String(computed[result] ?? "")) || isNaRow(result, sample, nominal, tol),
+  );
+  computed.A1 = failed > 0 ? "Failed" : !allGraded ? "" : "Passed";
   return computed;
 }
 

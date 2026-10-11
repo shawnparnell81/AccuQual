@@ -14,17 +14,10 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.2",
+    version: "2026-10-11.5",
     date: "2026-10-11",
     items: [
-      "The CSA validation sheet's top-left status cell stays blank until every row has a pass/fail result, instead of reading \"Passed\" on an unfinished form.",
-    ],
-  },
-  {
-    version: "2026-10-11.1",
-    date: "2026-10-11",
-    items: [
-      "On a CAPA, Cancel now throws away unsaved changes and returns the form to its last saved version. Save keeps the verification text you typed without moving the CAPA forward or signing anything.",
+      "The CSA validation sheet's top-left status cell shows Failed as soon as any row fails, stays blank while rows are ungraded, and counts NA rows as graded.",
     ],
   },
   {
