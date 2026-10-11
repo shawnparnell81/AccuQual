@@ -87,7 +87,8 @@ describe("workspace section tabs", () => {
     assert.equal(new Set(keys.values()).size, keys.size);
 
     assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/capa"));
-    assert.equal(workspaceTabKey("/ncr/9"), workspaceTabKey("/8d/4"));
+    assert.notEqual(workspaceTabKey("/ncr/9"), workspaceTabKey("/ncr/10"));
+    assert.notEqual(workspaceTabKey("/ncr/9"), workspaceTabKey("/8d/4"));
     assert.equal(workspaceTabKey("/documents/folders"), workspaceTabKey("/blank-forms"));
     assert.equal(workspaceTabKey("/form-folders/sop"), workspaceTabKey("/documents"));
     assert.equal(workspaceTabKey("/pareto"), workspaceTabKey("/reporting"));
@@ -127,7 +128,7 @@ describe("workspace section tabs", () => {
     assert.equal(deriveTabMeta("/").title, "Dashboard");
     assert.equal(deriveTabMeta("/executive").title, "Home · Executive dashboard");
     assert.equal(deriveTabMeta("/executive/list").title, "Records");
-    assert.equal(workspaceTabKey("/executive/list"), workspaceTabKey("/executive"));
+    assert.notEqual(workspaceTabKey("/executive/list"), workspaceTabKey("/executive"));
     assert.equal(isLiveTabPath("/executive"), true);
     assert.equal(isLiveTabPath("/audit-log"), true);
     assert.equal(isLiveTabPath("/documents/engineering-request-log"), true);
@@ -199,7 +200,7 @@ describe("workspace section tabs", () => {
   });
 
   it("closes the NCR section onto its neighbor and does not open it again", () => {
-    assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/ncr/11"));
+    // Note: /ncr/11 (a record) now gets its own tab key, separate from the /ncr list section.
     assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/capa"));
     assert.equal(workspaceTabKey("/ncr"), workspaceTabKey("/8d"));
     const open = [
@@ -214,12 +215,18 @@ describe("workspace section tabs", () => {
     assert.ok(closed.suppressed.includes(workspaceTabKey("/ncr")));
 
     let session = closed;
-    for (const path of ["/ncr", "/ncr/11", "/capa", "/8d/2"]) {
+    for (const path of ["/ncr", "/capa", "/8d"]) {
       const synced = syncClosedWorkspace(session.tabs, session.activeId, session.suppressed, { path, title: path, icon: "quality" }, () => "again", false);
       assert.equal(synced.tabs.some((row) => workspaceTabKey(row.path) === workspaceTabKey("/ncr")), false, path);
       assert.equal(synced.redirectTo, "/", path);
       assert.equal(synced.activeId, "home", path);
       session = { ...session, tabs: synced.tabs, activeId: synced.activeId, suppressed: synced.suppressed, navigateTo: synced.redirectTo };
+    }
+    // Records have their own tab keys now; opening /ncr/11 while the NCR section is closed
+    // should open the record tab (not be suppressed).
+    {
+      const synced = syncClosedWorkspace(session.tabs, session.activeId, session.suppressed, { path: "/ncr/11", title: "/ncr/11", icon: "quality" }, () => "again", false);
+      assert.equal(synced.redirectTo, null);
     }
 
     const reopened = syncClosedWorkspace(session.tabs, session.activeId, session.suppressed, { path: "/ncr", title: "Quality · NCR", icon: "quality" }, () => "quality-2", true);
@@ -231,7 +238,7 @@ describe("workspace section tabs", () => {
 
   it("drops a closed section when saved tabs are loaded again", () => {
     const closed = closeWorkspaceTab(
-      [tab("home", "/"), tab("quality", "/ncr/11"), tab("docs", "/documents")],
+      [tab("home", "/"), tab("quality", "/ncr"), tab("docs", "/documents")],
       "quality",
       [],
       "quality",
@@ -242,5 +249,16 @@ describe("workspace section tabs", () => {
     const bounced = syncClosedWorkspace(loaded.tabs, loaded.activeId, closed.suppressed, { path: "/capa", title: "Quality · CAPA", icon: "quality" }, () => "nope", false);
     assert.equal(bounced.redirectTo, "/");
     assert.equal(bounced.tabs.length, loaded.tabs.length);
+  });
+
+  it("gives dashboard, two filtered lists, and two records five distinct tab keys", () => {
+    const keys = new Set([
+      workspaceTabKey("/executive"),
+      workspaceTabKey("/executive/list?kind=ncr&bucket=open&dateRange=90d&siteId=6"),
+      workspaceTabKey("/executive/list?kind=fai&bucket=open&dateRange=90d&siteId=6"),
+      workspaceTabKey("/ncr/123"),
+      workspaceTabKey("/capa/456"),
+    ]);
+    assert.equal(keys.size, 5);
   });
 });

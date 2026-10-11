@@ -102,7 +102,10 @@ export function StartBlankFormPage() {
     const start = form.start;
     const deferred = blankDraftState(start);
     if (deferred) {
-      navigate(unsavedBlankPath(start.openPath), { replace: true, state: deferred });
+      // Pass formKey as query param too, so the blank page can recover if location.state is lost.
+      const base = unsavedBlankPath(start.openPath);
+      const sep = base.includes("?") ? "&" : "?";
+      navigate(`${base}${sep}formKey=${encodeURIComponent(formKey)}`, { replace: true, state: deferred });
       return;
     }
     void apiClient.post<{ id: number }>(start.createPath, start.body).then(
