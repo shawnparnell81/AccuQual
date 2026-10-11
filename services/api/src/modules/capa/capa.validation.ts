@@ -25,6 +25,7 @@ export const createCapaSchema = z.object({
   rootCause: freeTextField(),
   actionPlan: freeTextField(),
   preventiveAction: freeTextField(),
+  verification: freeTextField(),
   ownerId: z.number().int().optional(),
   dueDate: reasonableDate.nullable().optional(),
   recordNumber: recordNumberSchema,
