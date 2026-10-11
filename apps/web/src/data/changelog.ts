@@ -14,7 +14,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.7",
+    version: "2026-10-11.8",
     date: "2026-10-11",
     items: [
       "If the Executive dashboard drill panel hits a render error, it now shows 'Couldn't show these records' instead of a blank white panel.",
