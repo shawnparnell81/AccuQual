@@ -23,7 +23,7 @@ import { capaStepFieldEditable, textStillDirty, type CapaNarrativeField } from "
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
-import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureBoundText } from "../../components/forms/PictureText";
@@ -62,37 +62,15 @@ export function CapaDetailPage() {
   const rootCommit = useRef<(() => void) | null>(null);
   const planCommit = useRef<(() => void) | null>(null);
   const preventCommit = useRef<(() => void) | null>(null);
-  const rootDiscard = useRef<(() => void) | null>(null);
-  const planDiscard = useRef<(() => void) | null>(null);
-  const preventDiscard = useRef<(() => void) | null>(null);
   const [pendingNarrative, setPendingNarrative] = useState<Record<string, boolean>>({});
   const narrativeDirty = Object.values(pendingNarrative).some(Boolean);
   function noteNarrative(key: string) {
     return (value: string | null) => setPendingNarrative((current) => ({ ...current, [key]: value != null }));
   }
-  function verificationDirty() {
-    return verificationTouched && textStillDirty(capa?.verification ?? "", verification);
-  }
   function flushNarrative() {
     rootCommit.current?.();
     planCommit.current?.();
     preventCommit.current?.();
-    // Save keeps the verification text that was typed, without moving the
-    // CAPA forward or signing anything — a plain field save, not the verify action.
-    if (verificationDirty()) updateCapa.mutate({ id: capaId, verification });
-  }
-  function cancelEdit() {
-    // Cancel throws away unsaved changes and returns to the last saved version.
-    rootDiscard.current?.();
-    planDiscard.current?.();
-    preventDiscard.current?.();
-    setVerification(capa?.verification ?? "");
-    setVerificationTouched(false);
-    formLock.lock();
-  }
-  function doneEdit() {
-    flushNarrative();
-    formLock.lock();
   }
   const startAction = useWorkflowAction("capa", "start", { successMessage: "CAPA started.", invalidateKeys: historyKey });
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
@@ -104,7 +82,7 @@ export function CapaDetailPage() {
   useEffect(() => {
     setVerification(capa?.verification ?? "");
     setVerificationTouched(false);
-  }, [capa?.verification]);
+  }, [capa?.verification, capa?.status]);
 
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this CAPA. Refresh the page and try again." noun="this CAPA" />;
   if (isLoading || !capa) return <LoadingPlaceholder />;
@@ -177,7 +155,15 @@ export function CapaDetailPage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateCapa.isPending} onEdit={() => formLock.onEdit()} onSave={flushNarrative} onLock={formLock.lock} onCancel={cancelEdit} onDone={doneEdit} />
+            <SavedFormLockBar
+              mode={formLock.mode}
+              canEdit={permitted}
+              pending={updateCapa.isPending}
+              onEdit={() => formLock.onEdit()}
+              onSave={flushNarrative}
+              onCancel={formLock.lock}
+              onDone={() => { flushNarrative(); formLock.lock(); }}
+            />
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
@@ -199,7 +185,7 @@ export function CapaDetailPage() {
         }
         trail={<LoopTrail steps={CAPA_LOOP} current={capaLoopIndex(capa.status)} />}
       />
-      <SaveStatus saving={updateCapa.isPending} unsaved={narrativeDirty || verificationDirty()} />
+      <SaveStatus saving={updateCapa.isPending} unsaved={narrativeDirty || (verificationTouched && textStillDirty(capa.verification ?? "", verification))} />
       <p className="text-sm text-muted-foreground">
         {capa.ncrId ? (
           <>
@@ -237,7 +223,6 @@ export function CapaDetailPage() {
             entityId={capaId}
             rows={4}
             commitRef={rootCommit}
-            discardRef={rootDiscard}
             onPendingChange={noteNarrative("rootCause")}
             className={narrativeClass}
             onSave={(value) => stepField("rootCause") && updateCapa.mutate({ id: capaId, rootCause: value })}
@@ -255,7 +240,6 @@ export function CapaDetailPage() {
             entityId={capaId}
             rows={4}
             commitRef={planCommit}
-            discardRef={planDiscard}
             onPendingChange={noteNarrative("actionPlan")}
             className={narrativeClass}
             onSave={(value) => stepField("actionPlan") && updateCapa.mutate({ id: capaId, actionPlan: value })}
@@ -273,7 +257,6 @@ export function CapaDetailPage() {
             entityId={capaId}
             rows={4}
             commitRef={preventCommit}
-            discardRef={preventDiscard}
             onPendingChange={noteNarrative("preventiveAction")}
             className={narrativeClass}
             onSave={(value) => stepField("preventiveAction") && updateCapa.mutate({ id: capaId, preventiveAction: value })}

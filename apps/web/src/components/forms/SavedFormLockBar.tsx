@@ -69,8 +69,6 @@ export function ModuleFormLock({
   onEdit,
   onSave,
   onLock,
-  onCancel,
-  onDone,
 }: {
   mode: SavedFormMode;
   canEdit: boolean;
@@ -79,10 +77,6 @@ export function ModuleFormLock({
   /** Persist the open session. Does not lock. */
   onSave?: () => void;
   onLock: () => void;
-  /** Cancel discards unsaved changes, then locks. Defaults to onLock. */
-  onCancel?: () => void;
-  /** Done persists any pending drafts, then locks. Defaults to onLock. */
-  onDone?: () => void;
 }) {
-  return <SavedFormLockBar mode={mode} canEdit={canEdit} pending={pending} onEdit={onEdit} onSave={() => onSave?.()} onCancel={onCancel ?? onLock} onDone={onDone ?? onLock} />;
+  return <SavedFormLockBar mode={mode} canEdit={canEdit} pending={pending} onEdit={onEdit} onSave={() => onSave?.()} onCancel={onLock} onDone={onLock} />;
 }
