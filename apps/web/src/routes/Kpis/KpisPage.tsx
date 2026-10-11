@@ -6,7 +6,7 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import { Modal } from "../../components/modals/Modal";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useToast } from "../../components/shared/ToastProvider";
-import { ExecutiveDrillPanel, type DrillListRow } from "../../components/executive/ExecutiveDrillPanel";
+import { SafeExecutiveDrillPanel as ExecutiveDrillPanel, type DrillListRow } from "../../components/executive/ExecutiveDrillPanel";
 import { KpiCatalog, PlantToggle, usePlantChoice } from "../../components/kpis/KpiBoards";
 import { UpdatedStamp } from "../../components/kpis/UpdatedStamp";
 import { KPI_QUERY_KEY, useKpis } from "../../hooks/useKpis";
