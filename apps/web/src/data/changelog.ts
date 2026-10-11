@@ -14,7 +14,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.5",
+    version: "2026-10-11.6",
     date: "2026-10-11",
     items: [
       "The Calibration on time KPI's View records now lists every gage behind the percentage, instead of showing 0 records.",
