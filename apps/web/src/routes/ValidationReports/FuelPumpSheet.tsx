@@ -15,7 +15,7 @@ interface FuelPumpSheetProps {
 
 type Slot = FuelCell | "covered" | "empty" | "gap";
 
-const FUEL_COLUMNS = "306px 141px 141px 141px 92px 92px 92px 86px 16px 74px 74px";
+const FUEL_COLUMNS = "306px 141px 141px 141px 92px 130px 92px 140px 16px 74px 74px";
 
 function occupy(grid: Slot[][], row: number, spec: FuelCell) {
   for (let dc = 0; dc < spec.span; dc += 1) {

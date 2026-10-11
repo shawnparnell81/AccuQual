@@ -234,7 +234,7 @@ export function NcrWorkspacePage() {
               type="date"
               aria-label="Due date"
               value={ncr.dueDate ? ncr.dueDate.slice(0, 10) : ""}
-              onChange={(e) => updateNcr.mutate({ id: ncrId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              onChange={(e) => updateNcr.mutate({ id: ncrId, dueDate: e.target.value || null })}
               className="rounded-md border border-border bg-background px-2 py-1 text-sm"
             />
           ) : undefined

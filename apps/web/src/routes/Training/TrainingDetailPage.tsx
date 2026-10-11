@@ -148,7 +148,11 @@ export function TrainingDetailPage() {
             {mayManage && (
               <button
                 type="button"
-                onClick={() => updateCourse.mutate({ id: courseId, documentId: null })}
+                onClick={() => {
+                  if (window.confirm("Unlink this document from the course? People will no longer be sent back here when it changes.")) {
+                    updateCourse.mutate({ id: courseId, documentId: null });
+                  }
+                }}
                 disabled={updateCourse.isPending}
                 className="shrink-0 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-60"
               >
@@ -217,12 +221,7 @@ export function TrainingDetailPage() {
           <DocumentRetentionPanel document={material} />
           <DocumentHistoryPanel documentId={material.id} />
         </>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          No controlled document linked to this course's material yet — link one via <code>PATCH /training/{courseId}</code>{" "}
-          <code>{"{ documentId }"}</code> to get approval, revision, expiration, and retention tracking.
-        </p>
-      )}
+      ) : null}
 
       <RequirementsPanel course={course as CourseFull} />
       <QualificationPanel courseId={courseId} />
