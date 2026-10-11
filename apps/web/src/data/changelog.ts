@@ -14,10 +14,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.8",
+    version: "2026-10-11.7",
     date: "2026-10-11",
     items: [
       "If the Executive dashboard drill panel hits a render error, it now shows 'Couldn't show these records' instead of a blank white panel.",
+    ],
+  },
+  {
+    version: "2026-10-11.1",
+    date: "2026-10-11",
+    items: [
+      "On a CAPA, Cancel now throws away unsaved changes and returns the form to its last saved version. Save keeps the verification text you typed without moving the CAPA forward or signing anything.",
     ],
   },
   {
