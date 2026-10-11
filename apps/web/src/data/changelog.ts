@@ -18,6 +18,13 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-11",
     items: [
       "If the Executive dashboard drill panel hits a render error, it now shows 'Couldn't show these records' instead of a blank white panel.",
+          ],
+  },
+  {
+    version: "2026-10-11.3",
+    date: "2026-10-11",
+    items: [
+      "The executive dashboard and KPI pass rates now read validation report outcomes from the saved disposition checkboxes, so reports with a ticked pass/fail show correctly instead of sitting at zero.",
     ],
   },
   {
