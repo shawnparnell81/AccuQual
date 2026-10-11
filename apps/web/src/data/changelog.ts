@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.1",
+    date: "2026-10-11",
+    items: [
+      "On a CAPA, Cancel now throws away unsaved changes and returns the form to its last saved version. Save keeps the verification text you typed without moving the CAPA forward or signing anything.",
+    ],
+  },
+  {
     version: "2026-10-10.4",
     date: "2026-10-10",
     items: [
