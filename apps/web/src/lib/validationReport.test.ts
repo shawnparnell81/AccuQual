@@ -48,7 +48,7 @@ test("a blank report leaves unscored rows empty and does not fail them", () => {
   assert.equal(result.D14, "");
   assert.equal(result.F14, "");
   assert.equal(result.B17, "#DIV/0!");
-  assert.equal(result.A1, "Passed");
+  assert.equal(result.A1, "");
   assert.equal(showValue("B17", result.B17), "#DIV/0!");
   assert.equal(showValue("B14", result.B14), "");
 });
@@ -156,7 +156,7 @@ test("live CSA copy: ≤ rows pass inside the max, blank tolerance stays blank, 
   assert.equal(result.B14, "");
   assert.equal(result.D14, "");
   assert.equal(result.F14, "");
-  assert.equal(result.A1, "Passed");
+  assert.equal(result.A1, "");
 
   cells.D18 = 26;
   result = evaluate(cells);
@@ -220,7 +220,7 @@ test("saved row 14 cache is ignored when only the tolerance was stored", () => {
   assert.equal(stale.B14, "");
   assert.equal(stale.D14, "");
   assert.equal(stale.F14, "");
-  assert.equal(stale.A1, "Passed");
+  assert.equal(stale.A1, "");
 
   const oneSided = evaluate({ ...saved, B13: 320, D15: 20 });
   assert.equal(oneSided.B14, "");
@@ -251,4 +251,32 @@ test("the sheet keeps the workbook labels, including the original spelling", () 
   assert.match(text, /Pass \/ Fail Sample 2/);
   assert.match(text, /6\.0 FINAL CONCLUSION/);
   assert.match(text, /Engineer who Approved Conditional Pass:/);
+});
+
+test("A1 stays blank until every scored row has a pass/fail result", () => {
+  const cells = passingExample();
+  // Knock out one row's inputs so it can't be graded.
+  cells.D12 = "";
+  cells.B12 = "";
+  const partial = evaluate(cells);
+  assert.equal(partial.F12, "");
+  assert.equal(partial.A1, "");
+});
+
+test("A1 counts NA rows as graded and shows Failed immediately on any failure", () => {
+  const cells = passingExample();
+  // Mark one row NA — it computes #VALUE! but must not block A1.
+  cells.D30 = "NA";
+  const withNa = evaluate(cells);
+  assert.equal(withNa.A1, "Passed");
+
+  // A single failure shows Failed even with other rows blank.
+  const partial = passingExample();
+  partial.D12 = ""; // blank out a passing row
+  partial.B12 = "";
+  // Force F18 to fail by making the sample out of tolerance
+  partial.D18 = 999;
+  const failed = evaluate(partial);
+  assert.equal(failed.F18, "Failed");
+  assert.equal(failed.A1, "Failed");
 });

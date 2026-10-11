@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.8",
+    date: "2026-10-11",
+    items: [
+      "The CSA validation sheet's top-left status cell shows Failed as soon as any row fails, stays blank while rows are ungraded, and counts NA rows as graded.",
+    ],
+  },
+  {
     version: "2026-10-11.7",
     date: "2026-10-11",
     items: [
