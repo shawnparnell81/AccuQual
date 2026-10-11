@@ -8,7 +8,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { ExecutiveDrillPanel, type DrillListRow } from "../../components/executive/ExecutiveDrillPanel";
+import { SafeExecutiveDrillPanel as ExecutiveDrillPanel, type DrillListRow } from "../../components/executive/ExecutiveDrillPanel";
 import { KpiChartCustomize, KpiPinnedCharts } from "../../components/kpis/KpiBoards";
 import { UpdatedStamp } from "../../components/kpis/UpdatedStamp";
 import { useKpis } from "../../hooks/useKpis";

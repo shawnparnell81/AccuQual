@@ -63,6 +63,7 @@ export interface KpiSource {
   assignments: KpiAssignment[];
   userSites: { userId: number; siteId: number }[];
   gageStatuses: string[];
+  gages: { id: number; name: string; serialNumber: string | null; dueStatus: string }[];
 }
 
 export interface DrillRow {
@@ -257,9 +258,28 @@ export function valueFor(metricId: string, source: KpiSource, window: TimeWindow
   if (metricId === "calibration_on_time") {
     const notes = ["Company-wide. Gages are not assigned to a plant, so Greer and Wellman show this same figure."];
     if (!window.live) return { value: null, rows: [], notes: [...notes, "Earlier months are not stored."] };
-    return { value: calibrationOnTimePercent(source.gageStatuses), rows: [], notes };
+    const rows: DrillRow[] = source.gages.map((gage) => ({
+      recordNumber: gage.serialNumber ?? `Gage #${gage.id}`,
+      title: gage.name,
+      status: dueStatusLabel(gage.dueStatus),
+      ageLabel: "—",
+      href: `/calibration/${gage.id}`,
+      module: "calibration",
+    }));
+    return { value: calibrationOnTimePercent(source.gageStatuses), rows, notes };
   }
   return { value: null, rows: [], notes: [] };
+}
+
+function dueStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    current: "Current",
+    due_soon: "Due soon",
+    overdue: "Overdue",
+    failed: "Failed",
+    uncalibrated: "Uncalibrated",
+  };
+  return labels[status] ?? status;
 }
 
 function countEvents(events: KpiEvent[], window: TimeWindow, plant: PlantPick, now: Date, noun: string): MetricValue {
