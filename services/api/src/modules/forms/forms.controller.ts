@@ -124,8 +124,9 @@ export const createVersion = asyncHandler(async (req: Request, res: Response) =>
   // deliberate, user-initiated "finalize this" action, so that's the trigger
   // for actually logging the event (and the due-date/status recompute that
   // comes with it), not every keystroke.
+  let calibrationEventLogged: boolean | undefined;
   if (req.params.type === "calibration" && current.entityId != null) {
-    await maybeLogCalibrationEvent(req, current.entityId, current.data);
+    calibrationEventLogged = await maybeLogCalibrationEvent(req, current.entityId, current.data);
   }
 
   // Same reasoning as Calibration above: the "Training Record" form's
@@ -139,7 +140,10 @@ export const createVersion = asyncHandler(async (req: Request, res: Response) =>
     await maybeCompleteTrainingAssignment(req, current.entityId, current.data);
   }
 
-  res.json(updated);
+  // Tell the client whether the version actually produced a calibration
+  // event: without a valid performed date the event is skipped server-side,
+  // and the UI must say so instead of toasting success.
+  res.json(calibrationEventLogged === undefined ? updated : { ...updated, calibrationEventLogged });
 });
 
 function formCalendarDate(value: unknown): Date | null {
@@ -147,11 +151,11 @@ function formCalendarDate(value: unknown): Date | null {
   return parsed.success ? parsed.data : null;
 }
 
-async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data: Record<string, unknown>): Promise<void> {
+async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data: Record<string, unknown>): Promise<boolean> {
   const performedAt = formCalendarDate(data.performedAt);
   if (!performedAt) {
     logger.warn(`Skipped auto-creating a calibration event for equipment ${equipmentId}: no valid performedAt in the form yet`);
-    return;
+    return false;
   }
   await createCalibrationEvent(
     req.db!,
@@ -164,6 +168,7 @@ async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data:
     },
     req.user?.id
   );
+  return true;
 }
 
 async function maybeCompleteTrainingAssignment(req: Request, assignmentId: number, data: Record<string, unknown>): Promise<void> {

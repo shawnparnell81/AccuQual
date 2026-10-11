@@ -125,6 +125,13 @@ export const createFromInspectionHandler = asyncHandler(async (req: Request, res
   await requireNcrEdit(req.db!, actor);
   const body = fromInspectionSchema.parse(req.body);
   if (!INSPECTION_FORM_TYPES.has(body.formType)) throw AppError.badRequest("Create NCR is only on an inspection form.");
+  // Idempotent: a second click (or a double-POST) returns the already-linked
+  // NCR instead of opening a duplicate.
+  const alreadyOpen = await ncrsForPath(req.db!, body.path);
+  if (alreadyOpen[0]) {
+    res.status(200).json({ id: alreadyOpen[0].id, recordNumber: alreadyOpen[0].recordNumber, existing: true });
+    return;
+  }
 
   let siteId: number | null = null;
   if (body.sourceKind === "iso") {

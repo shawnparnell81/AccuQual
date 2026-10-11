@@ -32,7 +32,8 @@ export function useSaveForm(formType: string, entityId: number) {
 export function useCreateFormVersion(formType: string, entityId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => (await apiClient.post<FormDataRecord>(`/forms/${formType}/${entityId}/version`)).data,
+    mutationFn: async () =>
+      (await apiClient.post<FormDataRecord & { calibrationEventLogged?: boolean }>(`/forms/${formType}/${entityId}/version`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["form-data", formType, entityId] });
       queryClient.invalidateQueries({ queryKey: ["form-history", formType, entityId] });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
+import { openInspectionNcr, ncrsForPath, requireNcrEdit } from "../ncr/inspectionNcr.js";
 
 export const validationNcrSchema = z.object({
   rows: z
@@ -43,6 +43,14 @@ export const createValidationNcr = asyncHandler(async (req: Request, res: Respon
   const body = validationNcrSchema.parse(req.body);
   const [report] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!report) throw AppError.notFound("Validation Report");
+  // Idempotent: a second click returns the already-linked NCR instead of
+  // opening a duplicate (mirrors qms-forms' createNcrHandler).
+  const ncrPath = `/validation-reports/${id}`;
+  const alreadyOpen = await ncrsForPath(req.db!, ncrPath);
+  if (alreadyOpen[0]) {
+    res.status(200).json({ id: alreadyOpen[0].id, recordNumber: alreadyOpen[0].recordNumber, existing: true });
+    return;
+  }
   const data = (report.data ?? {}) as { formType?: string; cells?: Record<string, unknown>; linkedNcrs?: { id: number }[] };
   const formType = typeof data.formType === "string" ? data.formType : "csa";
   const formTitle = TITLES[formType] ?? "Validation report";
@@ -52,7 +60,7 @@ export const createValidationNcr = asyncHandler(async (req: Request, res: Respon
     reportId: id,
     formType,
     formTitle,
-    path: `/validation-reports/${id}`,
+    path: ncrPath,
     part,
     rows: body.rows,
   };
