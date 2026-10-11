@@ -192,9 +192,13 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
           onClick={() => {
             if (createVersion.isPending) return;
             createVersion.mutate(undefined, {
-              onSuccess: () => {
+              onSuccess: (version) => {
                 if (formType === "calibration") {
-                  toast.success("Calibration event logged.");
+                  if (version?.calibrationEventLogged === false) {
+                    toast.error("Version saved, but the calibration event wasn't logged — add the performed date first.");
+                  } else {
+                    toast.success("Calibration event logged.");
+                  }
                   void queryClient.invalidateQueries({ queryKey: ["equipment"] });
                 } else if (formType === "training") {
                   toast.success("Training completed.");
