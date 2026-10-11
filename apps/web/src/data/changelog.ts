@@ -18,6 +18,13 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-11",
     items: [
       "The Calibration on time KPI's View records now lists every gage behind the percentage, instead of showing 0 records.",
+          ],
+  },
+  {
+    version: "2026-10-11.3",
+    date: "2026-10-11",
+    items: [
+      "The executive dashboard and KPI pass rates now read validation report outcomes from the saved disposition checkboxes, so reports with a ticked pass/fail show correctly instead of sitting at zero.",
     ],
   },
   {
