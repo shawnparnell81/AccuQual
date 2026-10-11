@@ -10,7 +10,7 @@ import { userSites, sites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { listEquipmentWithSummary } from "../calibration/calibration.service.js";
-import { faiOutcome } from "../executive/executive.data.js";
+import { faiOutcome, validationOutcome } from "../executive/executive.data.js";
 import { optionalRows } from "../sites/optionalSql.js";
 import { asDate, isAuditFinding } from "./kpi.model.js";
 import type { KpiEvent, KpiSource } from "./kpi.compute.js";
@@ -315,7 +315,7 @@ async function loadFai(db: Db): Promise<KpiEvent[]> {
     sql`SELECT id, site_id, record_number, created_at, data FROM validation_reports`,
   );
   for (const row of validations) {
-    const outcome = faiOutcome("", null, false, JSON.stringify(row.data ?? {}));
+    const outcome = validationOutcome(row.data);
     events.push({
       id: Number(row.id),
       siteId: num(row.site_id),

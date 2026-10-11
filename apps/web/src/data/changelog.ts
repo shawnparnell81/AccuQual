@@ -18,6 +18,13 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-11",
     items: [
       "The Executive dashboard's Open CAPAs and Open NCRs cards now label the total row 'Total open' so it can't be confused with a status row.",
+          ],
+  },
+  {
+    version: "2026-10-11.3",
+    date: "2026-10-11",
+    items: [
+      "The executive dashboard and KPI pass rates now read validation report outcomes from the saved disposition checkboxes, so reports with a ticked pass/fail show correctly instead of sitting at zero.",
     ],
   },
   {
