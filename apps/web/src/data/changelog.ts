@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.9",
+    date: "2026-10-11",
+    items: [
+      "Training course page: removing the old developer note, added a confirm step on Unlink. Complete Training now creates the Training Record form if missing (instead of 'Form not found') and requires the completion date.",
+    ],
+  },
+  {
+    version: "2026-10-11.4",
+    date: "2026-10-11",
+    items: [
+      "A training course page now lets you link or unlink its controlled document directly, instead of needing the API. Completing training works whether or not a document is linked.",
+    ],
+  },
+  {
     version: "2026-10-11.1",
     date: "2026-10-11",
     items: [

@@ -112,8 +112,23 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
 // on hand — not form_data's own internal id. These two resolve it first.
 
 export const createVersion = asyncHandler(async (req: Request, res: Response) => {
-  const current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
-  if (!current) throw AppError.notFound("Form");
+  let current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
+  if (!current) {
+    // The Training Record form is opened from an assignment row, not from a
+    // saved form. Create the form_data row on first "Complete Training" so
+    // it doesn't fail with "Form not found".
+    if (req.params.type === "training") {
+      const entityId = Number(req.params.id);
+      await formsService.saveData(req.db!, {
+        formType: "training",
+        entityId,
+        data: {},
+        userId: req.user?.id,
+      });
+      current = await formsService.loadData(req.db!, "training", entityId);
+    }
+    if (!current) throw AppError.notFound("Form");
+  }
   const updated = await formsService.createVersion(req.db!, current.id, req.user?.id);
 
   // The "Calibration Record" form is the single source of truth for a
@@ -174,8 +189,7 @@ async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data:
 async function maybeCompleteTrainingAssignment(req: Request, assignmentId: number, data: Record<string, unknown>): Promise<void> {
   const completionDate = formCalendarDate(data.completionDate);
   if (!completionDate) {
-    logger.warn(`Skipped auto-completing training assignment ${assignmentId}: no valid completionDate in the form yet`);
-    return;
+    throw AppError.badRequest("Enter the completion date first.");
   }
   await completeTrainingAssignment(
     req.db!,

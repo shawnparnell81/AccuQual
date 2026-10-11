@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
+import { useControlledDocuments } from "../../api/documents";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { TextAreaField } from "../../components/forms/Field";
 import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
@@ -36,6 +37,32 @@ const trainingHooks = createResourceHooks<TrainingCourse>("training");
  * to complete it — the real "Training Record" form (entityId = that
  * assignment, see layouts/training.ts) or the quick TrainingCompletionModal.
  */
+function DocumentLinkPicker({ onLink, pending }: { onLink: (documentId: number) => void; pending: boolean }) {
+  const { data: documents = [], isLoading } = useControlledDocuments();
+  const available = documents.filter((doc) => !doc.isDeleted && doc.status !== "obsolete");
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-muted-foreground">No controlled document is linked. Choose the document this course teaches:</span>
+      <select
+        value=""
+        disabled={isLoading || pending || available.length === 0}
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          if (Number.isInteger(id) && id > 0) onLink(id);
+        }}
+        className="w-full max-w-md rounded-md border border-form-field bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+      >
+        <option value="">{isLoading ? "Loading documents…" : available.length === 0 ? "No documents available" : "Select a document…"}</option>
+        {available.map((doc) => (
+          <option key={doc.id} value={doc.id}>
+            {doc.title ?? `Document #${doc.id}`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function TrainingDetailPage() {
   const { id } = useParams();
   const courseId = Number(id);
@@ -110,13 +137,29 @@ export function TrainingDetailPage() {
       />
       <div className="rounded-lg border border-border bg-card p-3 text-sm">
         {course.documentId && material ? (
-          <p>
-            Teaches{" "}
-            <Link to={`/documents/${material.id}`} className="text-primary hover:underline">
-              {material.title}
-            </Link>
-            . When that document changes, people on this course need to learn the new revision.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p>
+              Teaches{" "}
+              <Link to={`/documents/${material.id}`} className="text-primary hover:underline">
+                {material.title}
+              </Link>
+              . When that document changes, people on this course need to learn the new revision.
+            </p>
+            {mayManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Unlink this document from the course? People will no longer be sent back here when it changes.")) {
+                    updateCourse.mutate({ id: courseId, documentId: null });
+                  }
+                }}
+                disabled={updateCourse.isPending}
+                className="shrink-0 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-60"
+              >
+                Unlink
+              </button>
+            )}
+          </div>
         ) : course.documentId ? (
           <p className="text-muted-foreground">
             Linked document #{course.documentId}.{" "}
@@ -125,6 +168,11 @@ export function TrainingDetailPage() {
             </Link>
             .
           </p>
+        ) : mayManage ? (
+          <DocumentLinkPicker
+            onLink={(documentId) => updateCourse.mutate({ id: courseId, documentId })}
+            pending={updateCourse.isPending}
+          />
         ) : (
           <p className="text-muted-foreground">No controlled document is linked. Link the document this course teaches so a revision can send people back here.</p>
         )}
@@ -173,12 +221,7 @@ export function TrainingDetailPage() {
           <DocumentRetentionPanel document={material} />
           <DocumentHistoryPanel documentId={material.id} />
         </>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          No controlled document linked to this course's material yet — link one via <code>PATCH /training/{courseId}</code>{" "}
-          <code>{"{ documentId }"}</code> to get approval, revision, expiration, and retention tracking.
-        </p>
-      )}
+      ) : null}
 
       <RequirementsPanel course={course as CourseFull} />
       <QualificationPanel courseId={courseId} />
