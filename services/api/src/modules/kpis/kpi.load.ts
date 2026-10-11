@@ -176,6 +176,12 @@ export async function loadKpiSource(db: Db, now: Date): Promise<KpiSource> {
     })),
     userSites: memberships,
     gageStatuses: gages.map((gage) => gage.dueStatus),
+    gages: gages.map((gage) => ({
+      id: gage.id,
+      name: gage.name,
+      serialNumber: gage.serialNumber,
+      dueStatus: gage.dueStatus,
+    })),
   };
 }
 

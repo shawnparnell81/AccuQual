@@ -14,10 +14,10 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.1",
+    version: "2026-10-11.5",
     date: "2026-10-11",
     items: [
-      "On a CAPA, Cancel now throws away unsaved changes and returns the form to its last saved version. Save keeps the verification text you typed without moving the CAPA forward or signing anything.",
+      "The Calibration on time KPI's View records now lists every gage behind the percentage, instead of showing 0 records.",
     ],
   },
   {
