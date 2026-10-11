@@ -99,6 +99,11 @@ export function closureRoleLabel(label: string): string {
   return label.replace(/\s+signature$/i, "").trim();
 }
 
+/** Whether a signature value is a "Not required" mark (not a real signature). */
+export function isNotRequiredMark(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("Not required");
+}
+
 /** Required closure roles with no stamp. A role marked Not required is skipped. */
 export function missingClosureSignatures(data: Record<string, unknown> | null | undefined): { path: string; label: string }[] {
   const layout = getFormLayout("ncr");
@@ -109,7 +114,8 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
   for (const block of blocks) {
     if (choiceOf(source, block.path) === "no") continue;
     const stamp = valueAt(source, block.path);
-    if (!stamp || stamp === NOT_REQUIRED_LABEL) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
+    // A Not-required mark satisfies the row; only truly empty rows are missing.
+    if (!stamp || (stamp !== NOT_REQUIRED_LABEL && !isNotRequiredMark(stamp))) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
   }
   return missing;
 }

@@ -35,6 +35,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Can build forms",
         hint: "Creating a form and editing its structure, including adding, renaming, or removing columns on a living controlled list. Filling a published copy does not use this. Owner and Administrator can always build forms.",
       },
+      {
+        key: "ncr.closure_signoff",
+        label: "Can sign NCR closure sign-off",
+        hint: "Sign the required Quality Manager row on NCR closure. Stored on the role; a role name does not grant it.",
+      },
     ],
   },
   {
