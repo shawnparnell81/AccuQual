@@ -114,6 +114,12 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
 export const createVersion = asyncHandler(async (req: Request, res: Response) => {
   const current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
   if (!current) throw AppError.notFound("Form");
+  // Training: don't create an empty version that then fails — require the completion date first.
+  if (req.params.type === "training") {
+    const data = (current.data ?? {}) as Record<string, unknown>;
+    const completedAt = formCalendarDate(data.completedAt ?? data.completionDate);
+    if (!completedAt) throw AppError.badRequest("Enter the completion date first.");
+  }
   const updated = await formsService.createVersion(req.db!, current.id, req.user?.id);
 
   // The "Calibration Record" form is the single source of truth for a
