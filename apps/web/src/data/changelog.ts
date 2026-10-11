@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.4",
+    date: "2026-10-11",
+    items: [
+      "A training course page now lets you link or unlink its controlled document directly, instead of needing the API. Completing training works whether or not a document is linked.",
+    ],
+  },
+  {
     version: "2026-10-11.3",
     date: "2026-10-11",
     items: [
