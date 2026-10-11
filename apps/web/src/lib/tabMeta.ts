@@ -55,7 +55,7 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/reporting\/imported-data\/?$/, icon: "default", title: () => "Imported Data" },
   { test: /^\/reports\/?$/, icon: "default", title: () => "Reports" },
   { test: /^\/reporting\/?$/, icon: "default", title: () => "Reports" },
-  { test: /^\/pareto\/?$/, icon: "default", title: () => "Pareto" },
+  { test: /^\/pareto\/?$/, icon: "default", title: () => "Pareto Analysis" },
   { test: /^\/iso-forms\/record\/(\d+)$/, icon: "documents", title: () => "ISO form" },
   { test: /^\/iso-forms\/frm-fai-001/, icon: "documents", title: () => "First Article Inspection" },
   { test: /^\/fai\/csa\/(\d+)$/, icon: "documents", title: () => "CSA FAI" },
@@ -120,4 +120,18 @@ export function deriveTabMeta(pathname: string): { title: string; icon: string }
     if (match) return { title: pattern.title(match), icon: pattern.icon };
   }
   return { title: pathname, icon: "default" };
+}
+
+/**
+ * Saved tabs can carry stale titles: "QMS Forms" from before the rename to
+ * Blank Forms, or a raw path from when the title fallback ran. Refresh them
+ * from the current route metadata so the strip never shows dead labels.
+ */
+export function refreshTabTitle(path: string, title: string): string {
+  const stale = title.includes("QMS Forms") || title.startsWith("/");
+  if (!stale) return title;
+  const fresh = deriveTabMeta(path).title;
+  if (fresh && !fresh.startsWith("/") && !fresh.includes("QMS Forms")) return fresh;
+  if (title.includes("QMS Forms")) return "Blank Forms";
+  return title;
 }

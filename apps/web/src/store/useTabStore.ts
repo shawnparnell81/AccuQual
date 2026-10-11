@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { isLiveTabPath, selectRestoredTabs } from "../lib/tabPaths";
+import { refreshTabTitle } from "../lib/tabMeta";
 import { moveTab, setTabPinned, withPinsLeft } from "../lib/tabLayout";
 import {
   closeWorkspaceTab,
@@ -80,7 +81,10 @@ function restore(ownerId: string): { tabs: TabInstance[]; activeId: string | nul
     if (!raw) return { tabs: [], activeId: null, suppressedKeys: [] };
     const parsed = JSON.parse(raw) as { tabs?: TabInstance[]; activeId?: string | null; suppressedKeys?: string[] };
     const selected = selectRestoredTabs(parsed.tabs ?? [], parsed.activeId ?? null);
-    const deduped = dedupeWorkspaceTabs(selected.tabs, selected.activeId ?? null);
+    // Saved titles can predate a rename ("QMS Forms") or be a raw path —
+    // refresh them from the current route metadata before showing the strip.
+    const refreshed = selected.tabs.map((tab) => ({ ...tab, title: refreshTabTitle(tab.path, tab.title) }));
+    const deduped = dedupeWorkspaceTabs(refreshed, selected.activeId ?? null);
     const suppressedKeys = uniqueSuppressed(parsed.suppressedKeys ?? []);
     const dropped = dropSuppressedTabs(deduped.tabs, deduped.activeId, suppressedKeys);
     return { tabs: dropped.tabs, activeId: dropped.activeId, suppressedKeys };
