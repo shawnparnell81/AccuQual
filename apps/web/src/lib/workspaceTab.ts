@@ -152,6 +152,16 @@ registerSectionTabPaths((pathname) => workspaceSectionId(pathname) != null);
 /** Identity of the workspace tab this path belongs to. Sub-pages of one section share it. */
 export function workspaceTabKey(path: string): string {
   const pathname = normalizeTabPath(path);
+  // Each filtered executive list gets its own tab (full query string is the key),
+  // so opening a list never replaces the dashboard tab.
+  if (pathname === "/executive/list") {
+    return `executive-list:${path}`;
+  }
+  // Each record gets its own tab, so opening a record never rewrites a list or dashboard tab.
+  const recordMatch = pathname.match(/^\/(ncr|capa|8d|audits|complaints|warranty|labor-claims)\/([^/]+)$/);
+  if (recordMatch) {
+    return `record:${recordMatch[1]}/${recordMatch[2]}`;
+  }
   const section = workspaceSectionId(pathname);
   return section ? `section:${section}` : pathname;
 }

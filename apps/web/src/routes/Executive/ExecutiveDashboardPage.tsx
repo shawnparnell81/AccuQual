@@ -167,7 +167,9 @@ export function ExecutiveDashboardPage() {
         setPanel(null);
         return;
       }
-      setPanel({ target: { ...target, value: data.total, siteName: data.siteName || target.siteName }, data, denied: null });
+      // 2+ records: open the filtered list in its own tab (never replace the dashboard tab).
+      openFullList({ ...target, value: data.total, siteName: data.siteName || target.siteName });
+      setPanel(null);
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't open those records."));
     } finally {
@@ -182,6 +184,14 @@ export function ExecutiveDashboardPage() {
           params: { metric: metricId, month, siteId: plant === "all" ? "all" : String(plant) },
         })
       ).data;
+      // Single record: open directly in its own tab.
+      const only = data.total === 1 ? data.rows[0] : undefined;
+      if (only?.href) {
+        openTab({ path: only.href, title: `${only.recordNumber} ${only.title}`.trim(), icon: tabIconForHref(only.href) });
+        setKpiPanel(null);
+        setPanel(null);
+        return;
+      }
       setPanel(null);
       setKpiPanel({ title: data.title, detail: data.siteName, total: data.total, rows: data.rows, note: data.note, denied: null });
     } catch (err) {

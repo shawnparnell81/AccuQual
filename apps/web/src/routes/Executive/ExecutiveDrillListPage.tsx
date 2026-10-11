@@ -8,6 +8,7 @@ import { PageHeader } from "../../components/layout/PageHeader";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { canViewModule, drillDetail, drillHeading, permissionMessage, tabIconForHref, type DrillTarget } from "../../lib/executiveDrill";
+import { statusPhrase } from "../../lib/opsLanguage";
 
 interface DrillRow {
   recordNumber: string;
@@ -71,7 +72,7 @@ export function DrillRows({
             >
               <span className="truncate text-sm text-foreground">{label}</span>
               <span className="shrink-0 text-xs text-muted-foreground">
-                {row.status} · {row.ageLabel}
+                {statusPhrase(row.status)} · {row.ageLabel}
               </span>
             </button>
           </li>
