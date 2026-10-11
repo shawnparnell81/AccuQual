@@ -57,6 +57,30 @@ describe("NCR closure signatures follow the Required setting", () => {
     });
     expect(done).toEqual([]);
   });
+
+  it("counts Not required marks as satisfied", () => {
+    const done = missingClosureSignatures({
+      closureApprovals: [
+        { signature: "Ada 2026-10-10 10:00" },
+        { signature: "Not required – Bea 2026-10-10 11:00" },
+        { signature: "Not required – Cam 2026-10-10 12:00" },
+        { signature: "Not required – Dan 2026-10-10 13:00" },
+      ],
+    });
+    expect(done).toEqual([]);
+  });
+
+  it("still blocks close when a row is neither signed nor Not required", () => {
+    const missing = missingClosureSignatures({
+      closureApprovals: [
+        { signature: "Ada 2026-10-10 10:00" },
+        { signature: "" },
+        { signature: "Not required – Cam 2026-10-10 12:00" },
+      ],
+    });
+    expect(missing.length).toBeGreaterThan(0);
+    expect(missing[0]?.path).toBe("closureApprovals.1.signature");
+  });
 });
 
 describe("quarantine complete disposition advances the stage once", () => {

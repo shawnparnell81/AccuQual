@@ -183,7 +183,11 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
   for (const block of blocks) {
     if (!signatureRequired(source, block.path, blocks)) continue;
     const stamp = valueAt(source, block.path);
-    if (!stamp || stamp === NOT_REQUIRED_LABEL) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
+    // A Not-required mark satisfies the row; only truly empty rows are missing.
+    const isMarked = typeof stamp === "string" && stamp.startsWith("Not required");
+    if (!stamp || (stamp === NOT_REQUIRED_LABEL && !isMarked)) {
+      if (!isMarked) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
+    }
   }
   return missing;
 }
