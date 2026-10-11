@@ -296,7 +296,7 @@ export function NcrListPage() {
                 title: form.title,
                 description: form.description || undefined,
                 severity: form.severity,
-                dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
+                dueDate: form.dueDate || undefined,
                 assignedTo: form.assignedTo ? Number(form.assignedTo) : undefined,
               },
               {
