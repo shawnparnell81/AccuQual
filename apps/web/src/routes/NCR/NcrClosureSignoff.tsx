@@ -4,8 +4,6 @@ import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { useFormSign } from "../../components/forms/formSign";
 import { layoutSignatureBlocks } from "../../components/forms/signatureRequired";
 import { NCR_CLOSURE_CERTIFY, closureRoleLabel, isNotRequiredMark, missingClosureSignatures } from "../../lib/ncrDocument";
-import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { useToast } from "../../components/shared/ToastProvider";
 import { apiClient } from "../../api/client";
 
 type Row = Record<string, unknown>;
@@ -22,7 +20,6 @@ function rowsOf(value: unknown): Row[] {
 export function NcrClosureSignoff({
   data,
   canEdit,
-  onChange,
   onPreview,
   ncrId,
 }: {
@@ -33,7 +30,6 @@ export function NcrClosureSignoff({
   ncrId: number;
 }) {
   const sign = useFormSign();
-  const toast = useToast();
   const layout = getFormLayout("ncr");
   const blocks = layout ? layoutSignatureBlocks(layout).filter((block) => block.path.startsWith("closureApprovals.")) : [];
   const missing = missingClosureSignatures(data);
@@ -61,9 +57,6 @@ export function NcrClosureSignoff({
         ...(reason ? { reason } : {}),
       });
       writeStamp(blockPath, result.mark, result.signedOn);
-    } catch (err) {
-      // Rethrow so SignatureStamp shows the error inline and keeps the tick.
-      throw err;
     } finally {
       setBusy(null);
     }
@@ -79,9 +72,6 @@ export function NcrClosureSignoff({
         description: "Clear Not required mark",
       });
       writeStamp(blockPath, "", "");
-    } catch (err) {
-      // Rethrow so SignatureStamp shows the error inline and keeps the tick.
-      throw err;
     } finally {
       setBusy(null);
     }
@@ -119,13 +109,8 @@ export function NcrClosureSignoff({
                 disabled={!canEdit || !sign || busy === block.path}
                 onSign={async (pin: string, certified: boolean) => {
                   if (!sign) return;
-                  try {
-                    const result = await sign({ path: block.path, description: NCR_CLOSURE_CERTIFY, pin, certified });
-                    writeStamp(block.path, result.stamp, result.signedOn);
-                  } catch (err) {
-                    // Rethrow so SignatureStamp shows the error inline and keeps the tick.
-                    throw err;
-                  }
+                  const result = await sign({ path: block.path, description: NCR_CLOSURE_CERTIFY, pin, certified });
+                  writeStamp(block.path, result.stamp, result.signedOn);
                 }}
               />
               {!isRow0 && !sig && (
