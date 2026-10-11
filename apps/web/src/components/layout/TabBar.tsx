@@ -69,9 +69,6 @@ export function TabBar() {
   const openSplit = useSplitStore((s) => s.openSplit);
   const askUnsaved = useAskUnsavedChanges();
 
-  // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
-  if (tabs.length < 2) return null;
-
   function forgetSection(path: string) {
     for (const key of dirtyKeysInSection(useDirtyPathStore.getState().paths, path)) {
       useDirtyPathStore.getState().setDirtyPath(key, false);
@@ -165,6 +162,10 @@ export function TabBar() {
     observer.observe(containerEl);
     return () => observer.disconnect();
   }, [tabs, activeId]);
+
+  // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
+  // This sits after all hooks: returning earlier would change the hook count when tabs load after login.
+  if (tabs.length < 2) return null;
 
   const overflowSet = new Set(overflowIds);
   const visibleTabs = tabs.filter((tab) => !overflowSet.has(tab.id));
