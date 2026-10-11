@@ -8,7 +8,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
-import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { seedDefaultPermissions, seedTestRoles } from "../helpers/seedDefaults.js";
 import { TEST_PIN, setTestPin } from "../helpers/signaturePin.js";
 
 let app: ReturnType<typeof createApp>;
@@ -48,6 +48,7 @@ describe("NCR closure sign-off", () => {
   beforeAll(async () => {
     app = createApp();
     const co = await ensureTestCompany();
+    await seedTestRoles();
     await seedDefaultPermissions(co!.id);
     const op = await makeUser("quality", "operator");
     operatorToken = op.token;

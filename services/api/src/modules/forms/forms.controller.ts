@@ -14,7 +14,8 @@ import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 import { syncDocumentToRecord } from "../ncr/ncr.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
+import { pool } from "../../db/index.js";
 import { writeSignatureValue } from "../signatures/signaturePin.js";
 import { NCR_CLOSURE_SIGNOFF_PERMISSION } from "../roles/roleAccess.js";
 import { roleHasPermission } from "../roles/rolePermissions.js";
@@ -107,7 +108,9 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
     const roleName = (req.user as any)?.role ?? (req.user as any)?.roleName;
     const allowed = await roleHasPermission(req.db!, roleName, NCR_CLOSURE_SIGNOFF_PERMISSION);
     if (!allowed) {
-      await recordAuditTrail(req.db!, {
+      // Use standalone (not req.db) — the 403 rolls back the request transaction,
+      // which would silently discard the audit row.
+      await recordAuditTrailStandalone(pool, {
         entityType: "NCR",
         entityId,
         action: "permission_denied",
@@ -117,7 +120,7 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
           description: `User lacks ${NCR_CLOSURE_SIGNOFF_PERMISSION} for NCR ${entityId} closure row 0`,
         },
         performedBy: (req.user as any)?.id ?? null,
-      }).catch((err) => logger.error("Failed to audit permission denial", { err }));
+      });
       throw AppError.forbidden("You don't have permission to sign the required closure sign-off row.");
     }
   }

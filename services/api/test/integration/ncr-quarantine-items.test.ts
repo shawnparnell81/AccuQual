@@ -8,7 +8,7 @@ import { db, pool } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
-import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { seedDefaultPermissions, seedTestRoles } from "../helpers/seedDefaults.js";
 import { TEST_PIN, setTestPin } from "../helpers/signaturePin.js";
 
 const app = createApp();
@@ -31,6 +31,7 @@ async function makeUser(department: string, roleName = "operator") {
 describe("NCR quarantined items", () => {
   beforeAll(async () => {
     const co = await ensureTestCompany();
+    await seedTestRoles();
     await seedDefaultPermissions(co!.id);
     qualityToken = (await makeUser("quality")).token;
     engineeringToken = (await makeUser("engineering")).token;

@@ -28,3 +28,24 @@ export async function seedDefaultPermissions(companyId: number) {
   }
   if (rows.length > 0) await db.insert(departmentPermissions).values(rows).onConflictDoNothing();
 }
+
+/**
+ * Seeds the system roles from ROLE_SEEDS so permission checks by role name
+ * (e.g. ncr.closure_signoff) work in tests. Uses onConflictDoNothing to be idempotent.
+ */
+export async function seedTestRoles() {
+  const { ROLE_SEEDS } = await import("../../src/modules/roles/roleHierarchy.js");
+  const { roles } = await import("../../src/drizzle/schema/roles.js");
+  for (const seed of ROLE_SEEDS) {
+    await db
+      .insert(roles)
+      .values({
+        name: seed.name,
+        description: seed.description,
+        hierarchyLevel: seed.hierarchyLevel,
+        isProtected: seed.isProtected,
+        permissions: seed.permissions,
+      })
+      .onConflictDoNothing();
+  }
+}

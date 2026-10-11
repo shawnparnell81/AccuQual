@@ -17,7 +17,7 @@ import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { validationReports } from "../../src/drizzle/schema/validationReport.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
-import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { seedDefaultPermissions, seedTestRoles } from "../helpers/seedDefaults.js";
 import { TEST_PIN, setTestPin } from "../helpers/signaturePin.js";
 
 const app = createApp();
@@ -66,6 +66,7 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
   beforeAll(async () => {
     const co = await ensureTestCompany();
     companyId = co!.id;
+    await seedTestRoles();
     await seedDefaultPermissions(companyId);
 
     qualityToken = (await makeUser("quality")).token;
