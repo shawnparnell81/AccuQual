@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 
 /** Show, hide, and reorder the sections this person is allowed to see. */
@@ -6,10 +6,12 @@ export function WorkspaceArrange({
   surface,
   labels,
   allowed,
+  footer,
 }: {
   surface: "home" | "dashboard";
   labels: Record<string, string>;
   allowed: (id: string) => boolean;
+  footer?: ReactNode;
 }) {
   const { arrangeIds, hidden, save, reset, pending } = useWorkspaceSurface(surface, allowed);
   const [open, setOpen] = useState(false);
@@ -67,6 +69,7 @@ export function WorkspaceArrange({
               </li>
             ))}
           </ul>
+          {footer}
         </div>
       )}
     </div>

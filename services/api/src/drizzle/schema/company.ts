@@ -324,6 +324,27 @@ export const company = pgTable("company", {
     deletedSystemRoles?: { name: string; deletedAt: string; deletedBy: number | null; reason: string | null }[];
     /** Set once Owner and Administrator have been given roles.manage. Removing it later stays removed. */
     rolesManageGranted?: boolean;
+    /**
+     * ISO 9001 clause 6.2 quality objectives. Missing means they have not
+     * been seeded yet. An empty list means someone removed them and they
+     * must not be seeded again. Company Settings spreads this object, so a
+     * profile save keeps the list. No new column.
+     */
+    qualityObjectives?: {
+      id: string;
+      name: string;
+      metric: string;
+      plantScope: "greer" | "wellman" | "all";
+      target: number;
+      direction: "higher" | "lower";
+      amberThreshold: number;
+      ownerId: number | null;
+      reviewFrequency: "monthly" | "quarterly";
+      active: boolean;
+      notes: string;
+      updatedAt: string;
+      updatedById: number | null;
+    }[];
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

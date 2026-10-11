@@ -63,7 +63,8 @@ function categoriesFromForm(data: unknown): string[] {
   return checkedOptions(form.nonconformanceCategory, "category");
 }
 
-function faiOutcome(status: string, failure: string | null, closed: boolean, blob: string): "open" | "pass" | "fail" {
+/** Pass / fail / still open for a validation report or a first-article form. KPI pass rate uses this same rule. */
+export function faiOutcome(status: string, failure: string | null, closed: boolean, blob: string): "open" | "pass" | "fail" {
   const folded = `${status} ${failure ?? ""}`.toLowerCase();
   const failed = folded.includes("fail") || folded.includes("reject") || failure?.toLowerCase() === "yes" || blob.toLowerCase().includes('"failed"');
   if (failed) return "fail";

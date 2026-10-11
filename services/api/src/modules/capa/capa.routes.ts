@@ -8,10 +8,17 @@ import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "./capa.val
 import { baseHandlers, listHandler, startHandler, verifyHandler, closeHandler, openRepeatCapaHandler } from "./capa.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { beginCapaEdit } from "../forms/moduleBeginEdit.js";
+import { clearReportingCache } from "../reporting/reporting.service.js";
 
 export const capaRouter = Router();
 // Turns on PERMISSION_MATRIX.capa (quality: edit) — previously unenforced.
 capaRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("capa"));
+capaRouter.use((req, res, next) => {
+  res.on("finish", () => {
+    if (req.method !== "GET" && req.method !== "HEAD" && res.statusCode < 400) clearReportingCache();
+  });
+  next();
+});
 
 capaRouter.get("/", listHandler);
 capaRouter.post("/", validate(createCapaSchema), baseHandlers.create);

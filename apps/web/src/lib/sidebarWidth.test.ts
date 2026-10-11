@@ -121,7 +121,7 @@ describe("sidebar width", () => {
 
   it("fits the longest nav title at the maximum width", () => {
     const label = longestLabel(SIDEBAR_FOLDERS);
-    assert.equal(label, "Customer Return Analysis");
+    assert.equal(label, "Quality Objectives & KPIs");
     // Padding, admin grip, icon, gap, chevron, and one level of nesting.
     const chrome = 160;
     const charPx = 8;

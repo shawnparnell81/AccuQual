@@ -16,6 +16,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { ReportsPage } from "../Reports/ReportsPage";
 import { useSiteStore } from "../../store/siteStore";
+import { useSites } from "../../hooks/useSites";
 import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 // ---------------------------------------------------------------------------
@@ -96,7 +97,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function SectionHeader({ title, reportKey, aiKind }: { title: string; reportKey?: string; aiKind?: string }) {
+function SectionHeader({ title, reportKey, aiKind, siteId }: { title: string; reportKey?: string; aiKind?: string; siteId?: number | null }) {
   return (
     <div className="flex items-center justify-between">
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -126,7 +127,7 @@ function SectionHeader({ title, reportKey, aiKind }: { title: string; reportKey?
             )}
           />
         )}
-        {reportKey && <ReportExportButtons reportKey={reportKey} />}
+        {reportKey && <ReportExportButtons reportKey={reportKey} siteId={siteId} />}
       </div>
     </div>
   );
@@ -136,12 +137,37 @@ function SectionHeader({ title, reportKey, aiKind }: { title: string; reportKey?
 // Quality Overview
 // ---------------------------------------------------------------------------
 function QualityOverview() {
-  const { data: ncr } = useQuery<NcrMetrics>({ queryKey: ["reporting", "ncr-metrics"], queryFn: async () => (await apiClient.get("/reporting/ncr-metrics")).data });
-  const { data: capa } = useQuery<CapaMetrics>({ queryKey: ["reporting", "capa-metrics"], queryFn: async () => (await apiClient.get("/reporting/capa-metrics")).data });
+  const plants = useSites();
+  const [plantId, setPlantId] = useState<number | "all">("all");
+  const siteId = plantId === "all" ? undefined : plantId;
+  const { data: ncr } = useQuery<NcrMetrics>({
+    queryKey: ["reporting", "ncr-metrics", plantId],
+    queryFn: async () => (await apiClient.get("/reporting/ncr-metrics", { params: { siteId } })).data,
+  });
+  const { data: capa } = useQuery<CapaMetrics>({
+    queryKey: ["reporting", "capa-metrics", plantId],
+    queryFn: async () => (await apiClient.get("/reporting/capa-metrics", { params: { siteId } })).data,
+  });
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionHeader title="NCR Metrics" reportKey="ncr-metrics" aiKind="quality_trends" />
+      <label className="flex items-center gap-2 text-sm">
+        Plant
+        <select
+          aria-label="Plant"
+          className="rounded-md border border-border bg-background px-2 py-1"
+          value={plantId}
+          onChange={(event) => setPlantId(event.target.value === "all" ? "all" : Number(event.target.value))}
+        >
+          <option value="all">All plants</option>
+          {(plants.data?.sites ?? []).map((site) => (
+            <option key={site.id} value={site.id}>
+              {site.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <SectionHeader title="NCR Metrics" reportKey="ncr-metrics" aiKind="quality_trends" siteId={siteId ?? null} />
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Open NCRs" value={ncr?.totalOpen ?? "—"} />
         <StatCard label="Closed NCRs" value={ncr?.totalClosed ?? "—"} />
@@ -152,10 +178,10 @@ function QualityOverview() {
         <TrendLineChart data={ncr?.byMonth ?? []} label="NCRs" />
       </div>
 
-      <SectionHeader title="CAPA Metrics" reportKey="capa-metrics" />
+      <SectionHeader title="CAPA Metrics" reportKey="capa-metrics" siteId={siteId ?? null} />
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Total CAPAs" value={capa?.total ?? "—"} />
-        <StatCard label="Effectiveness (Closure Rate)" value={capa ? `${capa.effectivenessRate}%` : "—"} />
+        <StatCard label="Closure rate" value={capa ? `${capa.effectivenessRate}%` : "—"} />
         <StatCard label="Avg. Closure Time" value={capa?.avgClosureDays !== null && capa?.avgClosureDays !== undefined ? `${capa.avgClosureDays}d` : "—"} />
       </div>
       <div className="rounded-lg border border-border bg-card p-4">

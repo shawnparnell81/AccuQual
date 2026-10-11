@@ -52,6 +52,7 @@ const RULES: SurfaceRule[] = [
   { test: /^\/management-system\/management-review$/, kind: "form", access: "management_review" },
   { test: /^\/management-system\/context$/, kind: "form", access: "context_of_org" },
   { test: /^\/pareto$/, kind: "form", access: "any" },
+  { test: /^\/kpis$/, kind: "list", access: "any" },
   { test: /^\/form-builder\/fills\/\d+$/, kind: "form", access: "documents", edit: false },
   { test: /^\/form-builder\/template\/\d+$/, kind: "form", access: "documents", edit: false },
 ];

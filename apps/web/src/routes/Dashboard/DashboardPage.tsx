@@ -25,6 +25,8 @@ import type { OpenWork } from "../../api/dashboard";
 import { useSiteStore } from "../../store/siteStore";
 import { formatDate } from "../../lib/dates";
 import { isPastDue } from "../../lib/opsLanguage";
+import { KpiChartCustomize, KpiPinnedCharts } from "../../components/kpis/KpiBoards";
+import { UpdatedStamp } from "../../components/kpis/UpdatedStamp";
 import { WorkspaceArrange } from "../../components/home/WorkspaceArrange";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 import { OpenWorkSection } from "../../components/dashboard/OpenWorkSection";
@@ -217,6 +219,7 @@ export function DashboardPage() {
     queryKey: ["dashboard", "overview", scope, scope === "all" ? "all" : siteId],
     queryFn: async () => (await apiClient.get<DashboardOverview>("/dashboard/overview", { params: { scope } })).data,
     enabled: scope === "all" || siteId != null,
+    refetchInterval: 60_000,
   });
 
   const data = query.data;
@@ -246,7 +249,8 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6 pb-8">
-      <WorkspaceArrange surface="dashboard" labels={DASHBOARD_LABELS} allowed={dashAllowed} />
+      <WorkspaceArrange surface="dashboard" labels={DASHBOARD_LABELS} allowed={dashAllowed} footer={<KpiChartCustomize surface="home" />} />
+      <KpiPinnedCharts surface="home" />
       <div className="flex flex-col gap-6">
       <OrderedBlock id="hero" shown={shown}>
       <section className="hero-surface rounded-2xl px-5 py-5 md:px-6">
@@ -255,9 +259,12 @@ export function DashboardPage() {
             <nav aria-label="Breadcrumb" className="aq-crumbs">
               <span>Home</span>
             </nav>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
-            </p>
+            <div className="mt-2 text-sm text-muted-foreground">
+              <p>
+                {data?.scope.label ?? (scope === "all" ? "All plants" : "This plant")} · {today}
+              </p>
+              {query.isSuccess && <UpdatedStamp at={new Date(query.dataUpdatedAt)} />}
+            </div>
             <h1 className="aq-page-title mt-1">
               {greeting()}
               {first ? `, ${first}` : ""}.

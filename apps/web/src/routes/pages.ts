@@ -30,6 +30,7 @@ export const DashboardPage = lazyNamed("/", () => import("./Dashboard/DashboardP
 export const ExecutiveDashboardPage = lazyNamed("/executive", () => import("./Executive/ExecutiveDashboardPage"), "ExecutiveDashboardPage");
 export const ExecutiveDrillListPage = lazyNamed("/executive/list", () => import("./Executive/ExecutiveDrillListPage"), "ExecutiveDrillListPage");
 export const HomePage = lazyNamed("/home", () => import("./Home/HomePage"), "HomePage");
+export const KpisPage = lazyNamed("/kpis", () => import("./Kpis/KpisPage"), "KpisPage");
 export const CalendarPage = lazyNamed("/calendar", () => import("./Calendar/CalendarPage"), "CalendarPage");
 export const NcrListPage = lazyNamed("/ncr", () => import("./NCR/NcrListPage"), "NcrListPage");
 export const NcrWorkspacePage = lazyNamed("/ncr", () => import("./NCR/NcrWorkspacePage"), "NcrWorkspacePage");
