@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.12",
+    date: "2026-10-11",
+    items: [
+      "A server error (like a 502) when logging an NCR now says 'The server didn't respond. Your entries are still here.' with a Retry button, instead of a misleading field error.",
+    ],
+  },
+  {
     version: "2026-10-11.3",
     date: "2026-10-11",
     items: [

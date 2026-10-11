@@ -24,7 +24,7 @@ export function ncrLogFailure(err: unknown): NcrLogFailure {
   const status = statusOf(err);
   const message = serverMessage(err);
   if (status == null || status >= 500) {
-    return { message: "The server couldn't log this NCR. Try again.", retry: true };
+    return { message: "The server didn't respond. Your entries are still here.", retry: true };
   }
   if (status === 400 && /title/i.test(message)) return { message, retry: false };
   if (message) return { message, retry: false };

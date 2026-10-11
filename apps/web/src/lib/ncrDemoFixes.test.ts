@@ -5,7 +5,7 @@ import { mergeStageIntoDocument, missingClosureSignatures, stagePreviewPatch } f
 
 test("a 502 while logging an NCR is a server error with retry, and a title error is not", () => {
   const gateway = { response: { status: 502, data: { message: "Bad gateway" } } };
-  assert.deepEqual(ncrLogFailure(gateway), { message: "The server couldn't log this NCR. Try again.", retry: true });
+  assert.deepEqual(ncrLogFailure(gateway), { message: "The server didn't respond. Your entries are still here.", retry: true });
   assert.equal(ncrLogFailure(gateway).message.includes("title"), false);
 
   const dropped = new Error("Network Error");
