@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.2",
+    date: "2026-10-11",
+    items: [
+      "The CSA validation sheet's top-left status cell stays blank until every row has a pass/fail result, instead of reading \"Passed\" on an unfinished form.",
+    ],
+  },
+  {
     version: "2026-10-10.4",
     date: "2026-10-10",
     items: [

@@ -429,7 +429,12 @@ export function evaluate(cells: Record<string, CellValue>): Record<string, CellV
     if (seen.has(addr)) continue;
     consider(addr, val);
   }
-  computed.A1 = failed > 0 ? "Failed" : "Passed";
+  // A1 stays blank until every scored cell has a pass/fail result. An
+  // unfinished form must not read "Passed" — the header pill shows
+  // "In progress" for the same state.
+  const graded = /^(passed|failed)$/i;
+  const allScored = scored.every(([result]) => graded.test(String(computed[result] ?? "")));
+  computed.A1 = !allScored ? "" : failed > 0 ? "Failed" : "Passed";
   return computed;
 }
 
