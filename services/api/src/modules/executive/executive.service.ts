@@ -168,11 +168,11 @@ export function figuresFor(widget: DashboardWidget, rows: Fact[], now: Date): Fi
     return [{ label: "Overdue", value: rows.length, bucket: "overdue" }, ...overdueFigures(rows)];
   }
   const open = rows.filter((row) => row.outcome === "open");
-  if (metric === "count") return countFigures(open, "open", "Open");
+  if (metric === "count") return countFigures(open, "open", "Total open");
   if (metric === "aging" && widget.kind === "open_ncrs") return agingFigures(open, now);
   if (metric === "status") return statusFigures(open);
   if (metric === "category") return categoryFigures(open);
-  const summary: Figure[] = countFigures(open, "open", "Open");
+  const summary: Figure[] = countFigures(open, "open", "Total open");
   if (widget.kind === "open_ncrs") summary.push(...agingFigures(open, now), ...statusFigures(open), ...categoryFigures(open));
   else summary.push(...statusFigures(open));
   return summary;

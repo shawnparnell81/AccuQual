@@ -18,6 +18,7 @@ function source(patch: Partial<KpiSource> = {}): KpiSource {
     assignments: [],
     userSites: [],
     gageStatuses: [],
+    gages: [],
     ...patch,
   };
 }
@@ -81,11 +82,17 @@ describe("kpi values", () => {
     const rows = source({
       assignments: [{ id: 1, userId: 3, status: "completed", dueAt: null, courseTitle: "ISO" }],
       gageStatuses: ["current", "overdue"],
+      gages: [
+        { id: 1, name: "Gage A", serialNumber: "SN-001", dueStatus: "current" },
+        { id: 2, name: "Gage B", serialNumber: "SN-002", dueStatus: "overdue" },
+      ],
     });
     expect(valueFor("training_completion", rows, past, "all").value).toBeNull();
     expect(valueFor("training_completion", rows, live, "all").value).toBe(100);
     expect(valueFor("calibration_on_time", rows, past, 1).value).toBeNull();
-    expect(valueFor("calibration_on_time", rows, live, 1).value).toBe(50);
-    expect(valueFor("calibration_on_time", rows, live, 1).notes.join(" ")).toMatch(/Company-wide/);
+    const cal = valueFor("calibration_on_time", rows, live, 1);
+    expect(cal.value).toBe(50);
+    expect(cal.rows.length).toBe(2);
+    expect(cal.notes.join(" ")).toMatch(/Company-wide/);
   });
 });

@@ -210,7 +210,10 @@ export function EightDDetailPage() {
 
   async function finishStep(stepNumber: number, pin?: string) {
     const payload = savePayload(draft);
-    if (!payload) return;
+    if (!payload) {
+      setSaveNotice({ kind: "validation", summary: "Couldn't save — the report didn't load. Refresh the page and try again.", fields: [] });
+      return;
+    }
     try {
       await updateReport.mutateAsync(payload);
       await completeStep.mutateAsync({ step: stepNumber, data: stepPayload(stepNumber, draft.blank), pin });
@@ -344,7 +347,7 @@ export function EightDDetailPage() {
                 );
               })}
             </div>
-            {saveNotice?.kind === "validation" && (
+            {saveNotice && (saveNotice.kind === "validation" || saveNotice.kind === "signature") && (
               <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm" data-testid="step-save-error">
                 <p className="font-medium">This step didn't save.</p>
                 <p>{saveNotice.summary}</p>
@@ -366,6 +369,13 @@ export function EightDDetailPage() {
                     await finishStep(signStep, pin);
                   }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setSignStep(null)}
+                  className="mt-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+                >
+                  Cancel
+                </button>
               </div>
             )}
           </div>
