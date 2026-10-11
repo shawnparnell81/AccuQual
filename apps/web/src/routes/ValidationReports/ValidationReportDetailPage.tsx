@@ -185,8 +185,8 @@ export function ValidationReportDetailPage() {
   async function createNcr(rows = failures) {
     if (savedReport.id === 0 || rows.length === 0) return;
     try {
-      const created = (await apiClient.post<{ id: number }>(`/validation-reports/${savedReport.id}/ncr`, { rows })).data;
-      toast.success("NCR created. Type the NCR number on that record.");
+      const created = (await apiClient.post<{ id: number; existing?: boolean }>(`/validation-reports/${savedReport.id}/ncr`, { rows })).data;
+      toast.success(created.existing ? "Opened the existing NCR for this report." : "NCR created. Type the NCR number on that record.");
       void queryClient.invalidateQueries({ queryKey: ["validation-reports", savedReport.id] });
       navigate(`/ncr/${created.id}`);
     } catch {

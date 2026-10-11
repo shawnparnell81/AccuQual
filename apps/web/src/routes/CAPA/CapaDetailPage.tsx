@@ -23,7 +23,7 @@ import { capaStepFieldEditable, textStillDirty, type CapaNarrativeField } from "
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, peopleForAssignment, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useModuleFormLock } from "../../hooks/useSavedFormMode";
-import { ModuleFormLock } from "../../components/forms/SavedFormLockBar";
+import { SavedFormLockBar } from "../../components/forms/SavedFormLockBar";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureBoundText } from "../../components/forms/PictureText";
@@ -82,7 +82,7 @@ export function CapaDetailPage() {
   useEffect(() => {
     setVerification(capa?.verification ?? "");
     setVerificationTouched(false);
-  }, [capa?.verification]);
+  }, [capa?.verification, capa?.status]);
 
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this CAPA. Refresh the page and try again." noun="this CAPA" />;
   if (isLoading || !capa) return <LoadingPlaceholder />;
@@ -155,7 +155,15 @@ export function CapaDetailPage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateCapa.isPending} onEdit={() => formLock.onEdit()} onSave={flushNarrative} onLock={formLock.lock} />
+            <SavedFormLockBar
+              mode={formLock.mode}
+              canEdit={permitted}
+              pending={updateCapa.isPending}
+              onEdit={() => formLock.onEdit()}
+              onSave={flushNarrative}
+              onCancel={formLock.lock}
+              onDone={() => { flushNarrative(); formLock.lock(); }}
+            />
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
