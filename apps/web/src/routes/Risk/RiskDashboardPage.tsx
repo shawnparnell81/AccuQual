@@ -56,7 +56,7 @@ export function RiskDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Risk Dashboard</h1>
-          <p className="text-sm text-muted-foreground">The Risk Register only — not the AI Insights supplier-risk score or the Digital Twin's simulation heatmap.</p>
+          <p className="text-sm text-muted-foreground">The Risk Register only — not the AI Insights supplier-risk score.</p>
         </div>
         <button onClick={() => navigate("/risk")} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
           Back to list
