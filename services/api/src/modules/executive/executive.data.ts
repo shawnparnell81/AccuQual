@@ -72,31 +72,6 @@ export function faiOutcome(status: string, failure: string | null, closed: boole
   return passed ? "pass" : "open";
 }
 
-/**
- * Pass / fail / still open for a validation report, read from the saved
- * disposition checkboxes. The "passed"/"failed" words only exist in unsaved
- * formula cells, so faiOutcome's text search can't see them.
- */
-export function validationOutcome(data: unknown): "open" | "pass" | "fail" {
-  const cells = data && typeof data === "object" ? (data as { cells?: unknown }).cells : undefined;
-  const c = cells && typeof cells === "object" ? (cells as Record<string, unknown>) : {};
-  const kind = validationKind(data);
-  if (kind === "csa") {
-    if (c.D51 === true) return "fail";
-    if (c.B51 === true || c.F51 === true) return "pass";
-  } else if (kind === "fuel_pump") {
-    // Further Review row 59 overrides row 52 when ticked.
-    if (c.C59 === true || c.E59 === true || c.H59 === true) {
-      if (c.E59 === true) return "fail";
-      if (c.C59 === true || c.H59 === true) return "pass";
-    } else {
-      if (c.E52 === true) return "fail";
-      if (c.C52 === true || c.H52 === true) return "pass";
-    }
-  }
-  return faiOutcome("", null, false, JSON.stringify(data ?? {}));
-}
-
 async function rowsOf<T extends Record<string, unknown>>(db: Db, statement: ReturnType<typeof sql>): Promise<T[]> {
   return (await optionalRows<T>(db, statement)) ?? [];
 }
@@ -385,7 +360,8 @@ export async function loadFacts(db: Db, now: Date): Promise<Fact[]> {
     data: unknown;
   }>(db, sql`SELECT id, site_id, record_number, created_at, data FROM validation_reports`);
   for (const row of validations) {
-    const outcome = validationOutcome(row.data);
+    const blob = JSON.stringify(row.data ?? {});
+    const outcome = faiOutcome("", null, false, blob);
     const kind = validationKind(row.data);
     facts.push({
       group: "fai",

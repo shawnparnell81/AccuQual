@@ -379,7 +379,6 @@ export function PictureBoundText({
   onSave,
   onPendingChange,
   commitRef,
-  discardRef,
   entityType,
   entityId,
   className,
@@ -394,8 +393,6 @@ export function PictureBoundText({
   onPendingChange?: (value: string | null) => void;
   /** Header Save calls this so the latest draft is stored even if blur has not run. */
   commitRef?: { current: (() => void) | null };
-  /** Header Cancel calls this to throw away the draft and return to the saved text. */
-  discardRef?: { current: (() => void) | null };
   entityType: string;
   entityId: number;
   className?: string;
@@ -412,13 +409,6 @@ export function PictureBoundText({
   if (commitRef) {
     commitRef.current = () => {
       if (valueRef.current !== savedRef.current) onSave(valueRef.current);
-    };
-  }
-  if (discardRef) {
-    discardRef.current = () => {
-      valueRef.current = savedRef.current;
-      setValue(savedRef.current);
-      onPendingChange?.(null);
     };
   }
 
