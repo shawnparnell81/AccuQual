@@ -49,7 +49,7 @@ export function RiskPage() {
         <div>
           <h1 className="text-2xl font-semibold">Risk / FMEA</h1>
           <p className="text-sm text-muted-foreground">
-            The Risk Register — distinct from AI Insights' supplier risk score and the Digital Twin's simulation heatmap; see each page's own label.
+            The Risk Register only — not the AI Insights supplier-risk score; see each page's own label.
           </p>
         </div>
         <div className="flex gap-2">
