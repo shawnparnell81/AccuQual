@@ -14,6 +14,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { Modal } from "../../components/modals/Modal";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
@@ -82,6 +83,7 @@ export function NcrWorkspacePage() {
   const { label, people } = usePersonDirectory();
   const [showHistory, setShowHistory] = useState(false);
   const [quarantineOnHold, setQuarantineOnHold] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const { data: ncr, isLoading, isError, error } = ncrHooks.useOne(ncrId);
   const user = useCurrentUser();
@@ -272,7 +274,7 @@ export function NcrWorkspacePage() {
                   toast.error(`Sign these before closing: ${missing.map((item) => item.label).join(", ")}`);
                   return;
                 }
-                closeAction.mutate({ id: ncrId }, { onSuccess: (data) => void rememberStep(data) });
+                setCloseConfirmOpen(true);
               }}
               visible={step === "verify"}
               variant="primary"
@@ -398,6 +400,33 @@ export function NcrWorkspacePage() {
 
       <Modal title="History" isOpen={showHistory} onClose={() => setShowHistory(false)}>
         <WorkflowHistoryPanel moduleName="ncr" recordId={ncrId} bare />
+      </Modal>
+      <Modal title="Close NCR" isOpen={closeConfirmOpen} onClose={() => setCloseConfirmOpen(false)}>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Your signature is required to close this NCR. Your name and the date/time will be stamped on the record.
+          </p>
+          <SignatureStamp
+            certify="I certify that this NCR is complete and may be closed."
+            onSign={async (pin) => {
+              // The backend validates the PIN via requireSignatureStamp before closing.
+              // closeAction sends the PIN; on success the page updates via rememberStep.
+              await new Promise<void>((resolve, reject) => {
+                closeAction.mutate(
+                  { id: ncrId, pin },
+                  {
+                    onSuccess: (data) => {
+                      setCloseConfirmOpen(false);
+                      void rememberStep(data);
+                      resolve();
+                    },
+                    onError: (err) => reject(err),
+                  },
+                );
+              });
+            }}
+          />
+        </div>
       </Modal>
     </RecordFrame>
     </PictureRecordProvider>

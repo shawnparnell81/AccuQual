@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { documents } from "../../drizzle/schema/documents.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
@@ -138,7 +139,18 @@ export const correctiveActionHandler = asyncHandler(async (req: Request, res: Re
 });
 
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.close(req.db!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
+  const ncrId = Number(req.params.id);
+  // Require a fresh PIN signature to close. The closer's name and timestamp
+  // are stamped via the audit trail. No new columns — uses existing audit.
+  await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: true, // SignatureStamp already requires the certify checkbox
+    entityType: "NCR",
+    entityId: ncrId,
+    field: "closure",
+    description: "Closed this NCR.",
+  });
+  const updated = await ncrService.close(req.db!, ncrId, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
