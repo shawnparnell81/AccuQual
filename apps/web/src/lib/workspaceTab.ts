@@ -158,12 +158,27 @@ export function workspaceTabKey(path: string): string {
     return `executive-list:${path}`;
   }
   // Each record gets its own tab, so opening a record never rewrites a list or dashboard tab.
-  const recordMatch = pathname.match(/^\/(ncr|capa|8d|audits|complaints|warranty|labor-claims)\/([^/]+)$/);
+  // Only numeric IDs match (so /warranty/dashboard doesn't become a record tab).
+  const recordMatch = pathname.match(/^\/(ncr|capa|8d|audits|complaints|warranty|labor-claims)\/(\d+)$/);
   if (recordMatch) {
     return `record:${recordMatch[1]}/${recordMatch[2]}`;
   }
   const section = workspaceSectionId(pathname);
   return section ? `section:${section}` : pathname;
+}
+
+/**
+ * Whether an incoming path should reuse an existing tab.
+ * A bare "/executive/list" (no query, as reported by location.pathname) reuses
+ * the active filtered list tab instead of opening a second unfiltered "Records" tab.
+ */
+export function tabKeysMatch(existingPath: string, incomingPath: string): boolean {
+  if (workspaceTabKey(existingPath) === workspaceTabKey(incomingPath)) return true;
+  const incomingPathname = normalizeTabPath(incomingPath);
+  if (incomingPathname === "/executive/list" && !incomingPath.includes("?")) {
+    return normalizeTabPath(existingPath) === "/executive/list";
+  }
+  return false;
 }
 
 export function workspaceSectionIcon(path: string): string | null {
@@ -231,7 +246,7 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
     return { ...tab, path: next.path, title: next.title, icon: next.icon };
   }
 
-  if (active && workspaceTabKey(active.path) === key) {
+  if (active && tabKeysMatch(active.path, next.path)) {
     if (keepsFilteredPath(active.path, next.path)) return { tabs, activeId: active.id };
     if (active.path === next.path && active.title === next.title && active.icon === next.icon) {
       return { tabs, activeId: active.id };
@@ -239,7 +254,7 @@ export function followWorkspacePath<T extends WorkspaceTabFields>(
     return { tabs: tabs.map((tab) => (tab.id === active.id ? rewritten(tab) : tab)), activeId: active.id };
   }
 
-  const existing = tabs.find((tab) => workspaceTabKey(tab.path) === key);
+  const existing = tabs.find((tab) => tabKeysMatch(tab.path, next.path));
   if (existing) {
     if (keepsFilteredPath(existing.path, next.path)) return { tabs, activeId: existing.id };
     const same = existing.path === next.path && existing.title === next.title && existing.icon === next.icon;
@@ -366,7 +381,7 @@ export function syncClosedWorkspace<T extends WorkspaceTabFields>(
   reopen: boolean,
 ): { tabs: T[]; activeId: string | null; suppressed: string[]; redirectTo: string | null } {
   const key = workspaceTabKey(next.path);
-  const open = tabs.some((tab) => workspaceTabKey(tab.path) === key);
+  const open = tabs.some((tab) => tabKeysMatch(tab.path, next.path));
   if (suppressed.includes(key) && !reopen && !open) {
     const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0] ?? null;
     const redirectTo = active && workspaceTabKey(active.path) !== key ? active.path : null;

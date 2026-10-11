@@ -90,16 +90,24 @@ export function ExecutiveDrillListPage() {
   const dateRange = params.get("dateRange") ?? "";
   const siteRaw = params.get("siteId") ?? "";
   const siteId = siteRaw === "unassigned" || siteRaw === "" ? null : Number(siteRaw);
+  // KPI chart drill-down params
+  const kpiMetric = params.get("metric") ?? "";
+  const kpiMonth = params.get("month") ?? "";
+  const isKpi = kpiMetric.length > 0 && kpiMonth.length > 0;
   const records = useQuery({
-    queryKey: ["executive-list", kind, bucket, dateRange, siteRaw],
-    enabled: kind.length > 0 && bucket.length > 0 && dateRange.length > 0,
+    queryKey: ["executive-list", kind, bucket, dateRange, siteRaw, kpiMetric, kpiMonth],
+    enabled: (kind.length > 0 && bucket.length > 0 && dateRange.length > 0) || isKpi,
     queryFn: async () => {
+      if (isKpi) {
+        const query = new URLSearchParams({ metric: kpiMetric, month: kpiMonth, siteId: siteRaw || "all" });
+        return (await apiClient.get<DrillPayload>(`/kpis/records?${query.toString()}`)).data;
+      }
       const query = new URLSearchParams({ kind, bucket, dateRange, siteId: siteRaw || "unassigned" });
       return (await apiClient.get<DrillPayload>(`/executive/records?${query.toString()}`)).data;
     },
   });
 
-  if (!kind || !bucket || !dateRange) {
+  if ((!kind || !bucket || !dateRange) && !isKpi) {
     return <p className="text-sm text-muted-foreground">Choose a number on the executive dashboard to open its list.</p>;
   }
   if (records.isLoading) return <LoadingPlaceholder />;

@@ -230,7 +230,7 @@ describe("saved tabs stay closed across a reload", () => {
     useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedKeys: [] });
   });
 
-  it("drops a closed Quality tab and does not open NCR, the record, or CAPA again", () => {
+  it("drops a closed Quality tab and does not open NCR or CAPA again", () => {
     useTabStore.getState().loadForUser("owner-1");
     useTabStore.getState().openTab({ path: "/", title: "Dashboard", icon: "dashboard" });
     useTabStore.getState().openTab({ path: "/ncr", title: "NCR", icon: "ncr" });
@@ -241,10 +241,23 @@ describe("saved tabs stay closed across a reload", () => {
     const next = useTabStore.getState().closeTab(quality.id);
     assert.equal(next, "/");
     assert.equal(useTabStore.getState().activeId === quality.id, false);
-    for (const path of ["/ncr", "/ncr/11", "/capa", "/capa/4", "/8d/2"]) {
+    // Closing the Quality list tab suppresses the list sections, but records have
+    // their own tab keys now, so a record can still open.
+    for (const path of ["/ncr", "/capa"]) {
       assert.equal(useTabStore.getState().syncActiveTabLocation(path, "Quality", "quality"), "/");
-      assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr" || row.path.startsWith("/ncr/") || row.path.startsWith("/capa") || row.path.startsWith("/8d")), false, path);
+      assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr" || row.path === "/capa"), false, path);
     }
+    // A record opens even though the Quality list tab is closed.
+    assert.equal(useTabStore.getState().syncActiveTabLocation("/ncr/11", "NCR 11", "ncr"), null);
+    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr/11"), true);
+
+    // But closing a record tab keeps that record closed after a sync or reload.
+    const record = useTabStore.getState().tabs.find((row) => row.path === "/ncr/11");
+    assert.ok(record);
+    useTabStore.getState().closeTab(record.id);
+    const recordRedirect = useTabStore.getState().syncActiveTabLocation("/ncr/11", "NCR 11", "ncr");
+    assert.ok(recordRedirect !== null); // redirected away, record not reopened
+    assert.equal(useTabStore.getState().tabs.some((row) => row.path === "/ncr/11"), false);
 
     useTabStore.setState({ ownerId: null, tabs: [], activeId: null, suppressedKeys: [] });
     useTabStore.getState().loadForUser("owner-1");

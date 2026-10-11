@@ -178,10 +178,11 @@ export function ExecutiveDashboardPage() {
   }
 
   async function openKpiRecords(metricId: string, month: string, plant: PlantView) {
+    const siteParam = plant === "all" ? "all" : String(plant);
     try {
       const data = (
         await apiClient.get<{ title: string; siteName: string; total: number; note: string | null; rows: DrillListRow[] }>("/kpis/records", {
-          params: { metric: metricId, month, siteId: plant === "all" ? "all" : String(plant) },
+          params: { metric: metricId, month, siteId: siteParam },
         })
       ).data;
       // Single record: open directly in its own tab.
@@ -192,8 +193,11 @@ export function ExecutiveDashboardPage() {
         setPanel(null);
         return;
       }
+      // 2+ records: open the KPI list in its own tab (same rule as dashboard numbers).
+      const query = new URLSearchParams({ metric: metricId, month, siteId: siteParam });
+      openTab({ path: `/executive/list?${query.toString()}`, title: data.title, icon: "dashboard" });
+      setKpiPanel(null);
       setPanel(null);
-      setKpiPanel({ title: data.title, detail: data.siteName, total: data.total, rows: data.rows, note: data.note, denied: null });
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't open those records."));
     }
@@ -344,11 +348,12 @@ export function ExecutiveDashboardPage() {
                         {cardTarget ? (
                           <button
                             type="button"
-                            className="block max-w-full cursor-pointer truncate rounded-md text-left text-sm font-medium text-foreground hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
+                            className="block max-w-full cursor-pointer truncate rounded-md text-left text-sm font-medium text-foreground hover:underline focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"
                             title={drillTooltip(cardTarget)}
+                            disabled={openingKey === `${cardTarget.siteName}-${cardTarget.kind}-${cardTarget.bucket}`}
                             onClick={() => void openFigure(cardTarget)}
                           >
-                            {live?.title ?? item?.label ?? widget.kind}
+                            {openingKey === `${cardTarget.siteName}-${cardTarget.kind}-${cardTarget.bucket}` ? "…" : (live?.title ?? item?.label ?? widget.kind)}
                           </button>
                         ) : (
                           <h3 className="truncate text-sm font-medium text-muted-foreground" title="Nothing to open">
@@ -404,17 +409,22 @@ export function ExecutiveDashboardPage() {
                     )}
                     {chart.length > 1 && chartTotal > 0 && (
                       <div className="mb-2 flex h-3 overflow-hidden rounded-full" role="group" aria-label={`${live?.title ?? widget.kind} chart`}>
-                        {chart.map((target, index) => (
-                          <button
-                            key={`${target.bucket}-bar`}
-                            type="button"
-                            className="h-full min-w-1 cursor-pointer hover:opacity-80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring"
-                            style={{ width: `${(target.value / chartTotal) * 100}%`, background: SEGMENT_COLORS[index % SEGMENT_COLORS.length] }}
-                            title={drillTooltip(target)}
-                            aria-label={drillTooltip(target)}
-                            onClick={() => void openFigure(target)}
-                          />
-                        ))}
+                        {chart.map((target, index) => {
+                          const barKey = `${target.siteName}-${target.kind}-${target.bucket}`;
+                          const isOpening = openingKey === barKey;
+                          return (
+                            <button
+                              key={`${target.bucket}-bar`}
+                              type="button"
+                              className="h-full min-w-1 cursor-pointer hover:opacity-80 focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                              style={{ width: `${(target.value / chartTotal) * 100}%`, background: SEGMENT_COLORS[index % SEGMENT_COLORS.length] }}
+                              title={drillTooltip(target)}
+                              aria-label={isOpening ? "Loading…" : drillTooltip(target)}
+                              disabled={isOpening}
+                              onClick={() => void openFigure(target)}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                     <ul className="flex flex-col gap-1">
