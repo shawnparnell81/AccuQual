@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { exportFormPdfResult } from "../../api/formHooks";
 import { PdfExportActions } from "../../components/records/PdfExportActions";
@@ -138,8 +139,17 @@ export function NcrWorkspacePage() {
     }
   }
 
-  if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this issue. Refresh the page and try again." noun="this NCR" />;
-  if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading this issue…</p>;
+  const ncrNotFound = axios.isAxiosError(error) && error.response?.status === 404;
+  if (isError)
+    return (
+      <RecordAccessMessage
+        error={error}
+        fallback={ncrNotFound ? "This NCR doesn't exist or was deleted." : "Couldn't load this issue. Refresh the page and try again."}
+        noun="this NCR"
+      />
+    );
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading this issue…</p>;
+  if (!ncr) return <p className="text-sm text-muted-foreground">This NCR doesn't exist or was deleted.</p>;
 
   const owner = label(ncr.assignedTo);
   const step = ncrStepKey(ncr.status);
