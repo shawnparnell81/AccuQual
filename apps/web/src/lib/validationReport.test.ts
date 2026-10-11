@@ -244,9 +244,9 @@ test("the sheet keeps the workbook labels, including the original spelling", () 
   assert.equal(/FRM-VAL-/.test(text), false);
   assert.match(text, /Rev: C/);
   assert.match(text, /Effective Date: 03\/26\/2026/);
-  assert.match(text, /athe approved DMA engineering drawing/);
+  assert.match(text, /the approved DMA engineering drawing/);
   assert.match(text, /Hardwear Grade/);
-  assert.match(text, /Tolorences/);
+  assert.match(text, /Tolerances/);
   assert.match(text, /Pass \/ Fail sample 1/);
   assert.match(text, /Pass \/ Fail Sample 2/);
   assert.match(text, /6\.0 FINAL CONCLUSION/);

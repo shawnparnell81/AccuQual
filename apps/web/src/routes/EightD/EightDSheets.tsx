@@ -30,7 +30,7 @@ const TABS = [
   { id: "decision", label: "Decision Making (D3 & D5)" },
   { id: "risk", label: "Risk Analysis" },
   { id: "plan", label: "Plan & Problem Prevention" },
-  { id: "help", label: "Intructions" },
+  { id: "help", label: "Instructions" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -869,7 +869,7 @@ function InstructionsTab({ rootCausePercent, pcaPercent }: { rootCausePercent: s
   const rootHint = percentTotalHint(rootCausePercent);
   const pcaHint = percentTotalHint(pcaPercent);
   return (
-    <section className="e8-sheet e8-help" aria-label="Intructions">
+    <section className="e8-sheet e8-help" aria-label="Instructions">
       <h2 className="e8-title">8D Problem Solving</h2>
       <h3>D2 Problem Statement/Description (quantify) (one defect per 8D)</h3>
       <p>What are the symptoms that the customer is seeing? Specify the internal/external customer problems by identifying in quantifiable terms who, what, when, where, why, how, how many (5W2H) of the problem.</p>

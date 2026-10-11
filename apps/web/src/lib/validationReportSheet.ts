@@ -98,7 +98,7 @@ function spacer(row: number): SheetCell {
 }
 
 function headers(row: number): SheetCell[] {
-  const labels = ["Criteria", "Nominal", "Tolorences", "Sample 1", "Sample 2", "Pass / Fail sample 1", "Pass / Fail Sample 2"];
+  const labels = ["Criteria", "Nominal", "Tolerances", "Sample 1", "Sample 2", "Pass / Fail sample 1", "Pass / Fail Sample 2"];
   return labels.map((text, index) => ({
     col: index + 1,
     span: 1,
@@ -172,7 +172,7 @@ export function buildSheetRows(): SheetCell[][] {
       span: 7,
       addr: "A3",
       kind: "label",
-      text: "Purpose: To validate incoming First Article or production CSAs against athe approved DMA engineering drawing",
+      text: "Purpose: To validate incoming First Article or production CSAs against the approved DMA engineering drawing",
       wrap: true,
     },
   ]);
