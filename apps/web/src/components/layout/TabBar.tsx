@@ -1,5 +1,6 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Columns2, Pin, AlertTriangle,
+import { ChevronDown, Columns2, Pin, AlertTriangle,
   ClipboardCheck,
   Truck,
   Package,
@@ -113,102 +114,204 @@ export function TabBar() {
     if (id === activeId && nextPath) navigate(nextPath, { replace: true });
   }
 
-  const compress = tabs.length >= 6;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measurerRef = useRef<HTMLDivElement>(null);
+  const [overflowIds, setOverflowIds] = useState<string[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Tabs never squeeze: measure which ones fit at natural width and put the
+  // rest in the "More tabs" menu. An off-screen measurer renders the same tab
+  // markup so widths match exactly; the visible strip only renders what fits.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const measurer = measurerRef.current;
+    if (!container || !measurer) return;
+    const containerEl: HTMLDivElement = container;
+    const measurerEl: HTMLDivElement = measurer;
+    function measure() {
+      const width = containerEl.clientWidth;
+      const els = measurerEl.querySelectorAll<HTMLElement>("[data-measure-id]");
+      const over: string[] = [];
+      const fits = (reserve: number) => {
+        over.length = 0;
+        for (const el of els) {
+          if (el.offsetLeft + el.offsetWidth > width - reserve) over.push(el.dataset.measureId!);
+        }
+      };
+      fits(0);
+      if (over.length > 0) fits(120); // room for the "More tabs" button
+      // The active tab is always on the strip — swap it with the last visible tab.
+      if (activeId && over.includes(activeId)) {
+        const rest = over.filter((id) => id !== activeId);
+        const visibleIds = tabs.map((t) => t.id).filter((id) => !rest.includes(id) && id !== activeId);
+        const lastVisible = visibleIds[visibleIds.length - 1];
+        setOverflowIds(lastVisible ? [...rest, lastVisible] : rest);
+      } else {
+        setOverflowIds(over);
+      }
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(containerEl);
+    return () => observer.disconnect();
+  }, [tabs, activeId]);
+
+  const overflowSet = new Set(overflowIds);
+  const visibleTabs = tabs.filter((tab) => !overflowSet.has(tab.id));
+  const overflowTabs = tabs.filter((tab) => overflowSet.has(tab.id));
+
+  function renderTab(tab: (typeof tabs)[number]) {
+    const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
+    const isActive = tab.id === activeId;
+    const dirty = shouldWarnOnClose(dirtyPaths, tab.path);
+    return (
+      <div
+        key={tab.id}
+        role="tab"
+        aria-selected={isActive}
+        tabIndex={0}
+        draggable
+        data-tab-id={tab.id}
+        onDragStart={(event) => {
+          event.dataTransfer.setData("text/plain", tab.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(event) => {
+          event.dataTransfer.dropEffect = "move";
+          event.preventDefault();
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          const fromId = event.dataTransfer.getData("text/plain");
+          if (fromId) reorderTabs(fromId, tab.id);
+        }}
+        onClick={() => handleActivate(tab.id)}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") handleActivate(tab.id);
+        }}
+        title={tab.title}
+        className={
+          isActive
+            ? "relative flex min-w-0 shrink-0 cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground active:cursor-grabbing"
+            : "flex min-w-0 shrink-0 cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary active:cursor-grabbing"
+        }
+      >
+        {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
+        <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
+        {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" title="Unsaved changes" aria-label="Unsaved changes" />}
+        <TruncatedName name={tab.title} className="text-left max-w-[9rem]" />
+        <button
+          type="button"
+          draggable={false}
+          aria-label={tab.pinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
+          title={tab.pinned ? "Unpin tab" : "Pin tab"}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            consumeTabUserGesture();
+            togglePin(tab.id);
+          }}
+          className={`shrink-0 rounded p-0.5 hover:bg-muted-foreground/20 ${tab.pinned ? "text-accent" : ""}`}
+        >
+          <Pin size={12} className={tab.pinned ? "fill-current" : ""} />
+        </button>
+        <button
+          type="button"
+          draggable={false}
+          aria-label={`Open ${tab.title} in right pane`}
+          title="Open in right pane"
+          onClick={(e) => {
+            e.stopPropagation();
+            consumeTabUserGesture();
+            openSplit(tab.path);
+          }}
+          className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
+        >
+          <Columns2 size={12} />
+        </button>
+        <button
+          type="button"
+          draggable={false}
+          data-tab-close=""
+          onClick={(e) => void handleClose(e, tab.id)}
+          aria-label={`Close ${tab.title}`}
+          title={tab.title}
+          className="ml-1 shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
+        >
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <>
-    <div className="hidden w-full min-w-0 max-w-full items-center gap-0.5 overflow-hidden border-b border-border bg-card px-2 pt-1 md:flex" role="tablist" aria-label="Open pages">
-      {tabs.map((tab) => {
-        const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
-        const isActive = tab.id === activeId;
-        const dirty = shouldWarnOnClose(dirtyPaths, tab.path);
-        const compact = compress && !isActive;
-        const titleLimit = compact ? "max-w-[2.5rem]" : "max-w-[9rem]";
-        return (
-          <div
-            key={tab.id}
-            role="tab"
-            aria-selected={isActive}
-            tabIndex={0}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData("text/plain", tab.id);
-              event.dataTransfer.effectAllowed = "move";
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              const fromId = event.dataTransfer.getData("text/plain");
-              if (fromId) reorderTabs(fromId, tab.id);
-            }}
-            onClick={() => handleActivate(tab.id)}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return;
-              if (event.key === "Enter" || event.key === " ") handleActivate(tab.id);
-            }}
-            title={tab.title}
-            className={
-              isActive
-                ? "relative flex min-w-0 shrink cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground active:cursor-grabbing"
-                : "flex min-w-0 shrink cursor-grab items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary active:cursor-grabbing"
-            }
-          >
-            {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
-            <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
-            {dirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" title="Unsaved changes" aria-label="Unsaved changes" />}
-            <TruncatedName name={tab.title} className={`text-left ${titleLimit}`} />
-            {!compact && (
-              <button
-                type="button"
-                draggable={false}
-                aria-label={tab.pinned ? `Unpin ${tab.title}` : `Pin ${tab.title}`}
-                title={tab.pinned ? "Unpin tab" : "Pin tab"}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  consumeTabUserGesture();
-                  togglePin(tab.id);
-                }}
-                className={`shrink-0 rounded p-0.5 hover:bg-muted-foreground/20 ${tab.pinned ? "text-accent" : ""}`}
-              >
-                <Pin size={12} className={tab.pinned ? "fill-current" : ""} />
-              </button>
-            )}
-            {!compact && (
-              <button
-                type="button"
-                draggable={false}
-                aria-label={`Open ${tab.title} in right pane`}
-                title="Open in right pane"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  consumeTabUserGesture();
-                  openSplit(tab.path);
-                }}
-                className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
-              >
-                <Columns2 size={12} />
-              </button>
-            )}
+    <div className="relative">
+      {/* Off-screen measurer — same tab markup, so natural widths match the strip exactly. */}
+      <div ref={measurerRef} aria-hidden className="invisible absolute left-0 top-0 flex gap-0.5 px-2 pt-1">
+        {tabs.map((tab) => {
+          const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
+          return (
+            <div key={tab.id} data-measure-id={tab.id} className="flex shrink-0 items-center gap-1.5 px-2.5 py-1 text-xs">
+              <Icon size={14} className="shrink-0" />
+              <span className="max-w-[9rem] truncate">{tab.title}</span>
+              <span className="shrink-0 p-0.5"><Pin size={12} /></span>
+              <span className="shrink-0 p-0.5"><Columns2 size={12} /></span>
+              <span className="ml-1 shrink-0 p-0.5"><X size={12} /></span>
+            </div>
+          );
+        })}
+      </div>
+      <div ref={containerRef} className="hidden w-full min-w-0 max-w-full items-center gap-0.5 overflow-hidden border-b border-border bg-card px-2 pt-1 md:flex" role="tablist" aria-label="Open pages">
+        {visibleTabs.map(renderTab)}
+        {overflowTabs.length > 0 && (
+          <div className="relative shrink-0">
             <button
               type="button"
-              draggable={false}
-              data-tab-close=""
-              onClick={(e) => void handleClose(e, tab.id)}
-              aria-label={`Close ${tab.title}`}
-              title={tab.title}
-              className="ml-1 shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-label={`${overflowTabs.length} more tabs`}
+              title={`${overflowTabs.length} more tabs`}
+              className="flex items-center gap-1 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-secondary"
             >
-              <X size={12} />
+              <ChevronDown size={14} className="shrink-0" />
+              <span>{overflowTabs.length} more</span>
             </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden />
+                <div role="menu" aria-label="More tabs" className="absolute right-0 top-full z-50 mt-1 max-h-96 w-64 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                  {overflowTabs.map((tab) => {
+                    const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
+                    return (
+                      <div key={tab.id} role="menuitem" className="flex items-center gap-2 px-2 py-1 hover:bg-secondary">
+                        <button
+                          type="button"
+                          onClick={() => { setMenuOpen(false); void handleActivate(tab.id); }}
+                          title={tab.title}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs text-foreground"
+                        >
+                          <Icon size={14} className="shrink-0" />
+                          <span className="truncate">{tab.title}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => void handleClose(e, tab.id)}
+                          aria-label={`Close ${tab.title}`}
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
-    </>
   );
 }
 
