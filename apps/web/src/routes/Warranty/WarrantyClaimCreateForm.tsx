@@ -19,7 +19,7 @@ const supplierHooks = createResourceHooks<Supplier>("suppliers");
  */
 export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose: () => void; onCreated: (claim: WarrantyClaim) => void }) {
   const toast = useToast();
-  const { data: products = [] } = productHooks.useList();
+  const { data: products = [], isError: productsError } = productHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
   const createClaim = claimHooks.useCreate();
 
@@ -78,7 +78,7 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
       >
         <RecordNumberField label="Claim No." value={form.claimNumber} error={numberError} onChange={(value) => { setNumberError(null); setForm({ ...form, claimNumber: value }); }} />
         <SelectField label="Product (optional)" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
-          <option value="">{products.length === 0 ? "No products on file" : "Select a product…"}</option>
+          <option value="">{productsError ? "Couldn't load products — type the part number below" : products.length === 0 ? "No products on file" : "Select a product…"}</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.sku}
