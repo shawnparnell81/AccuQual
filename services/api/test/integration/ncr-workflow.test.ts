@@ -18,6 +18,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { validationReports } from "../../src/drizzle/schema/validationReport.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { TEST_PIN, setTestPin } from "../helpers/signaturePin.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -26,11 +27,13 @@ let companyId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
+let managerToken: string;
+let managerUserId: number;
 
-async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ email: `ncr-workflow-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(department: string | null, roleName = "operator") {
+  const [user] = await db.insert(users).values({ email: `ncr-workflow-${department ?? "none"}-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
+  return { token: signAccessToken({ sub: String(user!.id), roleId: null, roleName, department }), userId: user!.id };
 }
 
 async function createNcr(token: string, title: string) {
@@ -65,8 +68,11 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     companyId = co!.id;
     await seedDefaultPermissions(companyId);
 
-    qualityToken = await makeUser("quality");
-    engineeringToken = await makeUser("engineering"); // ncr's default permissions are quality-only — engineering has zero access
+    qualityToken = (await makeUser("quality")).token;
+    engineeringToken = (await makeUser("engineering")).token; // ncr's default permissions are quality-only — engineering has zero access
+    const manager = await makeUser("quality", "quality_manager");
+    managerToken = manager.token;
+    managerUserId = manager.userId;
   });
 
   afterAll(async () => {
@@ -158,7 +164,14 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     expect(customerWaived.body.message).toMatch(/Quality Manager/);
     expect(customerWaived.body.message).not.toMatch(/Customer Representative/);
 
-    await setClosureRequired(qualityToken, id, Object.fromEntries(CLOSURE_PATHS.map((path) => [path, "no"])));
+    await setClosureRequired(qualityToken, id, Object.fromEntries(CLOSURE_PATHS.filter((p) => p !== "closureApprovals.0.signature").map((path) => [path, "no"])));
+    // Sign row 0 as quality_manager (has ncr.closure_signoff).
+    await setTestPin(managerUserId);
+    const signed = await request(app)
+      .post(`/forms/ncr/${id}/sign`)
+      .set("Authorization", `Bearer ${managerToken}`)
+      .send({ pin: TEST_PIN, certified: true, path: "closureApprovals.0.signature", description: "Quality Manager closure sign-off" });
+    expect(signed.status).toBe(200);
     const closed = await request(app).post(`/ncr/${id}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(closed.status).toBe(200);
     expect(closed.body.status).toBe("closed");

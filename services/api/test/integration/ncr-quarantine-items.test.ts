@@ -9,6 +9,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { TEST_PIN, setTestPin } from "../helpers/signaturePin.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -16,6 +17,7 @@ const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
 let managerToken: string;
+let managerUserId: number;
 
 async function makeUser(department: string, roleName = "operator") {
   const [user] = await db
@@ -23,16 +25,18 @@ async function makeUser(department: string, roleName = "operator") {
     .values({ email: `ncr-quar-${department}-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
+  return { token: signAccessToken({ sub: String(user!.id), roleId: null, roleName, department }), userId: user!.id };
 }
 
 describe("NCR quarantined items", () => {
   beforeAll(async () => {
     const co = await ensureTestCompany();
     await seedDefaultPermissions(co!.id);
-    qualityToken = await makeUser("quality");
-    engineeringToken = await makeUser("engineering");
-    managerToken = await makeUser("quality", "quality_manager");
+    qualityToken = (await makeUser("quality")).token;
+    engineeringToken = (await makeUser("engineering")).token;
+    const manager = await makeUser("quality", "quality_manager");
+    managerToken = manager.token;
+    managerUserId = manager.userId;
   });
 
   afterAll(async () => {
@@ -143,8 +147,17 @@ describe("NCR quarantined items", () => {
   });
 
   const closureWaived = Object.fromEntries(
-    ["closureApprovals.0.signature", "closureApprovals.1.signature", "closureApprovals.2.signature", "closureApprovals.3.signature"].map((path) => [path, "no"]),
+    ["closureApprovals.1.signature", "closureApprovals.2.signature", "closureApprovals.3.signature"].map((path) => [path, "no"]),
   );
+
+  async function signRowZero(ncrId: number, token: string, userId: number) {
+    await setTestPin(userId);
+    const signed = await request(app)
+      .post(`/forms/ncr/${ncrId}/sign`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ pin: TEST_PIN, certified: true, path: "closureApprovals.0.signature", description: "Quality Manager closure sign-off" });
+    expect(signed.status).toBe(200);
+  }
 
   async function waiveClosureSignatures(ncrId: number) {
     const form = await request(app).get(`/forms/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`);
@@ -239,6 +252,7 @@ describe("NCR quarantined items", () => {
     expect(unsigned.status).toBe(400);
     expect(unsigned.body.message).toMatch(/Sign these before closing/);
     await waiveClosureSignatures(ncrId);
+    await signRowZero(ncrId, managerToken, managerUserId);
     const nowClosed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(nowClosed.status).toBe(200);
     expect(nowClosed.body.status).toBe("closed");
@@ -254,6 +268,7 @@ describe("NCR quarantined items", () => {
 
     expect((await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "rework", release: false })).status).toBe(200);
     await waiveClosureSignatures(ncrId);
+    await signRowZero(ncrId, managerToken, managerUserId);
     const closed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(closed.status).toBe(200);
     expect(closed.body.status).toBe("closed");
