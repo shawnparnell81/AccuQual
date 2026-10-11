@@ -36,6 +36,7 @@ export async function seedDefaultPermissions(companyId: number) {
 export async function seedTestRoles() {
   const { ROLE_SEEDS } = await import("../../src/modules/roles/roleHierarchy.js");
   const { roles } = await import("../../src/drizzle/schema/roles.js");
+  const { sql } = await import("drizzle-orm");
   for (const seed of ROLE_SEEDS) {
     await db
       .insert(roles)
@@ -46,6 +47,15 @@ export async function seedTestRoles() {
         isProtected: seed.isProtected,
         permissions: seed.permissions,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: roles.name,
+        // Append any missing seed permissions to the existing row (don't overwrite).
+        set: {
+          permissions: sql`(
+            SELECT COALESCE(array_agg(DISTINCT p), '{}')
+            FROM unnest(COALESCE(${roles.permissions}, '{}') || ${seed.permissions}) AS p
+          )`,
+        },
+      });
   }
 }
