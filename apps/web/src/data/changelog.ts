@@ -18,7 +18,21 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-11",
     items: [
       "The Executive dashboard's Open CAPAs and Open NCRs cards now label the total row 'Total open' so it can't be confused with a status row.",
-          ],
+    ],
+  },
+  {
+    version: "2026-10-11.5",
+    date: "2026-10-11",
+    items: [
+      "The Calibration on time KPI's View records now lists every gage behind the percentage, instead of showing 0 records.",
+    ],
+  },
+  {
+    version: "2026-10-11.4",
+    date: "2026-10-11",
+    items: [
+      "A training course page now lets you link or unlink its controlled document directly, instead of needing the API. Completing training works whether or not a document is linked.",
+    ],
   },
   {
     version: "2026-10-11.3",
