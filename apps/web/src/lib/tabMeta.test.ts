@@ -6,6 +6,10 @@ test("a saved QMS Forms title refreshes to the current page name", () => {
   assert.equal(refreshTabTitle("/blank-forms", "QMS Forms"), "Documents · Blank Forms");
 });
 
+test("any title containing QMS Forms is treated as stale", () => {
+  assert.equal(refreshTabTitle("/blank-forms", "My QMS Forms page"), "Documents · Blank Forms");
+});
+
 test("a raw path title resolves to the current page name", () => {
   assert.equal(refreshTabTitle("/pareto", "/pareto"), "Reports · Pareto");
 });

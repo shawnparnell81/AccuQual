@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, Columns2, Pin, AlertTriangle,
   ClipboardCheck,
@@ -118,6 +118,16 @@ export function TabBar() {
   const measurerRef = useRef<HTMLDivElement>(null);
   const [overflowIds, setOverflowIds] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Escape closes the overflow menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   // Tabs never squeeze: measure which ones fit at natural width and put the
   // rest in the "More tabs" menu. An off-screen measurer renders the same tab
@@ -247,29 +257,35 @@ export function TabBar() {
 
   return (
     <div className="relative">
-      {/* Off-screen measurer — same tab markup, so natural widths match the strip exactly. */}
-      <div ref={measurerRef} aria-hidden className="invisible absolute left-0 top-0 flex gap-0.5 px-2 pt-1">
-        {tabs.map((tab) => {
-          const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
-          return (
-            <div key={tab.id} data-measure-id={tab.id} className="flex shrink-0 items-center gap-1.5 px-2.5 py-1 text-xs">
-              <Icon size={14} className="shrink-0" />
-              <span className="max-w-[9rem] truncate">{tab.title}</span>
-              <span className="shrink-0 p-0.5"><Pin size={12} /></span>
-              <span className="shrink-0 p-0.5"><Columns2 size={12} /></span>
-              <span className="ml-1 shrink-0 p-0.5"><X size={12} /></span>
-            </div>
-          );
-        })}
+      {/* Off-screen measurer — same tab markup, so natural widths match the strip exactly.
+          h-0 + overflow-hidden so it can never add a page-wide horizontal scrollbar. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-0 overflow-hidden">
+        <div ref={measurerRef} className="flex gap-0.5 px-2 pt-1">
+          {tabs.map((tab) => {
+            const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
+            return (
+              <div key={tab.id} data-measure-id={tab.id} className="flex shrink-0 items-center gap-1.5 px-2.5 py-1 text-xs">
+                <Icon size={14} className="shrink-0" />
+                <span className="max-w-[9rem] truncate">{tab.title}</span>
+                <span className="shrink-0 p-0.5"><Pin size={12} /></span>
+                <span className="shrink-0 p-0.5"><Columns2 size={12} /></span>
+                <span className="ml-1 shrink-0 p-0.5"><X size={12} /></span>
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div ref={containerRef} className="hidden w-full min-w-0 max-w-full items-center gap-0.5 overflow-hidden border-b border-border bg-card px-2 pt-1 md:flex" role="tablist" aria-label="Open pages">
-        {visibleTabs.map(renderTab)}
+      <div className="flex items-stretch border-b border-border bg-card">
+        <div ref={containerRef} className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden px-2 pt-1 md:flex" role="tablist" aria-label="Open pages">
+          {visibleTabs.map(renderTab)}
+        </div>
         {overflowTabs.length > 0 && (
-          <div className="relative shrink-0">
+          <div className="relative hidden shrink-0 items-end px-2 pt-1 md:flex">
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
               aria-expanded={menuOpen}
+              aria-haspopup="menu"
               aria-label={`${overflowTabs.length} more tabs`}
               title={`${overflowTabs.length} more tabs`}
               className="flex items-center gap-1 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground hover:bg-secondary"

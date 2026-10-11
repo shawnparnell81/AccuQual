@@ -128,10 +128,10 @@ export function deriveTabMeta(pathname: string): { title: string; icon: string }
  * from the current route metadata so the strip never shows dead labels.
  */
 export function refreshTabTitle(path: string, title: string): string {
-  const stale = title === "QMS Forms" || title.startsWith("/");
+  const stale = title.includes("QMS Forms") || title.startsWith("/");
   if (!stale) return title;
   const fresh = deriveTabMeta(path).title;
-  if (fresh && !fresh.startsWith("/") && fresh !== "QMS Forms") return fresh;
-  if (title === "QMS Forms") return "Blank Forms";
+  if (fresh && !fresh.startsWith("/") && !fresh.includes("QMS Forms")) return fresh;
+  if (title.includes("QMS Forms")) return "Blank Forms";
   return title;
 }
