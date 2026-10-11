@@ -5,6 +5,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { AppError } from "../../utils/appError.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { withDb } from "../../lib/requestDb.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
 import { getUserAccessLevel, requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { saveFormSchema, signFormSchema, markNotRequiredSchema, FORM_TYPES } from "./forms.validation.js";
@@ -30,7 +31,7 @@ function rejectSupplierForms(req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
-formsRouter.use(requireAuth, withDb, rejectSupplierForms);
+formsRouter.use(requireAuth, withDb, withSiteContext, rejectSupplierForms);
 
 // memoryStorage: files are small (PDF forms), and uploadTemplateHandler
 // decides the on-disk path itself — same convention as document-folders'

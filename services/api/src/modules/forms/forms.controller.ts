@@ -169,7 +169,7 @@ export const markNotRequired = asyncHandler(async (req: Request, res: Response) 
   const row = rows[index] ?? {};
   const sig = typeof row.signature === "string" ? row.signature : "";
   // Refuse if already signed (a real signature, not a Not-required mark).
-  if (sig && !sig.startsWith("Not required")) throw AppError.badRequest("This row is already signed.");
+  if (sig && !sig.startsWith("Not required – ")) throw AppError.badRequest("This row is already signed.");
 
   const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
   const stamp = await requireSignatureStamp(req, {
@@ -217,7 +217,7 @@ export const clearNotRequired = asyncHandler(async (req: Request, res: Response)
   const rows = Array.isArray((current as any).closureApprovals) ? (current as any).closureApprovals as Record<string, unknown>[] : [];
   const row = rows[index] ?? {};
   const sig = typeof row.signature === "string" ? row.signature : "";
-  if (!sig.startsWith("Not required")) throw AppError.badRequest("This row does not hold a Not required mark.");
+  if (!sig.startsWith("Not required – ")) throw AppError.badRequest("This row does not hold a Not required mark.");
 
   await requireSignatureStamp(req, {
     pin: req.body.pin,
