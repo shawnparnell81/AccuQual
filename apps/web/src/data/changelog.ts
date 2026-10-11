@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-10-11.11",
+    date: "2026-10-11",
+    items: [
+      "The 8D form's Save button now explains why it can't proceed (missing fields or required signature) instead of failing silently, and the signature prompt has a Cancel button.",
+    ],
+  },
+  {
     version: "2026-10-11.3",
     date: "2026-10-11",
     items: [
