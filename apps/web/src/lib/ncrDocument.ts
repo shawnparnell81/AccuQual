@@ -99,7 +99,15 @@ export function closureRoleLabel(label: string): string {
   return label.replace(/\s+signature$/i, "").trim();
 }
 
-/** Required closure roles with no stamp. A role marked Not required is skipped. */
+/** Prefix for a PIN-verified "Not required" mark: "Not required – <name>, <date/time>". */
+export const NOT_REQUIRED_MARK_PREFIX = "Not required –";
+
+/** True if the stamp is a PIN-verified "Not required" mark (satisfies the closure requirement). */
+export function isNotRequiredMark(stamp: unknown): boolean {
+  return typeof stamp === "string" && stamp.startsWith(NOT_REQUIRED_MARK_PREFIX);
+}
+
+/** Required closure roles with no stamp. A PIN-verified "Not required" mark is satisfied. */
 export function missingClosureSignatures(data: Record<string, unknown> | null | undefined): { path: string; label: string }[] {
   const layout = getFormLayout("ncr");
   if (!layout) return [];
@@ -109,6 +117,7 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
   for (const block of blocks) {
     if (choiceOf(source, block.path) === "no") continue;
     const stamp = valueAt(source, block.path);
+    if (isNotRequiredMark(stamp)) continue;
     if (!stamp || stamp === NOT_REQUIRED_LABEL) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
   }
   return missing;

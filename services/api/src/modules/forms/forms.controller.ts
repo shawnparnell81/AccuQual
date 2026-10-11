@@ -107,6 +107,111 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
   res.json({ stamp: stamp.stamp, signedAt: stamp.signedAt.toISOString(), signedOn: stamp.signedOn, displayName: stamp.displayName });
 });
 
+/**
+ * Mark an NCR closure signature row as "Not required" with PIN verification.
+ * The Quality Manager (closureApprovals.0) cannot be marked Not required.
+ * Stores "Not required – <name>, <date/time>" in the signature field.
+ */
+export const markNotRequired = asyncHandler(async (req: Request, res: Response) => {
+  const entityId = Number(req.params.id);
+  const formType = req.params.type!;
+  if (formType !== "ncr") throw AppError.badRequest("Not required marks are only for NCR closure signatures.");
+  
+  const path = String(req.body.path);
+  // Quality Manager is closureApprovals.0 — always required
+  if (path === "closureApprovals.0.signature" || path.startsWith("closureApprovals.0.")) {
+    throw AppError.badRequest("The Quality Manager signature is always required.");
+  }
+  if (!path.startsWith("closureApprovals.")) {
+    throw AppError.badRequest("Not required marks are only for closure signature rows.");
+  }
+
+  const existing = await formsService.loadData(req.db!, formType, entityId);
+  const current = (existing?.data ?? {}) as Record<string, unknown>;
+  
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: FORM_AUDIT_ENTITY[formType] ?? formType,
+    entityId,
+    field: path,
+    description: `Marked not required${req.body.reason ? `: ${String(req.body.reason).slice(0, 200)}` : "."}`,
+  });
+
+  const mark = `Not required – ${stamp.displayName}, ${stamp.signedOn}`;
+  const next = writeSignatureValue(current, path, mark, stamp.signedOn);
+  
+  // Store the reason in the row if provided
+  if (req.body.reason) {
+    const parts = path.split(".");
+    if (parts.length >= 2) {
+      const rows = Array.isArray((next as any).closureApprovals) ? (next as any).closureApprovals : [];
+      const idx = Number(parts[1]);
+      if (rows[idx]) {
+        rows[idx] = { ...rows[idx], notRequiredReason: String(req.body.reason).slice(0, 500) };
+      }
+    }
+  }
+
+  await formsService.saveData(req.db!, {
+    formType,
+    entityType: existing?.entityType ?? req.body.entityType ?? formType,
+    entityId,
+    data: next,
+    userId: req.user?.id,
+    trustSignatures: true,
+  });
+  res.json({ mark, displayName: stamp.displayName, signedOn: stamp.signedOn });
+});
+
+/**
+ * Clear a "Not required" mark (before closure). Requires PIN verification.
+ */
+export const clearNotRequired = asyncHandler(async (req: Request, res: Response) => {
+  const entityId = Number(req.params.id);
+  const formType = req.params.type!;
+  if (formType !== "ncr") throw AppError.badRequest("Not required marks are only for NCR closure signatures.");
+  
+  const path = String(req.body.path);
+  if (!path.startsWith("closureApprovals.")) {
+    throw AppError.badRequest("Not required marks are only for closure signature rows.");
+  }
+
+  const existing = await formsService.loadData(req.db!, formType, entityId);
+  const current = (existing?.data ?? {}) as Record<string, unknown>;
+  
+  await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: FORM_AUDIT_ENTITY[formType] ?? formType,
+    entityId,
+    field: path,
+    description: "Cleared the not-required mark.",
+  });
+
+  const next = writeSignatureValue(current, path, "", "");
+  // Clear the reason
+  const parts = path.split(".");
+  if (parts.length >= 2) {
+    const rows = Array.isArray((next as any).closureApprovals) ? (next as any).closureApprovals : [];
+    const idx = Number(parts[1]);
+    if (rows[idx]) {
+      const { notRequiredReason, ...rest } = rows[idx];
+      rows[idx] = rest;
+    }
+  }
+
+  await formsService.saveData(req.db!, {
+    formType,
+    entityType: existing?.entityType ?? req.body.entityType ?? formType,
+    entityId,
+    data: next,
+    userId: req.user?.id,
+    trustSignatures: true,
+  });
+  res.json({ cleared: true });
+});
+
 // `:id` is the entity id (the NCR/CAPA/... row this form is attached to) across
 // every route in this module, matching what a frontend "Open Form" button has
 // on hand — not form_data's own internal id. These two resolve it first.

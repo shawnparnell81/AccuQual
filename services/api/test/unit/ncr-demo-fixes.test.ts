@@ -57,6 +57,30 @@ describe("NCR closure signatures follow the Required setting", () => {
     });
     expect(done).toEqual([]);
   });
+
+  it("treats a PIN-verified Not required mark as satisfied", () => {
+    const result = missingClosureSignatures({
+      closureApprovals: [
+        { signature: "Ada 2026-10-10" },
+        { signature: "Bea 2026-10-10" },
+        { signature: "Not required – Cam Smith, Oct 11, 2026 2:30 PM ET" },
+        { signature: "Not required – Dan Jones, Oct 11, 2026 2:31 PM ET" },
+      ],
+    });
+    expect(result).toEqual([]);
+  });
+
+  it("still lists a row that is neither signed nor marked Not required", () => {
+    const result = missingClosureSignatures({
+      closureApprovals: [
+        { signature: "Ada 2026-10-10" },
+        { signature: "" },
+        { signature: "Not required – Cam Smith, Oct 11, 2026 2:30 PM ET" },
+        { signature: "Not required – Dan Jones, Oct 11, 2026 2:31 PM ET" },
+      ],
+    });
+    expect(result.map((item) => item.label)).toEqual(["Operations / Production Manager"]);
+  });
 });
 
 describe("quarantine complete disposition advances the stage once", () => {
