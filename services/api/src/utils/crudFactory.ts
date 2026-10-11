@@ -183,10 +183,13 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     const id = Number(req.params.id);
     const sitePredicate = siteRecordPredicate(req);
     if (sitePredicate === null) throw AppError.notFound(options.entityName);
-    const where = sitePredicate
-      ? and(eq(idCol as never, id), sitePredicate)
-      : eq(idCol as never, id);
-    const rows = await db.select().from(table).where(where);
+    const columns = table as unknown as Record<string, unknown>;
+    const predicates: SQL[] = [eq(idCol as never, id)];
+    if (sitePredicate) predicates.push(sitePredicate);
+    // Match `list`: soft-deleted rows are invisible, so a deleted record
+    // reads as 404 instead of returning the deleted row with a 200.
+    if (options.softDelete && columns.isDeleted) predicates.push(eq(columns.isDeleted as never, false));
+    const rows = await db.select().from(table).where(and(...predicates));
     const row = rows[0];
     if (!row) throw AppError.notFound(options.entityName);
     res.json(row);
