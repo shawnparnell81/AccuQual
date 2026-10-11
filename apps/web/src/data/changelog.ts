@@ -14,10 +14,10 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-10-11.3",
+    version: "2026-10-11.10",
     date: "2026-10-11",
     items: [
-      "The executive dashboard and KPI pass rates now read validation report outcomes from the saved disposition checkboxes, so reports with a ticked pass/fail show correctly instead of sitting at zero.",
+      "Date fields no longer save one day early. Due dates on NCRs and CAPAs are sent as calendar days without timezone conversion.",
     ],
   },
   {
