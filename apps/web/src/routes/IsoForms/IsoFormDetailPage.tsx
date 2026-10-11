@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -54,7 +54,7 @@ import { withChoice, type SignatureChoice } from "../../components/forms/signatu
 import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
-import { readBlankDraft } from "../../lib/blankDraft";
+import { blankDraftState, readBlankDraft } from "../../lib/blankDraft";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 
 interface IsoFormData {
@@ -84,20 +84,34 @@ export function IsoFormDetailPage() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const blank = useMemo(() => (id === "new" ? readBlankDraft(location.state, "/iso-quality-forms") : null), [id, location.state]);
+  // Fallback: if location.state was lost (e.g. refresh), recover from the formKey query param.
+  const fallbackFormKey = id === "new" && !blank ? searchParams.get("formKey") : null;
+  const templates = useFormTemplates({ enabled: !!fallbackFormKey });
+  const fallbackBlank = useMemo(() => {
+    if (!fallbackFormKey || blank) return null;
+    const template = templates.data?.find((t) => t.formKey === fallbackFormKey);
+    const start = template?.start;
+    if (!start) return null;
+    const deferred = blankDraftState(start);
+    if (!deferred) return null;
+    return deferred.blankDraft;
+  }, [fallbackFormKey, blank, templates.data]);
+  const effectiveBlank = blank ?? fallbackBlank;
   const recordId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = effective?.documents === "edit";
-  const loaded = hooks.useOne(blank ? undefined : recordId);
+  const loaded = hooks.useOne(effectiveBlank ? undefined : recordId);
   const draftRecord = useMemo(() => {
-    if (!blank) return null;
-    const body = blank.body as { formType?: IsoFormType; data?: IsoFormData };
+    if (!effectiveBlank) return null;
+    const body = effectiveBlank.body as { formType?: IsoFormType; data?: IsoFormData };
     return { id: 0, formType: body.formType ?? "process_change", data: body.data ?? { cells: {} }, recordNumber: null } satisfies IsoQualityForm;
-  }, [blank]);
+  }, [effectiveBlank]);
   const record = loaded.data ?? draftRecord;
-  const isLoading = blank ? false : loaded.isLoading;
-  const isError = blank ? false : loaded.isError;
+  const isLoading = effectiveBlank ? false : loaded.isLoading;
+  const isError = effectiveBlank ? false : loaded.isError;
   const error = loaded.error;
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
@@ -509,7 +523,7 @@ function IsoFormDetailBody({
                 onClick={() => {
                   const rows = lines
                     .filter((line) => line.result === "Fail")
-                    .map((line) => ({ measurement: line.characteristic || line.balloon || "Characteristic", spec: [line.nominal, line.tolerance].filter(Boolean).join(" ") || "(blank)", actual: line.actual || "(blank)" }));
+                    .map((line) => ({ measurement: line.characteristic || line.balloon || "Characteristic", spec: [line.nominal, line.tolerance].filter(Boolean).join(" ") || "(effectiveBlank)", actual: line.actual || "(effectiveBlank)" }));
                   void apiClient.post<{ id: number }>("/ncr/from-inspection", {
                     sourceKind: "iso",
                     formType: "first_article",
