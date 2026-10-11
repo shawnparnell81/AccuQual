@@ -419,6 +419,9 @@ export function PictureBoundText({
       if (!caughtUp) {
         valueRef.current = saved;
         setValue(saved);
+        // The draft was just replaced by the new saved value, so nothing is
+        // pending anymore — report it, or the unsaved indicator sticks.
+        onPendingChange?.(null);
       }
     }
     if (caughtUp || readOnly) onPendingChange?.(null);
