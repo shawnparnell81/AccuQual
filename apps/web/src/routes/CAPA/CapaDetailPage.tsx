@@ -167,7 +167,7 @@ export function CapaDetailPage() {
               type="date"
               aria-label="Due date"
               value={capa.dueDate ? capa.dueDate.slice(0, 10) : ""}
-              onChange={(e) => updateCapa.mutate({ id: capaId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              onChange={(e) => updateCapa.mutate({ id: capaId, dueDate: e.target.value || null })}
               className="rounded-md border border-border bg-background px-2 py-1 text-sm"
             />
           ) : undefined

@@ -38,6 +38,7 @@ export function NcrClosureSignoff({
   const blocks = layout ? layoutSignatureBlocks(layout).filter((block) => block.path.startsWith("closureApprovals.")) : [];
   const missing = missingClosureSignatures(data);
   const [busy, setBusy] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   if (blocks.length === 0) return null;
 
   function writeStamp(path: string, stamp: string, signedOn?: string) {
@@ -56,11 +57,13 @@ export function NcrClosureSignoff({
         path: blockPath,
         pin,
         certified,
-        description: reason ? `Mark Not required: ${reason}` : "Mark closure row Not required",
+        description: "Mark closure row Not required",
+        ...(reason ? { reason } : {}),
       });
       writeStamp(blockPath, result.mark, result.signedOn);
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't mark Not required."));
+      // Rethrow so SignatureStamp shows the error inline and keeps the tick.
+      throw err;
     } finally {
       setBusy(null);
     }
@@ -77,7 +80,8 @@ export function NcrClosureSignoff({
       });
       writeStamp(blockPath, "", "");
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't clear Not required."));
+      // Rethrow so SignatureStamp shows the error inline and keeps the tick.
+      throw err;
     } finally {
       setBusy(null);
     }
@@ -119,18 +123,28 @@ export function NcrClosureSignoff({
                     const result = await sign({ path: block.path, description: NCR_CLOSURE_CERTIFY, pin, certified });
                     writeStamp(block.path, result.stamp, result.signedOn);
                   } catch (err) {
-                    toast.error(extractErrorMessage(err, "Couldn't sign."));
+                    // Rethrow so SignatureStamp shows the error inline and keeps the tick.
+                    throw err;
                   }
                 }}
               />
               {!isRow0 && !sig && (
                 <div className="mt-2">
                   <p className="text-xs text-muted-foreground mb-1">Or mark Not required (requires PIN + I certify):</p>
+                  <input
+                    type="text"
+                    placeholder="Reason (optional)"
+                    maxLength={500}
+                    value={reasons[block.path] ?? ""}
+                    onChange={(e) => setReasons((prev) => ({ ...prev, [block.path]: e.target.value }))}
+                    disabled={!canEdit || busy === block.path}
+                    className="mb-1 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                  />
                   <SignatureStamp
                     value=""
                     certify="I certify this approval is not required for closure."
                     disabled={!canEdit || busy === block.path}
-                    onSign={(pin, certified) => handleNotRequired(block.path, pin, certified)}
+                    onSign={(pin, certified) => handleNotRequired(block.path, pin, certified, reasons[block.path]?.trim() || undefined)}
                   />
                 </div>
               )}
