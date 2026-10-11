@@ -36,26 +36,14 @@ export async function seedDefaultPermissions(companyId: number) {
 export async function seedTestRoles() {
   const { ROLE_SEEDS } = await import("../../src/modules/roles/roleHierarchy.js");
   const { roles } = await import("../../src/drizzle/schema/roles.js");
-  const { sql } = await import("drizzle-orm");
+  const { eq } = await import("drizzle-orm");
   for (const seed of ROLE_SEEDS) {
-    await db
-      .insert(roles)
-      .values({
-        name: seed.name,
-        description: seed.description,
-        hierarchyLevel: seed.hierarchyLevel,
-        isProtected: seed.isProtected,
-        permissions: seed.permissions,
-      })
-      .onConflictDoUpdate({
-        target: roles.name,
-        // Append any missing seed permissions to the existing row (don't overwrite).
-        set: {
-          permissions: sql`(
-            SELECT COALESCE(array_agg(DISTINCT p), '{}')
-            FROM unnest(COALESCE(${roles.permissions}, '{}') || ${seed.permissions}) AS p
-          )`,
-        },
-      });
+    const [existing] = await db.select().from(roles).where(eq(roles.name, seed.name));
+    if (!existing) {
+      await db.insert(roles).values({ name: seed.name, description: seed.description, hierarchyLevel: seed.hierarchyLevel, isProtected: seed.isProtected, permissions: seed.permissions });
+    } else {
+      const merged = [...new Set([...(existing.permissions ?? []), ...seed.permissions])];
+      await db.update(roles).set({ permissions: merged }).where(eq(roles.id, existing.id));
+    }
   }
 }
