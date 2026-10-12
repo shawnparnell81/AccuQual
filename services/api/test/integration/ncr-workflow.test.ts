@@ -194,7 +194,7 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const actions = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { action?: string; step?: string })?.action);
     expect(actions).toEqual(expect.arrayContaining(["containment", "root_cause", "disposition", "fix", "verify", "closed"]));
     const closedAudit = trail.find((t) => t.entityType === "NCR" && (t.changes as { action?: string } | null)?.action === "closed");
-    expect((closedAudit?.changes as { closureSignatures?: string[] } | null)?.closureSignatures).toEqual([]);
+    expect((closedAudit?.changes as { closureSignatures?: string[] } | null)?.closureSignatures).toEqual(["Quality Manager"]);
     const verifyAudit = trail.find((t) => t.entityType === "NCR" && (t.changes as { action?: string } | null)?.action === "verify");
     expect((verifyAudit?.changes as { verification?: string; note?: string } | null)?.verification).toBe("Re-inspection of the next lot found no misalignment");
     expect((verifyAudit?.changes as { note?: string } | null)?.note).toBe("Re-inspection of the next lot found no misalignment");
