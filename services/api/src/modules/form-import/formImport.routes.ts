@@ -3,13 +3,17 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import {
   confirmImportHandler,
+  deleteMappingHandler,
   executeFormImport,
   extractFileHandler,
   inspectFormImport,
   listFormImportTemplates,
   listImportTargetsHandler,
+  listMappingsHandler,
   previewFormImport,
   proposeValuesHandler,
+  saveMappingHandler,
+  updateMappingHandler,
   uploadImportFile,
 } from "./formImport.controller.js";
 
@@ -27,3 +31,9 @@ formImportRouter.get("/targets", listImportTargetsHandler);
 formImportRouter.post("/extract", uploadImportFile, extractFileHandler);
 formImportRouter.post("/propose", proposeValuesHandler);
 formImportRouter.post("/confirm", confirmImportHandler);
+
+/** Saved per-target mappings (Phase 2). Each one checks the target's own permission. */
+formImportRouter.get("/mappings", listMappingsHandler);
+formImportRouter.post("/mappings", saveMappingHandler);
+formImportRouter.patch("/mappings/:id", updateMappingHandler);
+formImportRouter.delete("/mappings/:id", deleteMappingHandler);

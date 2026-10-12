@@ -69,6 +69,51 @@ async function loadRow(db: Db, year: number, month: number) {
   return row ?? null;
 }
 
+/**
+ * Upserts a month's narrative + supplier data and returns the assembled report. Shared by the
+ * existing CSV/XLSX supplier upload and the generic "Import from file" report:monthly-quality
+ * target (form-import/reportTargets/monthlyQuality.ts) — same write, same shape, so both paths
+ * stay identical. Callers check engineeringAccess themselves first.
+ */
+export async function saveEngineeringSupplierData(
+  db: Db,
+  input: {
+    year: number;
+    month: number;
+    narrative: EngineeringNarrative;
+    supplierData: SupplierData;
+    uploadFileName: string | null;
+    user: { id: number; roleName: string | null; department: string | null };
+    siteIds: number[];
+    plantId?: number | null;
+  },
+): Promise<EngineeringReportView> {
+  const now = new Date();
+  await db
+    .insert(qualityEngineeringReports)
+    .values({
+      year: input.year,
+      month: input.month,
+      narrative: input.narrative as unknown as Record<string, unknown>,
+      supplierData: input.supplierData as unknown as Record<string, unknown>,
+      uploadFileName: input.uploadFileName,
+      createdBy: input.user.id,
+      updatedBy: input.user.id,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
+      set: {
+        narrative: input.narrative as unknown as Record<string, unknown>,
+        supplierData: input.supplierData as unknown as Record<string, unknown>,
+        uploadFileName: input.uploadFileName,
+        updatedBy: input.user.id,
+        updatedAt: now,
+      },
+    });
+  return buildEngineeringReport(db, input);
+}
+
 export async function buildEngineeringReport(
   db: Db,
   input: {
@@ -157,30 +202,7 @@ export async function uploadEngineeringSupplier(
   const parsed = await parseSupplierFile(input.buffer, input.fileName, input.year);
   const existing = await loadRow(db, input.year, input.month);
   const narrative = mergeUploadNarrative(normalizeNarrative(existing?.narrative), parsed.data, input.replaceNotes);
-  const now = new Date();
-  await db
-    .insert(qualityEngineeringReports)
-    .values({
-      year: input.year,
-      month: input.month,
-      narrative: narrative as unknown as Record<string, unknown>,
-      supplierData: parsed.data as unknown as Record<string, unknown>,
-      uploadFileName: input.fileName.slice(0, 200),
-      createdBy: input.user.id,
-      updatedBy: input.user.id,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
-      set: {
-        narrative: narrative as unknown as Record<string, unknown>,
-        supplierData: parsed.data as unknown as Record<string, unknown>,
-        uploadFileName: input.fileName.slice(0, 200),
-        updatedBy: input.user.id,
-        updatedAt: now,
-      },
-    });
-  const report = await buildEngineeringReport(db, input);
+  const report = await saveEngineeringSupplierData(db, { ...input, narrative, supplierData: parsed.data, uploadFileName: input.fileName.slice(0, 200) });
   return { report, warnings: parsed.warnings };
 }
 

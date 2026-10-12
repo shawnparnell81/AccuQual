@@ -5,7 +5,9 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
-import { buildConfirmValues, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
+import { buildConfirmValues, buildMappingEntries, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 interface ExtractedBlock {
   kind: "heading" | "para" | "table";
@@ -36,6 +38,23 @@ interface Proposal {
   source: string | null;
   score: number;
   reason: string;
+  rule: "label" | "heading" | "tableRow" | "tableField" | "named" | null;
+}
+
+interface SavedMapping {
+  id: number;
+  targetRef: string;
+  fileKind: string;
+  name: string;
+}
+
+function detectTitleMonthYear(title: string | null): { month: number; year: number } | null {
+  if (!title) return null;
+  for (let index = 0; index < MONTH_NAMES.length; index += 1) {
+    const match = new RegExp(`${MONTH_NAMES[index]}\\D+(\\d{4})`, "i").exec(title);
+    if (match) return { month: index + 1, year: Number(match[1]) };
+  }
+  return null;
 }
 
 export function ImportFromFilePage() {
@@ -50,12 +69,25 @@ export function ImportFromFilePage() {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [recordNumber, setRecordNumber] = useState("");
   const [title, setTitle] = useState("");
+  const [reportMonth, setReportMonth] = useState<number | null>(null);
+  const [reportYear, setReportYear] = useState<number | null>(null);
+  const [replaceNotes, setReplaceNotes] = useState(false);
+  const [saveMappingChecked, setSaveMappingChecked] = useState(false);
+  const [mappingName, setMappingName] = useState("");
 
   const step = !extracted ? 0 : !targetRef ? 1 : 2;
+  const isReportTarget = targetRef === "report:monthly-quality";
+  const detected = detectTitleMonthYear(extracted?.title ?? null);
 
   const targets = useQuery<{ targets: ImportTarget[] }>({
     queryKey: ["form-import", "targets"],
     queryFn: async () => (await apiClient.get("/form-import/targets")).data,
+  });
+
+  const mappings = useQuery<{ mappings: SavedMapping[] }>({
+    queryKey: ["form-import", "mappings", targetRef],
+    queryFn: async () => (await apiClient.get("/form-import/mappings", { params: { targetRef } })).data,
+    enabled: Boolean(targetRef),
   });
 
   const extract = useMutation({
@@ -68,18 +100,25 @@ export function ImportFromFilePage() {
       setExtracted(data.extracted);
       setWarnings(data.warnings);
       setTitle(data.extracted.title ?? data.extracted.fileName);
+      const found = detectTitleMonthYear(data.extracted.title);
+      if (found) {
+        setReportMonth(found.month);
+        setReportYear(found.year);
+      }
     },
     onError: (err) => toast.error(extractErrorMessage(err, "That file couldn't be read.")),
   });
 
   const propose = useMutation({
-    mutationFn: async (ref: string) => (await apiClient.post<{ fields: TargetField[]; proposals: Proposal[] }>("/form-import/propose", { targetRef: ref, extracted })).data,
+    mutationFn: async (ref: string) =>
+      (await apiClient.post<{ fields: TargetField[]; proposals: Proposal[]; warnings: string[] }>("/form-import/propose", { targetRef: ref, extracted })).data,
     onSuccess: (data) => {
+      setWarnings((current) => [...current, ...(data.warnings ?? [])]);
       setRows(
         data.fields.map((field) => {
           const proposal = data.proposals.find((item) => item.key === field.key) ?? null;
           const value = proposal?.value ?? null;
-          return { field, original: value, value, source: proposal?.source ?? null };
+          return { field, original: value, value, source: proposal?.source ?? null, reason: proposal?.reason ?? "no match", rule: proposal?.rule ?? null };
         }),
       );
     },
@@ -90,6 +129,14 @@ export function ImportFromFilePage() {
     mutationFn: async () => {
       const edited = countEdited(rows);
       const values = buildConfirmValues(rows);
+      if (saveMappingChecked && extracted && mappingName.trim()) {
+        await apiClient.post("/form-import/mappings", {
+          targetRef,
+          fileKind: extracted.kind,
+          name: mappingName.trim(),
+          entries: buildMappingEntries(rows),
+        });
+      }
       return (
         await apiClient.post<{ openPath: string }>("/form-import/confirm", {
           targetRef,
@@ -98,6 +145,7 @@ export function ImportFromFilePage() {
           recordNumber: recordNumber || null,
           edited,
           values,
+          ...(isReportTarget ? { year: reportYear, month: reportMonth, replaceNotes } : {}),
         })
       ).data;
     },
@@ -121,6 +169,18 @@ export function ImportFromFilePage() {
     return order;
   }, [rows]);
 
+  const renameMapping = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => (await apiClient.patch(`/form-import/mappings/${id}`, { name })).data,
+    onSuccess: () => mappings.refetch(),
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't rename that mapping.")),
+  });
+
+  const removeMapping = useMutation({
+    mutationFn: async (id: number) => apiClient.delete(`/form-import/mappings/${id}`),
+    onSuccess: () => mappings.refetch(),
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete that mapping.")),
+  });
+
   function reset() {
     setFile(null);
     setExtracted(null);
@@ -129,6 +189,11 @@ export function ImportFromFilePage() {
     setRows([]);
     setRecordNumber("");
     setTitle("");
+    setReportMonth(null);
+    setReportYear(null);
+    setReplaceNotes(false);
+    setSaveMappingChecked(false);
+    setMappingName("");
   }
 
   function updateScalar(key: string, next: string) {
@@ -226,21 +291,93 @@ export function ImportFromFilePage() {
       {step === 2 && extracted && (
         <div className="flex flex-col gap-3">
           {propose.isPending && <LoadingPlaceholder />}
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex flex-col text-sm">
-              Title
-              <input className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5" value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-            <label className="flex flex-col text-sm">
-              Record number
-              <input
-                className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5"
-                placeholder="Blank is fine"
-                value={recordNumber}
-                onChange={(event) => setRecordNumber(event.target.value)}
-              />
-            </label>
-          </div>
+
+          {isReportTarget ? (
+            <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
+              <label className="flex flex-col text-sm">
+                Month
+                <select
+                  className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5"
+                  value={reportMonth ?? ""}
+                  onChange={(event) => setReportMonth(event.target.value ? Number(event.target.value) : null)}
+                >
+                  <option value="">Choose a month</option>
+                  {MONTH_NAMES.map((name, index) => (
+                    <option key={name} value={index + 1}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col text-sm">
+                Year
+                <input
+                  type="number"
+                  className="w-24 rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5"
+                  value={reportYear ?? ""}
+                  onChange={(event) => setReportYear(event.target.value ? Number(event.target.value) : null)}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={replaceNotes} onChange={(event) => setReplaceNotes(event.target.checked)} />
+                Replace narrative already typed
+              </label>
+              {detected && (detected.month !== reportMonth || detected.year !== reportYear) && (
+                <p className="w-full text-sm text-destructive">
+                  The file's title says {MONTH_NAMES[detected.month - 1]} {detected.year}, but {reportMonth ? MONTH_NAMES[reportMonth - 1] : "no month"}{" "}
+                  {reportYear ?? ""} is selected. Double-check before saving.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex flex-col text-sm">
+                Title
+                <input className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5" value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+              <label className="flex flex-col text-sm">
+                Record number
+                <input
+                  className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5"
+                  placeholder="Blank is fine"
+                  value={recordNumber}
+                  onChange={(event) => setRecordNumber(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
+
+          {(mappings.data?.mappings.length ?? 0) > 0 && (
+            <section className="rounded-lg border border-border bg-card p-3 text-sm">
+              <h3 className="font-semibold">Mappings</h3>
+              <ul className="mt-1 flex flex-col gap-1">
+                {mappings.data!.mappings.map((item) => (
+                  <li key={item.id} className="flex items-center gap-2">
+                    <span className="flex-1">{item.name}</span>
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        const next = window.prompt("Rename mapping", item.name);
+                        if (next && next.trim()) renameMapping.mutate({ id: item.id, name: next.trim() });
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="text-destructive hover:underline"
+                      onClick={() => {
+                        if (window.confirm(`Delete mapping "${item.name}"?`)) removeMapping.mutate(item.id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {groups.map((group) => (
             <section key={group} className="rounded-lg border border-border bg-card">
@@ -309,6 +446,9 @@ export function ImportFromFilePage() {
                           >
                             {status}
                           </span>
+                          {row.reason && row.reason !== "no match" && (
+                            <span className="w-fit rounded-full border border-border px-2 py-0.5 text-muted-foreground">{row.reason}</span>
+                          )}
                           <div className="flex gap-2">
                             <button type="button" className="text-primary hover:underline" onClick={() => acceptRow(row.field.key)}>
                               Accept
@@ -325,6 +465,19 @@ export function ImportFromFilePage() {
             </section>
           ))}
 
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <input type="checkbox" checked={saveMappingChecked} onChange={(event) => setSaveMappingChecked(event.target.checked)} />
+            Save mapping for next time
+            {saveMappingChecked && (
+              <input
+                className="rounded-md border border-form-field bg-[hsl(var(--form-input))] px-2 py-1.5"
+                placeholder="Mapping name"
+                value={mappingName}
+                onChange={(event) => setMappingName(event.target.value)}
+              />
+            )}
+          </label>
+
           <div className="flex flex-wrap gap-2">
             <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={reset}>
               Cancel
@@ -332,7 +485,7 @@ export function ImportFromFilePage() {
             <button
               type="button"
               className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
-              disabled={save.isPending || rows.length === 0}
+              disabled={save.isPending || rows.length === 0 || (saveMappingChecked && !mappingName.trim())}
               onClick={() => save.mutate()}
             >
               {save.isPending ? "Saving…" : "Save filled copy"}

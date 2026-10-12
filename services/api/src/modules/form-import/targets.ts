@@ -3,6 +3,7 @@ import { builtForms } from "../../drizzle/schema/builtForms.js";
 import type { Db } from "../../lib/requestDb.js";
 import { canFillBuiltForm } from "../form-builder/access.js";
 import { formBuilderAccess } from "../form-builder/service.js";
+import { engineeringAccess } from "../quality-engineering-report/livePull.js";
 import { FORM_IMPORT_TEMPLATES, type FormImportTemplate } from "./formImport.templates.js";
 
 export type TargetFieldType = "text" | "multiline" | "number" | "date" | "table" | "checkbox" | "yesno" | "dropdown";
@@ -21,7 +22,7 @@ export interface ImportTarget {
   ref: string;
   title: string;
   formNumber: string | null;
-  revision: string;
+  revision: string | null;
 }
 
 interface TargetActor {
@@ -42,6 +43,10 @@ export async function listImportTargets(db: Db, actor: TargetActor): Promise<Imp
   }
   for (const template of FORM_IMPORT_TEMPLATES) {
     targets.push({ ref: `frm:${template.key}`, title: template.title, formNumber: template.printedId, revision: "" });
+  }
+  const engineering = await engineeringAccess(db, actor);
+  if (engineering.canRead) {
+    targets.push({ ref: "report:monthly-quality", title: "Monthly Quality Report", formNumber: null, revision: null });
   }
   return targets;
 }

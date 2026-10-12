@@ -15,6 +15,25 @@ export interface ReviewRow {
   original: ReviewValue;
   value: ReviewValue;
   source: string | null;
+  /** The server's match rule for the proposed value, e.g. "Label match" or "saved mapping". */
+  reason: string;
+  /** Which Phase 1 rule produced the value — what a saved mapping actually records. */
+  rule: "label" | "heading" | "tableRow" | "tableField" | "named" | null;
+}
+
+export interface MappingEntry {
+  rule: "label" | "heading" | "tableRow" | "tableField" | "named";
+  source: string;
+}
+
+/** What "Save mapping for next time" stores: rule + source text for every accepted, rule-matched field. No values. */
+export function buildMappingEntries(rows: Pick<ReviewRow, "field" | "value" | "source" | "rule">[]): Record<string, MappingEntry> {
+  const entries: Record<string, MappingEntry> = {};
+  for (const row of rows) {
+    if (isEmptyValue(row.value) || !row.rule || !row.source) continue;
+    entries[row.field.key] = { rule: row.rule, source: row.source };
+  }
+  return entries;
 }
 
 export function sameValue(a: ReviewValue, b: ReviewValue): boolean {
