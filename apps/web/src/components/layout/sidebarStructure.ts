@@ -177,6 +177,7 @@ const QUALITY_FOLDER: SidebarFolder = {
   icon: ShieldCheck,
   children: [
     { key: "training", label: "Training", path: "/training", icon: GraduationCap },
+    { key: "fai-inspection", label: "FAI & Inspection", path: "/fai-inspection", icon: ClipboardCheck },
     { key: "workers", label: "Workers", path: "/workers", icon: Users },
     { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
     doc("product-alerts", FileText),
