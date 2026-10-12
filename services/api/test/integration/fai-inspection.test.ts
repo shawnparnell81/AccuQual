@@ -1,26 +1,41 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { ensureTestCompany } from "../helpers/company.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app } from "../../src/app.js";
+import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
+import { users } from "../../src/drizzle/schema/users.js";
+import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedTestRoles } from "../helpers/seedDefaults.js";
 
+const app = createApp();
+const suffix = Date.now().toString(36);
+const userIds: number[] = [];
 let managerToken: string;
 
-async function loginAs(role: string): Promise<string> {
-  // Uses the test auth helper pattern from existing integration tests.
-  const { createTestUser, getTestToken } = await import("../helpers/testAuth.js");
-  const user = await createTestUser({ role });
-  return getTestToken(user);
+async function makeUser(roleName: string) {
+  const [user] = await db
+    .insert(users)
+    .values({ email: `fai-test-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department: "quality" })
+    .returning();
+  userIds.push(user!.id);
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: "quality" });
 }
 
 beforeAll(async () => {
+  await ensureTestCompany();
   await seedTestRoles();
-  managerToken = await loginAs("quality_manager");
+  managerToken = await makeUser("quality_manager");
+});
+
+afterAll(async () => {
+  for (const id of userIds) {
+    await db.delete(users).where((await import("drizzle-orm")).eq(users.id, id)).catch(() => {});
+  }
 });
 
 describe("FAI & Inspection endpoints", () => {
   it("requires fai.view for the dashboard", async () => {
-    const other = await loginAs("operator");
+    const other = await makeUser("operator");
     const res = await request(app).get("/fai-inspection/dashboard").set("Authorization", `Bearer ${other}`);
     expect(res.status).toBe(403);
   });
@@ -77,7 +92,6 @@ describe("FAI & Inspection endpoints", () => {
     const line = got.body.lines[0];
     expect(line.limitLow).toBe("9.8");
     expect(line.limitHigh).toBe("10.2");
-    // AQL lookup ran: lot 150, level II -> F, n=20
     expect(got.body.codeLetter).toBe("F");
     expect(got.body.aqlSampleSize).toBe(20);
   });
