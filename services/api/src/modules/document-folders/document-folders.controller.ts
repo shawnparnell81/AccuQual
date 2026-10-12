@@ -32,7 +32,7 @@ import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAud
 import { explicitFileFormKeys, FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
 import { LIST_KEYS } from "../controlled-lists/logic.js";
 import { collapseDuplicateLivingListNodes, ensureLivingControlledLists } from "../controlled-lists/service.js";
-import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
+import { ensureFormTemplates, listFormTemplates, renameBlankForm } from "./formTemplates.js";
 import { fileExplicitModuleCopy } from "./defaultFormFiling.js";
 import { FILEABLE_FORM_KEYS } from "./editableForms.js";
 import { describeFormFiling, fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
@@ -307,6 +307,13 @@ export const setFormNumber = asyncHandler(async (req: Request, res: Response) =>
   const { formId } = req.body as { formId: string };
   const updated = await updateFormNumber(req.db!, formKey, formId, req.user?.id, req.user);
   res.json(updated);
+});
+
+/** Renames a blank's display title on the Blank Forms page. Needs "Can rename folders" on the Roles page. */
+export const renameBlankFormHandler = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  await assertFolderPermission(db, req.user?.roleName, FOLDERS_RENAME_PERMISSION);
+  res.json(await renameBlankForm(db, String(req.params.formKey ?? ""), (req.body as { name?: string }).name ?? "", req.user?.id));
 });
 
 /** Where a filled copy is filed, the number stored on that copy, and the suggested subject folder. */

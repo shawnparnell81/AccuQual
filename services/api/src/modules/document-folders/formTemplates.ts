@@ -3,6 +3,9 @@ import { company } from "../../drizzle/schema/company.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
+import { users } from "../../drizzle/schema/users.js";
+import { AppError } from "../../utils/appError.js";
+import { rememberBlankFormName } from "./folderTombstones.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import {
   BLANK_FORMS_FOLDER,
@@ -523,6 +526,8 @@ export interface FormTemplateView {
   formKey: string;
   formId: string;
   title: string;
+  /** Name shown on the Blank Forms page: a renamed title, else `title`. */
+  displayTitle: string;
   subjectRoute: string;
   folderId: number | null;
   isoPath: string[];
@@ -548,6 +553,8 @@ export async function listFormTemplates(db: Db, performedBy?: number): Promise<{
   const liveKeys = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
   const starts = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed.start]));
   const patterns = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, fileNamePatternFor(seed)]));
+  const [profileRow] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const aliases = profileRow?.profile?.blankFormDisplayNames ?? {};
 
   function pathOf(folderId: number | null): string[] {
     const names: string[] = [];
@@ -579,6 +586,7 @@ export async function listFormTemplates(db: Db, performedBy?: number): Promise<{
         formKey: template.formKey,
         formId: template.formId,
         title: template.title,
+        displayTitle: aliases[template.formKey]?.trim() || template.title,
         subjectRoute: template.subjectRoute,
         folderId: template.folderId,
         isoPath: pathOf(template.folderId),
@@ -589,3 +597,53 @@ export async function listFormTemplates(db: Db, performedBy?: number): Promise<{
       .sort((a, b) => a.formId.localeCompare(b.formId)),
   };
 }
+
+/** "FRM-DEV-009 Air Compressor ..." when a number is set, else just the title. */
+export function blankFormFileName(formId: string | null | undefined, title: string): string {
+  const number = (formId ?? "").trim();
+  return number ? `${number} ${title}` : title;
+}
+
+/** Trims and collapses spaces. Rejects an empty title or a name another blank already shows. */
+export function checkBlankRename(
+  rows: { formKey: string; formId: string; displayTitle: string }[],
+  formKey: string,
+  name: string,
+): string {
+  const next = name.trim().replace(/\s+/g, " ");
+  if (!next) throw AppError.badRequest("Name is required");
+  if (next.length > 200) throw AppError.badRequest("Name must be 200 characters or fewer");
+  const target = rows.find((row) => row.formKey === formKey);
+  if (!target) throw AppError.notFound("Blank form");
+  const wanted = blankFormFileName(target.formId, next).toLowerCase();
+  const clash = rows.some((row) => row.formKey !== formKey && (blankFormFileName(row.formId, row.displayTitle).toLowerCase() === wanted || row.displayTitle.toLowerCase() === next.toLowerCase()));
+  if (clash) throw AppError.badRequest("Another blank form already has that name");
+  return next;
+}
+
+/** Renames the Blank Forms display title only. The template, its number, and its REV are unchanged. */
+export async function renameBlankForm(db: Db, formKey: string, name: string, performedBy: number | undefined): Promise<FormTemplateView> {
+  const { templates } = await listFormTemplates(db, performedBy);
+  const next = checkBlankRename(templates, formKey, name);
+  const current = templates.find((row) => row.formKey === formKey)!;
+  if (current.displayTitle === next) return current;
+  await rememberBlankFormName(db, formKey, next);
+  let who = "Someone";
+  if (performedBy != null) {
+    const [person] = await db.select({ name: users.name }).from(users).where(eq(users.id, performedBy));
+    if (person?.name) who = person.name;
+  }
+  const when = new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" }) + " ET";
+  const from = blankFormFileName(current.formId, current.displayTitle);
+  const to = blankFormFileName(current.formId, next);
+  await recordAuditTrail(db, {
+    entityType: TEMPLATE_RENAME_AUDIT,
+    entityId: current.id,
+    action: "update",
+    performedBy,
+    changes: { event: "blank_form_renamed", summary: `${who} renamed blank form "${from}" to "${to}" on ${when}`, formKey, from, to },
+  });
+  return { ...current, displayTitle: next };
+}
+
+const TEMPLATE_RENAME_AUDIT = "ControlledFormTemplate";

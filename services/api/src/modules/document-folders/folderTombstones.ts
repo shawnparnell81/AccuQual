@@ -67,3 +67,16 @@ export async function rememberFormFolderName(db: Db, formKeys: readonly string[]
     )
   `);
 }
+
+/** Remembers a Blank Forms display title. Template sync keeps resetting `title` to the seed; this name stays. */
+export async function rememberBlankFormName(db: Db, formKey: string, title: string): Promise<void> {
+  const encoded = JSON.stringify({ [formKey]: title });
+  await db.execute(sql`
+    UPDATE company
+    SET profile = jsonb_set(
+      COALESCE(profile, '{}'::jsonb),
+      '{blankFormDisplayNames}',
+      COALESCE(profile->'blankFormDisplayNames', '{}'::jsonb) || ${encoded}::jsonb
+    )
+  `);
+}

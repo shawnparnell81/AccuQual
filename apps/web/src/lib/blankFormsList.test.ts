@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { blankTemplateTopic, templatesOnBlankShelf } from "./blankFormsList.ts";
+import { blankFormFileName, blankFormsByName, blankRenameProblem, blankTemplateTopic, templatesOnBlankShelf } from "./blankFormsList.ts";
 
 describe("blank forms list", () => {
   const rows = [
@@ -31,5 +31,32 @@ describe("blank forms list", () => {
       { formKey: "other", formId: "", title: "Other", isoPath: ["Quality"] },
     ]);
     assert.deepEqual(listed.map((row) => row.formKey), ["frm-val-001"]);
+  });
+});
+
+describe("Blank Forms explorer names", () => {
+  it("shows the controlled number then the title, or only the title when there is no number", () => {
+    assert.equal(blankFormFileName({ formId: "FRM-DEV-009", title: "AIR COMPRESSOR DEVELOPMENT DOCUMENT" }), "FRM-DEV-009 AIR COMPRESSOR DEVELOPMENT DOCUMENT");
+    assert.equal(blankFormFileName({ formId: "  ", title: "Turtle diagram" }), "Turtle diagram");
+    assert.equal(blankFormFileName({ formId: "LST-GEN-001", title: "Old", displayTitle: "Master List" }), "LST-GEN-001 Master List");
+  });
+
+  it("sorts A to Z by the shown name", () => {
+    const rows = [
+      { formKey: "c", formId: "", title: "Turtle diagram" },
+      { formKey: "a", formId: "FRM-DEV-009", title: "Air" },
+      { formKey: "b", formId: "FRM-DEV-001", title: "CSA" },
+    ];
+    assert.deepEqual(blankFormsByName(rows).map((row) => row.formKey), ["b", "a", "c"]);
+  });
+
+  it("rejects an empty name or a name another blank already shows", () => {
+    const rows = [
+      { formKey: "a", formId: "FRM-DEV-009", title: "Air" },
+      { formKey: "b", formId: "", title: "Turtle diagram" },
+    ];
+    assert.equal(blankRenameProblem(rows, "a", "   "), "Name is required");
+    assert.equal(blankRenameProblem(rows, "a", "turtle  DIAGRAM"), "Another blank form already has that name");
+    assert.equal(blankRenameProblem(rows, "a", "Air Compressor"), null);
   });
 });
