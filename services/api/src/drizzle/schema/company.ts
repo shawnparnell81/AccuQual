@@ -293,6 +293,8 @@ export const company = pgTable("company", {
     deletedFormFolderKeys?: string[];
     /** Display name an administrator typed for a Folders tab row, keyed by form key. */
     formFolderDisplayNames?: Record<string, string>;
+    /** Blank Forms page display name (title only) someone typed, keyed by form key. The template is not changed. */
+    blankFormDisplayNames?: Record<string, string>;
     /**
      * Fingerprint of the rows a folder listing would repair. A matching read
      * does not file or relink again. Company Settings spreads this object.

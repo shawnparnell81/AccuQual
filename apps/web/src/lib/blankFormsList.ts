@@ -25,3 +25,26 @@ export function blankTemplateTopic(isoPath: string[]): string {
   const topic = [...isoPath].reverse().find((name) => name !== BLANK_FORMS_SHELF && name.trim());
   return topic ?? "Blank Forms";
 }
+
+/** Explorer-style file name: "FRM-DEV-009 Air Compressor ..." when a number is set, else just the title. */
+export function blankFormFileName(row: { formId?: string | null; title: string; displayTitle?: string | null }): string {
+  const title = row.displayTitle?.trim() || row.title;
+  const number = (row.formId ?? "").trim();
+  return number ? `${number} ${title}` : title;
+}
+
+/** A to Z by the shown file name. */
+export function blankFormsByName<T extends { formId?: string | null; title: string; displayTitle?: string | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => blankFormFileName(a).localeCompare(blankFormFileName(b), undefined, { sensitivity: "base", numeric: true }));
+}
+
+/** Client-side rename check, mirroring the API: trimmed, not empty, not another blank's name. */
+export function blankRenameProblem(rows: { formKey: string; formId?: string | null; title: string; displayTitle?: string | null }[], formKey: string, name: string): string | null {
+  const next = name.trim().replace(/\s+/g, " ");
+  if (!next) return "Name is required";
+  const target = rows.find((row) => row.formKey === formKey);
+  if (!target) return "Blank form not found";
+  const wanted = blankFormFileName({ formId: target.formId, title: next }).toLowerCase();
+  const clash = rows.some((row) => row.formKey !== formKey && (blankFormFileName(row).toLowerCase() === wanted || (row.displayTitle?.trim() || row.title).toLowerCase() === next.toLowerCase()));
+  return clash ? "Another blank form already has that name" : null;
+}

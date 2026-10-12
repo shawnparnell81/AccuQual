@@ -72,19 +72,24 @@ describe("explorer view screens", () => {
   const blanks = read("routes/BlankForms/BlankFormsPage.tsx");
   const formFolders = read("routes/FormFolders/FormFoldersPage.tsx");
 
-  it("puts a keyboard view switcher on the folder list, blank forms, and both folder pages", () => {
+  it("puts a keyboard view switcher on the folder list and both folder pages; Blank Forms is a Details list", () => {
     assert.match(switcher, /role="radiogroup"/);
     assert.match(switcher, /role="radio"/);
     assert.match(switcher, /aria-label=\{option\.label\}/);
     assert.match(switcher, /title=\{option\.label\}/);
     assert.match(switcher, /explorerViewFromKey/);
     assert.match(switcher, /data-testid=\{`explorer-view-\$\{option\.id\}`\}/);
-    for (const page of [folders, blanks, formFolders]) {
+    for (const page of [folders, formFolders]) {
       assert.match(page, /ExplorerViewSwitcher/);
       assert.match(page, /useExplorerView/);
     }
     assert.match(folders, /useExplorerView\("folders"\)/);
-    assert.match(blanks, /useExplorerView\("blank-forms"\)/);
+    assert.doesNotMatch(blanks, /FormNumberEditor|Save number/);
+    assert.match(blanks, /data-explorer-view="details"/);
+    assert.match(blanks, /event\.key === "F2"/);
+    assert.match(blanks, /onDoubleClick/);
+    assert.match(blanks, /onContextMenu/);
+    assert.match(blanks, /effective\?\.\["folders\.rename"\] === "edit"/);
     assert.match(formFolders, /useExplorerView\("form-folders"\)/);
     assert.match(formFolders, /useExplorerView\("form-folder"\)/);
     assert.match(list, /view\?: ExplorerView/);
@@ -93,7 +98,7 @@ describe("explorer view screens", () => {
     assert.match(list, /FileThumbnail/);
     assert.match(list, /title=\{item\.label\}/);
     assert.match(blanks, /data-testid="blank-forms-list"/);
-    assert.match(blanks, /itemTestId=\{\(\) => "blank-form"\}/);
+    assert.match(blanks, /data-testid="blank-form"/);
     assert.match(formFolders, /testId="form-folders-list"/);
     assert.match(formFolders, /testId="saved-fills"/);
     assert.match(formFolders, /itemTestId=\{\(\) => "saved-fill"\}/);

@@ -15,6 +15,8 @@ export interface FormTemplateCacheRow {
   formKey: string;
   formId: string;
   title: string;
+  /** Blank Forms display title (a rename), else the title. */
+  displayTitle?: string;
   subjectRoute: string;
   folderId?: number | null;
   isoPath: string[];
