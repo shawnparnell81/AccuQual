@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import {
+  aiSuggestHandler,
   confirmImportHandler,
   deleteMappingHandler,
   executeFormImport,
@@ -31,6 +32,7 @@ formImportRouter.get("/targets", listImportTargetsHandler);
 formImportRouter.post("/extract", uploadImportFile, extractFileHandler);
 formImportRouter.post("/propose", proposeValuesHandler);
 formImportRouter.post("/confirm", confirmImportHandler);
+formImportRouter.post("/ai-suggest", aiSuggestHandler);
 
 /** Saved per-target mappings (Phase 2). Each one checks the target's own permission. */
 formImportRouter.get("/mappings", listMappingsHandler);

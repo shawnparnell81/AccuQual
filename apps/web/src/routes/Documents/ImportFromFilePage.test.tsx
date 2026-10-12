@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildConfirmValues, buildMappingEntries, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
+import { buildAiAccepted, buildConfirmValues, buildMappingEntries, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
 
 function field(overrides: Partial<TargetField> = {}): TargetField {
   return { key: "status", label: "Status of Department", group: "Report", type: "text", ...overrides };
@@ -14,6 +14,7 @@ function row(overrides: Partial<ReviewRow> = {}): ReviewRow {
     source: "6.1 Executive Summary > 'Status of Department:'",
     reason: "Label match",
     rule: "label",
+    aiSuggestion: null,
     ...overrides,
   };
 }
@@ -58,5 +59,18 @@ describe("ImportFromFilePage review logic", () => {
     assert.deepEqual(Object.keys(entries), ["status"]);
     assert.deepEqual(entries.status, { rule: "label", source: "6.1 Executive Summary > 'Status of Department:'" });
     assert.equal("value" in entries.status!, false);
+  });
+
+  it("an AI-suggested empty field shows as Suggested, not Empty, until accepted", () => {
+    const suggested = row({ field: field({ key: "deptHealth", label: "Department health" }), original: null, value: null, aiSuggestion: "Yellow" });
+    assert.equal(rowStatus(suggested), "Suggested");
+    assert.deepEqual(buildConfirmValues([suggested]), {});
+  });
+
+  it("accepting an AI suggestion (or editing it) counts as accepted for the confirm payload", () => {
+    const accepted = row({ field: field({ key: "deptHealth", label: "Department health" }), original: null, value: "Yellow", aiSuggestion: "Yellow" });
+    const editedAfterAccept = row({ field: field({ key: "mood", label: "Inspector Mood" }), original: null, value: "Mostly fine", aiSuggestion: "Fine" });
+    const stillPending = row({ field: field({ key: "other", label: "Other" }), original: null, value: null, aiSuggestion: "Something" });
+    assert.deepEqual(buildAiAccepted([accepted, editedAfterAccept, stillPending]).sort(), ["deptHealth", "mood"]);
   });
 });

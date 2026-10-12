@@ -46,6 +46,9 @@ export const FAI_NOTIFICATIONS_MANAGE_PERMISSION = "fai.notifications.manage";
 /** Phase 3: open/download the 4 FAI reports. Separate from fai.view deliberately — this phase's own task list names it as its own permission. */
 export const FAI_REPORTS_VIEW_PERMISSION = "fai.reports.view";
 
+/** Import from file, Phase 3: ask AI to suggest values for fields the deterministic rules and saved mappings left empty. No role gets it by default — ticked per role on the Roles page. */
+export const IMPORT_AI_MAPPING_PERMISSION = "import.ai_mapping";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 

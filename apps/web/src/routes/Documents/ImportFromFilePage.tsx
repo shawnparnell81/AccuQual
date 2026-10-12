@@ -5,7 +5,8 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
-import { buildConfirmValues, buildMappingEntries, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { buildAiAccepted, buildConfirmValues, buildMappingEntries, countEdited, isEmptyValue, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -48,6 +49,13 @@ interface SavedMapping {
   name: string;
 }
 
+interface AiSuggestion {
+  key: string;
+  value: string | string[][];
+  quote: string;
+  source: string | null;
+}
+
 function detectTitleMonthYear(title: string | null): { month: number; year: number } | null {
   if (!title) return null;
   for (let index = 0; index < MONTH_NAMES.length; index += 1) {
@@ -60,6 +68,8 @@ function detectTitleMonthYear(title: string | null): { month: number; year: numb
 export function ImportFromFilePage() {
   const toast = useToast();
   const navigate = useNavigate();
+  const { effective } = useEffectivePermissions();
+  const canUseAi = effective?.["import.ai_mapping"] === "edit";
 
   const [file, setFile] = useState<File | null>(null);
   const [extracted, setExtracted] = useState<ExtractedFile | null>(null);
@@ -118,17 +128,36 @@ export function ImportFromFilePage() {
         data.fields.map((field) => {
           const proposal = data.proposals.find((item) => item.key === field.key) ?? null;
           const value = proposal?.value ?? null;
-          return { field, original: value, value, source: proposal?.source ?? null, reason: proposal?.reason ?? "no match", rule: proposal?.rule ?? null };
+          return { field, original: value, value, source: proposal?.source ?? null, reason: proposal?.reason ?? "no match", rule: proposal?.rule ?? null, aiSuggestion: null };
         }),
       );
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't match that file to this form.")),
   });
 
+  const aiSuggest = useMutation({
+    mutationFn: async () =>
+      (
+        await apiClient.post<{ suggestions: AiSuggestion[]; warnings: string[] }>("/form-import/ai-suggest", {
+          targetRef,
+          extracted,
+          proposals: rows.map((row) => ({ key: row.field.key, value: row.value, source: row.source, reason: row.reason, rule: row.rule })),
+        })
+      ).data,
+    onSuccess: (data) => {
+      setWarnings((current) => [...current, ...data.warnings]);
+      const byKey = new Map(data.suggestions.map((item) => [item.key, item]));
+      setRows((current) => current.map((row) => (byKey.has(row.field.key) ? { ...row, aiSuggestion: byKey.get(row.field.key)!.value } : row)));
+      if (data.suggestions.length === 0 && data.warnings.length === 0) toast.success("AI had no suggestions for the remaining empty fields.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't get AI suggestions.")),
+  });
+
   const save = useMutation({
     mutationFn: async () => {
       const edited = countEdited(rows);
       const values = buildConfirmValues(rows);
+      const aiAccepted = buildAiAccepted(rows);
       if (saveMappingChecked && extracted && mappingName.trim()) {
         await apiClient.post("/form-import/mappings", {
           targetRef,
@@ -145,6 +174,7 @@ export function ImportFromFilePage() {
           recordNumber: recordNumber || null,
           edited,
           values,
+          aiAccepted,
           ...(isReportTarget ? { year: reportYear, month: reportMonth, replaceNotes } : {}),
         })
       ).data;
@@ -220,6 +250,10 @@ export function ImportFromFilePage() {
     setRows((current) => current.map((row) => (row.field.key === key ? { ...row, value: row.original } : row)));
   }
 
+  function toggleAiAccept(key: string, accept: boolean) {
+    setRows((current) => current.map((row) => (row.field.key === key ? { ...row, value: accept ? row.aiSuggestion : null } : row)));
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -291,6 +325,14 @@ export function ImportFromFilePage() {
       {step === 2 && extracted && (
         <div className="flex flex-col gap-3">
           {propose.isPending && <LoadingPlaceholder />}
+
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
+              {warnings.map((note, index) => (
+                <p key={`${note}-${index}`}>{note}</p>
+              ))}
+            </div>
+          )}
 
           {isReportTarget ? (
             <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
@@ -379,6 +421,17 @@ export function ImportFromFilePage() {
             </section>
           )}
 
+          {canUseAi && rows.some((row) => isEmptyValue(row.value)) && (
+            <button
+              type="button"
+              className="w-fit rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60"
+              disabled={aiSuggest.isPending}
+              onClick={() => aiSuggest.mutate()}
+            >
+              {aiSuggest.isPending ? "Asking AI…" : "Suggest empty fields with AI"}
+            </button>
+          )}
+
           {groups.map((group) => (
             <section key={group} className="rounded-lg border border-border bg-card">
               <h3 className="border-b border-border px-4 py-2 text-sm font-semibold">{group}</h3>
@@ -441,22 +494,47 @@ export function ImportFromFilePage() {
                         <div className="flex flex-col gap-1 text-xs">
                           <span
                             className={
-                              status === "Matched" ? "text-emerald-600" : status === "Edited" ? "text-amber-600" : "text-muted-foreground"
+                              status === "Matched"
+                                ? "text-emerald-600"
+                                : status === "Edited"
+                                  ? "text-amber-600"
+                                  : status === "Suggested"
+                                    ? "text-sky-600"
+                                    : "text-muted-foreground"
                             }
                           >
                             {status}
                           </span>
+                          {row.aiSuggestion != null && (
+                            <span
+                              className="w-fit rounded-full border border-sky-300 px-2 py-0.5 text-sky-700"
+                              title={typeof row.aiSuggestion === "string" ? row.aiSuggestion : row.aiSuggestion.map((line) => line.join(" | ")).join("\n")}
+                            >
+                              AI suggested
+                            </span>
+                          )}
                           {row.reason && row.reason !== "no match" && (
                             <span className="w-fit rounded-full border border-border px-2 py-0.5 text-muted-foreground">{row.reason}</span>
                           )}
-                          <div className="flex gap-2">
-                            <button type="button" className="text-primary hover:underline" onClick={() => acceptRow(row.field.key)}>
+                          {status === "Suggested" ? (
+                            <label className="flex items-center gap-1">
+                              <input type="checkbox" checked={false} onChange={(event) => toggleAiAccept(row.field.key, event.target.checked)} />
                               Accept
-                            </button>
-                            <button type="button" className="text-muted-foreground hover:underline" onClick={() => clearRow(row.field.key)}>
-                              Clear
-                            </button>
-                          </div>
+                            </label>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="text-primary hover:underline"
+                                onClick={() => (row.aiSuggestion != null ? toggleAiAccept(row.field.key, true) : acceptRow(row.field.key))}
+                              >
+                                Accept
+                              </button>
+                              <button type="button" className="text-muted-foreground hover:underline" onClick={() => clearRow(row.field.key)}>
+                                Clear
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

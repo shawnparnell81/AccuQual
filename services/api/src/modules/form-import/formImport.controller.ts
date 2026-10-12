@@ -16,6 +16,7 @@ import { openBuiltFill, saveBuiltFill } from "../form-builder/service.js";
 import { MONTH_NAMES, mergeUploadNarrative, normalizeNarrative } from "../quality-engineering-report/model.js";
 import { saveEngineeringSupplierData } from "../quality-engineering-report/service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
+import { suggestWithAi } from "./aiSuggest.js";
 import { deleteMapping, listMappings, saveMapping, updateMapping } from "./importMappings.service.js";
 import { extractFile, type ExtractedFile } from "./extract.js";
 import { executeFormImport as runFormImport, planFormImport, type PlannedRow } from "./formImport.execute.js";
@@ -26,7 +27,7 @@ import { proposeValues, type Proposal } from "./propose.js";
 import { proposeMonthlyQuality, toSupplierData } from "./reportTargets/monthlyQuality.js";
 import { resolveTarget } from "./targetAccess.js";
 import { listImportTargets } from "./targets.js";
-import { confirmImportSchema, mappingBodySchema, mappingUpdateSchema, proposeBodySchema } from "./formImport.validation.js";
+import { aiSuggestBodySchema, confirmImportSchema, mappingBodySchema, mappingUpdateSchema, proposeBodySchema } from "./formImport.validation.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 
@@ -236,6 +237,20 @@ export const proposeValuesHandler = asyncHandler(async (req, res) => {
   res.json({ fields: target.fields, proposals, warnings });
 });
 
+export const aiSuggestHandler = asyncHandler(async (req, res) => {
+  const parsed = aiSuggestBodySchema.safeParse(req.body);
+  if (!parsed.success) throw AppError.badRequest("Choose a file and a target form.");
+  const actor = actorOf(req);
+  const target = await resolveTarget(req.db!, actor, parsed.data.targetRef);
+  const result = await suggestWithAi(req.db!, actor, {
+    targetRef: parsed.data.targetRef,
+    extracted: parsed.data.extracted as ExtractedFile,
+    fields: target.fields,
+    proposals: parsed.data.proposals as Proposal[],
+  });
+  res.json(result);
+});
+
 function hasValue(value: unknown): boolean {
   if (value == null) return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -252,6 +267,10 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   const allowedKeys = new Set(target.fields.map((field) => field.key));
   for (const key of Object.keys(body.values)) {
     if (!allowedKeys.has(key)) throw AppError.badRequest(`"${key}" is not a field on this form.`);
+  }
+  const aiAccepted = body.aiAccepted ?? [];
+  for (const key of aiAccepted) {
+    if (!(key in body.values)) throw AppError.badRequest(`"${key}" is not in the saved values.`);
   }
   const filled = target.fields.filter((field) => hasValue(body.values[field.key])).length;
 
@@ -312,15 +331,16 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   const person = await who(req.db!, req.user!.id);
   const revLabel = target.revision ? ` Rev ${target.revision}` : "";
   const edited = body.edited ?? 0;
+  const aiSuffix = aiAccepted.length > 0 ? `; ${aiAccepted.length} accepted from AI suggestions` : "";
   const summary =
-    target.kind === "report"
+    (target.kind === "report"
       ? `${person.label} imported "${body.fileName}" into the Monthly Quality Report for ${MONTH_NAMES[(body.month ?? 1) - 1]} ${body.year} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`
-      : `${person.label} imported "${body.fileName}" into "${target.title}"${revLabel} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`;
+      : `${person.label} imported "${body.fileName}" into "${target.title}"${revLabel} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`) + aiSuffix;
   await recordAuditTrail(req.db!, {
     entityType: auditEntityType,
     entityId: auditEntityId,
     action: target.kind === "report" ? "update" : "create",
-    changes: { summary, fileName: body.fileName, targetTitle: target.title, revision: target.revision, filled, edited },
+    changes: { summary, fileName: body.fileName, targetTitle: target.title, revision: target.revision, filled, edited, aiAccepted: aiAccepted.length },
     performedBy: req.user!.id,
   });
 
