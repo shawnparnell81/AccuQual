@@ -39,6 +39,8 @@ export const FAI_EDIT_PERMISSION = "fai.edit";
 export const FAI_DELETE_PERMISSION = "fai.delete";
 export const FAI_SIGNOFF_PERMISSION = "fai.signoff";
 export const FAI_PLANS_MANAGE_PERMISSION = "fai.plans.manage";
+/** Phase 2 (scheduling): random-pull rules, generating/approving a pick list. Repeat interval itself stays under fai.plans.manage (it's a plan field, edited through updatePlan). */
+export const FAI_SCHEDULE_MANAGE_PERMISSION = "fai.schedule.manage";
 
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);

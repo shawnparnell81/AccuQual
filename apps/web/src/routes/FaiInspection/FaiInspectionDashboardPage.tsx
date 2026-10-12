@@ -24,11 +24,14 @@ export function FaiInspectionDashboardPage() {
     { key: "due30", label: "Due in 30 days", count: data?.due30 ?? 0, listPath: "/fai-inspection/sources?due=30", title: (n) => `FAI Due in 30 Days (${n})` },
     { key: "overdue", label: "Overdue", count: data?.overdue ?? 0, listPath: "/fai-inspection/sources?due=overdue", title: (n) => `Overdue FAI Sources (${n})` },
     { key: "notApproved", label: "Not approved sources", count: data?.notApproved ?? 0, listPath: "/fai-inspection/sources?status=not_approved", title: (n) => `Not Approved Sources (${n})` },
+    { key: "pullsPending", label: "Random pulls pending", count: data?.pullsPending ?? 0, listPath: "/fai-inspection/random-pulls", title: (n) => `Random Pulls Pending (${n})` },
+    { key: "pullsOverdue", label: "Random pulls overdue", count: data?.pullsOverdue ?? 0, listPath: "/fai-inspection/random-pulls", title: (n) => `Random Pulls Overdue (${n})` },
   ];
 
   async function openTile(tile: Tile) {
     if (tile.count === 0) return;
-    if (tile.count === 1) {
+    // Random-pull tiles always open the Random Pulls page — a pending item has no FAI record yet to drill into.
+    if (tile.count === 1 && !tile.listPath.startsWith("/fai-inspection/random-pulls")) {
       // Fetch the single record and open it directly.
       const isRecord = tile.listPath.includes("/records");
       try {
@@ -90,6 +93,12 @@ export function FaiInspectionDashboardPage() {
           className="rounded border px-4 py-2 hover:bg-gray-50"
         >
           FAI Records
+        </button>
+        <button
+          onClick={() => openTab({ path: "/fai-inspection/random-pulls", title: "Random Pulls", icon: "clipboard-check" })}
+          className="rounded border px-4 py-2 hover:bg-gray-50"
+        >
+          Random Pulls
         </button>
       </div>
     </div>

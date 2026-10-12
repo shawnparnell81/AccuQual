@@ -3,9 +3,13 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import * as c from "./fai-inspection.controller.js";
+import { faiRandomPullRouter } from "./fai-random-pull.routes.js";
 
 export const faiInspectionRouter = Router();
 faiInspectionRouter.use(requireAuth, withDb, withSiteContext);
+
+// Phase 2 (scheduling): random-pull rules, pick lists, compliance. Separate files; same auth/db/site middleware above.
+faiInspectionRouter.use("/random-pulls", faiRandomPullRouter);
 
 faiInspectionRouter.get("/dashboard", c.dashboard);
 
