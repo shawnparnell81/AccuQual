@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { EXECUTIVE_DASHBOARD_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -52,6 +52,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   effective.login_history = granted.has(LOGIN_HISTORY_PERMISSION) ? "read" : "none";
   effective.import_data = isFullAccessRole(user.roleName) || granted.has(IMPORT_DATA_PERMISSION) ? "edit" : "none";
   effective[EXECUTIVE_DASHBOARD_PERMISSION] = granted.has(EXECUTIVE_DASHBOARD_PERMISSION) ? "read" : "none";
+  effective[FAI_VIEW_PERMISSION] = granted.has(FAI_VIEW_PERMISSION) ? "read" : "none";
   res.json({ ...effective, admin_console: adminConsole });
 });
 
