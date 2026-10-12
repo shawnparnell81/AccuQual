@@ -224,6 +224,11 @@ function readZip(buffer: Buffer): Map<string, Buffer> {
   return files;
 }
 
+/** Raw zip members of a .docx/.xlsx package, keyed by part name (e.g. "word/document.xml"). */
+export function readDocxParts(buffer: Buffer): Map<string, Buffer> {
+  return readZip(buffer);
+}
+
 export interface ImportedDocx {
   html: string;
   header: DocumentBand | null;

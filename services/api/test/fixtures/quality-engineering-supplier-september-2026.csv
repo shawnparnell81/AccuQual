@@ -1,0 +1,65 @@
+dataset,month,total_claims,total_product_alerts,total_amount_requested,parts_amount_requested,labor_amount_requested,labor_to_parts_ratio,mean_time_to_failure_days,median_time_to_failure_days,date,claims,returns,part_number,description,vehicle,source,count,key,value,category,total_completed,passed,failed,passed_with_deviation,total_issues,or_issues,napa_issues,open_count,hours_spent,avg_days_to_close,total,section,problem,response
+monthly_metrics,2026-04,546,27,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+monthly_metrics,2026-05,439,20,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+monthly_metrics,2026-06,416,22,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+monthly_metrics,2026-07,425,20,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+monthly_metrics,2026-08,459,19,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+monthly_metrics,2026-09,461,28,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-04,,,114542.01,10154.90,81794.55,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-05,,,92988.15,3933.79,92988.15,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-06,,,101480.45,8882.25,92598.20,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-07,,,99968.98,9763.74,90205.24,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-08,,,108871.03,14028.27,94842.76,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-09,,,108492.22,10529.32,97962.90,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-04,,,,,,8.05:1,126.2,,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-05,,,,,,23.6:1,105.5,,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-06,,,,,,10.4:1,140.9,65.0,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-07,,,,,,9.2:1,128.5,58.0,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-08,,,,,,6.76:1,125.9,41.0,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-09,,,,,,9.30:1,122.7,42.0,,,,,,,,,,,,,,,,,,,,,,,,,
+top_parts,,10,,,,,,,,,,,A30059,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,9,,,,,,,,,,,A33220,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,9,,,,,,,,,,,A60076,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,7,,,,,,,,,,,A30378,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,A47104,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,A33007,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,A30110,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,A46087,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,43GM1000PS,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,A30523,Precision Fuel Pump,,,,,,,,,,,,,,,,,,,,
+fuel_pump_returns,,,,,,,,,,,,,,,,DMA Parts,66,,,,,,,,,,,,,,,,,
+fuel_pump_returns,,,,,,,,,,,,,,,,Carter / Non-DMA Pumps,45,,,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,raw_claim_count,461,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,tracker_processed,220,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,potential_liability,34575,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,flat_rate,75,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,claims_denied,120,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,claims_approved,97,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,claims_pending,244,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,denied_labor_savings,9000,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,department_status,yellow,,,,,,,,,,,,,,,
+product_alerts,,,,,,,,,,,,,,,,,,,,,,,,,,,,8,19.50,2.45,28,,,
+fai_categories,,,,,,,,,,,,,,,,,,,,Fuel & Lift Supports,358,211,129,18,,,,,,,,,,
+fai_categories,,,,,,,,,,,,,,,,,,,,CSAs & Shocks,46,15,31,0,,,,,,,,,,
+fai_categories,,,,,,,,,,,,,,,,,,,,Brake Wear Sensors,3,3,0,0,,,,,,,,,,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,primary_achievement,Closed out 23 O'Reilly Product Alerts with an average resolution speed of 2.45 days; processed 217 claims through initial review.,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,critical_risk,"Data Entry Backlog & Tracking Inconsistencies. The raw O'Reilly labor claim export for September contains 461 claims, but only 220 are currently logged in the internal tracking spreadsheet, leaving a backlog of 241 unentered claims.
+
+NAPA black label defective fuel pumps pallets: Made it through 10 pallets.",
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,payout_policy,We pay a $75 flat rate for each defective part rather than the requested shop labor costs.,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,rca,"Vehicle-Specific Failure Mode: Precision Fuel Pumps (A30059, A33220, A60076, A30378) and Complete Strut Assemblies (CSAs) represent the highest return volume. Claim comments for September frequently cite fuel pumps failing to build pressure immediately after installation, incorrect fuel level sender readings, and CSAs making squeaking or clunking noises over bumps, indicating potential bearing tolerances or mount friction.
+
+Early Life Failure: The median time for failure remained low at 42.0 days in September (compared to 41.0 days in August). This indicates a continuing pattern of out-of-box defects or installer misdiagnoses that require close supplier and technical monitoring.",
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,recommendation,"Vendor Quality Audit: Initiate internal audits on bearing tolerances for Complete Strut Assemblies and pressure regulator calibration / float arm rheostats for the Precision fuel pump line.
+
+Installation Verification: With the median lifespan holding near 42.0 days, expand technical support outreach to stores and installers regarding wiring harness pinouts and pre-installation tank cleaning to rule out external contamination or improper electrical hookups.",
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,product_alert_notes,"Product alert resolution maintained strong momentum, averaging 2.45 days per case.",
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,quarantine,"All these parts failed FAI:
+CF42103, CF43093, HD1114-0271, HD1114-0267
+The Main issues are the damping.  That is truly out of spec and not even close on some.",
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,recalls,No new recalls,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,field_question,No new third-party fuel pump field issues reported for September.,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,pallet,NAPA black label defective fuel pumps pallets: Made it through 10 pallets.,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,fitment,DMA Industries/ Brake Best Select - Fitment Confirmation: We received feedback from a store regarding DMA Brake Best Select Brake Pad Wear sensor part number 20179. The team stated the customer has issues at time of installation where the customer mentioned the length of the harness was too short and the connector was not the same as the OE wear sensor (34356870349). An ACES snippet from the most recent ACES delivery shows 20179 cataloged to fit the 2022 BMW 330i xDrive.,"This is a catalog issue. We currently have this part cataloged for a 330i xDrive Base for the 2017–2024 year ranges. Based on market research and drawing confirmations, the part should be cataloged strictly for the 2017–2018 year range for that specific application and for 2019 for the 330i GT xDrive. For 2019 and later 330i xDrive models, other aftermarket parts have a longer extended length; DMA will need to develop a new part number to cover 2019–2026."
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,product_info,"Please see the notes below on these shocks for Marathon NAPA. They’re looking for credit on 4 shocks @ $473.04 ea. totaling $1,892.16. The technical dept. told the store to send in for full credit but it was denied.",I talked to CM late Friday and she says yes that’s what warranty credit is for. She will deal with it internally. Says the store teams don’t fully understand it often.
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,product_info,"We had a situation with your 90101186 L & R where the stabilizer link bracket is welded in the wrong position and is causing the sway bar link to rub on the body. We had to replace with Monroe Quick Strut to fix the problem, I would need your help in paying the difference between the store acquisition cost of your shocks and the Monroe which is 114$ CAD for the pair.",We inspected an OE part and found that ours matches exactly; the issue must be with installation or the vehicle's suspension structure.
