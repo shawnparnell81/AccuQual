@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AQL_VALUES, type InspectionLevel, type InspectionSeverity } from "./aql.js";
+import { AQL_VALUES } from "./aql.js";
 
 const LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"] as const;
 const SEVERITIES = ["Normal", "Tightened", "Reduced"] as const;
