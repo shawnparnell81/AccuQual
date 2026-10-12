@@ -100,9 +100,10 @@ describe("FAI & Inspection endpoints", () => {
     const rec = await request(app).post("/fai-inspection/records")
       .set("Authorization", `Bearer ${managerToken}`)
       .send({ faiNumber: "FAI-PIN-001", partNumber: "TEST-001" });
+    expect(rec.status).toBe(201);
     const res = await request(app).post(`/fai-inspection/records/${rec.body.id}/sign`)
       .set("Authorization", `Bearer ${managerToken}`)
-      .send({ pin: "0000", certified: true, outcome: "passed", description: "sign" });
+      .send({ pin: "0000", certified: true, outcome: "passed", description: "FAI sign-off test" });
     expect(res.status).toBe(401);
   });
 });
