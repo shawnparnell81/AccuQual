@@ -176,7 +176,10 @@ export function IsoFormDetailPage() {
     setLoadedFor(record.id);
   }, [loadedFor, record]);
 
-  if (id === "new" && !blank) return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
+  if (id === "new" && !effectiveBlank) {
+    if (fallbackFormKey && templates.isLoading) return <LoadingPlaceholder />;
+    return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
+  }
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this form. Refresh the page and try again." noun="this form" />;
   if (unreadable) return <p className="text-sm text-destructive">Couldn't load this form. Refresh the page and try again.</p>;
   if (isLoading || !record || !cells) return <LoadingPlaceholder />;
@@ -523,7 +526,7 @@ function IsoFormDetailBody({
                 onClick={() => {
                   const rows = lines
                     .filter((line) => line.result === "Fail")
-                    .map((line) => ({ measurement: line.characteristic || line.balloon || "Characteristic", spec: [line.nominal, line.tolerance].filter(Boolean).join(" ") || "(effectiveBlank)", actual: line.actual || "(effectiveBlank)" }));
+                    .map((line) => ({ measurement: line.characteristic || line.balloon || "Characteristic", spec: [line.nominal, line.tolerance].filter(Boolean).join(" ") || "(blank)", actual: line.actual || "(blank)" }));
                   void apiClient.post<{ id: number }>("/ncr/from-inspection", {
                     sourceKind: "iso",
                     formType: "first_article",
