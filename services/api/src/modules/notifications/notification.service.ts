@@ -258,12 +258,12 @@ export async function notifyInApp(db: Db, recipients: string[], subject: string,
   return sent;
 }
 
-export type NotificationPreferences = { inApp: boolean; email: boolean; dailyDigest: boolean };
+export type NotificationPreferences = { inApp: boolean; email: boolean; dailyDigest: boolean; faiEmail: boolean };
 export type EmailDeliveryMode = "ready" | "log_only";
 export type NotificationPreferencesView = NotificationPreferences & { emailDelivery: EmailDeliveryMode };
 
 export function normalizeNotificationPreferences(raw: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
-  return { inApp: raw?.inApp !== false, email: raw?.email !== false, dailyDigest: raw?.dailyDigest !== false };
+  return { inApp: raw?.inApp !== false, email: raw?.email !== false, dailyDigest: raw?.dailyDigest !== false, faiEmail: raw?.faiEmail !== false };
 }
 
 /** Whether this server can actually send mail. Log-only means alerts are stored and not delivered. */
@@ -275,6 +275,14 @@ async function emailAllowed(db: Db, recipient: string): Promise<boolean> {
   const [row] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.email, recipient));
   if (!row) return true;
   return normalizeNotificationPreferences(row.notificationPreferences).email;
+}
+
+/** Phase 3: a person can turn FAI emails off for themselves specifically, without touching their general email preference. The in-app notification (notifyInApp) is unaffected either way. */
+export async function faiEmailAllowed(db: Db, recipient: string): Promise<boolean> {
+  const [row] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.email, recipient));
+  if (!row) return true;
+  const prefs = normalizeNotificationPreferences(row.notificationPreferences);
+  return prefs.email && prefs.faiEmail;
 }
 
 async function notify(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number, html?: string): Promise<number> {

@@ -24,6 +24,22 @@ export function FaiRecordsPage() {
     queryFn: () => faiInspectionApi.records.list({ status: status || undefined, q: q || undefined }),
   });
 
+  // Phase 3 dashboard-chart drill-down: same client-side query-param filtering convention as FaiSourcesPage's ?due=.
+  let rows = data ?? [];
+  const trigger = params.get("trigger");
+  if (trigger) rows = rows.filter((r) => (r.triggerReason ?? "Not specified") === trigger);
+  const agingBucket = params.get("agingBucket");
+  if (agingBucket) {
+    rows = rows.filter((r) => {
+      if (!["draft", "in_inspection", "awaiting_signoff"].includes(r.status) || !r.createdAt) return false;
+      const days = Math.floor((Date.now() - new Date(r.createdAt).getTime()) / 86_400_000);
+      if (agingBucket === "0-7") return days <= 7;
+      if (agingBucket === "8-30") return days > 7 && days <= 30;
+      if (agingBucket === "31-60") return days > 30 && days <= 60;
+      return days > 60;
+    });
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -51,7 +67,7 @@ export function FaiRecordsPage() {
             </tr>
           </thead>
           <tbody>
-            {(data ?? []).map((r) => (
+            {rows.map((r) => (
               <tr key={r.id} className="border-b hover:bg-gray-50">
                 <td className="p-2">
                   <button className="text-blue-600 hover:underline"

@@ -98,6 +98,45 @@ export interface FaiRandomPullCompliance {
   overdue: number;
 }
 
+/* ---------------- Phase 3: distribution lists, charts, reports ---------------- */
+
+export type FaiDistributionMember = { type: "user"; userId: number } | { type: "email"; email: string };
+
+export interface FaiDistributionList {
+  id: number;
+  name: string;
+  members: FaiDistributionMember[];
+  matchSiteId?: number | null;
+  matchProductFamily?: string | null;
+  matchTriggerReason?: string | null;
+  matchEventTypes: string[];
+  mondaySummary: boolean;
+}
+
+export const FAI_EVENT_TYPES = [
+  { key: "awaiting_signoff", label: "FAI awaiting sign-off" },
+  { key: "passed", label: "FAI signed passed" },
+  { key: "failed", label: "FAI signed failed" },
+  { key: "due_reminder", label: "Source due in 30 days / overdue" },
+  { key: "random_pull_approved", label: "Random pull list approved" },
+] as const;
+
+export interface FaiPassRatePoint { month: string; passed: number; failed: number; total: number; passRate: number }
+export interface FaiTriggerReasonPoint { triggerReason: string; count: number }
+export interface FaiSupplierFailurePoint { supplierName: string; failures: number }
+export interface FaiAgingPoint { bucket: "0-7" | "8-30" | "31-60" | "60+"; count: number }
+
+export interface FaiReportPreview { title: string; columns: string[]; rows: (string | number)[][] }
+export interface FaiReportFilters {
+  from?: string; to?: string; siteId?: number; supplierId?: number; partNumber?: string; productFamily?: string;
+}
+export const FAI_REPORT_KEYS = [
+  { key: "aql-lot", label: "AQL Lot Report" },
+  { key: "source-qualification", label: "Source Qualification Report" },
+  { key: "random-pull-compliance", label: "Random Pull Compliance Report" },
+  { key: "supplier-performance", label: "Supplier FAI Performance" },
+] as const;
+
 export interface FaiRecord {
   id: number;
   faiNumber: string;
@@ -132,6 +171,7 @@ export interface FaiRecord {
   linkedFuelPumpFaiId?: number | null;
   ncrId?: number | null;
   signature?: string | null;
+  createdAt?: string;
   lines?: FaiResultLine[];
 }
 
@@ -188,5 +228,30 @@ export const faiInspectionApi = {
       apiClient.post(`${base}/random-pulls/batches/${id}/approve`, body).then((r) => r.data as FaiRandomPullBatch),
     linkItem: (itemId: number, recordId: number) => apiClient.post(`${base}/random-pulls/items/${itemId}/link`, { recordId }).then((r) => r.data),
     compliance: (year: number) => apiClient.get(`${base}/random-pulls/compliance`, { params: { year } }).then((r) => r.data as FaiRandomPullCompliance),
+  },
+  distributionLists: {
+    list: () => apiClient.get(`${base}/distribution-lists`).then((r) => r.data as FaiDistributionList[]),
+    create: (body: Partial<FaiDistributionList>) => apiClient.post(`${base}/distribution-lists`, body).then((r) => r.data as FaiDistributionList),
+    update: (id: number, body: Partial<FaiDistributionList>) => apiClient.patch(`${base}/distribution-lists/${id}`, body).then((r) => r.data as FaiDistributionList),
+    delete: (id: number) => apiClient.delete(`${base}/distribution-lists/${id}`).then((r) => r.data),
+  },
+  charts: {
+    passRateByMonth: () => apiClient.get(`${base}/charts/pass-rate-by-month`).then((r) => r.data as FaiPassRatePoint[]),
+    byTriggerReason: () => apiClient.get(`${base}/charts/by-trigger-reason`).then((r) => r.data as FaiTriggerReasonPoint[]),
+    failuresBySupplier: () => apiClient.get(`${base}/charts/failures-by-supplier`).then((r) => r.data as FaiSupplierFailurePoint[]),
+    aging: () => apiClient.get(`${base}/charts/aging`).then((r) => r.data as FaiAgingPoint[]),
+  },
+  reports: {
+    preview: (reportKey: string, filters: FaiReportFilters) => apiClient.get(`${base}/reports/${reportKey}/preview`, { params: filters }).then((r) => r.data as FaiReportPreview),
+    /** Fetches with the real auth header (a plain `<a href>` can't carry it) and triggers a real file download, same pattern as ImportedDataPage.tsx's downloadOriginal(). */
+    download: async (reportKey: string, format: "pdf" | "excel", filters: FaiReportFilters) => {
+      const res = await apiClient.get(`${base}/reports/${reportKey}/export`, { params: { ...filters, format }, responseType: "blob" });
+      const url = URL.createObjectURL(res.data as Blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${reportKey}-${new Date().toISOString().slice(0, 10)}.${format === "excel" ? "xlsx" : "pdf"}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    },
   },
 };

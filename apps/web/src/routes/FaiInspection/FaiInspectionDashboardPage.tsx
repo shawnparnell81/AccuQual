@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { faiInspectionApi } from "../../api/faiInspection";
+import { FaiAgingChart, FaiPassRateChart, FaiSupplierFailuresChart, FaiTriggerReasonChart } from "../../components/charts/FaiDashboardCharts";
 
 interface Tile {
   key: string;
@@ -16,6 +17,10 @@ export function FaiInspectionDashboardPage() {
     queryKey: ["fai-inspection", "dashboard"],
     queryFn: () => faiInspectionApi.dashboard(),
   });
+  const { data: passRate } = useQuery({ queryKey: ["fai-inspection", "charts", "pass-rate"], queryFn: () => faiInspectionApi.charts.passRateByMonth() });
+  const { data: byTrigger } = useQuery({ queryKey: ["fai-inspection", "charts", "trigger"], queryFn: () => faiInspectionApi.charts.byTriggerReason() });
+  const { data: bySupplier } = useQuery({ queryKey: ["fai-inspection", "charts", "supplier"], queryFn: () => faiInspectionApi.charts.failuresBySupplier() });
+  const { data: aging } = useQuery({ queryKey: ["fai-inspection", "charts", "aging"], queryFn: () => faiInspectionApi.charts.aging() });
 
   const tiles: Tile[] = [
     { key: "open", label: "Open FAIs", count: data?.open ?? 0, listPath: "/fai-inspection/records?status=draft", title: (n) => `Open FAIs (${n})` },
@@ -75,6 +80,25 @@ export function FaiInspectionDashboardPage() {
           </button>
         ))}
       </div>
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-2">Pass rate by month</h2>
+          <FaiPassRateChart data={passRate ?? []} onBarClick={(_month, status) => openTab({ path: `/fai-inspection/records?status=${status}`, title: status === "passed" ? "Passed FAIs" : "Failed FAIs", icon: "clipboard-check" })} />
+        </div>
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-2">FAIs by trigger reason</h2>
+          <FaiTriggerReasonChart data={byTrigger ?? []} onBarClick={(triggerReason) => openTab({ path: `/fai-inspection/records?trigger=${encodeURIComponent(triggerReason)}`, title: `FAIs — ${triggerReason}`, icon: "clipboard-check" })} />
+        </div>
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-2">Failures by supplier (top 10)</h2>
+          <FaiSupplierFailuresChart data={bySupplier ?? []} onBarClick={() => openTab({ path: "/fai-inspection/records?status=failed", title: "Failed FAIs", icon: "clipboard-check" })} />
+        </div>
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-2">Aging of open FAIs</h2>
+          <FaiAgingChart data={aging ?? []} onBarClick={(bucket) => openTab({ path: `/fai-inspection/records?agingBucket=${bucket}`, title: `Open FAIs — ${bucket} days`, icon: "clipboard-check" })} />
+        </div>
+      </div>
+
       <div className="mt-8 flex gap-4">
         <button
           onClick={() => openTab({ path: "/fai-inspection/plans", title: "Inspection Plans", icon: "clipboard-check" })}
@@ -99,6 +123,18 @@ export function FaiInspectionDashboardPage() {
           className="rounded border px-4 py-2 hover:bg-gray-50"
         >
           Random Pulls
+        </button>
+        <button
+          onClick={() => openTab({ path: "/fai-inspection/reports", title: "FAI Reports", icon: "clipboard-check" })}
+          className="rounded border px-4 py-2 hover:bg-gray-50"
+        >
+          Reports
+        </button>
+        <button
+          onClick={() => openTab({ path: "/fai-inspection/distribution-lists", title: "FAI Distribution Lists", icon: "clipboard-check" })}
+          className="rounded border px-4 py-2 hover:bg-gray-50"
+        >
+          Email Distribution Lists
         </button>
       </div>
     </div>

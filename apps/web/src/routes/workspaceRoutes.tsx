@@ -20,6 +20,8 @@ import { FaiSourcesPage } from "./FaiInspection/FaiSourcesPage";
 import { FaiRecordsPage } from "./FaiInspection/FaiRecordsPage";
 import { FaiRecordDetailPage } from "./FaiInspection/FaiRecordDetailPage";
 import { FaiRandomPullsPage } from "./FaiInspection/FaiRandomPullsPage";
+import { FaiDistributionListsPage } from "./FaiInspection/FaiDistributionListsPage";
+import { FaiReportsPage } from "./FaiInspection/FaiReportsPage";
 import {
   AdminAiSettingsPage,
   AdminAiUsagePage,
@@ -182,6 +184,8 @@ export function workspaceRouteElements() {
     <Route key="/fai-inspection/records/new" path="/fai-inspection/records/new" element={<FaiRecordDetailPage />} />,
     <Route key="/fai-inspection/records/:id" path="/fai-inspection/records/:id" element={<NumericRecord><FaiRecordDetailPage /></NumericRecord>} />,
     <Route key="/fai-inspection/random-pulls" path="/fai-inspection/random-pulls" element={<FaiRandomPullsPage />} />,
+    <Route key="/fai-inspection/distribution-lists" path="/fai-inspection/distribution-lists" element={<FaiDistributionListsPage />} />,
+    <Route key="/fai-inspection/reports" path="/fai-inspection/reports" element={<FaiReportsPage />} />,
     <Route key="/validation-reports/:id" path="/validation-reports/:id" element={<ValidationReportDetailPage />} />,
     <Route key="/iso-forms/record/:id" path="/iso-forms/record/:id" element={<IsoFormDetailPage />} />,
     <Route key="/iso-forms/:formKey" path="/iso-forms/:formKey" element={<IsoFormListPage />} />,

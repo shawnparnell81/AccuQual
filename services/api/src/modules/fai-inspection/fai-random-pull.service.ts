@@ -10,6 +10,7 @@ import { faiRandomPullBatches, faiRandomPullItems, faiRandomPullRules } from "..
 import { addMonths, isoToday } from "./fai-due-status.js";
 import { pickTarget, randomSample, type PickRulesInput } from "./fai-random-pick.js";
 import { deny } from "./fai-inspection.service.js";
+import { notifyRandomPullApproved } from "./fai-notifications.service.js";
 
 const ENTITY = "FAI Random Pull";
 
@@ -141,6 +142,7 @@ async function itemsFor(db: Db, batchId: number) {
       partNumber: source?.partNumber ?? null,
       supplierFactory: source?.supplierFactory ?? null,
       receivingLocation: source?.receivingLocation ?? null,
+      siteId: source?.siteId ?? null,
       linkedRecordId: item.linkedRecordId,
       linkedFaiNumber: record?.faiNumber ?? null,
       status,
@@ -179,7 +181,9 @@ export async function approveBatch(db: Db, user: any, req: any, id: number, inpu
     changes: { what: "random-pull approval", description: `Approved the ${batch.year} random-pull list, signed by ${stamp.stamp}.` },
     performedBy: user?.id ?? null,
   });
-  return getBatch(db, user, updated!.id);
+  const result = await getBatch(db, user, updated!.id);
+  await notifyRandomPullApproved(db, { id: result.id, year: result.year }, result.items);
+  return result;
 }
 
 /** Called right after the user creates the FAI record from this item (trigger reason "Annual random pull"). */

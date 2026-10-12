@@ -41,6 +41,10 @@ export const FAI_SIGNOFF_PERMISSION = "fai.signoff";
 export const FAI_PLANS_MANAGE_PERMISSION = "fai.plans.manage";
 /** Phase 2 (scheduling): random-pull rules, generating/approving a pick list. Repeat interval itself stays under fai.plans.manage (it's a plan field, edited through updatePlan). */
 export const FAI_SCHEDULE_MANAGE_PERMISSION = "fai.schedule.manage";
+/** Phase 3: edit the email distribution lists. */
+export const FAI_NOTIFICATIONS_MANAGE_PERMISSION = "fai.notifications.manage";
+/** Phase 3: open/download the 4 FAI reports. Separate from fai.view deliberately — this phase's own task list names it as its own permission. */
+export const FAI_REPORTS_VIEW_PERMISSION = "fai.reports.view";
 
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);

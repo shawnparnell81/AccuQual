@@ -11,6 +11,7 @@ import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.j
 import { isSiteAdmin } from "../sites/siteAccess.js";
 import { FAI_VIEW_PERMISSION, SITES_VIEW_ALL_PERMISSION } from "../roles/roleAccess.js";
 import { dueStatusFor, isoToday, type DueStatus } from "./fai-due-status.js";
+import { notifyDueReminder, sendMondaySummaries } from "./fai-notifications.service.js";
 
 const ENTITY = "FAI Approved Source";
 
@@ -96,9 +97,13 @@ export async function sweepFaiDue(): Promise<{ sources: number; notified: number
       for (const recipient of recipients) {
         if (!(await alreadyNotifiedToday(db, source.id, recipient, startOfToday))) toNotify.push(recipient);
       }
-      if (toNotify.length === 0) continue;
-      const subject = subjectFor(source);
-      notified += await notifyInApp(db, toNotify, subject, subject, ENTITY, source.id);
+      if (toNotify.length > 0) {
+        const subject = subjectFor(source);
+        notified += await notifyInApp(db, toNotify, subject, subject, ENTITY, source.id);
+      }
+      // Phase 3: email, via the distribution lists — separate recipient set and separate
+      // dedupe rule (by status change, not by day) from the in-app notice above.
+      await notifyDueReminder(db, source, source.dueStatus as "due_soon" | "overdue");
     }
     if (due.length > 0) {
       await recordAuditTrailStandalone(pool, {
@@ -115,13 +120,22 @@ export async function sweepFaiDue(): Promise<{ sources: number; notified: number
   }
 }
 
+async function tick(): Promise<void> {
+  await sweepFaiDue();
+  // Phase 3: the Monday-7am-company-time summary. Checked every tick, but it only actually
+  // sends during that one hour each week (see isMondaySevenAmHour) — hourly cadence (below)
+  // is what makes that check meaningfully close to "7:00 AM", not the once-a-day cadence
+  // Phase 2 used, which could land anywhere in the day depending on server start time.
+  await sendMondaySummaries();
+}
+
 let sweepHandle: ReturnType<typeof setInterval> | null = null;
-/** Runs once a day (plus a startup pass a few minutes in, same convention as calibration/training's sweeps). Idempotent. */
+/** Runs hourly (plus a startup pass a few minutes in, same convention as calibration/training's sweeps — "safe to run more than once a day" per Phase 2's own spec). Idempotent. */
 export function startFaiScheduler(): void {
   if (sweepHandle) return;
-  const first = setTimeout(() => void sweepFaiDue(), 4 * 60_000);
+  const first = setTimeout(() => void tick(), 4 * 60_000);
   first.unref?.();
-  sweepHandle = setInterval(() => void sweepFaiDue(), 24 * 3_600_000);
+  sweepHandle = setInterval(() => void tick(), 3_600_000);
   sweepHandle.unref?.();
 }
 export function stopFaiScheduler(): void {

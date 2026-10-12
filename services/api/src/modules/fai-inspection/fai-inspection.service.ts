@@ -15,6 +15,7 @@ import { aqlLookup } from "./aql.js";
 import { calcLimits, judgeLine, type LimitType } from "./fai-inspection.logic.js";
 import { dueStatusFor } from "./fai-due-status.js";
 import { faiRandomPullBatches, faiRandomPullItems } from "../../drizzle/schema/faiScheduling.js";
+import { notifyAwaitingSignoff, notifySignedOff } from "./fai-notifications.service.js";
 
 type Db = any;
 
@@ -329,6 +330,11 @@ export async function updateRecord(db: Db, user: any, id: number, input: any) {
     changes: { what: "FAI record", description: `Updated FAI record ${rec.faiNumber}` },
     performedBy: user?.id ?? null,
   });
+  if (input.status === "awaiting_signoff" && rec.status !== "awaiting_signoff") {
+    const productFamily = rec.planId ? (await db.select({ productFamily: inspPlans.productFamily }).from(inspPlans).where(eq(inspPlans.id, rec.planId)))[0]?.productFamily ?? null : null;
+    // sendFaiEvent (inside this) never throws — an email failure must never block the save itself.
+    await notifyAwaitingSignoff(db, updated, productFamily);
+  }
   return updated;
 }
 
@@ -455,6 +461,8 @@ export async function signRecord(db: Db, user: any, req: any, id: number, input:
     },
     performedBy: user?.id ?? null,
   });
+  const productFamily = rec.planId ? (await db.select({ productFamily: inspPlans.productFamily }).from(inspPlans).where(eq(inspPlans.id, rec.planId)))[0]?.productFamily ?? null : null;
+  await notifySignedOff(db, updated, outcome, productFamily);
   return updated;
 }
 

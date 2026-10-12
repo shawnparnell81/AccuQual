@@ -41,6 +41,7 @@ import {
   LayoutGrid,
   Users,
   Shuffle,
+  Mail,
 } from "lucide-react";
 
 /**
@@ -396,6 +397,8 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module" },
       { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
       { key: "fai-random-pulls", label: "Random Pulls", path: "/fai-inspection/random-pulls", icon: Shuffle, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module — Phase 2 scheduling" },
+      { key: "fai-reports", label: "FAI Reports", path: "/fai-inspection/reports", icon: BarChart3, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module — Phase 3" },
+      { key: "fai-distribution-lists", label: "Email Distribution Lists", path: "/fai-inspection/distribution-lists", icon: Mail, access: { fai_inspection: "read" }, kpi: false, priority: 3, notes: "FAI & Inspection module — Phase 3" },
     ],
   },
   {
