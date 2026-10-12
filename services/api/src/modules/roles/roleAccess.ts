@@ -32,6 +32,14 @@ export const ROLES_MANAGE_PERMISSION = "roles.manage";
 /** Sign the required NCR closure sign-off row (row 0). Stored on the role; a role name does not grant it. */
 export const NCR_CLOSURE_SIGNOFF_PERMISSION = "ncr.closure_signoff";
 
+/** FAI & Inspection module permissions. Stored on the role; a role name does not grant them. */
+export const FAI_VIEW_PERMISSION = "fai.view";
+export const FAI_CREATE_PERMISSION = "fai.create";
+export const FAI_EDIT_PERMISSION = "fai.edit";
+export const FAI_DELETE_PERMISSION = "fai.delete";
+export const FAI_SIGNOFF_PERMISSION = "fai.signoff";
+export const FAI_PLANS_MANAGE_PERMISSION = "fai.plans.manage";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 
