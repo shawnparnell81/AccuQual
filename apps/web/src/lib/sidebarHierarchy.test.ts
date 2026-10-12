@@ -4,6 +4,7 @@ import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder, visibleSidebar } from "
 
 const QUALITY_LABELS = [
   "Training",
+  "FAI & Inspection",
   "Workers",
   "Inspections",
   "Product Alerts",
