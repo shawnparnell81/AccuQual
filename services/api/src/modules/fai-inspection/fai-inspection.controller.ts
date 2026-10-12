@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
   createPlanSchema, updatePlanSchema, createRecordSchema, updateRecordSchema,
-  resultLineSchema, signRecordSchema, manualSourceStatusSchema,
+  resultLineSchema, signRecordSchema, manualSourceStatusSchema, attachFormSchema,
 } from "./fai-inspection.validation.js";
 import * as svc from "./fai-inspection.service.js";
 import { recordPdf as buildPdf } from "./fai-inspection.pdf.js";
@@ -72,6 +72,14 @@ export const deleteRecord = asyncHandler(async (req, res) => {
 export const signRecord = asyncHandler(async (req, res) => {
   const body = signRecordSchema.parse(req.body);
   res.json(await svc.signRecord(req.db!, req.user, req, idOf(req.params.id, "FAI record"), body));
+});
+export const attachForm = asyncHandler(async (req, res) => {
+  const body = attachFormSchema.parse(req.body);
+  res.json(await svc.attachForm(req.db!, req.user, idOf(req.params.id, "FAI record"), body));
+});
+export const detachForm = asyncHandler(async (req, res) => {
+  const body = attachFormSchema.parse(req.body);
+  res.json(await svc.detachForm(req.db!, req.user, idOf(req.params.id, "FAI record"), body));
 });
 export const recordPdf = asyncHandler(async (req, res) => {
   const id = idOf(req.params.id, "FAI record");

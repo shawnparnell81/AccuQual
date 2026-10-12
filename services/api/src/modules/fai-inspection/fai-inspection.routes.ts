@@ -35,4 +35,6 @@ faiInspectionRouter.patch("/records/:id", c.updateRecord);
 faiInspectionRouter.delete("/records/:id", c.deleteRecord);
 faiInspectionRouter.post("/records/:id/lines", c.saveResultLines);
 faiInspectionRouter.post("/records/:id/sign", c.signRecord);
+faiInspectionRouter.post("/records/:id/attach-form", c.attachForm);
+faiInspectionRouter.post("/records/:id/detach-form", c.detachForm);
 faiInspectionRouter.get("/records/:id/pdf", c.recordPdf);

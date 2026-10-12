@@ -114,4 +114,8 @@ export const manualSourceStatusSchema = z.object({
   description: z.string().min(1).max(400),
 });
 
+export const attachFormSchema = z.object({
+  formType: z.enum(["csa", "fuel_pump"]),
+});
+
 export { RECORD_STATUS, SOURCE_STATUS, TRIGGER_REASONS };
