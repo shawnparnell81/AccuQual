@@ -244,8 +244,8 @@ export function GageRRForm({ data, onChange, documentNumber = "" }: CustomFormPr
                   value={String(data.approvalSignature ?? "")}
                   certify={GAGE_CERTIFY}
                   variant="sheet"
-                  onSign={async (pin) => {
-                    const result = await signForm({ path: "approvalSignature", description: GAGE_CERTIFY, pin });
+                  onSign={async (pin: string, certified: boolean) => {
+                    const result = await signForm({ path: "approvalSignature", description: GAGE_CERTIFY, pin, certified });
                     onChange("approvalSignature", result.stamp);
                     if (!data.approvalDate) onChange("approvalDate", result.signedOn);
                   }}

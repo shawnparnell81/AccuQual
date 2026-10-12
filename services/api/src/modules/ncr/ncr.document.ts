@@ -181,8 +181,14 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
   const blocks = closureSignatureBlocks();
   const missing: { path: string; label: string }[] = [];
   for (const block of blocks) {
-    if (!signatureRequired(source, block.path, blocks)) continue;
+    // Row 0 (Quality Manager) is always required; a stored "no" is ignored.
+    const isRowZero = block.path === "closureApprovals.0.signature";
+    if (!isRowZero && !signatureRequired(source, block.path, blocks)) continue;
     const stamp = valueAt(source, block.path);
+    // Skip rows with a proper Not-required mark ("Not required \u2013 " with dash);
+    // a plain "Not required" label does NOT count as signed.
+    const isMarked = typeof stamp === "string" && stamp.startsWith("Not required \u2013 ");
+    if (isMarked) continue;
     if (!stamp || stamp === NOT_REQUIRED_LABEL) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
   }
   return missing;
@@ -192,4 +198,17 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
 export function dispositionAdvances(status: string | null | undefined, released: boolean): boolean {
   if (!released) return false;
   return ncrStepIndex(status) < ncrStepIndex("disposition");
+}
+
+/** Row 0 (Quality Manager) can never be waived. Strips a stored "no" for closureApprovals.0. */
+export function stripRowZeroWaiver(data: Record<string, unknown>): Record<string, unknown> {
+  const map = data._signatureRequired;
+  if (!map || typeof map !== "object") return data;
+  const row = map as Record<string, unknown>;
+  if (row["closureApprovals.0.signature"] === "no") {
+    const next = { ...data, _signatureRequired: { ...row } };
+    delete (next._signatureRequired as Record<string, unknown>)["closureApprovals.0.signature"];
+    return next;
+  }
+  return data;
 }

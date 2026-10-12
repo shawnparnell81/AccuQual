@@ -29,6 +29,9 @@ export const EXECUTIVE_DASHBOARD_PERMISSION = "executive.dashboard";
 /** Delete and restore roles, including built-in ones. Owner and Administrator start with this. A role name does not grant it. */
 export const ROLES_MANAGE_PERMISSION = "roles.manage";
 
+/** Sign the required NCR closure sign-off row (row 0). Stored on the role; a role name does not grant it. */
+export const NCR_CLOSURE_SIGNOFF_PERMISSION = "ncr.closure_signoff";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 

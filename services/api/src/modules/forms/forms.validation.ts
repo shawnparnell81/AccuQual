@@ -56,3 +56,11 @@ export const signFormSchema = z.object({
   path: z.string().min(1).max(80),
   description: z.string().min(1).max(400),
 });
+
+export const markNotRequiredSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
+  path: z.string().min(1).max(80),
+  description: z.string().min(1).max(400),
+  reason: z.string().max(500).optional(),
+});

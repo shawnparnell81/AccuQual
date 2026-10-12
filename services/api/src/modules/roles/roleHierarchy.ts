@@ -1,4 +1,4 @@
-import { EXECUTIVE_DASHBOARD_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, ROLES_MANAGE_PERMISSION, SITES_VIEW_ALL_PERMISSION, isFullAccessRole } from "./roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, NCR_CLOSURE_SIGNOFF_PERMISSION, PLANTS_DELETE_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, ROLES_MANAGE_PERMISSION, SITES_VIEW_ALL_PERMISSION, isFullAccessRole } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -49,8 +49,8 @@ export const ROLE_SEEDS: RoleSeed[] = [
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
   { name: "director", description: "Director — can view the quality system and approve work", hierarchyLevel: 40, isProtected: true, permissions: [] },
-  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION] },
-  { name: "engineering_manager", description: "Engineering Manager", hierarchyLevel: 50, isProtected: true, permissions: [IMPORT_DATA_PERMISSION] },
+  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, NCR_CLOSURE_SIGNOFF_PERMISSION] },
+  { name: "engineering_manager", description: "Engineering Manager", hierarchyLevel: 50, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, NCR_CLOSURE_SIGNOFF_PERMISSION] },
   { name: "lead", description: "Lead — supervises day-to-day work", hierarchyLevel: 60, isProtected: true, permissions: [] },
   { name: "operator", description: "Shop-floor / production user", hierarchyLevel: 80, isProtected: true, permissions: [] },
   { name: "staff", description: "Staff — day-to-day work", hierarchyLevel: 80, isProtected: true, permissions: [] },

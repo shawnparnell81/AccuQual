@@ -85,7 +85,7 @@ export function SignatureStamp({
   value?: string | null;
   certify: string;
   disabled?: boolean;
-  onSign: (pin: string) => Promise<unknown>;
+  onSign: (pin: string, certified: boolean) => Promise<unknown>;
   variant?: "app" | "sheet";
   /** Present only when this form has more than one signature block. */
   requirement?: {
@@ -163,9 +163,10 @@ export function SignatureStamp({
     }
     setBusy(true);
     const attempt = pin;
+    const wasCertified = certified;
     setPin("");
     try {
-      await onSign(attempt);
+      await onSign(attempt, wasCertified);
       setCertified(false);
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't record that signature."));

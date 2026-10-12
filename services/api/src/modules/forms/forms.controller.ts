@@ -14,8 +14,25 @@ import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 import { syncDocumentToRecord } from "../ncr/ncr.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
+import { pool } from "../../db/index.js";
 import { writeSignatureValue } from "../signatures/signaturePin.js";
+import { NCR_CLOSURE_SIGNOFF_PERMISSION } from "../roles/roleAccess.js";
+import { roleHasPermission } from "../roles/rolePermissions.js";
 import { reasonableDate } from "../../utils/validation.js";
+import { eq } from "drizzle-orm";
+import { ncr } from "../../drizzle/schema/ncr.js";
+
+/** Reject if the NCR is closed/locked. */
+import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
+
+async function rejectClosedNcr(db: any, ncrId: number, allowedSiteIds?: number[]): Promise<void> {
+  const [row] = await db.select({ processData: ncr.processData, status: ncr.status, siteId: ncr.siteId }).from(ncr).where(eq(ncr.id, ncrId));
+  if ((row?.processData as any)?.locked === true) throw AppError.badRequest("This NCR is closed and locked.");
+  // The Close button path doesn't set processData.locked; also refuse by status.
+  if (row?.status === "closed") throw AppError.badRequest("This NCR is closed.");
+  if (allowedSiteIds) assertRecordOnAllowedSite(row?.siteId ?? null, allowedSiteIds, "NCR");
+}
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const formType = req.params.type!;
@@ -81,6 +98,32 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
   const existing = await formsService.loadData(req.db!, formType, entityId);
   const current = (existing?.data ?? {}) as Record<string, unknown>;
   const path = String(req.body.path);
+  // NCR closure rows: reject if the NCR is closed/locked.
+  if (formType === "ncr" && path.startsWith("closureApprovals.")) {
+    await rejectClosedNcr(req.db!, entityId, (req as any).allowedSiteIds);
+  }
+  // Row 0 of NCR closure (the required Quality Manager sign-off) needs the ncr.closure_signoff permission.
+  // The permission is stored on the role; a role name does not grant it.
+  if (formType === "ncr" && path === "closureApprovals.0.signature") {
+    const roleName = (req.user as any)?.role ?? (req.user as any)?.roleName;
+    const allowed = await roleHasPermission(req.db!, roleName, NCR_CLOSURE_SIGNOFF_PERMISSION);
+    if (!allowed) {
+      // Use standalone (not req.db) — the 403 rolls back the request transaction,
+      // which would silently discard the audit row.
+      await recordAuditTrailStandalone(pool, {
+        entityType: "NCR",
+        entityId,
+        action: "permission_denied",
+        changes: {
+          permission: NCR_CLOSURE_SIGNOFF_PERMISSION,
+          field: path,
+          description: `User lacks ${NCR_CLOSURE_SIGNOFF_PERMISSION} for NCR ${entityId} closure row 0`,
+        },
+        performedBy: (req.user as any)?.id ?? null,
+      });
+      throw AppError.forbidden("You don't have permission to sign the required closure sign-off row.");
+    }
+  }
   try {
     writeSignatureValue(current, path, "pending", "2000-01-01");
   } catch (err) {
@@ -105,6 +148,100 @@ export const signForm = asyncHandler(async (req: Request, res: Response) => {
     trustSignatures: true,
   });
   res.json({ stamp: stamp.stamp, signedAt: stamp.signedAt.toISOString(), signedOn: stamp.signedOn, displayName: stamp.displayName });
+});
+
+/**
+ * Mark an NCR closure row (index 1+) as "Not required" with PIN verification.
+ * Row 0 (the required Quality Manager sign-off) can never be Not required.
+ * Refuses if the row already has a real signature. Requires the NCR to be open.
+ */
+export const markNotRequired = asyncHandler(async (req: Request, res: Response) => {
+  const entityId = Number(req.params.id);
+  const formType = req.params.type!;
+  if (formType !== "ncr") throw AppError.badRequest("Not required is only for NCR closure rows.");
+  await rejectClosedNcr(req.db!, entityId, (req as any).allowedSiteIds);
+  const path = String(req.body.path);
+  const match = path.match(/^closureApprovals\.(\d+)\.signature$/);
+  if (!match) throw AppError.badRequest("Invalid closure row path.");
+  const index = Number(match[1]);
+  if (index === 0) throw AppError.badRequest("The required Quality Manager sign-off cannot be marked Not required.");
+
+  const existing = await formsService.loadData(req.db!, formType, entityId);
+  const current = (existing?.data ?? {}) as Record<string, unknown>;
+  const rows = Array.isArray((current as any).closureApprovals) ? (current as any).closureApprovals as Record<string, unknown>[] : [];
+  const row = rows[index] ?? {};
+  const sig = typeof row.signature === "string" ? row.signature : "";
+  // Refuse if already signed (a real signature, not a Not-required mark).
+  if (sig && !sig.startsWith("Not required – ")) throw AppError.badRequest("This row is already signed.");
+
+  const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: FORM_AUDIT_ENTITY[formType] ?? formType,
+    entityId,
+    field: path,
+    description: reason
+      ? `${String(req.body.description ?? "Mark closure row Not required")}. Reason: ${reason}`
+      : String(req.body.description ?? "Mark closure row Not required"),
+  });
+  const mark = `Not required – ${stamp.stamp}`;
+  const nextRows = [...rows];
+  while (nextRows.length <= index) nextRows.push({});
+  nextRows[index] = { ...nextRows[index], signature: mark, date: stamp.signedOn, ...(reason ? { notRequiredReason: reason } : {}) };
+  const next = { ...current, closureApprovals: nextRows };
+  await formsService.saveData(req.db!, {
+    formType,
+    entityType: existing?.entityType ?? req.body.entityType ?? formType,
+    entityId,
+    data: next,
+    userId: req.user?.id,
+    trustSignatures: true,
+  });
+  res.json({ mark, signedOn: stamp.signedOn });
+});
+
+/**
+ * Clear a "Not required" mark from an NCR closure row. Only allowed when the row
+ * holds a Not-required mark — never erases a real signature. Uses SignatureStamp (PIN).
+ */
+export const clearNotRequired = asyncHandler(async (req: Request, res: Response) => {
+  const entityId = Number(req.params.id);
+  const formType = req.params.type!;
+  if (formType !== "ncr") throw AppError.badRequest("Not required is only for NCR closure rows.");
+  await rejectClosedNcr(req.db!, entityId, (req as any).allowedSiteIds);
+  const path = String(req.body.path);
+  const match = path.match(/^closureApprovals\.(\d+)\.signature$/);
+  if (!match) throw AppError.badRequest("Invalid closure row path.");
+  const index = Number(match[1]);
+
+  const existing = await formsService.loadData(req.db!, formType, entityId);
+  const current = (existing?.data ?? {}) as Record<string, unknown>;
+  const rows = Array.isArray((current as any).closureApprovals) ? (current as any).closureApprovals as Record<string, unknown>[] : [];
+  const row = rows[index] ?? {};
+  const sig = typeof row.signature === "string" ? row.signature : "";
+  if (!sig.startsWith("Not required – ")) throw AppError.badRequest("This row does not hold a Not required mark.");
+
+  await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: FORM_AUDIT_ENTITY[formType] ?? formType,
+    entityId,
+    field: path,
+    description: String(req.body.description ?? "Clear Not required mark"),
+  });
+  const nextRows = [...rows];
+  nextRows[index] = { ...nextRows[index], signature: "", date: "" };
+  const next = { ...current, closureApprovals: nextRows };
+  await formsService.saveData(req.db!, {
+    formType,
+    entityType: existing?.entityType ?? req.body.entityType ?? formType,
+    entityId,
+    data: next,
+    userId: req.user?.id,
+    trustSignatures: true,
+  });
+  res.json({ cleared: true });
 });
 
 // `:id` is the entity id (the NCR/CAPA/... row this form is attached to) across

@@ -370,7 +370,7 @@ export function NcrWorkspacePage() {
           </div>
 
           {step === "verify" && (
-            <NcrClosureSignoff data={values} canEdit={canEdit} onChange={updateField} onPreview={previewField} />
+            <NcrClosureSignoff data={values} canEdit={canEdit} onChange={updateField} onPreview={previewField} ncrId={ncrId} />
           )}
 
           <div className="rounded-lg border border-border bg-card p-4">

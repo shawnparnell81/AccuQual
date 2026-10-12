@@ -99,7 +99,12 @@ export function closureRoleLabel(label: string): string {
   return label.replace(/\s+signature$/i, "").trim();
 }
 
-/** Required closure roles with no stamp. A role marked Not required is skipped. */
+/** Whether a signature value is a "Not required" mark (not a real signature). */
+export function isNotRequiredMark(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith("Not required – ");
+}
+
+/** Required closure roles with no stamp. A row with a Not-required mark is skipped. */
 export function missingClosureSignatures(data: Record<string, unknown> | null | undefined): { path: string; label: string }[] {
   const layout = getFormLayout("ncr");
   if (!layout) return [];
@@ -107,8 +112,12 @@ export function missingClosureSignatures(data: Record<string, unknown> | null | 
   const blocks = layoutSignatureBlocks(layout).filter((block) => block.path.startsWith("closureApprovals."));
   const missing: { path: string; label: string }[] = [];
   for (const block of blocks) {
-    if (choiceOf(source, block.path) === "no") continue;
+    // Row 0 is never skippable, even if old data has "no" stored.
+    const isRowZero = block.path === "closureApprovals.0.signature";
+    if (!isRowZero && choiceOf(source, block.path) === "no") continue;
     const stamp = valueAt(source, block.path);
+    // Skip rows with a proper Not-required mark; otherwise use main's rule.
+    if (isNotRequiredMark(stamp)) continue;
     if (!stamp || stamp === NOT_REQUIRED_LABEL) missing.push({ path: block.path, label: closureRoleLabel(block.label) });
   }
   return missing;

@@ -550,9 +550,9 @@ function SignatureField({
       certify={sentence}
       disabled={readOnly || !sign}
       requirement={requirement}
-      onSign={async (pin) => {
+      onSign={async (pin: string, certified: boolean) => {
         if (!sign) return;
-        const result = await sign({ path, description: sentence, pin });
+        const result = await sign({ path, description: sentence, pin, certified });
         onStamp(result.stamp, dateEmpty ? result.signedOn : undefined);
       }}
     />
