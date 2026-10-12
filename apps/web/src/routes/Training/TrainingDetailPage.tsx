@@ -82,10 +82,11 @@ export function TrainingDetailPage() {
     enabled: !!course,
   });
   const { data: material } = useQuery<AccuQualDocument>({
-    queryKey: ["documents", course?.documentId],
+    queryKey: ["documents", "training-material", course?.documentId ?? 0],
     queryFn: async () => (await apiClient.get(`/documents/${course!.documentId}`)).data,
     enabled: !!course?.documentId,
   });
+  const linkedMaterial = course?.documentId ? material : undefined;
 
   async function viewCertificate(assignmentId: number) {
     const res = await apiClient.get(`/training/assignment/${assignmentId}/certificate`, { responseType: "blob" });
@@ -136,12 +137,12 @@ export function TrainingDetailPage() {
         }
       />
       <div className="rounded-lg border border-border bg-card p-3 text-sm">
-        {course.documentId && material ? (
+        {course.documentId && linkedMaterial ? (
           <div className="flex items-start justify-between gap-3">
             <p>
               Teaches{" "}
-              <Link to={`/documents/${material.id}`} className="text-primary hover:underline">
-                {material.title}
+              <Link to={`/documents/${linkedMaterial.id}`} className="text-primary hover:underline">
+                {linkedMaterial.title}
               </Link>
               . When that document changes, people on this course need to learn the new revision.
             </p>
@@ -204,22 +205,22 @@ export function TrainingDetailPage() {
         />
       </div>
 
-      {material ? (
+      {linkedMaterial ? (
         <>
           <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
             <div>
-              <h2 className="text-sm font-medium">Training Material — {material.title}</h2>
-              <p className="text-sm text-muted-foreground capitalize">Status: {material.status.replace("_", " ")}</p>
+              <h2 className="text-sm font-medium">Training Material — {linkedMaterial.title}</h2>
+              <p className="text-sm text-muted-foreground capitalize">Status: {linkedMaterial.status.replace("_", " ")}</p>
             </div>
             <div className="flex gap-2">
               {/* Revising and approving a controlled document happens on the document itself: draft, review, publish. */}
-              <Link to={`/documents/${material.id}`} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+              <Link to={`/documents/${linkedMaterial.id}`} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
                 Open document to revise or approve
               </Link>
             </div>
           </div>
-          <DocumentRetentionPanel document={material} />
-          <DocumentHistoryPanel documentId={material.id} />
+          <DocumentRetentionPanel document={linkedMaterial} />
+          <DocumentHistoryPanel documentId={linkedMaterial.id} />
         </>
       ) : null}
 
