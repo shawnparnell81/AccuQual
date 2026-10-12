@@ -82,8 +82,9 @@ export const users = pgTable("users", {
   // ResourceListPage's Column<T>.accessor returns ReactNode, not a plain sortable value, so a generic sort control isn't
   // type-safe to build without touching every one of DataTable's ~21 existing callers — deliberately out of scope here.
   savedViews: jsonb("saved_views").$type<Record<string, { label: string; searchText: string }[]>>().default({}),
-  // Per-user bell, email, and daily-digest switches. Missing values mean on.
-  notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean; dailyDigest?: boolean }>().default({ inApp: true, email: true, dailyDigest: true }),
+  // Per-user bell, email, and daily-digest switches. Missing values mean on. faiEmail (Phase 3) lets someone turn off
+  // FAI-specific emails without touching their general email switch — the in-app bell is unaffected either way.
+  notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean; dailyDigest?: boolean; faiEmail?: boolean }>().default({ inApp: true, email: true, dailyDigest: true, faiEmail: true }),
   // This person's sidebar: hidden rows, pinned destinations, and an optional arrangement.
   // Null, or a null layout, means the built-in menu. Another user's row is never read for this.
   sidebarShortcuts: jsonb("sidebar_shortcuts").$type<{

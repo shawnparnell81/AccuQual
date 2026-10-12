@@ -8,6 +8,8 @@ export interface NotificationPreferences {
   inApp: boolean;
   email: boolean;
   dailyDigest: boolean;
+  /** Phase 3 — turns off FAI & Inspection emails specifically, without touching the general email switch above. The bell notice is unaffected either way. */
+  faiEmail: boolean;
   /** ready: the server has a mail connection. log_only: alerts are stored and not sent. */
   emailDelivery?: "ready" | "log_only";
 }
@@ -69,6 +71,17 @@ export function NotificationPreferencesSection({ mode }: { mode: "inApp" | "emai
           Email me a daily digest
         </label>
         {!data.email && <p className="mt-2 text-xs text-muted-foreground">Turn email alerts on to receive the digest.</p>}
+      </div>
+      <div className="mt-4 border-t border-border pt-4">
+        <h3 className="text-sm font-medium">FAI &amp; Inspection emails</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sign-off requests, pass/fail results, due-date reminders, random-pull approvals, and the weekly FAI summary. Turning this off still shows the in-app notice — it only stops the email.
+        </p>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={data.faiEmail !== false} disabled={save.isPending || !data.email} onChange={(e) => save.mutate({ faiEmail: e.target.checked })} />
+          Email me FAI &amp; Inspection alerts
+        </label>
+        {!data.email && <p className="mt-2 text-xs text-muted-foreground">Turn email alerts on to receive these too.</p>}
       </div>
     </section>
   );

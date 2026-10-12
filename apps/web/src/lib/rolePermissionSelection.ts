@@ -53,6 +53,8 @@ export const ROLE_PERMISSION_GROUPS: {
       { key: "fai.signoff", label: "Can sign off FAIs", hint: "Sign FAI records pass/fail and manually change approved source status. Stored on the role; a role name does not grant it." },
       { key: "fai.plans.manage", label: "Can manage inspection plans", hint: "Create and edit inspection plans and their characteristics." },
       { key: "fai.schedule.manage", label: "Can manage FAI scheduling", hint: "Edit the annual random-pull rules, and generate and approve a pick list. Plan repeat intervals are still covered by \"Can manage inspection plans\"." },
+      { key: "fai.notifications.manage", label: "Can manage FAI email distribution lists", hint: "Create, edit, and delete the email distribution lists for FAI events and the weekly summary." },
+      { key: "fai.reports.view", label: "Can open FAI reports", hint: "Open and download the AQL Lot, Source Qualification, Random Pull Compliance, and Supplier FAI Performance reports." },
     ],
   },
   {
