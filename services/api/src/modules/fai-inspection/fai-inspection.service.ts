@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { AppError } from "../../utils/appError.js";
 import { pool } from "../../db/index.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
@@ -13,6 +13,8 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { ISO_DOCUMENTS_FOLDER } from "../document-folders/formFiling.js";
 import { aqlLookup } from "./aql.js";
 import { calcLimits, judgeLine, type LimitType } from "./fai-inspection.logic.js";
+import { dueStatusFor } from "./fai-due-status.js";
+import { faiRandomPullBatches, faiRandomPullItems } from "../../drizzle/schema/faiScheduling.js";
 
 type Db = any;
 
@@ -144,7 +146,9 @@ export async function listSources(db: Db, user: any, siteId: number | null, stat
   await requirePerm(db, user, FAI_VIEW_PERMISSION, "view approved sources");
   const conds = [siteFilter(db, inspApprovedSources, siteId)].filter(Boolean);
   if (status) conds.push(eq(inspApprovedSources.status, status));
-  return db.select().from(inspApprovedSources).where(conds.length ? and(...conds) : undefined).orderBy(asc(inspApprovedSources.nextDueDate));
+  const rows = await db.select().from(inspApprovedSources).where(conds.length ? and(...conds) : undefined).orderBy(asc(inspApprovedSources.nextDueDate));
+  // Phase 2: the row-level "Due in 30 days" / "Overdue" flag, same math the dashboard tiles and the daily scheduler use.
+  return rows.map((r: any) => ({ ...r, dueStatus: dueStatusFor(r.nextDueDate) }));
 }
 
 export async function ensureSource(db: Db, args: {
@@ -484,9 +488,32 @@ export async function dashboard(db: Db, user: any, siteId: number | null) {
       : sql`${inspApprovedSources.nextDueDate} < ${today}`);
   const [notApproved] = await db.select({ n: sql<number>`count(*)` }).from(inspApprovedSources)
     .where(sCond ? and(sCond, or(eq(inspApprovedSources.status, "not_approved"), eq(inspApprovedSources.status, "fai_required"))!) : or(eq(inspApprovedSources.status, "not_approved"), eq(inspApprovedSources.status, "fai_required"))!);
+
+  // Phase 2: random-pull items not yet completed, split into "still within the year" vs "overdue" (a past year's pull that never finished).
+  const approvedBatchIds = (await db.select({ id: faiRandomPullBatches.id, year: faiRandomPullBatches.year }).from(faiRandomPullBatches).where(eq(faiRandomPullBatches.status, "approved")));
+  let pullsPending = 0;
+  let pullsOverdue = 0;
+  if (approvedBatchIds.length > 0) {
+    const items = await db.select({ batchId: faiRandomPullItems.batchId, linkedRecordId: faiRandomPullItems.linkedRecordId }).from(faiRandomPullItems)
+      .where(inArray(faiRandomPullItems.batchId, approvedBatchIds.map((b: any) => b.id)));
+    const linkedIds = items.map((i: any) => i.linkedRecordId).filter((id: number | null): id is number => id != null);
+    const linkedRecords = linkedIds.length ? await db.select({ id: inspRecords.id, status: inspRecords.status }).from(inspRecords).where(inArray(inspRecords.id, linkedIds)) : [];
+    const statusById = new Map<number, string>(linkedRecords.map((r: any) => [r.id as number, r.status as string]));
+    const yearById = new Map<number, number>(approvedBatchIds.map((b: any) => [b.id as number, b.year as number]));
+    const currentYear = new Date().getFullYear();
+    for (const item of items) {
+      const recStatus = item.linkedRecordId ? statusById.get(item.linkedRecordId) : null;
+      const isDone = recStatus === "passed" || recStatus === "failed";
+      if (isDone) continue;
+      if ((yearById.get(item.batchId) ?? currentYear) < currentYear) pullsOverdue++;
+      else pullsPending++;
+    }
+  }
+
   return {
     open, awaitingSignoff: awaiting, failed90: Number(failed90.n),
     due30: Number(due30.n), overdue: Number(overdue.n), notApproved: Number(notApproved.n),
+    pullsPending, pullsOverdue,
   };
 }
 

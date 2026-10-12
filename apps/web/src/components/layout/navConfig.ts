@@ -40,6 +40,7 @@ import {
   ScrollText,
   LayoutGrid,
   Users,
+  Shuffle,
 } from "lucide-react";
 
 /**
@@ -394,6 +395,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "fai-plans", label: "Inspection Plans", path: "/fai-inspection/plans", icon: ClipboardList, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
       { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module" },
       { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
+      { key: "fai-random-pulls", label: "Random Pulls", path: "/fai-inspection/random-pulls", icon: Shuffle, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module — Phase 2 scheduling" },
     ],
   },
   {

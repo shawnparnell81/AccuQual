@@ -8,6 +8,7 @@ import { startCalibrationSweep } from "./modules/calibration/calibration.service
 import { startTrainingSweep } from "./modules/training/training.service.js";
 import { startQualityAutomationSweep } from "./modules/quality-automation/qualityAutomation.service.js";
 import { startNcrSlaSweep } from "./modules/ncr/ncrSla.sweep.js";
+import { startFaiScheduler } from "./modules/fai-inspection/fai-scheduler.service.js";
 import { failInterruptedImports } from "./modules/import/import.job.js";
 
 // Before anything else can fail, so start-up errors are reported too.
@@ -33,6 +34,8 @@ app.listen(env.PORT, () => {
   startQualityAutomationSweep();
   // In-app NCR SLA reminders. Separate from the quality-automation email sweep.
   startNcrSlaSweep();
+  // FAI & Inspection Phase 2: due/overdue in-app reminders, once a day.
+  startFaiScheduler();
   void failInterruptedImports().catch((err) => logger.error("Could not close interrupted imports", err));
 });
 

@@ -44,6 +44,58 @@ export interface FaiSource {
   lastFaiDate?: string | null;
   lastResult?: string | null;
   nextDueDate?: string | null;
+  /** Phase 2: "due_soon" (within 30 days), "overdue", or null. Computed, not stored. */
+  dueStatus?: "due_soon" | "overdue" | null;
+}
+
+export interface FaiDashboard {
+  open: number;
+  awaitingSignoff: number;
+  failed90: number;
+  due30: number;
+  overdue: number;
+  notApproved: number;
+  pullsPending: number;
+  pullsOverdue: number;
+}
+
+export interface FaiRandomPullRules {
+  id: number;
+  pickMode: "percent" | "count";
+  pickPercent?: number | null;
+  pickCount?: number | null;
+  productFamily?: string | null;
+  riskClass?: string | null;
+  siteId?: number | null;
+  excludeMonths: number;
+}
+
+export interface FaiRandomPullItem {
+  id: number;
+  batchId: number;
+  sourceId: number;
+  partNumber: string | null;
+  supplierFactory?: string | null;
+  receivingLocation?: string | null;
+  linkedRecordId?: number | null;
+  linkedFaiNumber?: string | null;
+  status: "pending" | "linked" | "completed_pass" | "completed_fail";
+}
+
+export interface FaiRandomPullBatch {
+  id: number;
+  year: number;
+  status: "pending_approval" | "approved";
+  generatedAt?: string | null;
+  approvedAt?: string | null;
+  items: FaiRandomPullItem[];
+}
+
+export interface FaiRandomPullCompliance {
+  year: number;
+  picked: number;
+  completed: number;
+  overdue: number;
 }
 
 export interface FaiRecord {
@@ -102,7 +154,7 @@ export interface FaiResultLine {
 const base = "/fai-inspection";
 
 export const faiInspectionApi = {
-  dashboard: () => apiClient.get(`${base}/dashboard`).then((r) => r.data),
+  dashboard: () => apiClient.get(`${base}/dashboard`).then((r) => r.data as FaiDashboard),
   plans: {
     list: (q?: string) => apiClient.get(`${base}/plans`, { params: { q } }).then((r) => r.data as FaiPlan[]),
     get: (id: number) => apiClient.get(`${base}/plans/${id}`).then((r) => r.data as FaiPlan),
@@ -125,5 +177,16 @@ export const faiInspectionApi = {
     sign: (id: number, body: { pin: string; certified: true; outcome: "passed" | "failed"; description: string }) =>
       apiClient.post(`${base}/records/${id}/sign`, body).then((r) => r.data),
     pdfUrl: (id: number) => `${base}/records/${id}/pdf`,
+  },
+  randomPulls: {
+    getRules: () => apiClient.get(`${base}/random-pulls/rules`).then((r) => r.data as FaiRandomPullRules),
+    updateRules: (body: Partial<FaiRandomPullRules>) => apiClient.put(`${base}/random-pulls/rules`, body).then((r) => r.data as FaiRandomPullRules),
+    listBatches: (year?: number) => apiClient.get(`${base}/random-pulls/batches`, { params: { year } }).then((r) => r.data as FaiRandomPullBatch[]),
+    getBatch: (id: number) => apiClient.get(`${base}/random-pulls/batches/${id}`).then((r) => r.data as FaiRandomPullBatch),
+    generate: (year?: number) => apiClient.post(`${base}/random-pulls/batches`, { year }).then((r) => r.data as FaiRandomPullBatch),
+    approve: (id: number, body: { pin: string; certified: true; description: string }) =>
+      apiClient.post(`${base}/random-pulls/batches/${id}/approve`, body).then((r) => r.data as FaiRandomPullBatch),
+    linkItem: (itemId: number, recordId: number) => apiClient.post(`${base}/random-pulls/items/${itemId}/link`, { recordId }).then((r) => r.data),
+    compliance: (year: number) => apiClient.get(`${base}/random-pulls/compliance`, { params: { year } }).then((r) => r.data as FaiRandomPullCompliance),
   },
 };

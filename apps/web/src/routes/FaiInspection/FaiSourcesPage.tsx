@@ -11,6 +11,15 @@ const STATUS_LABELS: Record<string, string> = {
   suspended: "Suspended",
 };
 
+const DUE_BADGE: Record<string, string> = {
+  due_soon: "bg-amber-100 text-amber-800",
+  overdue: "bg-red-100 text-red-800",
+};
+const DUE_LABEL: Record<string, string> = {
+  due_soon: "Due in 30 days",
+  overdue: "Overdue",
+};
+
 export function FaiSourcesPage() {
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
@@ -72,7 +81,12 @@ export function FaiSourcesPage() {
                 <td className="p-2">{STATUS_LABELS[s.status] ?? s.status}</td>
                 <td className="p-2">{s.lastFaiDate ?? "—"}</td>
                 <td className="p-2">{s.lastResult ?? "—"}</td>
-                <td className="p-2">{s.nextDueDate ?? "—"}</td>
+                <td className="p-2">
+                  {s.nextDueDate ?? "—"}
+                  {s.dueStatus && (
+                    <span className={`ml-2 rounded px-2 py-0.5 text-xs font-medium ${DUE_BADGE[s.dueStatus]}`}>{DUE_LABEL[s.dueStatus]}</span>
+                  )}
+                </td>
                 <td className="p-2">
                   <button onClick={() => { setSignId(s.id); setNewStatus(s.status); }} className="text-blue-600 hover:underline text-sm">
                     Change status…
