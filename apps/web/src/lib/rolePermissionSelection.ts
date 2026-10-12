@@ -13,6 +13,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Can import data",
         hint: "Owner and Administrator can always import, even if this is turned off.",
       },
+      {
+        key: "import.ai_mapping",
+        label: "Can use AI-suggested import mapping",
+        hint: "When importing a Word, Excel or CSV file, ask AI to suggest values for fields the automatic match left empty. Every suggestion must be accepted by hand.",
+      },
     ],
   },
   {

@@ -170,3 +170,15 @@ export const workflowAiNoteOutputSchema = z.object({
   suggestedNextStep: z.string(),
   confidence: z.number(),
 });
+
+/** Import from file, Phase 3 (see prompts.ts's formImportMappingPrompt). `quote` is optional — the model omits an entry it has nothing to quote for, rather than inventing one. Every kept quote is still re-verified as a literal substring server-side in form-import/aiSuggest.ts; this schema only checks shape. */
+export const importMappingOutputSchema = z.object({
+  suggestions: z
+    .array(
+      z.object({
+        key: z.string().max(80),
+        quote: z.string().max(4000).optional(),
+      }),
+    )
+    .max(50),
+});

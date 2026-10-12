@@ -189,3 +189,21 @@ Respond as strict JSON: { "suggestedDisposition": "approve" | "deny" | "needs_in
 
 Claim:
 ${wrapUntrustedData(input, "warranty_claim_context")}`;
+
+/**
+ * Import from file, Phase 3: AI-assisted mapping for fields the deterministic
+ * rules and any saved mapping left empty. Every suggestion is verified
+ * server-side as a literal substring of the extracted file text (see
+ * form-import/aiSuggest.ts) before it is ever shown to the reviewer, so the
+ * prompt's own "quote exactly, never paraphrase" instruction is enforced, not
+ * just requested.
+ */
+export const formImportMappingPrompt = (fields: { key: string; label: string }[], extractedText: string) => `You are AccuQual's import-mapping assistant. The fields below could not be matched automatically from the uploaded file's text. For each field you can find a clear value for, quote the exact text from the file that gives that value: copy it character-for-character, do not paraphrase, summarize, reformat, or compute anything. Omit a field entirely if you cannot find a clear, exact quote for it in the file text — never guess.
+
+Fields that need a value:
+${wrapUntrustedData(fields, "import_fields")}
+
+Respond as strict JSON: { "suggestions": [{ "key": string, "quote": string }] }
+
+File text:
+${wrapUntrustedData(extractedText, "file_text")}`;

@@ -8,7 +8,7 @@ export interface TargetField {
   columns?: { id: string; label: string }[];
 }
 
-export type RowStatus = "Matched" | "Edited" | "Empty";
+export type RowStatus = "Matched" | "Edited" | "Empty" | "Suggested";
 
 export interface ReviewRow {
   field: TargetField;
@@ -19,6 +19,8 @@ export interface ReviewRow {
   reason: string;
   /** Which Phase 1 rule produced the value — what a saved mapping actually records. */
   rule: "label" | "heading" | "tableRow" | "tableField" | "named" | null;
+  /** Phase 3: an AI-suggested value for a field the deterministic rules and any saved mapping left empty. Never set for a field that already has a value. Accept is off by default — ticking it (or editing the value) copies this into `value`. */
+  aiSuggestion: ReviewValue | null;
 }
 
 export interface MappingEntry {
@@ -46,13 +48,18 @@ export function isEmptyValue(value: ReviewValue): boolean {
   return value.trim() === "";
 }
 
-export function rowStatus(row: Pick<ReviewRow, "value" | "original">): RowStatus {
-  if (isEmptyValue(row.value)) return "Empty";
+export function rowStatus(row: Pick<ReviewRow, "value" | "original" | "aiSuggestion">): RowStatus {
+  if (isEmptyValue(row.value)) return row.aiSuggestion != null ? "Suggested" : "Empty";
   if (sameValue(row.value, row.original)) return "Matched";
   return "Edited";
 }
 
-export function countEdited(rows: Pick<ReviewRow, "value" | "original">[]): number {
+/** A suggestion is "accepted" the moment its field has any value — whether the reviewer ticked Accept as-is or typed over it (both count, per the spec: "edit counts as accepted-and-edited"). */
+export function buildAiAccepted(rows: Pick<ReviewRow, "field" | "value" | "aiSuggestion">[]): string[] {
+  return rows.filter((row) => row.aiSuggestion != null && !isEmptyValue(row.value)).map((row) => row.field.key);
+}
+
+export function countEdited(rows: Pick<ReviewRow, "value" | "original" | "aiSuggestion">[]): number {
   return rows.filter((row) => rowStatus(row) === "Edited").length;
 }
 
