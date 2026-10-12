@@ -185,6 +185,7 @@ const ROUTE_PATTERNS = [
   /^\/fai-inspection\/sources$/,
   /^\/fai-inspection\/records$/,
   /^\/fai-inspection\/records\/\d+$/,
+  /^\/fai-inspection\/random-pulls$/,
   /^\/validation-reports\/\d+$/,
   /^\/iso-forms\/record\/\d+$/,
   /^\/iso-forms\/[A-Za-z0-9-]+$/,

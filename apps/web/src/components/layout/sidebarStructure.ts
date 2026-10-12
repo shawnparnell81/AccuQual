@@ -220,6 +220,20 @@ const QUALITY_FOLDER: SidebarFolder = {
   ],
 };
 
+/** FAI & Inspection. Every row needs fai.view (sidebarAccess maps /fai-inspection to it); nothing names a role. */
+const FAI_INSPECTION_FOLDER: SidebarFolder = {
+  key: "fai-inspection",
+  label: "FAI & Inspection",
+  icon: ClipboardCheck,
+  path: "/fai-inspection",
+  children: [
+    { key: "fai-plans", label: "Inspection Plans", path: "/fai-inspection/plans", icon: ClipboardList },
+    { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck },
+    { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck },
+    { key: "fai-random-pulls", label: "Random Pulls", path: "/fai-inspection/random-pulls", icon: ClipboardList },
+  ],
+};
+
 const ENGINEERING_FOLDER: SidebarFolder = {
   key: "engineering",
   label: "Engineering",
@@ -309,6 +323,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
   },
   DOCUMENT_CONTROL_FOLDER,
   QUALITY_FOLDER,
+  FAI_INSPECTION_FOLDER,
   ENGINEERING_FOLDER,
   EQUIPMENT_FOLDER,
   SUPPLIERS_FOLDER,

@@ -17,7 +17,7 @@ const QUALITY_LABELS = [
   "Quarantined items",
 ];
 
-const TOP_LABELS = ["Home", "Documents", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"];
+const TOP_LABELS = ["Home", "Documents", "Quality", "FAI & Inspection", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"];
 
 describe("sidebar hierarchy", () => {
   it("keeps the ERP groups, with Documents above Quality, and drops the Validation tab", () => {
