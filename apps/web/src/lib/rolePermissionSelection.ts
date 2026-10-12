@@ -43,6 +43,18 @@ export const ROLE_PERMISSION_GROUPS: {
     ],
   },
   {
+    id: "fai",
+    label: "FAI & Inspection",
+    permissions: [
+      { key: "fai.view", label: "Can view FAI & Inspection", hint: "See the FAI & Inspection module, dashboard, plans, sources and records." },
+      { key: "fai.create", label: "Can create FAI records", hint: "Create new FAI / inspection records." },
+      { key: "fai.edit", label: "Can edit FAI records", hint: "Edit draft FAI records and enter inspection results." },
+      { key: "fai.delete", label: "Can delete FAI records", hint: "Delete FAI records (confirmation required, audit-logged)." },
+      { key: "fai.signoff", label: "Can sign off FAIs", hint: "Sign FAI records pass/fail and manually change approved source status. Stored on the role; a role name does not grant it." },
+      { key: "fai.plans.manage", label: "Can manage inspection plans", hint: "Create and edit inspection plans and their characteristics." },
+    ],
+  },
+  {
     id: "folders",
     label: "Folders",
     permissions: [

@@ -98,6 +98,7 @@ export function permissionMessage(module: string | null): string {
 
 export function tabIconForHref(href: string): string {
   if (href.startsWith("/ncr")) return "ncr";
+  if (href.startsWith("/fai-inspection")) return "clipboard-check";
   if (href.startsWith("/capa") || href.startsWith("/8d") || href.startsWith("/complaints")) return "capa";
   if (href.startsWith("/audits")) return "audit";
   if (href.startsWith("/validation-reports") || href.startsWith("/iso-forms") || href.startsWith("/documents") || href.startsWith("/qms-forms") || href.startsWith("/form-folders")) {

@@ -86,6 +86,7 @@ import { dashboardRouter } from "../modules/dashboard/dashboard.routes.js";
 import { executiveRouter } from "../modules/executive/executive.routes.js";
 import { kpisRouter } from "../modules/kpis/kpi.routes.js";
 import { faiRouter } from "../modules/fai/fai.routes.js";
+import { faiInspectionRouter } from "../modules/fai-inspection/fai-inspection.routes.js";
 import { legalHoldsRouter, pdfExportsRouter } from "../modules/pdf-exports/pdfExport.routes.js";
 
 export const apiRouter = Router();
@@ -186,6 +187,7 @@ apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/executive", executiveRouter);
 apiRouter.use("/kpis", kpisRouter);
 apiRouter.use("/fai", faiRouter);
+apiRouter.use("/fai-inspection", faiInspectionRouter);
 apiRouter.use("/reporting/imported-data", importedDataRouter);
 apiRouter.use("/reporting", reportingRouter);
 apiRouter.use("/reports", reportsRouter);
