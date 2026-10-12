@@ -32,7 +32,7 @@ describe("per-user sidebar layout", () => {
     const shown = resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll);
     assert.deepEqual(
       shown.map((node) => node.label),
-      ["Home", "Documents", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"],
+      ["Home", "Documents", "FAI & Inspection", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"],
     );
     const links = flattenSidebarLinks(shown);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);

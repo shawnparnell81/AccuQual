@@ -177,7 +177,6 @@ const QUALITY_FOLDER: SidebarFolder = {
   icon: ShieldCheck,
   children: [
     { key: "training", label: "Training", path: "/training", icon: GraduationCap },
-    { key: "fai-inspection", label: "FAI & Inspection", path: "/fai-inspection", icon: ClipboardCheck },
     { key: "workers", label: "Workers", path: "/workers", icon: Users },
     { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
     doc("product-alerts", FileText),
@@ -234,6 +233,19 @@ const ENGINEERING_FOLDER: SidebarFolder = {
     doc("work-instructions", ScrollText),
     // Stays in the catalog. filterSidebarByAccess drops it unless the company flag is on.
     { key: "digital-twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes },
+  ],
+};
+
+const FAI_INSPECTION_FOLDER: SidebarFolder = {
+  key: "fai-inspection",
+  label: "FAI & Inspection",
+  icon: ClipboardCheck,
+  path: "/fai-inspection",
+  children: [
+    { key: "fai-dashboard", label: "Dashboard", path: "/fai-inspection", icon: LayoutDashboard },
+    { key: "fai-plans", label: "Inspection Plans", path: "/fai-inspection/plans", icon: ClipboardList },
+    { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck },
+    { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck },
   ],
 };
 
@@ -309,6 +321,7 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
     ],
   },
   DOCUMENT_CONTROL_FOLDER,
+  FAI_INSPECTION_FOLDER,
   QUALITY_FOLDER,
   ENGINEERING_FOLDER,
   EQUIPMENT_FOLDER,

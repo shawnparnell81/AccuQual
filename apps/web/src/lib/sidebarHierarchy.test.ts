@@ -4,7 +4,6 @@ import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder, visibleSidebar } from "
 
 const QUALITY_LABELS = [
   "Training",
-  "FAI & Inspection",
   "Workers",
   "Inspections",
   "Product Alerts",
@@ -18,15 +17,16 @@ const QUALITY_LABELS = [
   "Quarantined items",
 ];
 
-const TOP_LABELS = ["Home", "Documents", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"];
+const TOP_LABELS = ["Home", "Documents", "FAI & Inspection", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"];
 
 describe("sidebar hierarchy", () => {
   it("keeps the ERP groups, with Documents above Quality, and drops the Validation tab", () => {
     const labels = SIDEBAR_FOLDERS.map((folder) => folder.label);
     assert.deepEqual(labels, TOP_LABELS);
     const control = labels.indexOf("Documents");
+    const fai = labels.indexOf("FAI & Inspection");
     const quality = labels.indexOf("Quality");
-    assert.ok(control >= 0 && quality === control + 1);
+    assert.ok(control >= 0 && fai === control + 1 && quality === fai + 1);
     assert.equal(labels.includes("Blank Forms"), false);
     assert.equal(labels.includes("Validation"), false);
     assert.equal(labels.includes("Validation Reports"), false);
@@ -68,7 +68,8 @@ describe("sidebar hierarchy", () => {
     for (const isAdmin of [false, true]) {
       const visible = visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: isAdmin });
       const labels = visible.map((folder) => ("label" in folder ? folder.label : ""));
-      assert.equal(labels.indexOf("Quality"), labels.indexOf("Documents") + 1);
+      assert.equal(labels.indexOf("FAI & Inspection"), labels.indexOf("Documents") + 1);
+      assert.equal(labels.indexOf("Quality"), labels.indexOf("FAI & Inspection") + 1);
       assert.equal(labels.includes("Engineering"), true);
       assert.equal(labels.includes("Equipment"), true);
       assert.equal(labels.includes("Suppliers"), true);
