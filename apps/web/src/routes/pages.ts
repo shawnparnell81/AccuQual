@@ -49,6 +49,7 @@ export const DevelopmentLogPage = lazyNamed("/documents/development-log", () => 
 export const NonconformanceLogPage = lazyNamed("/documents/nonconformance-log", () => import("./Documents/NonconformanceLogPage"), "NonconformanceLogPage");
 export const EngineeringRequestLogPage = lazyNamed("/documents/engineering-request-log", () => import("./Documents/EngineeringRequestLogPage"), "EngineeringRequestLogPage");
 export const FormImportPage = lazyNamed("/documents/import", () => import("./Documents/FormImportPage"), "FormImportPage");
+export const ImportFromFilePage = lazyNamed("/documents/import-file", () => import("./Documents/ImportFromFilePage"), "ImportFromFilePage");
 export const FormBuilderListPage = lazyNamed("/form-builder", () => import("./FormBuilder/FormBuilderListPage"), "FormBuilderListPage");
 export const FormBuilderEditorPage = lazyNamed("/form-builder", () => import("./FormBuilder/FormBuilderEditorPage"), "FormBuilderEditorPage");
 export const FormFillPage = lazyNamed("/form-builder/fills", () => import("./FormBuilder/FormFillPage"), "FormFillPage");
