@@ -173,6 +173,16 @@ export interface FaiRecord {
   signature?: string | null;
   createdAt?: string;
   lines?: FaiResultLine[];
+  attachedForms?: FaiAttachedForm[];
+  /** Whether the caller can attach/detach a validation form — from the API, no role names on the client. */
+  canEdit?: boolean;
+}
+
+export interface FaiAttachedForm {
+  formType: "csa" | "fuel_pump";
+  reportId: number;
+  title: string;
+  openPath: string;
 }
 
 export interface FaiResultLine {
@@ -216,6 +226,8 @@ export const faiInspectionApi = {
       apiClient.post(`${base}/records/${id}/lines`, { lines }).then((r) => r.data as FaiRecord),
     sign: (id: number, body: { pin: string; certified: true; outcome: "passed" | "failed"; description: string }) =>
       apiClient.post(`${base}/records/${id}/sign`, body).then((r) => r.data),
+    attachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/attach-form`, { formType }).then((r) => r.data as FaiRecord),
+    detachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/detach-form`, { formType }).then((r) => r.data as FaiRecord),
     pdfUrl: (id: number) => `${base}/records/${id}/pdf`,
   },
   randomPulls: {

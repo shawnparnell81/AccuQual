@@ -10,6 +10,9 @@ const TRIGGER_REASONS = ["New part", "New supplier", "Supplier factory change", 
 const LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"];
 const SEVERITIES = ["Normal", "Tightened", "Reduced"];
 const AQLS = ["0.010", "0.015", "0.025", "0.040", "0.065", "0.10", "0.15", "0.25", "0.40", "0.65", "1.0", "1.5", "2.5", "4.0", "6.5", "10.0"];
+// The generic result-lines table and free-text linked-id inputs are superseded by the real attached
+// validation form (see ValidationFormCard below) — kept, not deleted, behind this flag.
+const SHOW_GENERIC_FORM = false;
 
 export function FaiRecordDetailPage() {
   const { id } = useParams();
@@ -169,6 +172,16 @@ export function FaiRecordDetailPage() {
       )}
 
       {!isNew && (
+        <ValidationFormCard
+          recordId={Number(id)}
+          faiNumber={current.faiNumber}
+          attachedForms={rec?.attachedForms ?? []}
+          canEdit={!!rec?.canEdit}
+          locked={!!locked}
+        />
+      )}
+
+      {!isNew && SHOW_GENERIC_FORM && (
         <>
           <h2 className="text-lg font-semibold mb-2">Linked validation forms</h2>
           <div className="flex gap-3 mb-6">
@@ -182,11 +195,13 @@ export function FaiRecordDetailPage() {
 
           <h2 className="text-lg font-semibold mb-2">Characteristic results</h2>
           <ResultLinesTable lines={lines} locked={!!locked} onSave={(l) => saveLines.mutate(l)} />
-
-          <label className="block mb-6">Comments
-            <textarea value={current.comments ?? ""} onChange={(e) => set("comments", e.target.value)} disabled={locked} className="border rounded px-3 py-2 w-full mt-1 disabled:bg-gray-100" rows={3} />
-          </label>
         </>
+      )}
+
+      {!isNew && (
+        <label className="block mb-6">Comments
+          <textarea value={current.comments ?? ""} onChange={(e) => set("comments", e.target.value)} disabled={locked} className="border rounded px-3 py-2 w-full mt-1 disabled:bg-gray-100" rows={3} />
+        </label>
       )}
 
       <div className="flex gap-3 mb-8">
@@ -309,5 +324,84 @@ function ResultLinesTable({ lines, locked, onSave }: { lines: any[]; locked: boo
         <button onClick={() => { onSave(payload); setEdits({}); }} className="rounded bg-primary text-primary-foreground px-4 py-2 mb-6">Save results</button>
       )}
     </>
+  );
+}
+
+const ATTACHABLE: { formType: "csa" | "fuel_pump"; label: string }[] = [
+  { formType: "csa", label: "Attach CSA Validation Report" },
+  { formType: "fuel_pump", label: "Attach Fuel Pump Validation" },
+];
+
+/** The record's real validation form (CSA or Fuel Pump) — replaces the generic result-lines form (see SHOW_GENERIC_FORM). */
+function ValidationFormCard({ recordId, faiNumber, attachedForms, canEdit, locked }: {
+  recordId: number; faiNumber: string; attachedForms: { formType: "csa" | "fuel_pump"; title: string; openPath: string }[]; canEdit: boolean; locked: boolean;
+}) {
+  const openTab = useOpenTab();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [detaching, setDetaching] = useState<"csa" | "fuel_pump" | null>(null);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["fai-inspection", "record", String(recordId)] });
+    queryClient.invalidateQueries({ queryKey: ["fai-inspection", "records"] });
+  };
+
+  const attach = useMutation({
+    mutationFn: (formType: "csa" | "fuel_pump") => faiInspectionApi.records.attachForm(recordId, formType),
+    onSuccess: () => { invalidate(); setError(null); },
+    onError: (err) => setError(extractErrorMessage(err, "Could not attach that form.")),
+  });
+  const detach = useMutation({
+    mutationFn: (formType: "csa" | "fuel_pump") => faiInspectionApi.records.detachForm(recordId, formType),
+    onSuccess: () => { invalidate(); setError(null); setDetaching(null); },
+    onError: (err) => setError(extractErrorMessage(err, "Could not detach that form.")),
+  });
+
+  const attachedTypes = new Set(attachedForms.map((f) => f.formType));
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-lg font-semibold mb-2">Validation form</h2>
+      {error && <div className="bg-red-50 text-red-700 p-2 rounded mb-3 text-sm">{error}</div>}
+      <div className="flex flex-col gap-2">
+        {attachedForms.map((f) => (
+          <div key={f.formType} className="flex items-center gap-3">
+            <button
+              onClick={() => openTab({ path: f.openPath, title: f.title, icon: "file-text" })}
+              className="rounded border px-4 py-2 hover:bg-gray-50 w-fit"
+            >
+              Open {f.title}
+            </button>
+            {canEdit && !locked && (
+              <button onClick={() => setDetaching(f.formType)} className="text-red-600 hover:underline text-sm">Detach</button>
+            )}
+          </div>
+        ))}
+        {canEdit && !locked && ATTACHABLE.filter((a) => !attachedTypes.has(a.formType)).map((a) => (
+          <button
+            key={a.formType}
+            onClick={() => attach.mutate(a.formType)}
+            disabled={attach.isPending}
+            className="rounded bg-primary text-primary-foreground px-4 py-2 w-fit disabled:opacity-50"
+          >
+            {a.label}
+          </button>
+        ))}
+        {attachedForms.length === 0 && !canEdit && <p className="text-sm text-gray-500">No validation form attached.</p>}
+      </div>
+
+      {detaching && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h2 className="text-lg font-semibold mb-3">Detach this validation form?</h2>
+            <p className="text-sm mb-4">This unlinks it from FAI {faiNumber}. The validation report itself is not deleted.</p>
+            <div className="flex gap-3">
+              <button onClick={() => detach.mutate(detaching)} disabled={detach.isPending} className="rounded bg-destructive text-destructive-foreground px-4 py-2">Detach</button>
+              <button onClick={() => setDetaching(null)} className="rounded border px-4 py-2">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

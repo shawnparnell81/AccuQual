@@ -10,12 +10,14 @@ import {
 } from "../roles/roleAccess.js";
 import { inspPlans, inspPlanCharacteristics, inspApprovedSources, inspRecords, inspResultLines } from "../../drizzle/schema/faiInspection.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { validationReports } from "../../drizzle/schema/validationReport.js";
 import { ISO_DOCUMENTS_FOLDER } from "../document-folders/formFiling.js";
 import { aqlLookup } from "./aql.js";
 import { calcLimits, judgeLine, type LimitType } from "./fai-inspection.logic.js";
 import { dueStatusFor } from "./fai-due-status.js";
 import { faiRandomPullBatches, faiRandomPullItems } from "../../drizzle/schema/faiScheduling.js";
 import { notifyAwaitingSignoff, notifySignedOff } from "./fai-notifications.service.js";
+import { productTypeFor, type FaiProductType } from "./fai-product-type.js";
 
 type Db = any;
 
@@ -38,9 +40,20 @@ async function requirePerm(db: Db, user: any, permission: string, what: string) 
   if (!allowed) await deny(db, user, permission, what);
 }
 
+/** Non-throwing check — used to tell the web app whether to show the Attach buttons (no role names there). */
+async function hasPerm(db: Db, user: any, permission: string): Promise<boolean> {
+  return roleHasPermission(db, user?.role ?? user?.roleName, permission);
+}
+
 function siteFilter(db: Db, table: any, siteId: number | null) {
   return siteId ? eq(table.siteId, siteId) : undefined;
 }
+
+/** The existing validation forms these FAI records attach to. Column names (linkedCsaFaiId/linkedFuelPumpFaiId) stay as-is. */
+const VALIDATION_FORM: Record<Exclude<FaiProductType, null>, { column: "linkedCsaFaiId" | "linkedFuelPumpFaiId"; label: string; formId: string }> = {
+  csa: { column: "linkedCsaFaiId", label: "CSA Validation Report", formId: "FRM-VAL-001" },
+  fuel_pump: { column: "linkedFuelPumpFaiId", label: "Fuel Pump Validation", formId: "FRM-VAL-007" },
+};
 
 /* ---------------- Plans ---------------- */
 
@@ -208,12 +221,22 @@ export async function listRecords(db: Db, user: any, siteId: number | null, filt
   return db.select().from(inspRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(inspRecords.createdAt));
 }
 
+function attachedFormsFor(rec: any): { formType: Exclude<FaiProductType, null>; reportId: number; title: string; openPath: string }[] {
+  const out: { formType: Exclude<FaiProductType, null>; reportId: number; title: string; openPath: string }[] = [];
+  for (const type of ["csa", "fuel_pump"] as const) {
+    const reportId = rec[VALIDATION_FORM[type].column];
+    if (reportId) out.push({ formType: type, reportId, title: `${VALIDATION_FORM[type].label} (${VALIDATION_FORM[type].formId})`, openPath: `/validation-reports/${reportId}` });
+  }
+  return out;
+}
+
 export async function getRecord(db: Db, user: any, id: number) {
   await requirePerm(db, user, FAI_VIEW_PERMISSION, "view FAI record");
   const [rec] = await db.select().from(inspRecords).where(eq(inspRecords.id, id));
   if (!rec) throw AppError.notFound("FAI record not found.");
   const lines = await db.select().from(inspResultLines).where(eq(inspResultLines.recordId, id)).orderBy(asc(inspResultLines.sortOrder));
-  return { ...rec, lines };
+  const canEdit = await hasPerm(db, user, FAI_EDIT_PERMISSION);
+  return { ...rec, lines, attachedForms: attachedFormsFor(rec), canEdit };
 }
 
 export async function createRecord(db: Db, user: any, siteId: number | null, input: any) {
@@ -303,6 +326,15 @@ export async function createRecord(db: Db, user: any, siteId: number | null, inp
     performedBy: user?.id ?? null,
   });
   await fileRecordInFolder(db, user, rec);
+
+  // Auto-attach the matching existing validation form. Input = the plan's productFamily, else its
+  // partDescription (insp_records itself has no description field of its own to fall back to).
+  // Nothing is inferred beyond that; a null type attaches nothing.
+  const type = productTypeFor(plan?.productFamily ?? plan?.partDescription ?? null);
+  if (type && !rec[VALIDATION_FORM[type].column]) {
+    const reportId = await attachValidationReport(db, user, rec, type);
+    rec[VALIDATION_FORM[type].column] = reportId;
+  }
   return rec;
 }
 
@@ -336,6 +368,39 @@ export async function updateRecord(db: Db, user: any, id: number, input: any) {
     await notifyAwaitingSignoff(db, updated, productFamily);
   }
   return updated;
+}
+
+function assertValidationFormType(formType: unknown): Exclude<FaiProductType, null> {
+  if (formType === "csa" || formType === "fuel_pump") return formType;
+  throw AppError.badRequest('formType must be "csa" or "fuel_pump".');
+}
+
+export async function attachForm(db: Db, user: any, id: number, input: any) {
+  await requirePerm(db, user, FAI_EDIT_PERMISSION, "attach a validation form to a FAI record");
+  const type = assertValidationFormType(input.formType);
+  const [rec] = await db.select().from(inspRecords).where(eq(inspRecords.id, id));
+  if (!rec) throw AppError.notFound("FAI record not found.");
+  if (["passed", "failed", "cancelled"].includes(rec.status)) throw new AppError("Signed or cancelled records cannot be edited.");
+  if (rec[VALIDATION_FORM[type].column]) throw new AppError(`A ${VALIDATION_FORM[type].label} is already attached.`, 409);
+  await attachValidationReport(db, user, rec, type);
+  return getRecord(db, user, id);
+}
+
+export async function detachForm(db: Db, user: any, id: number, input: any) {
+  await requirePerm(db, user, FAI_EDIT_PERMISSION, "detach a validation form from a FAI record");
+  const type = assertValidationFormType(input.formType);
+  const [rec] = await db.select().from(inspRecords).where(eq(inspRecords.id, id));
+  if (!rec) throw AppError.notFound("FAI record not found.");
+  if (["passed", "failed", "cancelled"].includes(rec.status)) throw new AppError("Signed or cancelled records cannot be edited.");
+  const column = VALIDATION_FORM[type].column;
+  if (!rec[column]) throw AppError.notFound("Attached validation form");
+  await db.update(inspRecords).set({ [column]: null, updatedAt: new Date() }).where(eq(inspRecords.id, id));
+  await recordAuditTrail(db, {
+    entityType: ENTITY, entityId: id, action: "update",
+    changes: { what: "validation form detach", description: `Detached ${VALIDATION_FORM[type].label} (${VALIDATION_FORM[type].formId}) from FAI ${rec.faiNumber}. The validation report itself was not deleted.` },
+    performedBy: user?.id ?? null,
+  });
+  return getRecord(db, user, id);
 }
 
 export async function saveResultLines(db: Db, user: any, id: number, lines: any[]) {
@@ -398,7 +463,9 @@ async function fileRecordInFolder(db: Db, user: any, rec: any) {
       const siblings = all.filter((r: any) => r.parentId === parent.id);
       const [created] = await db.insert(documentFolders).values({
         name, parentId: parent.id, sortOrder: siblings.length,
-        linkedPath: `/fai-inspection/records/${rec.id}`,
+        // The shared "FAI" folder is a container for every FAI record, not one record's own link —
+        // it must not point at whichever record happened to create it first.
+        linkedPath: name === "FAI" ? null : `/fai-inspection/records/${rec.id}`,
       }).returning();
       if (!created) return;
       all.push(created);
@@ -411,6 +478,46 @@ async function fileRecordInFolder(db: Db, user: any, rec: any) {
     }
     parent = child;
   }
+}
+
+/**
+ * Files an attached validation report under the record's own FAI folder. The app's real "Save as"
+ * mechanism for a validation report (fileExplicitModuleCopy in document-folders/defaultFormFiling.ts)
+ * files it into that form's OWN standard folder, not inside this specific FAI record's folder — so it
+ * doesn't fit here; this mirrors fileRecordInFolder's own node-creation pattern instead, same as that
+ * function already does for the record itself.
+ */
+async function fileAttachedValidationReport(db: Db, user: any, rec: any, type: Exclude<FaiProductType, null>, reportId: number) {
+  const all = await db.select().from(documentFolders);
+  const iso = all.find((r: any) => r.parentId == null && r.name === ISO_DOCUMENTS_FOLDER);
+  const testData = iso && all.find((r: any) => r.parentId === iso.id && r.name === "Test Data Projects");
+  const fai = testData && all.find((r: any) => r.parentId === testData.id && r.name === "FAI");
+  if (!fai) return;
+  const name = `${rec.faiNumber} – ${VALIDATION_FORM[type].label}`;
+  const siblings = all.filter((r: any) => r.parentId === fai.id);
+  const [created] = await db.insert(documentFolders).values({
+    name, parentId: fai.id, sortOrder: siblings.length, linkedPath: `/validation-reports/${reportId}`,
+  }).returning();
+  if (!created) return;
+  await recordAuditTrail(db, {
+    entityType: "DocumentFolder", entityId: created.id, action: "create",
+    changes: { description: `Filed ${VALIDATION_FORM[type].label} (${VALIDATION_FORM[type].formId}) for FAI ${rec.faiNumber}.` },
+    performedBy: user?.id ?? null,
+  });
+}
+
+/** Creates a blank validation report exactly like the app's own blank start (formFiling.ts's frm-val-001/frm-val-007 seeds), attaches it, audit-logs, and files it. */
+async function attachValidationReport(db: Db, user: any, rec: any, type: Exclude<FaiProductType, null>) {
+  const meta = VALIDATION_FORM[type];
+  const [report] = await db.insert(validationReports).values({ data: { formType: type, cells: {} } }).returning();
+  await db.update(inspRecords).set({ [meta.column]: report.id, updatedAt: new Date() }).where(eq(inspRecords.id, rec.id));
+  await recordAuditTrail(db, {
+    entityType: ENTITY, entityId: rec.id, action: "update",
+    changes: { what: "validation form attach", description: `Attached ${meta.label} (${meta.formId}) to FAI ${rec.faiNumber}` },
+    performedBy: user?.id ?? null,
+  });
+  await fileAttachedValidationReport(db, user, rec, type, report.id);
+  return report.id as number;
 }
 
 export async function signRecord(db: Db, user: any, req: any, id: number, input: any) {
