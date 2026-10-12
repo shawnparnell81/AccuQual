@@ -13,6 +13,12 @@ import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
 import { useSites } from "../hooks/useSites";
+import { FaiInspectionDashboardPage } from "./FaiInspection/FaiInspectionDashboardPage";
+import { FaiPlansPage } from "./FaiInspection/FaiPlansPage";
+import { FaiPlanDetailPage } from "./FaiInspection/FaiPlanDetailPage";
+import { FaiSourcesPage } from "./FaiInspection/FaiSourcesPage";
+import { FaiRecordsPage } from "./FaiInspection/FaiRecordsPage";
+import { FaiRecordDetailPage } from "./FaiInspection/FaiRecordDetailPage";
 import {
   AdminAiSettingsPage,
   AdminAiUsagePage,
@@ -166,6 +172,14 @@ export function workspaceRouteElements() {
     <Route key="/capa/:id" path="/capa/:id" element={<NumericRecord><CapaDetailPage /></NumericRecord>} />,
     <Route key="/8d" path="/8d" element={<EightDPage />} />,
     <Route key="/8d/:id" path="/8d/:id" element={<NumericRecord><EightDDetailPage /></NumericRecord>} />,
+    <Route key="/fai-inspection" path="/fai-inspection" element={<FaiInspectionDashboardPage />} />,
+    <Route key="/fai-inspection/plans" path="/fai-inspection/plans" element={<FaiPlansPage />} />,
+    <Route key="/fai-inspection/plans/new" path="/fai-inspection/plans/new" element={<FaiPlanDetailPage />} />,
+    <Route key="/fai-inspection/plans/:id" path="/fai-inspection/plans/:id" element={<NumericRecord><FaiPlanDetailPage /></NumericRecord>} />,
+    <Route key="/fai-inspection/sources" path="/fai-inspection/sources" element={<FaiSourcesPage />} />,
+    <Route key="/fai-inspection/records" path="/fai-inspection/records" element={<FaiRecordsPage />} />,
+    <Route key="/fai-inspection/records/new" path="/fai-inspection/records/new" element={<FaiRecordDetailPage />} />,
+    <Route key="/fai-inspection/records/:id" path="/fai-inspection/records/:id" element={<NumericRecord><FaiRecordDetailPage /></NumericRecord>} />,
     <Route key="/validation-reports/:id" path="/validation-reports/:id" element={<ValidationReportDetailPage />} />,
     <Route key="/iso-forms/record/:id" path="/iso-forms/record/:id" element={<IsoFormDetailPage />} />,
     <Route key="/iso-forms/:formKey" path="/iso-forms/:formKey" element={<IsoFormListPage />} />,
