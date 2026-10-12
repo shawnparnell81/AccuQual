@@ -1,10 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import multer from "multer";
 import { z } from "zod";
 import { company } from "../../drizzle/schema/company.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
-import { builtForms } from "../../drizzle/schema/builtForms.js";
+import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
 import { users } from "../../drizzle/schema/users.js";
 import type { Db } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -12,17 +12,21 @@ import { AppError } from "../../utils/appError.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { canFillBuiltForm } from "../form-builder/access.js";
-import { formBuilderAccess, openBuiltFill, saveBuiltFill } from "../form-builder/service.js";
+import { openBuiltFill, saveBuiltFill } from "../form-builder/service.js";
+import { MONTH_NAMES, mergeUploadNarrative, normalizeNarrative } from "../quality-engineering-report/model.js";
+import { saveEngineeringSupplierData } from "../quality-engineering-report/service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
+import { deleteMapping, listMappings, saveMapping, updateMapping } from "./importMappings.service.js";
 import { extractFile, type ExtractedFile } from "./extract.js";
 import { executeFormImport as runFormImport, planFormImport, type PlannedRow } from "./formImport.execute.js";
 import { suggestMapping } from "./formImport.match.js";
 import { interpretGrid, parseImportFile, type InterpretedImport } from "./formImport.parse.js";
 import { FORM_IMPORT_TEMPLATES, getFormImportTemplate, type FormImportTemplate } from "./formImport.templates.js";
-import { proposeValues } from "./propose.js";
-import { listImportTargets, targetFields, targetFieldsForFrm, type TargetField } from "./targets.js";
-import { confirmImportSchema, proposeBodySchema } from "./formImport.validation.js";
+import { proposeValues, type Proposal } from "./propose.js";
+import { proposeMonthlyQuality, toSupplierData } from "./reportTargets/monthlyQuality.js";
+import { resolveTarget } from "./targetAccess.js";
+import { listImportTargets } from "./targets.js";
+import { confirmImportSchema, mappingBodySchema, mappingUpdateSchema, proposeBodySchema } from "./formImport.validation.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 
@@ -178,37 +182,6 @@ function actorOf(req: Request) {
   return { id: req.user.id, roleName: req.user.roleName, department: req.user.department };
 }
 
-interface ResolvedTarget {
-  kind: "built" | "frm";
-  title: string;
-  revision: string;
-  fields: TargetField[];
-  builtId?: number;
-  frmTemplate?: FormImportTemplate;
-}
-
-async function resolveTarget(req: Request, ref: string): Promise<ResolvedTarget> {
-  if (ref.startsWith("built:")) {
-    const id = Number(ref.slice("built:".length));
-    if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a form to import into.");
-    const access = await formBuilderAccess(req.db!, actorOf(req));
-    if (!canFillBuiltForm(access)) throw AppError.forbidden("You can view this form once Documents is turned on for you.");
-    const [row] = await req.db!.select().from(builtForms).where(eq(builtForms.id, id));
-    if (!row || row.status !== "published" || row.publishedStructure == null) {
-      throw AppError.badRequest("Choose a published form to import into.");
-    }
-    return { kind: "built", title: row.title, revision: row.revision, fields: targetFields(row.publishedStructure), builtId: id };
-  }
-  if (ref.startsWith("frm:")) {
-    const key = ref.slice("frm:".length);
-    const template = getFormImportTemplate(key);
-    if (!template) throw AppError.badRequest("Choose a form to import into.");
-    await assertDocuments(req, false);
-    return { kind: "frm", title: template.title, revision: "", fields: targetFieldsForFrm(template), frmTemplate: template };
-  }
-  throw AppError.badRequest("Choose a form to import into.");
-}
-
 async function who(db: Db, userId: number): Promise<{ label: string; when: string }> {
   const [person] = await db.select({ name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, userId));
   const [profile] = await db.select({ profile: company.profile }).from(company).limit(1);
@@ -229,12 +202,38 @@ export const extractFileHandler = asyncHandler(async (req, res) => {
   res.json({ extracted, warnings: [] });
 });
 
+/** Saved mappings only relabel a field's reason to "saved mapping" — the match itself still comes
+ * from the deterministic rules (label/heading/table text, not position), so a reordered or
+ * revalued file with the same labels keeps matching. A field the mapping doesn't cover, or that
+ * no longer matches anything, falls back to (or stays) the normal Phase 1 result. */
+function applySavedMappingReasons(proposals: Proposal[], entries: Record<string, { rule: string; source: string }>): Proposal[] {
+  return proposals.map((proposal) => {
+    if (proposal.value == null || !entries[proposal.key]) return proposal;
+    return { ...proposal, reason: "saved mapping" };
+  });
+}
+
 export const proposeValuesHandler = asyncHandler(async (req, res) => {
   const parsed = proposeBodySchema.safeParse(req.body);
   if (!parsed.success) throw AppError.badRequest("Choose a file and a target form.");
-  const target = await resolveTarget(req, parsed.data.targetRef);
-  const proposals = proposeValues(parsed.data.extracted as ExtractedFile, target.fields);
-  res.json({ fields: target.fields, proposals });
+  const target = await resolveTarget(req.db!, actorOf(req), parsed.data.targetRef);
+  const extracted = parsed.data.extracted as ExtractedFile;
+
+  let proposals: Proposal[];
+  let warnings: string[] = [];
+  if (target.kind === "report" && target.reportKind === "monthly-quality") {
+    const result = proposeMonthlyQuality(extracted);
+    proposals = result.proposals;
+    warnings = result.warnings;
+  } else {
+    proposals = proposeValues(extracted, target.fields);
+  }
+
+  const mappings = await listMappings(req.db!, actorOf(req), parsed.data.targetRef);
+  const mapping = mappings.find((row) => row.fileKind === extracted.kind);
+  if (mapping) proposals = applySavedMappingReasons(proposals, mapping.entries);
+
+  res.json({ fields: target.fields, proposals, warnings });
 });
 
 function hasValue(value: unknown): boolean {
@@ -247,7 +246,9 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   const parsed = confirmImportSchema.safeParse(req.body);
   if (!parsed.success) throw AppError.badRequest("That import could not be saved.");
   const body = parsed.data;
-  const target = await resolveTarget(req, body.targetRef);
+  const actor = actorOf(req);
+  const target = await resolveTarget(req.db!, actor, body.targetRef);
+  if (!target.canEdit) throw AppError.forbidden("This form is read-only for your access.");
   const allowedKeys = new Set(target.fields.map((field) => field.key));
   for (const key of Object.keys(body.values)) {
     if (!allowedKeys.has(key)) throw AppError.badRequest(`"${key}" is not a field on this form.`);
@@ -259,13 +260,12 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   let auditEntityId: number;
 
   if (target.kind === "built") {
-    const actor = actorOf(req);
     const fill = await openBuiltFill(req.db!, actor, target.builtId!, body.recordNumber ?? null, req.siteId);
     await saveBuiltFill(req.db!, actor, fill.id, { title: body.title, answers: body.values as Record<string, unknown> });
     openPath = `/form-builder/fills/${fill.id}`;
     auditEntityType = "BuiltFormFill";
     auditEntityId = fill.id;
-  } else {
+  } else if (target.kind === "frm") {
     const template = target.frmTemplate!;
     const cells = template.fields.map((field) => {
       const value = body.values[field.key];
@@ -282,19 +282,77 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
     openPath = written.href;
     auditEntityType = template.persist.kind === "document" ? "Document" : "Validation Report";
     auditEntityId = written.id;
+  } else {
+    if (body.year == null || body.month == null) throw AppError.badRequest("Choose a month and year.");
+    const supplier = toSupplierData(body.values, body.year);
+    const [existing] = await req.db!
+      .select()
+      .from(qualityEngineeringReports)
+      .where(and(eq(qualityEngineeringReports.year, body.year), eq(qualityEngineeringReports.month, body.month)));
+    const narrative = mergeUploadNarrative(normalizeNarrative(existing?.narrative), supplier, body.replaceNotes ?? false);
+    await saveEngineeringSupplierData(req.db!, {
+      year: body.year,
+      month: body.month,
+      narrative,
+      supplierData: supplier,
+      uploadFileName: body.fileName.slice(0, 200),
+      user: actor,
+      siteIds: req.allowedSiteIds ?? [],
+      plantId: req.allSites ? null : (req.siteId ?? null),
+    });
+    const [savedRow] = await req.db!
+      .select({ id: qualityEngineeringReports.id })
+      .from(qualityEngineeringReports)
+      .where(and(eq(qualityEngineeringReports.year, body.year), eq(qualityEngineeringReports.month, body.month)));
+    openPath = "/reporting";
+    auditEntityType = "QualityEngineeringReport";
+    auditEntityId = savedRow!.id;
   }
 
   const person = await who(req.db!, req.user!.id);
   const revLabel = target.revision ? ` Rev ${target.revision}` : "";
   const edited = body.edited ?? 0;
-  const summary = `${person.label} imported "${body.fileName}" into "${target.title}"${revLabel} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`;
+  const summary =
+    target.kind === "report"
+      ? `${person.label} imported "${body.fileName}" into the Monthly Quality Report for ${MONTH_NAMES[(body.month ?? 1) - 1]} ${body.year} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`
+      : `${person.label} imported "${body.fileName}" into "${target.title}"${revLabel} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`;
   await recordAuditTrail(req.db!, {
     entityType: auditEntityType,
     entityId: auditEntityId,
-    action: "create",
+    action: target.kind === "report" ? "update" : "create",
     changes: { summary, fileName: body.fileName, targetTitle: target.title, revision: target.revision, filled, edited },
     performedBy: req.user!.id,
   });
 
   res.status(201).json({ openPath });
+});
+
+export const listMappingsHandler = asyncHandler(async (req, res) => {
+  const targetRef = String(req.query.targetRef ?? "");
+  if (!targetRef) throw AppError.badRequest("Choose a target form.");
+  const rows = await listMappings(req.db!, actorOf(req), targetRef);
+  res.json({ mappings: rows });
+});
+
+export const saveMappingHandler = asyncHandler(async (req, res) => {
+  const parsed = mappingBodySchema.safeParse(req.body);
+  if (!parsed.success) throw AppError.badRequest("Name the mapping and choose which fields to save.");
+  const created = await saveMapping(req.db!, actorOf(req), parsed.data);
+  res.status(201).json(created);
+});
+
+export const updateMappingHandler = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a mapping.");
+  const parsed = mappingUpdateSchema.safeParse(req.body);
+  if (!parsed.success) throw AppError.badRequest("That change could not be saved.");
+  const updated = await updateMapping(req.db!, actorOf(req), id, parsed.data);
+  res.json(updated);
+});
+
+export const deleteMappingHandler = asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Choose a mapping.");
+  await deleteMapping(req.db!, actorOf(req), id);
+  res.status(204).send();
 });

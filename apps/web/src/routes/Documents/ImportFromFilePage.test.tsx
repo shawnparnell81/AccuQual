@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildConfirmValues, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
+import { buildConfirmValues, buildMappingEntries, countEdited, rowStatus, type ReviewRow, type TargetField } from "./importFromFileReview";
 
 function field(overrides: Partial<TargetField> = {}): TargetField {
   return { key: "status", label: "Status of Department", group: "Report", type: "text", ...overrides };
 }
 
 function row(overrides: Partial<ReviewRow> = {}): ReviewRow {
-  return { field: field(), original: "Yellow", value: "Yellow", source: "6.1 Executive Summary > 'Status of Department:'", ...overrides };
+  return {
+    field: field(),
+    original: "Yellow",
+    value: "Yellow",
+    source: "6.1 Executive Summary > 'Status of Department:'",
+    reason: "Label match",
+    rule: "label",
+    ...overrides,
+  };
 }
 
 describe("ImportFromFilePage review logic", () => {
@@ -41,5 +49,14 @@ describe("ImportFromFilePage review logic", () => {
     const rows = [row(), row({ field: field({ key: "achievement", label: "Primary Achievement" }), value: "Closed out 23 alerts." }), row({ field: field({ key: "recalls", label: "Recalls" }), value: null })];
     const values = buildConfirmValues(rows);
     assert.deepEqual(Object.keys(values).sort(), ["achievement", "status"]);
+  });
+
+  it("builds a saved mapping with only rule + source, never the value, and skips empty/unmatched rows", () => {
+    const cleared = row({ field: field({ key: "recalls", label: "Recalls" }), value: null, rule: "heading", source: "Recalls" });
+    const unmatched = row({ field: field({ key: "mystery", label: "Mystery" }), value: null, rule: null, source: null });
+    const entries = buildMappingEntries([row(), cleared, unmatched]);
+    assert.deepEqual(Object.keys(entries), ["status"]);
+    assert.deepEqual(entries.status, { rule: "label", source: "6.1 Executive Summary > 'Status of Department:'" });
+    assert.equal("value" in entries.status!, false);
   });
 });

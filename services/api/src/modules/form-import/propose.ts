@@ -2,6 +2,8 @@ import { matchScore } from "./formImport.match.js";
 import type { ExtractedBlock, ExtractedFile } from "./extract.js";
 import type { TargetField } from "./targets.js";
 
+export type ProposalRule = "label" | "heading" | "tableRow" | "tableField" | "named" | null;
+
 export interface Proposal {
   key: string;
   label: string;
@@ -9,6 +11,8 @@ export interface Proposal {
   source: string | null;
   score: number;
   reason: string;
+  /** Which Phase 1 rule produced this value. Used by saved mappings (Phase 2); null when no match. */
+  rule: ProposalRule;
 }
 
 const THRESHOLD = 0.8;
@@ -70,6 +74,7 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
       source: sourceFor(lines[chosen.index]!.section, `${chosen.label}:`),
       score: chosen.score,
       reason: "Label match",
+      rule: "label",
     };
   }
 
@@ -87,7 +92,7 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
     usedHeadings.add(chosen.index);
     const underHeading = file.blocks.filter((block): block is Extract<ExtractedBlock, { kind: "para" }> => block.kind === "para" && block.section === heading.text);
     const value = underHeading.map((block) => block.text).join("\n\n");
-    return { key: field.key, label: field.label, value: value || null, source: heading.text, score: chosen.score, reason: "Heading match" };
+    return { key: field.key, label: field.label, value: value || null, source: heading.text, score: chosen.score, reason: "Heading match", rule: "heading" };
   }
 
   function tryTableRow(field: TargetField): Proposal | null {
@@ -118,6 +123,7 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
       source: tables[chosen.tableIndex]!.section,
       score: chosen.score,
       reason: `row '${chosen.rowLabel}', column '${chosen.colLabel}'`,
+      rule: "tableRow",
     };
   }
 
@@ -149,16 +155,16 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
       usedTables.add(tableIndex);
       const bodyRows = table.rows.slice(1).filter((row) => (row[0] ?? "").trim().toLowerCase() !== "total");
       const value = bodyRows.map((row) => colMap.map((idx) => (row[idx] ?? "").trim()));
-      return { key: field.key, label: field.label, value, source: table.section, score: 1, reason: "Table match" };
+      return { key: field.key, label: field.label, value, source: table.section, score: 1, reason: "Table match", rule: "tableField" };
     }
-    return { key: field.key, label: field.label, value: null, source: null, score: 0, reason: "no match" };
+    return { key: field.key, label: field.label, value: null, source: null, score: 0, reason: "no match", rule: null };
   }
 
   function tryXlsxNamed(field: TargetField): Proposal | null {
     for (const sheet of file.sheets) {
       for (const [name, value] of Object.entries(sheet.named)) {
         if (scoreAgainst(name, field) >= THRESHOLD) {
-          return { key: field.key, label: field.label, value, source: `named cell '${name}'`, score: 1, reason: `Named cell "${name}"` };
+          return { key: field.key, label: field.label, value, source: `named cell '${name}'`, score: 1, reason: `Named cell "${name}"`, rule: "named" };
         }
       }
       const entries = Object.entries(sheet.cells);
@@ -169,7 +175,7 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
         const col = match[1]!.split("").reduce((acc, ch) => acc * 26 + (ch.charCodeAt(0) - 64), 0);
         const rightAddress = `${columnLetterOf(col + 1)}${match[2]}`;
         const right = sheet.cells[rightAddress];
-        if (right) return { key: field.key, label: field.label, value: right, source: `adjacent to '${text}'`, score: 1, reason: `Adjacent to "${text}"` };
+        if (right) return { key: field.key, label: field.label, value: right, source: `adjacent to '${text}'`, score: 1, reason: `Adjacent to "${text}"`, rule: "named" };
       }
     }
     return null;
@@ -195,6 +201,7 @@ export function proposeValues(file: ExtractedFile, fields: TargetField[]): Propo
       source: null,
       score: 0,
       reason: "no match",
+      rule: null,
     };
   });
 }

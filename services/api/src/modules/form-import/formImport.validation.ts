@@ -21,4 +21,26 @@ export const confirmImportSchema = z.object({
   recordNumber: z.string().max(80).nullable().optional(),
   edited: z.number().int().nonnegative().max(1000).optional(),
   values: z.record(z.string().max(80), valueSchema),
+  // report:monthly-quality only.
+  year: z.number().int().min(2000).max(2100).optional(),
+  month: z.number().int().min(1).max(12).optional(),
+  replaceNotes: z.boolean().optional(),
+});
+
+const mappingEntrySchema = z.object({
+  rule: z.enum(["label", "heading", "tableRow", "tableField", "named", "manual"]),
+  source: z.string().max(300),
+  column: z.string().max(80).optional(),
+});
+
+export const mappingBodySchema = z.object({
+  targetRef: z.string().min(1).max(80),
+  fileKind: z.enum(["docx", "xlsx", "csv"]),
+  name: z.string().min(1).max(200),
+  entries: z.record(z.string().max(80), mappingEntrySchema),
+});
+
+export const mappingUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  entries: z.record(z.string().max(80), mappingEntrySchema).optional(),
 });
