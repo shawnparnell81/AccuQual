@@ -232,7 +232,31 @@ function diffList(label: string, before: unknown, after: unknown, monthNames?: u
   return edits;
 }
 
-const FORM_DIFF_SKIP = new Set(["cells", "lines", "customers", "problems", "months", "photos"]);
+const FORM_DIFF_SKIP = new Set(["cells", "lines", "customers", "problems", "months", "photos", "graph"]);
+
+function pointCount(graph: Record<string, unknown>): number {
+  return Array.isArray(graph.points) ? graph.points.length : 0;
+}
+
+/** A validation form's Graphs tab: the run header fields by name, and the points as a count (50,000 points are never listed). */
+function diffGraph(before: unknown, after: unknown): FormEdit[] {
+  const left = asRecord(before) ?? {};
+  const right = asRecord(after) ?? {};
+  const edits: FormEdit[] = [];
+  const leftFields = asRecord(left.fields) ?? {};
+  const rightFields = asRecord(right.fields) ?? {};
+  for (const name of new Set([...Object.keys(leftFields), ...Object.keys(rightFields)])) {
+    if (same(leftFields[name] ?? "", rightFields[name] ?? "")) continue;
+    edits.push({ label: `Chart ${name}`, from: showAuditValue(leftFields[name]), to: showAuditValue(rightFields[name]) });
+  }
+  if (!same(left.points ?? [], right.points ?? [])) {
+    const was = pointCount(left);
+    const now = pointCount(right);
+    const noun = (count: number) => `${count} point${count === 1 ? "" : "s"}`;
+    edits.push({ label: "Chart data", from: noun(was), to: was === now ? `${noun(now)} (values changed)` : noun(now) });
+  }
+  return edits;
+}
 
 /** Field and cell changes between two saved form payloads. Signature bookkeeping stays on its own audit row. */
 export function formDataEdits(previousData: unknown, nextData: unknown, formType?: string): FormEdit[] {
@@ -250,6 +274,7 @@ export function formDataEdits(previousData: unknown, nextData: unknown, formType
   if (!same(prev.photos, next.photos)) {
     edits.push({ label: "Photos", from: showAuditValue(prev.photos), to: showAuditValue(next.photos) });
   }
+  if ("graph" in next) edits.push(...diffGraph(prev.graph, next.graph));
   for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
     if (key.startsWith("_") || FORM_DIFF_SKIP.has(key)) continue;
     const before = prev[key];

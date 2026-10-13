@@ -4,6 +4,8 @@ import { blankBatch, evaluateBatch, type Batch3Kind } from "./batch3Reports";
 import { PARAMETER_NAMES } from "./fuelPumpReport";
 import { headerStatusFor } from "./headerStatus";
 import { blankBrakeCells, blankInjectorCells, evaluateBrake, evaluateInjector } from "./partInspection";
+import { showValue } from "./validation-forms/engine";
+import { registryModule } from "./validation-forms/registry";
 import type { CellValue } from "./validationReport";
 import { evaluate as csaEvaluate, FORMULA_TEXT as csaFormulas } from "./validationReport";
 import { evaluate as fuelEvaluate, FORMULA_TEXT as fuelFormulas } from "./fuelPumpReport";
@@ -195,8 +197,41 @@ function otherRows(formType: string, cells: Record<string, CellValue>): FailedMe
   return rows;
 }
 
+/** The row's own label from the workbook layout: the first text in its first three columns. */
+function rowLabel(layout: { cells: Record<string, { v?: unknown }> }, row: number): string {
+  for (const col of ["A", "B", "C"]) {
+    const value = layout.cells[`${col}${row}`]?.v;
+    if (typeof value === "string" && value.trim() && !/^[\s[\]]*$/.test(value)) return value.trim().replace(/:$/, "");
+  }
+  return `Row ${row}`;
+}
+
+/** Failed rows of a form drawn from its workbook: every calculated cell that reads the form's own Fail word, except the overall result. */
+function registryRows(formType: string, cells: Record<string, CellValue>): FailedMeasurement[] | null {
+  const module = registryModule(formType);
+  if (!module) return null;
+  const merged = module.cellsFromData({ cells });
+  const blank = module.blank();
+  const values = module.evaluate(merged);
+  const fail = module.def.words.fail.toLowerCase();
+  if (module.status(values) !== "Fail") return [];
+  const rows: FailedMeasurement[] = [];
+  for (const [addr, value] of Object.entries(values)) {
+    if (module.kinds[addr] !== "calc" || module.def.resultCells.includes(addr)) continue;
+    if (showValue(value).trim().toLowerCase() !== fail) continue;
+    const row = rowOf(addr);
+    if (!touched(merged, blank, row)) continue;
+    const pair = nearby(merged, row, addr);
+    rows.push({ addr, measurement: rowLabel(module.def.layout, row), spec: pair.spec, actual: pair.actual });
+    if (rows.length >= 40) break;
+  }
+  return rows.length > 0 ? rows : [{ addr: "overall", measurement: "Overall result", spec: module.def.words.pass, actual: module.def.words.fail }];
+}
+
 /** Failed measurements for an optional NCR. Blank sheets stay empty. */
 export function failedValidationRows(formType: string, cells: Record<string, CellValue>): FailedMeasurement[] {
+  const registry = registryRows(formType, cells);
+  if (registry) return registry;
   if (formType === "csa" || formType === "fuel_pump" || formType === "air_strut" || formType === "air_spring") {
     if (headerStatusFor(formType, cells) !== "Fail") return [];
     const rows = formType === "csa" ? csaRows(cells) : formType === "fuel_pump" ? fuelRows(cells) : airLabelRows(formType, cells);

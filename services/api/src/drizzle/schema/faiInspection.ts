@@ -4,6 +4,7 @@ import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
 import { sites } from "./sites.js";
+import { validationReports } from "./validationReport.js";
 
 /** FAI & Inspection module (Phase 1). New tables only; the retired fai_* tables are untouched. */
 
@@ -107,6 +108,9 @@ export const inspRecords = pgTable("insp_records", {
   reMinor: integer("re_minor"),
   linkedCsaFaiId: integer("linked_csa_fai_id"),
   linkedFuelPumpFaiId: integer("linked_fuel_pump_fai_id"),
+  /** The attached validation report for any form type other than CSA / Fuel Pump (those keep the two columns above). */
+  linkedValidationReportId: integer("linked_validation_report_id").references(() => validationReports.id, { onDelete: "set null" }),
+  linkedValidationFormType: text("linked_validation_form_type"),
   ncrId: integer("ncr_id").references(() => ncr.id),
   siteId: integer("site_id").references(() => sites.id),
   signedBy: integer("signed_by").references(() => users.id),

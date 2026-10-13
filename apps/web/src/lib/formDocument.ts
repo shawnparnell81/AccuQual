@@ -34,6 +34,7 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-val-004",
   "frm-val-005",
   "frm-val-006",
+  "frm-val-012",
   "frm-gen-002",
   "lst-vis-001",
   "rpt-eng-001",

@@ -22,8 +22,11 @@ export const validationReports = pgTable("validation_reports", {
         | "air_compressor"
         | "electric_lift"
         | "gas_lift"
+        | "regular_gas_lift"
         | "coil_spring";
       cells?: Record<string, string | number | boolean | null>;
+      /** The Graphs tab of a validation workbook: the run's header fields and [displacement, force] points. */
+      graph?: { fields?: Record<string, string>; points?: [number, number][] };
       authorizedSignature?: string;
       furtherSignature?: string;
       /** NCRs opened from a failed validation. The NCR number stays blank until someone types it. */

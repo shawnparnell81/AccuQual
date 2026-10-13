@@ -423,6 +423,7 @@ function validationLabel(row: Row): string {
   if (kind === "air_compressor") return "FRM-VAL-003 AIR COMPRESSOR VALIDATION DOCUMENT";
   if (kind === "electric_lift") return "FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT";
   if (kind === "gas_lift") return "FRM-VAL-005 GAS LIFT SUPPORT VALIDATION DOCUMENT";
+  if (kind === "regular_gas_lift") return "FRM-VAL-012 REGULAR GAS LIFT SUPPORT VALIDATION DOCUMENT";
   if (kind === "coil_spring") return "FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT";
   return "Validation Report";
 }

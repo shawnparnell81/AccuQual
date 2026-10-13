@@ -116,6 +116,10 @@ export const RECORD_SIGNATURE_BLOCKS: Record<string, SignatureBlock[]> = {
     { path: "authorizedSignature", label: "Authorized signature" },
     { path: "furtherSignature", label: "Further review signature" },
   ],
+  "validation:regular_gas_lift": [
+    { path: "authorizedSignature", label: "Authorized signature" },
+    { path: "furtherSignature", label: "Further review signature" },
+  ],
   "validation:air_strut": [{ path: "authorizedSignature", label: "Authorized signature" }],
   "validation:air_spring": [{ path: "authorizedSignature", label: "Authorized signature" }],
   "validation:air_compressor": [{ path: "authorizedSignature", label: "Authorized signature" }],

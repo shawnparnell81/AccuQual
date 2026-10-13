@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOpenTab } from "../../hooks/useOpenTab";
-import { faiInspectionApi } from "../../api/faiInspection";
+import { faiInspectionApi, type FaiAttachedForm, type FaiValidationFormType } from "../../api/faiInspection";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FaiSampleTags } from "../../components/labels/FaiSampleTags";
@@ -195,6 +195,7 @@ export function FaiRecordDetailPage() {
           recordId={Number(id)}
           faiNumber={current.faiNumber}
           attachedForms={rec?.attachedForms ?? []}
+          productType={rec?.productType ?? null}
           canEdit={!!rec?.canEdit}
           locked={!!locked}
         />
@@ -348,19 +349,33 @@ function ResultLinesTable({ lines, locked, onSave }: { lines: any[]; locked: boo
   );
 }
 
-const ATTACHABLE: { formType: "csa" | "fuel_pump"; label: string }[] = [
+const ATTACHABLE: { formType: FaiValidationFormType; label: string }[] = [
   { formType: "csa", label: "Attach CSA Validation Report" },
   { formType: "fuel_pump", label: "Attach Fuel Pump Validation" },
+  { formType: "air_strut", label: "Attach Air Strut Validation" },
+  { formType: "air_spring", label: "Attach Air Spring Validation" },
+  { formType: "fuel_injector", label: "Attach Fuel Injector Validation" },
+  { formType: "brake_wear", label: "Attach Brake Wear Sensor Validation" },
+  { formType: "electric_lift", label: "Attach Electric Lift Support Validation" },
+  { formType: "regular_gas_lift", label: "Attach Regular Gas Lift Support Validation" },
+  { formType: "coil_spring", label: "Attach Coil Spring Validation" },
+  { formType: "shock", label: "Attach Shock Validation" },
 ];
 
+/** The Attach buttons to offer: only the record's own product family when it has one, otherwise every form to pick from. */
+export function attachOffers(productType: FaiValidationFormType | null | undefined, attached: FaiAttachedForm[]) {
+  const have = new Set(attached.map((f) => f.formType));
+  return ATTACHABLE.filter((a) => !have.has(a.formType) && (!productType || a.formType === productType));
+}
+
 /** The record's real validation form (CSA or Fuel Pump) — replaces the generic result-lines form (see SHOW_GENERIC_FORM). */
-function ValidationFormCard({ recordId, faiNumber, attachedForms, canEdit, locked }: {
-  recordId: number; faiNumber: string; attachedForms: { formType: "csa" | "fuel_pump"; title: string; openPath: string }[]; canEdit: boolean; locked: boolean;
+function ValidationFormCard({ recordId, faiNumber, attachedForms, productType, canEdit, locked }: {
+  recordId: number; faiNumber: string; attachedForms: FaiAttachedForm[]; productType?: FaiValidationFormType | null; canEdit: boolean; locked: boolean;
 }) {
   const openTab = useOpenTab();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [detaching, setDetaching] = useState<"csa" | "fuel_pump" | null>(null);
+  const [detaching, setDetaching] = useState<FaiValidationFormType | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["fai-inspection", "record", String(recordId)] });
@@ -368,17 +383,16 @@ function ValidationFormCard({ recordId, faiNumber, attachedForms, canEdit, locke
   };
 
   const attach = useMutation({
-    mutationFn: (formType: "csa" | "fuel_pump") => faiInspectionApi.records.attachForm(recordId, formType),
+    mutationFn: (formType: FaiValidationFormType) => faiInspectionApi.records.attachForm(recordId, formType),
     onSuccess: () => { invalidate(); setError(null); },
     onError: (err) => setError(extractErrorMessage(err, "Could not attach that form.")),
   });
   const detach = useMutation({
-    mutationFn: (formType: "csa" | "fuel_pump") => faiInspectionApi.records.detachForm(recordId, formType),
+    mutationFn: (formType: FaiValidationFormType) => faiInspectionApi.records.detachForm(recordId, formType),
     onSuccess: () => { invalidate(); setError(null); setDetaching(null); },
     onError: (err) => setError(extractErrorMessage(err, "Could not detach that form.")),
   });
 
-  const attachedTypes = new Set(attachedForms.map((f) => f.formType));
 
   return (
     <div className="mb-6">
@@ -398,7 +412,7 @@ function ValidationFormCard({ recordId, faiNumber, attachedForms, canEdit, locke
             )}
           </div>
         ))}
-        {canEdit && !locked && ATTACHABLE.filter((a) => !attachedTypes.has(a.formType)).map((a) => (
+        {canEdit && !locked && attachOffers(productType, attachedForms).map((a) => (
           <button
             key={a.formType}
             onClick={() => attach.mutate(a.formType)}

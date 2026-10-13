@@ -5,12 +5,20 @@ import { recordNumberSchema } from "../records/userRecordNumber.js";
 const cellValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 const formType = z
-  .enum(["csa", "fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear", "shock", "air_compressor", "electric_lift", "gas_lift", "coil_spring"])
+  .enum(["csa", "fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear", "shock", "air_compressor", "electric_lift", "gas_lift", "regular_gas_lift", "coil_spring"])
   .optional();
+
+/** A validation form's Graphs tab: the run's header fields and its [displacement, force] points. */
+export const MAX_GRAPH_POINTS = 50000;
+const graphData = z.object({
+  fields: z.record(z.string().max(80), z.string().max(500)).optional(),
+  points: z.array(z.tuple([z.number().finite(), z.number().finite()])).max(MAX_GRAPH_POINTS).optional(),
+});
 
 const reportData = {
   formType,
   cells: z.record(z.string(), cellValue).optional(),
+  graph: graphData.optional(),
   [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
 };
 
