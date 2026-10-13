@@ -590,7 +590,7 @@ export function EngineeringMonthlyReport() {
 
   return (
     <div className="qe-report flex flex-col gap-4">
-      <style>{`@media print { body * { visibility: hidden; } .qe-report, .qe-report * { visibility: visible; } .qe-report { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; } .qe-no-print { display: none !important; } }`}</style>
+      <style>{`@media print { .qe-report { width: 100%; background: white; color: black; } .qe-no-print { display: none !important; } }`}</style>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {view ? `${view.documentId} · Rev ${view.revision}` : "TMP-ENG-001 · Rev C"}
@@ -617,10 +617,10 @@ export function EngineeringMonthlyReport() {
           </label>
           <div className="flex items-end">
             <label className="flex w-full cursor-pointer flex-col gap-1 text-sm">
-              <span className="text-xs font-semibold text-muted-foreground">Supplier file (CSV or Excel)</span>
+              <span className="text-xs font-semibold text-muted-foreground">Supplier file (CSV, Excel or Word)</span>
               <input
                 type="file"
-                accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".csv,.xlsx,.xls,.docx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 disabled={locked || upload.isPending}
                 className="text-sm"
                 onChange={(event) => {

@@ -2054,6 +2054,26 @@ body.side-collapsed .aq-nav-folder-link {
     background: #fff !important;
     color: #111 !important;
   }
+  /* The open workspace tab is a fixed-size scroll panel with an entrance
+     animation. Printed as-is it clips to one screen or comes out blank, so
+     let it flow and paginate like a normal page. */
+  [data-kept-path],
+  .page-enter {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  /* Notes boxes print at their full text, not the visible rows. */
+  textarea {
+    field-sizing: content;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    resize: none !important;
+  }
   .aq-print-stack {
     display: block !important;
   }
