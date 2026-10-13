@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Bot, Copy, Send, X } from "lucide-react";
+import { Bot, Copy, Move, Send, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useAssistantContextStore } from "../../store/assistantContextStore";
@@ -9,6 +9,13 @@ import { useToast } from "./ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { MarkdownLite } from "./MarkdownLite";
 import type { AssistantReply } from "../../api/types";
+import { clampToViewport, fabStorageKey, loadFabPosition, movedPastThreshold, saveFabPosition, type FloatPoint } from "../../lib/floatingPosition";
+
+const FAB_SIZE = { width: 56, height: 56 };
+
+function viewportSize() {
+  return { width: window.innerWidth, height: window.innerHeight };
+}
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -30,6 +37,60 @@ export function AiAssistantPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const context = useAssistantContextStore((s) => s.context);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const storageKey = fabStorageKey(userId);
+  // null = the default bottom-right corner. Otherwise the button's top-left, in px.
+  const [position, setPosition] = useState<FloatPoint | null>(null);
+  const drag = useRef<{ pointerId: number; start: FloatPoint; origin: FloatPoint; moved: boolean; last?: FloatPoint } | null>(null);
+  const suppressClick = useRef(false);
+
+  useEffect(() => {
+    const saved = loadFabPosition(storageKey);
+    setPosition(saved ? clampToViewport(saved, FAB_SIZE, viewportSize()) : null);
+  }, [storageKey]);
+
+  useEffect(() => {
+    function onResize() {
+      setPosition((current) => (current ? clampToViewport(current, FAB_SIZE, viewportSize()) : current));
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const resetPosition = useCallback(() => {
+    setPosition(null);
+    saveFabPosition(storageKey, null);
+  }, [storageKey]);
+
+  function onPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    suppressClick.current = false;
+    const rect = event.currentTarget.getBoundingClientRect();
+    drag.current = { pointerId: event.pointerId, start: { x: event.clientX, y: event.clientY }, origin: { x: rect.left, y: rect.top }, moved: false };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    const now = { x: event.clientX, y: event.clientY };
+    if (!d.moved && !movedPastThreshold(d.start, now)) return;
+    d.moved = true;
+    const next = clampToViewport({ x: d.origin.x + now.x - d.start.x, y: d.origin.y + now.y - d.start.y }, FAB_SIZE, viewportSize());
+    d.last = next;
+    setPosition(next);
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    const d = drag.current;
+    if (!d || d.pointerId !== event.pointerId) return;
+    drag.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (d.moved) {
+      suppressClick.current = true;
+      if (d.last) saveFabPosition(storageKey, d.last);
+    }
+  }
 
   const { data: assistantNameRaw } = useAssistantName();
   const assistantName = assistantNameRaw || "the Assistant";
@@ -71,9 +132,23 @@ export function AiAssistantPanel() {
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        type="button"
+        onClick={() => {
+          if (suppressClick.current) {
+            suppressClick.current = false;
+            return;
+          }
+          setIsOpen(true);
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         aria-label={`Chat with ${assistantName}`}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
+        title={`Chat with ${assistantName} (drag to move)`}
+        data-testid="ai-assistant-fab"
+        style={position ? { left: position.x, top: position.y, touchAction: "none" } : { touchAction: "none" }}
+        className={`fixed z-40 flex h-14 w-14 cursor-grab touch-none select-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 active:cursor-grabbing focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${position ? "" : "bottom-6 right-6"}`}
       >
         <Bot size={24} />
       </button>
@@ -87,9 +162,16 @@ export function AiAssistantPanel() {
           <span className="text-sm font-semibold">Chat with {assistantName}</span>
           {context && <span className="text-xs text-muted-foreground">Viewing: {context.label}</span>}
         </div>
-        <button onClick={() => setIsOpen(false)} className="rounded-md p-1 hover:bg-muted" aria-label="Close assistant">
-          <X size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          {position && (
+            <button type="button" onClick={resetPosition} className="rounded-md p-1 hover:bg-muted" aria-label="Reset button position" title="Reset position">
+              <Move size={16} />
+            </button>
+          )}
+          <button onClick={() => setIsOpen(false)} className="rounded-md p-1 hover:bg-muted" aria-label="Close assistant">
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3">
