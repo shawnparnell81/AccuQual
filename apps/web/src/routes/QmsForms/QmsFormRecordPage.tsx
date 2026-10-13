@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -27,7 +27,7 @@ import { RecordFolderField } from "../../components/forms/FormDocumentControls";
 import { useFormFiling } from "../../components/forms/FormDocumentControls";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
-import { readBlankDraft } from "../../lib/blankDraft";
+import { useBlankDraft } from "../../lib/useBlankDraft";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -560,16 +560,16 @@ function QmsRow({
 }
 
 function QmsUnsavedDraft({ formType }: { formType: string }) {
-  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const draft = readBlankDraft(location.state, "/qms-forms");
+  const { draft, loading: draftLoading } = useBlankDraft("/qms-forms", true);
   const definition = getQmsFormDefinition(formType);
   const [formNo, setFormNo] = useState("");
   const [preparedBy, setPreparedBy] = useState("");
   const [approvedBy, setApprovedBy] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [pending, setPending] = useState(false);
+  if (!draft && draftLoading) return <p className="text-sm text-muted-foreground">Opening a new copy…</p>;
   if (!draft || draft.body.formType !== formType) {
     return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
   }

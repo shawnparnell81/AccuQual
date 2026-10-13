@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -54,7 +54,7 @@ import { withChoice, type SignatureChoice } from "../../components/forms/signatu
 import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
-import { blankDraftState, readBlankDraft } from "../../lib/blankDraft";
+import { useBlankDraft } from "../../lib/useBlankDraft";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 
 interface IsoFormData {
@@ -82,23 +82,8 @@ const WIDE = new Set<IsoFormType>(["customer_scorecard", "failure_effectiveness"
 
 export function IsoFormDetailPage() {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const blank = useMemo(() => (id === "new" ? readBlankDraft(location.state, "/iso-quality-forms") : null), [id, location.state]);
-  // Fallback: if location.state was lost (e.g. refresh), recover from the formKey query param.
-  const fallbackFormKey = id === "new" && !blank ? searchParams.get("formKey") : null;
-  const templates = useFormTemplates({ enabled: !!fallbackFormKey });
-  const fallbackBlank = useMemo(() => {
-    if (!fallbackFormKey || blank) return null;
-    const template = templates.data?.find((t) => t.formKey === fallbackFormKey);
-    const start = template?.start;
-    if (!start) return null;
-    const deferred = blankDraftState(start);
-    if (!deferred) return null;
-    return deferred.blankDraft;
-  }, [fallbackFormKey, blank, templates.data]);
-  const effectiveBlank = blank ?? fallbackBlank;
+  const { draft: effectiveBlank, loading: blankLoading } = useBlankDraft("/iso-quality-forms", id === "new");
   const recordId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
@@ -177,7 +162,7 @@ export function IsoFormDetailPage() {
   }, [loadedFor, record]);
 
   if (id === "new" && !effectiveBlank) {
-    if (fallbackFormKey && templates.isLoading) return <LoadingPlaceholder />;
+    if (blankLoading) return <LoadingPlaceholder />;
     return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
   }
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this form. Refresh the page and try again." noun="this form" />;

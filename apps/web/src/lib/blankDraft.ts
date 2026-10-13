@@ -32,3 +32,19 @@ export function readBlankDraft(state: unknown, createPath: DeferredCreatePath): 
   const body = row.body && typeof row.body === "object" ? (row.body as Record<string, unknown>) : {};
   return { createPath, body };
 }
+
+/**
+ * Rebuilds the unsaved blank from Blank Forms Templates by formKey.
+ * Used when router state is gone: workspace tabs render each page with `state: null`, and a refresh drops it.
+ * Never writes anything; works the same whether the form folder has zero or many saved copies.
+ */
+export function blankDraftFromTemplates(
+  formKey: string | null | undefined,
+  templates: ReadonlyArray<{ formKey: string; start?: { createPath: string; body: unknown } | null }> | undefined,
+  createPath: DeferredCreatePath,
+): BlankDraft | null {
+  if (!formKey || !templates) return null;
+  const start = templates.find((t) => t.formKey === formKey)?.start;
+  if (!start || start.createPath !== createPath) return null;
+  return blankDraftState(start)?.blankDraft ?? null;
+}
