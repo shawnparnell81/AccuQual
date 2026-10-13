@@ -3,6 +3,7 @@ import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import { uploadAttachmentHandler, listAttachmentsHandler, downloadAttachmentHandler, attachmentOfficeSessionHandler, deleteAttachmentHandler } from "./attachments.controller.js";
 
 export const attachmentsRouter = Router();
@@ -15,7 +16,7 @@ attachmentsRouter.use(requireAuth, withDb, withSiteContext);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 attachmentsRouter.get("/", listAttachmentsHandler);
-attachmentsRouter.post("/", upload.single("file"), uploadAttachmentHandler);
+attachmentsRouter.post("/", upload.single("file"), scanUploads((req) => (req.body?.entityType ? `Attachments > ${String(req.body.entityType)}` : "General Uploads")), uploadAttachmentHandler);
 attachmentsRouter.get("/:id/download", downloadAttachmentHandler);
 attachmentsRouter.get("/:id/office-session", attachmentOfficeSessionHandler);
 attachmentsRouter.delete("/:id", deleteAttachmentHandler);

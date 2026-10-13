@@ -35,6 +35,12 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).default(15),
   // Rejects passwords found in known breaches via the Have I Been Pwned range API (k-anonymity: only the first 5 hex chars of the SHA-1 leave the server). Fails open if the service is unreachable. Defaults to on, except under test.
   PASSWORD_BREACH_CHECK: z.enum(["true", "false"]).optional(),
+  // Virus scanning of every uploaded file through ClamAV's clamd (lib/virusScan.ts). Unset means on in production and off in development and tests.
+  // When on, an infected file is refused and so is a file that could not be scanned. CLAMD_HOST/CLAMD_PORT (default 127.0.0.1:3310) or CLAMD_SOCKET say where clamd listens.
+  VIRUS_SCAN_ENABLED: z.enum(["true", "false"]).optional().or(z.literal("").transform(() => undefined)),
+  CLAMD_HOST: z.string().optional(),
+  CLAMD_PORT: z.string().optional(),
+  CLAMD_SOCKET: z.string().optional(),
   // How long a user whose company policy newly requires MFA may keep signing in before they must enroll.
   MFA_ENROLLMENT_GRACE_DAYS: z.coerce.number().int().min(0).default(7),
   // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is both the compose nginx proxy and the Render static-site rewrite. Leave it unset on that deploy. Set it only when the browser calls the API on its own origin.

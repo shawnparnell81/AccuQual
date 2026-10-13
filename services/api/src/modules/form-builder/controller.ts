@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -104,6 +105,7 @@ export const signFillHandler = asyncHandler(async (req: Request, res: Response) 
 
 export const importDocxHandler = [
   upload.single("file"),
+  scanUploads("Blank Forms > Import Word"),
   asyncHandler(async (req: Request, res: Response) => {
     const file = req.file;
     if (!file?.buffer?.length) throw AppError.badRequest("Choose a .docx file.");

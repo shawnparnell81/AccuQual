@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import { requireAuth } from "../../middleware/auth.js";
 import {
   checkImportHandler,
@@ -22,7 +23,7 @@ adminImportRouter.get("/types", listImportTypes);
 adminImportRouter.get("/destination", importDestination);
 adminImportRouter.get("/types/:key/template", templateHandler);
 adminImportRouter.get("/", listImports);
-adminImportRouter.post("/", uploadImportFile, uploadImport);
+adminImportRouter.post("/", uploadImportFile, scanUploads("Admin > Import data"), uploadImport);
 adminImportRouter.get("/:id/errors", downloadErrors);
 adminImportRouter.get("/:id", getImport);
 adminImportRouter.post("/:id/check", checkImportHandler);

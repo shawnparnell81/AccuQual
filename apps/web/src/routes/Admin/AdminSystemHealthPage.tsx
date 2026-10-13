@@ -86,6 +86,17 @@ const CARDS: CardDef[] = [
       return [{ label: "Active last 7d", value: `${s.recentlyActiveCount}/${s.activeSupplierUsers}` }];
     },
   },
+  {
+    key: "virusScanner",
+    label: "Virus scanning",
+    stats: (c) => {
+      const v = c as { enabled: boolean; up: boolean; definitionsDate?: string | null };
+      return [
+        { label: "Scanning", value: !v.enabled ? "off" : v.up ? "up" : "down" },
+        { label: "Definitions", value: v.definitionsDate ? v.definitionsDate.slice(0, 10) : "unknown" },
+      ];
+    },
+  },
 ];
 
 function MonitoringPanel({ report }: { report: SystemHealthReport }) {

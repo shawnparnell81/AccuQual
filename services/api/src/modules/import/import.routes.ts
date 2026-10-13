@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -12,5 +13,5 @@ importRouter.use(requireAuth, withDb);
 
 importRouter.get("/:entity", entityGate, describeHandler);
 importRouter.get("/:entity/template", entityGate, templateHandler);
-importRouter.post("/:entity/preview", entityGate, upload.single("file"), previewHandler);
-importRouter.post("/:entity/run", entityGate, upload.single("file"), runHandler);
+importRouter.post("/:entity/preview", entityGate, upload.single("file"), scanUploads("Import data"), previewHandler);
+importRouter.post("/:entity/run", entityGate, upload.single("file"), scanUploads("Import data"), runHandler);

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { validate } from "../../middleware/validate.js";
 import { emailEngineeringReportSchema, deleteEngineeringReportSchema, saveEngineeringReportSchema, updateReportImageSchema } from "./validation.js";
@@ -31,4 +32,4 @@ engineeringReportRouter.delete("/", validate(deleteEngineeringReportSchema), eng
 engineeringReportRouter.post("/email", validate(emailEngineeringReportSchema), engineeringEmailHandler);
 engineeringReportRouter.patch("/images/:attachmentId", validate(updateReportImageSchema), engineeringImageCaptionHandler);
 engineeringReportRouter.delete("/images/:attachmentId", engineeringImageDeleteHandler);
-engineeringReportRouter.post("/upload", upload.single("file"), engineeringUploadHandler);
+engineeringReportRouter.post("/upload", upload.single("file"), scanUploads("Monthly Quality Report > supplier file"), engineeringUploadHandler);

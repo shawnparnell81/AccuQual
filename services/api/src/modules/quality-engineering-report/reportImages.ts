@@ -6,6 +6,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { env } from "../../config/env.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import type { ExtractedImage } from "../form-import/extract.js";
+import { assertUploadClean } from "../upload-scan/uploadScan.js";
 import { REPORT_IMAGES_ENTITY, sectionKeyForHeading, type ReportImage } from "./model.js";
 
 /** Same folder and file naming as the generic attachment upload (attachments.controller.ts). */
@@ -50,6 +51,10 @@ export async function storeReportImages(
   db: Db,
   input: { reportId: number; images: ExtractedImage[]; existing: ReportImage[]; replace: boolean; uploadedBy: number },
 ): Promise<StoredImages> {
+  // The Word file was scanned when it came in. Each picture pulled out of it is scanned too, before anything is replaced or stored.
+  for (const image of input.images) {
+    await assertUploadClean({ buffer: image.bytes, fileName: image.fileName, userId: input.uploadedBy, where: "Monthly Quality Report > pictures" });
+  }
   let keep = input.existing;
   let removed = 0;
   if (input.replace && input.images.length > 0) {

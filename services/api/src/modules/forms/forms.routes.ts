@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
@@ -101,7 +102,7 @@ function requireFormStructureEditor(req: Request, _res: Response, next: NextFunc
 formsRouter.get("/templates", requireFormStructureEditor, listTemplatesHandler);
 
 formsRouter.get("/:type/template", getTemplate);
-formsRouter.post("/:type/template", requireFormStructureEditor, upload.single("file"), uploadTemplateHandler);
+formsRouter.post("/:type/template", requireFormStructureEditor, upload.single("file"), scanUploads((req) => `Blank Forms > template (${String(req.params.type ?? "form")})`), uploadTemplateHandler);
 formsRouter.delete("/:type/template", requireFormStructureEditor, deleteTemplateHandler);
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
 formsRouter.get("/:type/:id", gateFormRead, getForm);

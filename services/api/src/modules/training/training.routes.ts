@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -68,7 +69,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 trainingRouter.get("/employees", view, listEmployeesHandler);
 trainingRouter.get("/employee/:userId/history", view, employeeHistoryHandler);
 trainingRouter.post("/assignment/:assignmentId/complete", manageSessions, validate(completeAssignmentSchema), completeAssignmentHandler);
-trainingRouter.post("/assignment/:assignmentId/certificate", manageSessions, upload.single("file"), uploadCertificateHandler);
+trainingRouter.post("/assignment/:assignmentId/certificate", manageSessions, upload.single("file"), scanUploads("Training > certificate"), uploadCertificateHandler);
 trainingRouter.get("/assignment/:assignmentId/certificate", view, downloadCertificateHandler);
 
 // ---- Sessions ---------------------------------------------------------------------------------------------------------------------------------------

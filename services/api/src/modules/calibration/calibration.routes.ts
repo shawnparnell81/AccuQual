@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -61,5 +62,5 @@ calibrationRouter.post("/:id/calibration", calibrate, validate(addCalibrationSch
 
 calibrationRouter.post("/calibration/:calibrationId/complete", calibrate, validate(completeCalibrationSchema), completeCalibrationHandler);
 calibrationRouter.delete("/calibration/:calibrationId", calibrate, cancelScheduleHandler);
-calibrationRouter.post("/calibration/:calibrationId/certificate", calibrate, upload.single("file"), uploadCertificateHandler);
+calibrationRouter.post("/calibration/:calibrationId/certificate", calibrate, upload.single("file"), scanUploads("Calibration > certificate"), uploadCertificateHandler);
 calibrationRouter.get("/calibration/:calibrationId/certificate", view, downloadCertificateHandler);

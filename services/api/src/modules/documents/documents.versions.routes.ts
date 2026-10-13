@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { existsSync } from "node:fs";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -156,6 +157,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/attachments",
     edit,
     upload.single("file"),
+    scanUploads("Documents > attachments"),
     asyncHandler(async (req: Request, res: Response) => {
       if (!req.file) throw AppError.badRequest("No file uploaded");
       res.status(201).json(await addAttachment(dbOf(req), idParam(req), idParam(req, "versionId"), actorOf(req), req.file));
