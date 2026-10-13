@@ -70,7 +70,8 @@ describe("Monthly Quality Report supplier upload accepts a Word file", () => {
     expect(saved.financials.length).toBeGreaterThan(0);
     expect(saved.topParts.length).toBeGreaterThan(0);
     expect(saved.faiCategories.length).toBeGreaterThan(0);
-    expect(saved).toEqual(expected);
+    // The Word report also carries the NCR notes, which the CSV has no columns for.
+    expect({ ...saved, ncrTable: [], notes: saved.notes.filter((note: { section: string }) => note.section !== "ncr") }).toEqual({ ...expected, ncrTable: [] });
 
     const narrative = res.body.report.narrative;
     expect(narrative.departmentStatus).toBe("yellow");
@@ -104,7 +105,7 @@ describe("Monthly Quality Report supplier upload accepts a Word file", () => {
     expect(entry).toBeTruthy();
     expect(entry!.performedBy).not.toBeNull();
     const summary = String((entry!.changes as any).summary);
-    expect(summary).toContain("Monthly Quality Report for November 2026");
+    expect(summary).toContain("November 2026 Monthly Quality Report");
     expect(summary).not.toMatch(/\b\d{5,}\b/);
   });
 

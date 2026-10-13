@@ -1,4 +1,6 @@
 import type { FormLayout } from "../forms/layouts/types.js";
+import { drawReportImages, imagesForSection, UNMATCHED_SECTION } from "./pdfImages.js";
+import type { ReportImageFile } from "./reportImages.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import type { ControlledPdfFrame } from "../forms/controlledPdf.js";
 import { money, type EngineeringReportView, type Gated, type QaItem } from "./model.js";
@@ -34,7 +36,7 @@ function qaLines(items: QaItem[]): string {
 }
 
 /** PDF of one monthly quality report. Chart series are tables of the same numbers drawn on screen. */
-export async function renderEngineeringReportPdf(view: EngineeringReportView, frame: ControlledPdfFrame | null): Promise<Uint8Array> {
+export async function renderEngineeringReportPdf(view: EngineeringReportView, frame: ControlledPdfFrame | null, images: ReportImageFile[] = []): Promise<Uint8Array> {
   const months = view.tables.months;
   const data: Record<string, unknown> = {
     document: `${view.documentId} | Rev ${view.revision} | ${view.documentTitle}`,
@@ -80,7 +82,9 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     pallet: view.sections.palletNotes || "—",
     pir: view.sections.pir.note,
     ncrSummary:
-      view.live.ncr.status === "ok"
+      view.sections.ncrNotes.trim()
+        ? view.sections.ncrNotes.replace(/\n{2,}/g, "\n")
+        : view.live.ncr.status === "ok"
         ? `${view.live.ncr.data.total} logged (${view.live.ncr.data.open} open, ${view.live.ncr.data.closed} closed).`
         : view.live.ncr.status === "no_access"
           ? "No access to NCR."
@@ -128,6 +132,10 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     failed: String(row.failed),
     deviation: String(row.passedWithDeviation),
   }));
+  data.ncrReportRows =
+    view.sections.ncrTableRows.length > 0
+      ? view.sections.ncrTableRows.map((row) => ({ number: dash(row.ncrNumber), part: dash(row.partNumber), defect: dash(row.description), disposition: dash(row.disposition), status: dash(row.status) }))
+      : [{ number: "—", part: "—", defect: "—", disposition: "—", status: "—" }];
   data.ncrs =
     view.live.ncr.status === "ok"
       ? view.live.ncr.data.rows.map((row) => ({
@@ -219,7 +227,8 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
           { type: "textarea", name: "carSummary", label: "CARs and CAPA" },
           { type: "row", fields: [{ kind: "text", name: "rpnSummary", label: "RPNs logged" }] },
           { type: "textarea", name: "pir", label: "PIRs" },
-          { type: "table", name: "ncrs", columns: [{ key: "number", label: "NCR number", kind: "text" }, { key: "part", label: "Part number", kind: "text" }, { key: "defect", label: "Description", kind: "text" }, { key: "disposition", label: "Disposition", kind: "text" }, { key: "status", label: "Status", kind: "text" }] },
+          { type: "table", name: "ncrReportRows", legend: "NCR table (from report)", columns: [{ key: "number", label: "NCR number", kind: "text" }, { key: "part", label: "Part number", kind: "text" }, { key: "defect", label: "Description of defect", kind: "text" }, { key: "disposition", label: "Disposition", kind: "text" }, { key: "status", label: "Status", kind: "text" }] },
+          { type: "table", name: "ncrs", legend: "NCRs in AccuQual for this month", columns: [{ key: "number", label: "NCR number", kind: "text" }, { key: "part", label: "Part number", kind: "text" }, { key: "defect", label: "Description", kind: "text" }, { key: "disposition", label: "Disposition", kind: "text" }, { key: "status", label: "Status", kind: "text" }] },
         ],
       },
       { number: "6.7", title: "Recalls", blocks: [{ type: "row", fields: [{ kind: "text", name: "recallDocs", label: "Recall documents filed" }] }, { type: "textarea", name: "recallNotes", label: "Notes" }] },
@@ -239,5 +248,10 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     ],
   };
 
-  return renderFormLayoutAsPdf(layout, data, frame);
+  // Pictures go in the section their Word heading belongs to; any left over close out an Images section.
+  const known = new Set(layout.sections.map((section) => section.number));
+  if (imagesForSection(images, UNMATCHED_SECTION, known).length > 0) layout.sections.push({ number: "7", title: "Images", blocks: [] });
+  return renderFormLayoutAsPdf(layout, data, frame, {
+    afterSection: (ctx, section) => drawReportImages(ctx, imagesForSection(images, section.number === "7" && section.title === "Images" ? UNMATCHED_SECTION : section.number, known)),
+  });
 }

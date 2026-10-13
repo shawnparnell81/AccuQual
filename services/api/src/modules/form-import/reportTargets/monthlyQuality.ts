@@ -11,6 +11,7 @@ import {
   type FinancialMonth,
   type MonthMetric,
   type NamedCount,
+  type NcrReportRow,
   type SupplierData,
   type SupplierNote,
   type TopPart,
@@ -77,6 +78,13 @@ export function monthlyQualityFields(): TargetField[] {
       { id: "failed", label: "Failed" },
       { id: "dev", label: "Passed w/ Deviation" },
     ]),
+    tableField("ncr_table", "NCR table (from report)", [
+      { id: "ncrNumber", label: "NCR Number" },
+      { id: "partNumber", label: "Part Number" },
+      { id: "description", label: "Description of Defect" },
+      { id: "disposition", label: "Disposition" },
+      { id: "status", label: "Status" },
+    ]),
     tableField("fuel_pump_returns", "Fuel Pump Returns (by source)", [
       { id: "source", label: "Source" },
       { id: "count", label: "Count" },
@@ -104,6 +112,8 @@ export function monthlyQualityFields(): TargetField[] {
     textField("notes.recalls", "Recalls", NOTES_GROUP, "multiline"),
     textField("notes.field_question", "Field Question", NOTES_GROUP, "multiline"),
     textField("notes.pallet", "NAPA Black Label Pallet Work", NOTES_GROUP, "multiline"),
+    textField("notes.ncr", "NCRs / CARs / PIRs / RPNs notes", NOTES_GROUP, "multiline"),
+    textField("notes.email_issues", "OR/NAPA Email Issues notes", NOTES_GROUP, "multiline"),
     { key: "notes.fitment", label: "Fitment Verification", group: NOTES_GROUP, type: "table", columns: [{ id: "problem", label: "Problem" }, { id: "response", label: "Response" }] },
     { key: "notes.product_info", label: "Product Information", group: NOTES_GROUP, type: "table", columns: [{ id: "problem", label: "Problem" }, { id: "response", label: "Response" }] },
     { key: "notes.tech_line", label: "NAPA Tech Line / Collabtic", group: NOTES_GROUP, type: "table", columns: [{ id: "problem", label: "Problem" }, { id: "response", label: "Response" }] },
@@ -161,6 +171,15 @@ function labelLine(file: ExtractedFile, label: string, withinSection?: string): 
       const match = pattern.exec(line.trim());
       if (match) return { value: match[1]!.trim(), source: `${block.section ?? ""} > '${label}:'` };
     }
+  }
+  return { value: null, source: null };
+}
+
+/** All paras under the first heading containing every keyword in ANY of the keyword sets, joined like joinedSection. */
+function joinedSectionAny(file: ExtractedFile, keywordSets: string[][]): { value: string | null; source: string | null } {
+  for (const keywords of keywordSets) {
+    const found = joinedSection(file, ...keywords);
+    if (found.source) return found;
   }
   return { value: null, source: null };
 }
@@ -247,6 +266,9 @@ export function proposeMonthlyQuality(extracted: ExtractedFile): MonthlyQualityP
   const genericTableFields = fields.filter((field) => field.key === "top_parts" || field.key === "fai_categories");
   for (const proposal of proposeValues(extracted, genericTableFields)) byKey.set(proposal.key, proposal);
 
+  const ncrRows = tableByFirstHeader(extracted, "NCR Number");
+  put("ncr_table", "NCR table (from report)", ncrRows, ncrRows ? sectionContaining(extracted, "ncr") ?? "NCR table" : null, "trend table");
+
   const fuel = fuelPumpReturnsTable(extracted);
   put("fuel_pump_returns", "Fuel Pump Returns (by source)", fuel.rows.length ? fuel.rows : null, fuel.source, "bullet lines under Executive Summary");
 
@@ -328,6 +350,11 @@ export function proposeMonthlyQuality(extracted: ExtractedFile): MonthlyQualityP
   const pallet = joinedSection(extracted, "pallet");
   put("notes.pallet", "NAPA Black Label Pallet Work", pallet.value, pallet.source, "Heading match");
 
+  const ncrNotes = joinedSectionAny(extracted, [["cars"], ["rpn"], ["ncr"]]);
+  put("notes.ncr", "NCRs / CARs / PIRs / RPNs notes", ncrNotes.value, ncrNotes.source, "Heading match");
+  const emailNotes = joinedSection(extracted, "email issues");
+  put("notes.email_issues", "OR/NAPA Email Issues notes", emailNotes.value, emailNotes.source, "Heading match");
+
   const fitmentSection = sectionContaining(extracted, "fitment");
   const fitmentRows = problemResponsePairs(extracted, fitmentSection);
   put("notes.fitment", "Fitment Verification", fitmentRows.length ? fitmentRows : null, fitmentSection, "Problem/Response pairs");
@@ -340,12 +367,8 @@ export function proposeMonthlyQuality(extracted: ExtractedFile): MonthlyQualityP
   const techLineRows = problemResponsePairs(extracted, techLineSection);
   put("notes.tech_line", "NAPA Tech Line / Collabtic", techLineRows.length ? techLineRows : null, techLineSection, "Problem/Response pairs");
 
-  if (tableByFirstHeader(extracted, "NCR Number")) warnings.push("The NCR table is not imported. File it from the NCR module directly.");
-  if (sectionContaining(extracted, "cars") || sectionContaining(extracted, "rpn")) {
-    warnings.push("Free text under NCRs/CARs/PIRs/RPNs is not imported.");
-  }
-  if (sectionContaining(extracted, "email issues")) warnings.push("Free text under OR/NAPA Email Issues is not imported.");
-  if (extracted.images > 0) warnings.push(`${extracted.images} image(s) in this file are not imported.`);
+  // Only content that was really skipped is reported: a picture over a limit or in an unsupported format.
+  warnings.push(...(extracted.imageWarnings ?? []));
 
   const proposals = fields.map((field) => byKey.get(field.key) ?? { key: field.key, label: field.label, value: null, source: null, score: 0, reason: "no match", rule: null });
   return { proposals, warnings };
@@ -381,6 +404,30 @@ function fillMonthRows(
       byMonth.set(key, entry);
     });
   }
+}
+
+/** Header cells matched loosely by name, never by position. Cell text is kept exactly as written ("[Unassigned]" stays). */
+export function ncrRowsFromTable(rows: string[][]): NcrReportRow[] {
+  const header = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
+  const find = (...patterns: RegExp[]) => header.findIndex((cell) => patterns.some((pattern) => pattern.test(cell)));
+  const at = {
+    ncrNumber: find(/ncr/, /number/),
+    partNumber: find(/part/),
+    description: find(/descr/, /defect/),
+    disposition: find(/dispos/),
+    status: find(/status/),
+  };
+  const cell = (row: string[], index: number) => (index >= 0 ? (row[index] ?? "").trim() : "");
+  return rows
+    .slice(1)
+    .map((row): NcrReportRow => ({
+      ncrNumber: cell(row, at.ncrNumber),
+      partNumber: cell(row, at.partNumber),
+      description: cell(row, at.description),
+      disposition: cell(row, at.disposition),
+      status: cell(row, at.status),
+    }))
+    .filter((row) => Object.values(row).some((value) => value !== ""));
 }
 
 export function toSupplierData(values: Record<string, string | string[][] | null | undefined>, year: number): SupplierData {
@@ -508,6 +555,12 @@ export function toSupplierData(values: Record<string, string | string[][] | null
       if (problem || response) data.notes.push({ section, problem, response } satisfies SupplierNote);
     }
   };
+  pushNote("ncr", "notes.ncr");
+  pushNote("email_issues", "notes.email_issues");
+
+  const ncrRows = asTable(values["ncr_table"]);
+  if (ncrRows) data.ncrTable = ncrRowsFromTable(ncrRows);
+
   pushPairs("fitment", "notes.fitment");
   pushPairs("product_info", "notes.product_info");
   pushPairs("tech_line", "notes.tech_line");

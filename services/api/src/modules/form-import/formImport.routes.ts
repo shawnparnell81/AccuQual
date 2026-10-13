@@ -4,6 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import {
   aiSuggestHandler,
   confirmImportHandler,
+  confirmUploadFile,
   deleteMappingHandler,
   executeFormImport,
   extractFileHandler,
@@ -31,7 +32,7 @@ formImportRouter.post("/execute", executeFormImport);
 formImportRouter.get("/targets", listImportTargetsHandler);
 formImportRouter.post("/extract", uploadImportFile, extractFileHandler);
 formImportRouter.post("/propose", proposeValuesHandler);
-formImportRouter.post("/confirm", confirmImportHandler);
+formImportRouter.post("/confirm", confirmUploadFile, confirmImportHandler);
 formImportRouter.post("/ai-suggest", aiSuggestHandler);
 
 /** Saved per-target mappings (Phase 2). Each one checks the target's own permission. */

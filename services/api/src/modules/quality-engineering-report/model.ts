@@ -15,6 +15,52 @@ export interface QaItem {
   response: string;
 }
 
+/** One row of the report's own NCR table (6.6), kept exactly as written in the uploaded report. Not a link to the NCR module. */
+export interface NcrReportRow {
+  ncrNumber: string;
+  partNumber: string;
+  description: string;
+  disposition: string;
+  status: string;
+}
+
+/** A picture imported from a Word report. The file is an attachment (entity type quality_engineering_report). */
+export interface ReportImage {
+  attachmentId: number;
+  /** The Word heading it appeared under. */
+  section: string | null;
+  /** The report section it is shown in (for example "6.2"), or null for the Images section at the end. */
+  sectionKey: string | null;
+  order: number;
+  caption: string;
+  fileName: string;
+  sha256: string;
+}
+
+export const REPORT_IMAGES_ENTITY = "quality_engineering_report";
+
+/** Which report section a Word heading belongs to, by its words (the Word numbering differs from this report's). */
+export function sectionKeyForHeading(heading: string | null | undefined): string | null {
+  const text = (heading ?? "").replace(/^\s*\d+(?:\.\d+)*\s*[-–—:.]?\s*/, "").toLowerCase();
+  if (!text) return null;
+  const rules: [RegExp, string][] = [
+    [/executive|financial/, "6.1"],
+    [/labor claims|top returning|high-return|top vehicle|root cause|recommendation/, "6.2"],
+    [/product alert/, "6.3"],
+    [/quarantine/, "6.4"],
+    [/first article/, "6.5"],
+    [/ncr|\bcars\b|rpn/, "6.6"],
+    [/recall/, "6.7"],
+    [/tech line|collabtic/, "6.8"],
+    [/email issue/, "6.10"],
+    [/field question/, "6.11"],
+    [/fitment/, "6.12"],
+    [/product information/, "6.13"],
+    [/pallet/, "6.14"],
+  ];
+  return rules.find(([pattern]) => pattern.test(text))?.[1] ?? null;
+}
+
 export interface EngineeringNarrative {
   departmentStatus: DepartmentStatus;
   primaryAchievement: string;
@@ -31,6 +77,12 @@ export interface EngineeringNarrative {
   techLine: QaItem[];
   fitment: QaItem[];
   productInfo: QaItem[];
+  /** Free text under NCRs, CARs, PIRs and RPNs (6.6). */
+  ncrNotes: string;
+  /** The report's own NCR table (6.6). A snapshot kept with the report; the NCR module is never changed by it. */
+  ncrTableRows: NcrReportRow[];
+  /** Pictures imported from a Word report. Managed by the import and the image actions, never by the narrative save. */
+  images: ReportImage[];
   /** Company-typed dollars for a month that has no Labor Claim or Warranty cost yet. */
   financialEntries: FinancialEntry[];
   /** Fields summed from a chosen imported file. The value is labeled with that import. */
@@ -140,6 +192,8 @@ export interface SupplierData {
   faiCategories: FaiCategoryRow[];
   emailIssues: EmailIssueMonth[];
   notes: SupplierNote[];
+  /** NCR table rows read from an uploaded Word report. Merged into the narrative; not stored here. */
+  ncrTable: NcrReportRow[];
 }
 
 export type Gated<T> = { status: "ok"; data: T } | { status: "no_access" } | { status: "unavailable"; reason: string };
@@ -256,6 +310,8 @@ export interface EngineeringReportView {
     techLine: QaItem[];
     fitment: QaItem[];
     productInfo: QaItem[];
+    ncrNotes: string;
+    ncrTableRows: NcrReportRow[];
     pir: { status: "not_tracked"; note: string };
   };
   live: LivePull;
@@ -278,6 +334,9 @@ export function emptyNarrative(): EngineeringNarrative {
     techLine: [],
     fitment: [],
     productInfo: [],
+    ncrNotes: "",
+    ncrTableRows: [],
+    images: [],
     financialEntries: [],
     importPulls: [],
   };
@@ -297,6 +356,7 @@ export function emptySupplierData(): SupplierData {
     faiCategories: [],
     emailIssues: [],
     notes: [],
+    ncrTable: [],
   };
 }
 
@@ -396,8 +456,10 @@ export function mergeUploadNarrative(current: EngineeringNarrative, supplier: Su
     techLine: current.techLine.map((item) => ({ ...item })),
     fitment: current.fitment.map((item) => ({ ...item })),
     productInfo: current.productInfo.map((item) => ({ ...item })),
+    ncrTableRows: current.ncrTableRows.map((row) => ({ ...row })),
+    images: current.images.map((image) => ({ ...image })),
   };
-  const fillText = (key: "primaryAchievement" | "criticalRisk" | "payoutPolicy" | "rca" | "recommendation" | "productAlertNotes" | "quarantineNotes" | "recallsNotes" | "emailIssuesNotes" | "fieldQuestions" | "palletNotes", section: string) => {
+  const fillText = (key: "primaryAchievement" | "criticalRisk" | "payoutPolicy" | "rca" | "recommendation" | "productAlertNotes" | "quarantineNotes" | "recallsNotes" | "emailIssuesNotes" | "fieldQuestions" | "palletNotes" | "ncrNotes", section: string) => {
     const text = textOf(supplier.notes, section);
     if (!text) return;
     if (replaceNotes || !next[key].trim()) next[key] = text;
@@ -418,6 +480,10 @@ export function mergeUploadNarrative(current: EngineeringNarrative, supplier: Su
   fillText("emailIssuesNotes", "email_issues");
   fillText("fieldQuestions", "field_question");
   fillText("palletNotes", "pallet");
+  fillText("ncrNotes", "ncr");
+  if (supplier.ncrTable.length > 0 && (replaceNotes || next.ncrTableRows.length === 0)) {
+    next.ncrTableRows = supplier.ncrTable.map((row) => ({ ...row }));
+  }
   fillQa("techLine", "tech_line");
   fillQa("fitment", "fitment");
   fillQa("productInfo", "product_info");
@@ -618,6 +684,8 @@ export function assembleReport(input: {
       techLine: narrative.techLine,
       fitment: narrative.fitment,
       productInfo: narrative.productInfo,
+      ncrNotes: narrative.ncrNotes,
+      ncrTableRows: narrative.ncrTableRows,
       pir: { status: "not_tracked", note: "AccuQual does not keep a PIR log. This line is left blank rather than shown as zero." },
     },
     live,
@@ -626,6 +694,40 @@ export function assembleReport(input: {
 
 export function isDepartmentStatus(value: unknown): value is DepartmentStatus {
   return value === "" || value === "green" || value === "yellow" || value === "red";
+}
+
+export function asNcrRows(value: unknown): NcrReportRow[] {
+  if (!Array.isArray(value)) return [];
+  const text = (raw: unknown) => (typeof raw === "string" ? raw.slice(0, 2000) : "");
+  return value
+    .slice(0, 200)
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const out = { ncrNumber: text(row.ncrNumber), partNumber: text(row.partNumber), description: text(row.description), disposition: text(row.disposition), status: text(row.status) };
+      return Object.values(out).some((cell) => cell.trim() !== "") ? out : null;
+    })
+    .filter((row): row is NcrReportRow => row !== null);
+}
+
+export function asReportImages(value: unknown): ReportImage[] {
+  if (!Array.isArray(value)) return [];
+  const out: ReportImage[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (typeof row.attachmentId !== "number" || !Number.isInteger(row.attachmentId)) continue;
+    out.push({
+      attachmentId: row.attachmentId,
+      section: typeof row.section === "string" ? row.section : null,
+      sectionKey: typeof row.sectionKey === "string" ? row.sectionKey : null,
+      order: typeof row.order === "number" ? row.order : out.length + 1,
+      caption: typeof row.caption === "string" ? row.caption : "",
+      fileName: typeof row.fileName === "string" ? row.fileName : "",
+      sha256: typeof row.sha256 === "string" ? row.sha256 : "",
+    });
+  }
+  return out;
 }
 
 function asQa(value: unknown): QaItem[] {
@@ -664,6 +766,9 @@ export function normalizeNarrative(value: unknown): EngineeringNarrative {
     techLine: asQa(row.techLine),
     fitment: asQa(row.fitment),
     productInfo: asQa(row.productInfo),
+    ncrNotes: text("ncrNotes"),
+    ncrTableRows: asNcrRows(row.ncrTableRows),
+    images: asReportImages(row.images),
     financialEntries: normalizeFinancialEntries(row.financialEntries),
     importPulls: normalizeImportPulls(row.importPulls),
   };

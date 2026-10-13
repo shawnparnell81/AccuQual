@@ -23,6 +23,9 @@ interface ExtractedFile {
   blocks: ExtractedBlock[];
   sheets: { name: string; cells: Record<string, string>; named: Record<string, string> }[];
   images: number;
+  /** Pictures that will be imported into the Monthly Quality Report (Word files only), without their bytes. */
+  imageMeta?: { order: number; section: string | null; fileName: string; mimeType: string; caption: string; size: number }[];
+  imageWarnings?: string[];
 }
 
 interface ImportTarget {
@@ -74,6 +77,7 @@ export function ImportFromFilePage() {
   const [file, setFile] = useState<File | null>(null);
   const [extracted, setExtracted] = useState<ExtractedFile | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<Record<number, string>>({});
   const [search, setSearch] = useState("");
   const [targetRef, setTargetRef] = useState<string | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -104,10 +108,11 @@ export function ImportFromFilePage() {
     mutationFn: async (chosen: File) => {
       const body = new FormData();
       body.append("file", chosen);
-      return (await apiClient.post<{ extracted: ExtractedFile; warnings: string[] }>("/form-import/extract", body)).data;
+      return (await apiClient.post<{ extracted: ExtractedFile; warnings: string[]; imagePreviews?: { order: number; dataUrl: string }[] }>("/form-import/extract", body)).data;
     },
     onSuccess: (data) => {
       setExtracted(data.extracted);
+      setImagePreviews(Object.fromEntries((data.imagePreviews ?? []).map((preview) => [preview.order, preview.dataUrl])));
       setWarnings(data.warnings);
       setTitle(data.extracted.title ?? data.extracted.fileName);
       const found = detectTitleMonthYear(data.extracted.title);
@@ -166,18 +171,24 @@ export function ImportFromFilePage() {
           entries: buildMappingEntries(rows),
         });
       }
-      return (
-        await apiClient.post<{ openPath: string }>("/form-import/confirm", {
-          targetRef,
-          fileName: extracted?.fileName ?? file?.name ?? "upload",
-          title: title || undefined,
-          recordNumber: recordNumber || null,
-          edited,
-          values,
-          aiAccepted,
-          ...(isReportTarget ? { year: reportYear, month: reportMonth, replaceNotes } : {}),
-        })
-      ).data;
+      const payload = {
+        targetRef,
+        fileName: extracted?.fileName ?? file?.name ?? "upload",
+        title: title || undefined,
+        recordNumber: recordNumber || null,
+        edited,
+        values,
+        aiAccepted,
+        ...(isReportTarget ? { year: reportYear, month: reportMonth, replaceNotes } : {}),
+      };
+      // A Word file going into the Monthly Quality Report is sent along so its pictures are stored with the report.
+      if (isReportTarget && file && extracted?.kind === "docx") {
+        const body = new FormData();
+        body.append("payload", JSON.stringify(payload));
+        body.append("file", file);
+        return (await apiClient.post<{ openPath: string }>("/form-import/confirm", body)).data;
+      }
+      return (await apiClient.post<{ openPath: string }>("/form-import/confirm", payload)).data;
     },
     onSuccess: (data) => {
       toast.success("Filled copy saved.");
@@ -284,7 +295,11 @@ export function ImportFromFilePage() {
         <div className="flex flex-col gap-3">
           <div className="rounded-lg border border-border bg-card p-4 text-sm">
             <div className="font-medium">{extracted.fileName}</div>
-            {extracted.images > 0 && <p className="mt-1 text-muted-foreground">{extracted.images} image(s) are not imported.</p>}
+            {(extracted.imageMeta?.length ?? 0) > 0 && (
+              <p className="mt-1 text-muted-foreground">
+                {extracted.imageMeta!.length} picture(s) are imported when this goes into the Monthly Quality Report. Other forms do not import pictures.
+              </p>
+            )}
             {warnings.map((note) => (
               <p key={note} className="mt-1 text-muted-foreground">
                 {note}
@@ -332,6 +347,25 @@ export function ImportFromFilePage() {
                 <p key={`${note}-${index}`}>{note}</p>
               ))}
             </div>
+          )}
+
+          {isReportTarget && (extracted.imageMeta?.length ?? 0) > 0 && (
+            <section className="rounded-lg border border-border bg-card p-3" aria-label="Pictures to import">
+              <h3 className="mb-2 text-sm font-medium">Pictures to import ({extracted.imageMeta!.length})</h3>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {extracted.imageMeta!.map((image) => (
+                  <li key={image.order} className="flex flex-col gap-1 text-sm">
+                    {imagePreviews[image.order] ? (
+                      <img src={imagePreviews[image.order]} alt={image.caption || image.fileName} className="max-h-48 w-full rounded border border-border object-contain" />
+                    ) : (
+                      <div className="flex h-24 items-center justify-center rounded border border-border text-xs text-muted-foreground">{image.fileName} (too large to preview)</div>
+                    )}
+                    <span>{image.caption || <span className="text-muted-foreground">No caption</span>}</span>
+                    <span className="text-xs text-muted-foreground">{image.section ?? "Before the first heading"}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {isReportTarget ? (

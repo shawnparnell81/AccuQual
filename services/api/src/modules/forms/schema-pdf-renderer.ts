@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import type { Block, FormLayout, TableColumn } from "./layouts/types.js";
+import type { Block, FormLayout, FormSection, TableColumn } from "./layouts/types.js";
 import { hydrateDimensionalRow, measuredCellValue, passFailPdfPalette } from "../../utils/passFail.js";
 import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
 import { pictureTextToPlain } from "../attachments/inlinePicture.js";
@@ -70,8 +70,13 @@ function stampPageChrome(ctx: RenderContext) {
   drawRunningHeader(ctx.page, ctx.font, ctx.bold, ctx.frame);
 }
 
+export interface RenderHooks {
+  /** Runs after a section's blocks are drawn, for content a layout block cannot describe (for example pictures). */
+  afterSection?: (ctx: RenderContext, section: FormSection) => Promise<void>;
+}
+
 /** Renders a FormLayout + its current data as a PDF matching the reference document's look. */
-export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<string, unknown>, frame: ControlledPdfFrame | null = null): Promise<Uint8Array> {
+export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<string, unknown>, frame: ControlledPdfFrame | null = null, hooks: RenderHooks = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -101,6 +106,7 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
     for (const block of section.blocks) {
       drawBlock(ctx, block, data);
     }
+    await hooks.afterSection?.(ctx, section);
     ctx.y -= 10; // gap between sections
   }
 

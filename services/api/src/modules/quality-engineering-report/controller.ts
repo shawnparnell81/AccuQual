@@ -9,7 +9,10 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { SUPPLIER_COLUMNS, SUPPLIER_UPLOAD_NOTE } from "./supplierHelp.js";
 import { renderEngineeringReportPdf } from "./pdf.js";
-import { buildEngineeringReport, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, uploadEngineeringSupplier } from "./service.js";
+import { buildEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
+import { loadReportImageFiles } from "./reportImages.js";
+import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
+import { and } from "drizzle-orm";
 import { engineeringAccess } from "./livePull.js";
 import { listRecipientPeople } from "../reporting/recipientPeople.js";
 import { DOCUMENT_ID, DOCUMENT_REVISION, DOCUMENT_TITLE, type EngineeringNarrative } from "./model.js";
@@ -110,6 +113,18 @@ export const engineeringUploadHandler = asyncHandler(async (req: Request, res: R
   res.json(result);
 });
 
+/** PATCH /reports/engineering/images/:attachmentId { year, month, caption } — edits one picture's caption. */
+export const engineeringImageCaptionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { year: number; month: number; caption: string };
+  res.json(await updateReportImageCaption(req.db!, { ...actor(req), year: body.year, month: body.month, attachmentId: Number(req.params.attachmentId), caption: body.caption }));
+});
+
+/** DELETE /reports/engineering/images/:attachmentId?year=&month= — removes one picture from the report. */
+export const engineeringImageDeleteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const period = periodFrom(req.query);
+  res.json(await deleteReportImage(req.db!, { ...actor(req), ...period, attachmentId: Number(req.params.attachmentId) }));
+});
+
 export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const period = periodFrom(req.query);
   const report = await buildEngineeringReport(req.db!, { ...actor(req), ...period });
@@ -127,7 +142,12 @@ export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Resp
     }),
     chrome,
   );
-  const bytes = await renderEngineeringReportPdf(report, frame);
+  const [saved] = await req.db!
+    .select({ id: qualityEngineeringReports.id })
+    .from(qualityEngineeringReports)
+    .where(and(eq(qualityEngineeringReports.year, period.year), eq(qualityEngineeringReports.month, period.month)));
+  const images = saved ? await loadReportImageFiles(req.db!, saved.id, report.narrative.images) : [];
+  const bytes = await renderEngineeringReportPdf(report, frame, images);
   await persistPdfExport(req.db!, bytes, frame, { entityType: "quality_engineering_report", entityId: null, actorId: req.user!.id });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("X-Export-Id", chrome.exportId);
