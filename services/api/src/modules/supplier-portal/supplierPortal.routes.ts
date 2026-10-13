@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -66,17 +67,17 @@ supplierPortalRouter.use(requireAuth, withDb, requireSupplierPortalAccess);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Onboarding
-supplierPortalRouter.post("/onboarding/upload", upload.single("file"), uploadOnboardingDocumentHandler);
+supplierPortalRouter.post("/onboarding/upload", upload.single("file"), scanUploads("Supplier Portal > onboarding documents"), uploadOnboardingDocumentHandler);
 supplierPortalRouter.get("/onboarding/status", onboardingStatusHandler);
 supplierPortalRouter.post("/onboarding/:id/review", validate(reviewOnboardingDocumentSchema), reviewOnboardingDocumentHandler);
 
 // Ongoing document management
-supplierPortalRouter.post("/documents/upload", upload.single("file"), uploadSupplierDocumentHandler);
+supplierPortalRouter.post("/documents/upload", upload.single("file"), scanUploads("Supplier Portal > documents"), uploadSupplierDocumentHandler);
 supplierPortalRouter.get("/documents/list", listSupplierDocumentsHandler);
 
 // PPAP (Levels 1-5)
 supplierPortalRouter.post("/ppap/submit", validate(submitPpapSchema), submitPpapHandler);
-supplierPortalRouter.post("/ppap/:id/documents", upload.single("file"), uploadPpapDocumentHandler);
+supplierPortalRouter.post("/ppap/:id/documents", upload.single("file"), scanUploads("Supplier Portal > PPAP documents"), uploadPpapDocumentHandler);
 supplierPortalRouter.get("/ppap/status", ppapStatusHandler);
 supplierPortalRouter.post("/ppap/:id/review", validate(reviewPpapSchema), reviewPpapHandler);
 

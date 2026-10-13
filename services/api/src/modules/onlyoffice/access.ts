@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { assertUploadClean } from "../upload-scan/uploadScan.js";
 import path from "node:path";
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
@@ -217,6 +218,9 @@ export async function persistEditedOfficeFile(db: Db, actor: OfficeActor, ids: O
   const detected = detectFileType(bytes, access.file.fileName);
   if (!detected) throw AppError.badRequest("The saved file isn't a valid Word or Excel document.");
   if (detected.ext !== path.extname(access.file.fileName).toLowerCase()) throw AppError.badRequest("The saved file type doesn't match the original.");
+
+  // What the editor saved back is a stored file like any upload, so it is scanned before it replaces the draft.
+  await assertUploadClean({ buffer: bytes, fileName: access.file.fileName, userId: actor.id, where: "Documents > editor save" });
 
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const nextPath = path.join(path.dirname(access.file.filePath), `${randomUUID()}${detected.ext}`);

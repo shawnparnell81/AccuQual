@@ -35,8 +35,19 @@ FROM node:26-alpine AS runtime
 # Pick up OS security patches released since the base image was built, and drop npm/yarn: nothing runs a package
 # manager in production, and npm's own bundled libraries were a source of scanner findings.
 RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# ClamAV scans every uploaded file. docker/entrypoint.sh runs freshclam (definitions update on start and every 6 hours)
+# and clamd beside the API, and waits for clamd before starting it. clamd keeps its signatures in memory, so the
+# service needs about 2 GB of RAM (see docs/virus-scanning.md). A baseline set of definitions is baked into the image
+# so the first start is quick; the build still passes if the ClamAV mirror cannot be reached.
+RUN apk add --no-cache clamav clamav-daemon freshclam \
+ && printf 'DatabaseDirectory /var/lib/clamav\nDatabaseMirror database.clamav.net\nDatabaseOwner clamav\n' > /tmp/freshclam-build.conf \
+ && (freshclam --config-file=/tmp/freshclam-build.conf || echo "Could not fetch baseline virus definitions at build time; freshclam will fetch them at start.") \
+ && rm -f /tmp/freshclam-build.conf
 WORKDIR /app
 ENV NODE_ENV=production
+COPY --from=build /repo/services/api/docker/entrypoint.sh /usr/local/bin/api-entrypoint.sh
+# Strip any Windows line endings and make it runnable regardless of how git checked it out.
+RUN sed -i 's/\r$//' /usr/local/bin/api-entrypoint.sh && chmod +x /usr/local/bin/api-entrypoint.sh
 COPY --from=build /repo/services/api/dist ./dist
 COPY --from=build /repo/services/api/assets ./assets
 COPY --from=build /repo/services/api/package.json ./package.json
@@ -45,4 +56,5 @@ COPY --from=build /repo/services/api/package.json ./package.json
 # finds it from dist/index.js regardless of how deep dist's own layout is.
 COPY --from=proddeps /repo/node_modules ./node_modules
 EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/api-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

@@ -1,4 +1,7 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
+import { eq } from "drizzle-orm";
+import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -7,6 +10,16 @@ import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, fileFormRecordSchema, renameFormFolderSchema, retireFolderSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
 import { list, create, update, remove, retire, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, renameBlankFormHandler, formFiling, fileForm, formFolders, formFolderDetail, renameFormFolderHandler, retireFormFolderHandler, livePaths } from "./document-folders.controller.js";
 import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
+
+/** Names the folder an upload is going into, for the audit entry of a blocked file. */
+async function folderPlace(req: Request): Promise<string> {
+  const id = Number(req.body?.parentId ?? req.params.id);
+  if (id) {
+    const [folder] = await req.db!.select({ name: documentFolders.name }).from(documentFolders).where(eq(documentFolders.id, id));
+    if (folder) return `Folder Explorer > ${folder.name}`;
+  }
+  return "Folder Explorer";
+}
 
 export const documentFoldersRouter = Router();
 // Security audit finding (high): this router had no RBAC gate at all — any
@@ -36,7 +49,7 @@ documentFoldersRouter.get("/form-folders/:formKey", formFolderDetail);
 documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
 // Fixed literal path before ":id"-shaped ones — the one-step "create a
 // leaf + attach a file" upload, not scoped to an existing node.
-documentFoldersRouter.post("/upload", upload.single("file"), uploadDocument);
+documentFoldersRouter.post("/upload", upload.single("file"), scanUploads(folderPlace), uploadDocument);
 documentFoldersRouter.patch("/:id", validate(updateDocumentFolderSchema), update);
 documentFoldersRouter.post("/:id/retire", validate(retireFolderSchema), retire);
 documentFoldersRouter.delete("/:id/pool", removeFromLibraryPool);
@@ -44,7 +57,7 @@ documentFoldersRouter.delete("/:id", remove);
 
 documentFoldersRouter.get("/:id/comments", listFolderCommentsHandler);
 documentFoldersRouter.post("/:id/comments", createFolderCommentHandler);
-documentFoldersRouter.post("/:id/template", upload.single("file"), uploadTemplate);
+documentFoldersRouter.post("/:id/template", upload.single("file"), scanUploads(folderPlace), uploadTemplate);
 documentFoldersRouter.get("/:id/template", downloadTemplate);
 documentFoldersRouter.get("/:id/office-session", folderOfficeSessionHandler);
 documentFoldersRouter.delete("/:id/template", removeTemplate);

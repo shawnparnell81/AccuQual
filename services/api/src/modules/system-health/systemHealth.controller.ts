@@ -16,6 +16,7 @@ import { currentAlerts } from "../monitoring/alerts.js";
 import { metrics } from "../monitoring/metrics.js";
 import { sentryEnabled } from "../monitoring/sentry.js";
 import type { Db } from "../../lib/requestDb.js";
+import { scannerStatus } from "../../lib/virusScan.js";
 
 type Status = "ok" | "warning" | "critical";
 
@@ -136,6 +137,35 @@ async function checkSupplierPortal(db: Db): Promise<HealthCheck> {
   };
 }
 
+const SCANNER_STALE_DAYS = 3;
+
+/** The virus scanner behind every upload: is scanning on, is clamd answering, and how old are its definitions. */
+async function checkVirusScanner(): Promise<HealthCheck> {
+  const scanner = await scannerStatus();
+  if (!scanner.enabled) {
+    return {
+      status: process.env.NODE_ENV === "production" ? "warning" : "ok",
+      enabled: false,
+      up: false,
+      detail: process.env.NODE_ENV === "production" ? "Virus scanning is turned off (VIRUS_SCAN_ENABLED=false). Uploads are not being scanned." : "Virus scanning is off in this environment",
+    };
+  }
+  if (!scanner.up) {
+    return { status: "critical", enabled: true, up: false, detail: `The virus scanner is down, so uploads are refused. ${scanner.error ?? ""}`.trim() };
+  }
+  const ageDays = scanner.definitionsDate ? Math.floor((Date.now() - new Date(scanner.definitionsDate).getTime()) / (24 * 60 * 60 * 1000)) : null;
+  const stale = ageDays != null && ageDays > SCANNER_STALE_DAYS;
+  return {
+    status: stale ? "warning" : "ok",
+    enabled: true,
+    up: true,
+    engine: scanner.engine ?? null,
+    definitionsVersion: scanner.definitionsVersion ?? null,
+    definitionsDate: scanner.definitionsDate ?? null,
+    detail: stale ? `Virus definitions are ${ageDays} days old. The 6-hourly update may be failing.` : `Up. Virus definitions ${scanner.definitionsDate ? `from ${scanner.definitionsDate.slice(0, 10)}` : "date unknown"}`,
+  };
+}
+
 /** The monitoring system itself: what is firing right now, and which of its outside connections are switched on. */
 function checkMonitoring(): HealthCheck {
   const alerts = currentAlerts();
@@ -170,7 +200,7 @@ function checkMonitoring(): HealthCheck {
 export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as Db;
 
-  const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal, readiness] = await Promise.all([
+  const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal, virusScanner, readiness] = await Promise.all([
     checkDatabase(),
     checkAi(db),
     checkWorkflow(db),
@@ -178,10 +208,11 @@ export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Res
     checkReporting(db),
     checkReceivingInventory(db),
     checkSupplierPortal(db),
+    checkVirusScanner(),
     checkReadiness(),
   ]);
 
-  const checks = { database, monitoring: checkMonitoring(), ai, workflow, email, reporting, receivingInventory, supplierPortal };
+  const checks = { database, monitoring: checkMonitoring(), ai, workflow, email, reporting, receivingInventory, supplierPortal, virusScanner };
   const overall: Status = Object.values(checks).some((c) => c.status === "critical")
     ? "critical"
     : Object.values(checks).some((c) => c.status === "warning")

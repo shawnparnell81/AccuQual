@@ -2,3 +2,4 @@
 ops/backup/*.sh text eol=lf
 ops/backup/*.mjs text eol=lf
 ops/backup/Dockerfile text eol=lf
+services/api/docker/*.sh text eol=lf

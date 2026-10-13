@@ -749,6 +749,7 @@ export interface SystemHealthReport {
     reporting: SystemHealthCheck & { totalSchedules: number; enabledSchedules: number; failedSchedules: number; overdueSchedules: number };
     receivingInventory: SystemHealthCheck & { itemsBelowMin: number };
     supplierPortal: SystemHealthCheck & { activeSupplierUsers: number; recentlyActiveCount: number };
+    virusScanner: SystemHealthCheck & { enabled: boolean; up: boolean; engine?: string | null; definitionsVersion?: string | null; definitionsDate?: string | null };
   };
 }
 

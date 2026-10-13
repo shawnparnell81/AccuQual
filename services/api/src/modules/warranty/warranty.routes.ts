@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -37,7 +38,7 @@ warrantyRouter.post("/claims", validate(createWarrantyClaimSchema), createWarran
 warrantyRouter.get("/claims/:id", getWarrantyClaimHandler);
 warrantyRouter.delete("/claims/:id", deleteRecordHandler("warranty"));
 warrantyRouter.post("/claims/:id/update", validate(updateWarrantyClaimSchema), updateWarrantyClaimHandler);
-warrantyRouter.post("/claims/:id/upload", upload.single("file"), uploadWarrantyDocumentHandler);
+warrantyRouter.post("/claims/:id/upload", upload.single("file"), scanUploads("Warranty > claim documents"), uploadWarrantyDocumentHandler);
 warrantyRouter.post("/claims/:id/transition", validate(transitionWarrantyClaimSchema), transitionWarrantyClaimHandler);
 
 warrantyRouter.get("/claims/:id/costs", listWarrantyCostsHandler);

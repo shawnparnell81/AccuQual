@@ -14,6 +14,11 @@ services:
     # starter is $7/month. A persistent disk is not available on the free
     # instance type, and a service with a disk cannot scale past one instance.
     # The 1 GB disk is $0.25/month.
+    # Virus scanning (ClamAV's clamd runs inside this container, see
+    # docs/virus-scanning.md) keeps its signatures in memory, about 1.1 GB.
+    # starter has 512 MB, so the API needs the standard plan (2 GB) or larger
+    # before this change is deployed. Until then clamd is killed for memory
+    # and every upload is refused (it fails closed).
     plan: starter
     # Must stay /health. The handler returns within a few seconds even when
     # REDIS_URL is unset; a hung probe here fails the deploy. The public body
@@ -34,6 +39,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Every uploaded file is scanned by ClamAV before it is stored. Leave this
+      # true. false turns scanning off (the Admin System Health page then warns).
+      - key: VIRUS_SCAN_ENABLED
+        value: "true"
       # Use the Session Pooler string (IPv4), never Direct connection —
       # Render's network doesn't route the IPv6 address Supabase's direct
       # endpoint resolves to. See DEPLOY.md's "The one gotcha" section.
