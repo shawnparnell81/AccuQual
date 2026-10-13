@@ -11,6 +11,8 @@ export const proposeBodySchema = z.object({
     blocks: z.array(z.unknown()).max(5000),
     sheets: z.array(z.unknown()).max(50),
     images: z.number().int().nonnegative(),
+    imageMeta: z.array(z.unknown()).max(60).optional(),
+    imageWarnings: z.array(z.string().max(400)).max(60).optional(),
   }),
 });
 

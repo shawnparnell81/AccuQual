@@ -8,6 +8,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
 import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
+import { FigureProvider, hasUnmatchedImages, IMAGES_SECTION, NcrReportTable, SectionFigures, type NcrReportRow, type ReportImage } from "./engineeringReportImages";
 
 type Status = "" | "green" | "yellow" | "red";
 
@@ -39,6 +40,10 @@ interface Narrative {
   techLine: QaItem[];
   fitment: QaItem[];
   productInfo: QaItem[];
+  ncrNotes?: string;
+  ncrTableRows?: NcrReportRow[];
+  /** Imported pictures. The server owns this list; the narrative save never sends it back as a change. */
+  images?: ReportImage[];
   financialEntries?: FinancialEntry[];
   importPulls?: ImportPull[];
 }
@@ -205,7 +210,10 @@ function Section({ number, title, children }: { number: string; title: string; c
       <h3 className="text-base font-semibold">
         {number} {title}
       </h3>
-      <div className="mt-3 flex flex-col gap-3">{children}</div>
+      <div className="mt-3 flex flex-col gap-3">
+        {children}
+        <SectionFigures sectionNumber={number} />
+      </div>
     </section>
   );
 }
@@ -525,6 +533,29 @@ export function EngineeringMonthlyReport() {
     onError: (err) => toast.error(extractErrorMessage(err, "The report didn't send.")),
   });
 
+  // Pictures are owned by the server: only their list is taken from these replies, so text being typed is never overwritten.
+  const takeImages = async (next: ReportView) => {
+    setNarrative((current) => (current ? { ...current, images: next.narrative.images ?? [] } : current));
+    await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
+  };
+  const captionImage = useMutation({
+    mutationFn: async ({ image, caption }: { image: ReportImage; caption: string }) =>
+      (await apiClient.patch<ReportView>(`/reports/engineering/images/${image.attachmentId}`, { year, month, caption })).data,
+    onSuccess: async (next) => {
+      await takeImages(next);
+      toast.success("Caption saved.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "The caption didn't save.")),
+  });
+  const deleteImage = useMutation({
+    mutationFn: async (image: ReportImage) => (await apiClient.delete<ReportView>(`/reports/engineering/images/${image.attachmentId}`, { params: { year, month } })).data,
+    onSuccess: async (next) => {
+      await takeImages(next);
+      toast.success("Picture removed.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "The picture wasn't removed.")),
+  });
+
   const upload = useMutation({
     mutationFn: async (file: File) => {
       const body = new FormData();
@@ -590,7 +621,7 @@ export function EngineeringMonthlyReport() {
 
   return (
     <div className="qe-report flex flex-col gap-4">
-      <style>{`@media print { .qe-report { width: 100%; background: white; color: black; } .qe-no-print { display: none !important; } }`}</style>
+      <style>{`@media print { .qe-report { width: 100%; background: white; color: black; } .qe-no-print { display: none !important; } .qe-figure, .qe-report tr { break-inside: avoid; page-break-inside: avoid; } .qe-figure img { max-width: 100%; height: auto; } }`}</style>
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {view ? `${view.documentId} · Rev ${view.revision}` : "TMP-ENG-001 · Rev C"}
@@ -688,7 +719,7 @@ export function EngineeringMonthlyReport() {
       </div>
 
       {view && narrative && (
-        <>
+        <FigureProvider value={{ images: narrative.images ?? [], canEdit: !locked, onCaption: (image, caption) => captionImage.mutate({ image, caption }), onDelete: (image) => deleteImage.mutate(image) }}>
           <Section number="6.1" title="Executive Summary">
             <div className="flex flex-wrap items-center gap-3">
               <span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusClass}`}>{status ? status.toUpperCase() : "NO STATUS"}</span>
@@ -924,6 +955,8 @@ export function EngineeringMonthlyReport() {
           </Section>
 
           <Section number="6.6" title="NCRs, CARs, PIRs, and RPNs">
+            <NcrReportTable rows={narrative.ncrTableRows ?? []} disabled={locked} onChange={(ncrTableRows) => patch({ ncrTableRows })} />
+            <TextAreaField allowPictures={false} label="NCRs / CARs / PIRs / RPNs notes" value={narrative.ncrNotes ?? ""} disabled={locked} onChange={(event) => patch({ ncrNotes: event.target.value })} />
             <p className="text-sm">
               {ncr?.status === "ok" ? `NCRs logged: ${ncr.data?.total ?? 0} (${ncr.data?.open ?? 0} open, ${ncr.data?.closed ?? 0} closed).` : ncr?.status === "no_access" ? "No access to NCR." : ncr?.reason}
             </p>
@@ -994,7 +1027,9 @@ export function EngineeringMonthlyReport() {
           <Section number="6.14" title="NAPA black label pallet work">
             <TextAreaField allowPictures={false} label="Notes" value={narrative.palletNotes} disabled={locked} onChange={(event) => patch({ palletNotes: event.target.value })} />
           </Section>
-        </>
+
+          {hasUnmatchedImages(narrative.images ?? []) && <Section number={IMAGES_SECTION} title="Images">{null}</Section>}
+        </FigureProvider>
       )}
     </div>
   );

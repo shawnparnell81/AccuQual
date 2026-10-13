@@ -22,6 +22,19 @@ export const saveEngineeringReportSchema = z.object({
     emailIssuesNotes: z.string().max(8000),
     fieldQuestions: z.string().max(8000),
     palletNotes: z.string().max(8000),
+    ncrNotes: z.string().max(8000).optional(),
+    ncrTableRows: z
+      .array(
+        z.object({
+          ncrNumber: z.string().max(2000),
+          partNumber: z.string().max(2000),
+          description: z.string().max(2000),
+          disposition: z.string().max(2000),
+          status: z.string().max(2000),
+        }),
+      )
+      .max(200)
+      .optional(),
     techLine: z.array(qaItem).max(40),
     fitment: z.array(qaItem).max(40),
     productInfo: z.array(qaItem).max(40),
@@ -50,6 +63,12 @@ export const saveEngineeringReportSchema = z.object({
       .default([]),
   }),
   recipients: zodRecipients(0).optional(),
+});
+
+export const updateReportImageSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+  caption: z.string().max(500),
 });
 
 export const emailEngineeringReportSchema = saveEngineeringReportSchema.extend({

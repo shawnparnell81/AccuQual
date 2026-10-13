@@ -1,10 +1,12 @@
 import { Router } from "express";
 import multer from "multer";
 import { validate } from "../../middleware/validate.js";
-import { emailEngineeringReportSchema, saveEngineeringReportSchema } from "./validation.js";
+import { emailEngineeringReportSchema, saveEngineeringReportSchema, updateReportImageSchema } from "./validation.js";
 import {
   engineeringEmailHandler,
   engineeringGetHandler,
+  engineeringImageCaptionHandler,
+  engineeringImageDeleteHandler,
   engineeringHelpHandler,
   engineeringPdfHandler,
   engineeringPeopleHandler,
@@ -25,4 +27,6 @@ engineeringReportRouter.get("/pdf", engineeringPdfHandler);
 engineeringReportRouter.get("/", engineeringGetHandler);
 engineeringReportRouter.put("/", validate(saveEngineeringReportSchema), engineeringSaveHandler);
 engineeringReportRouter.post("/email", validate(emailEngineeringReportSchema), engineeringEmailHandler);
+engineeringReportRouter.patch("/images/:attachmentId", validate(updateReportImageSchema), engineeringImageCaptionHandler);
+engineeringReportRouter.delete("/images/:attachmentId", engineeringImageDeleteHandler);
 engineeringReportRouter.post("/upload", upload.single("file"), engineeringUploadHandler);

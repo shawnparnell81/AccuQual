@@ -6,6 +6,8 @@ import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { AppError } from "../../utils/appError.js";
 import type { Db } from "../../lib/requestDb.js";
+import { engineeringAccess } from "../quality-engineering-report/livePull.js";
+import { REPORT_IMAGES_ENTITY } from "../quality-engineering-report/model.js";
 
 /**
  * Attachment entityType (the string the record pages send) -> the module
@@ -111,6 +113,17 @@ export async function assertAttachmentAudience(req: Request, entityType: string 
   if (!entityType && (entityId == null || Number.isNaN(entityId))) return;
   if (!entityType || entityId == null || !Number.isInteger(entityId) || entityId <= 0) {
     throw AppError.badRequest("entityType and entityId must be provided together");
+  }
+  if (entityType === REPORT_IMAGES_ENTITY) {
+    // Pictures imported into the Monthly Quality Report follow the report's own read access. They are added by
+    // importing a Word file and removed or captioned on the report page, so the generic routes only read them.
+    if (!req.user || !req.db) throw AppError.forbidden("No access to that file");
+    const access = await engineeringAccess(req.db, { id: req.user.id, roleName: req.user.roleName, department: req.user.department });
+    if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in the Monthly Quality Report.");
+    if (req.method !== "GET" && req.method !== "HEAD") throw AppError.forbidden("Add or remove pictures from the Monthly Quality Report page.");
+    if (!Number.isInteger(entityId) || entityId <= 0) throw AppError.badRequest("entityType and entityId must be provided together");
+    if (!(await loadParent(req.db, "quality_engineering_reports", entityId, false))) throw AppError.notFound("Attachment");
+    return;
   }
   const spec = PARENTS[entityType];
   if (!spec) throw AppError.badRequest("That record type can't have attachments.");

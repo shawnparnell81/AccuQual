@@ -97,11 +97,16 @@ describe("import from file phase 2: report targets + saved mappings", () => {
 
       const csv = readFileSync(csvPath);
       const expected = (await parseSupplierFile(csv, "x.csv", 2026)).data;
-      expect(mine).toEqual(expected);
+      // The Word report also carries the NCR table and the NCR notes, which the CSV has no columns for.
+      expect(mine.ncrTable).toHaveLength(2);
+      expect(mine.notes.some((note) => note.section === "ncr")).toBe(true);
+      expect({ ...mine, ncrTable: [], notes: mine.notes.filter((note) => note.section !== "ncr") }).toEqual(expected);
 
       const n1 = mergeUploadNarrative(emptyNarrative(), mine, true);
       const n2 = mergeUploadNarrative(emptyNarrative(), expected, true);
-      expect(n1).toEqual(n2);
+      expect(n1.ncrTableRows).toHaveLength(2);
+      expect(n1.ncrNotes).toContain("Total September NCRs Logged: 2");
+      expect({ ...n1, ncrTableRows: [], ncrNotes: "" }).toEqual(n2);
       expect(n1.departmentStatus).toBe("yellow");
       expect(n1.fitment).toHaveLength(1);
       expect(n1.productInfo).toHaveLength(2);

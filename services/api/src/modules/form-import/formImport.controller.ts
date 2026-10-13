@@ -13,12 +13,12 @@ import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { openBuiltFill, saveBuiltFill } from "../form-builder/service.js";
-import { MONTH_NAMES, mergeUploadNarrative, normalizeNarrative } from "../quality-engineering-report/model.js";
-import { saveEngineeringSupplierData } from "../quality-engineering-report/service.js";
+import { MONTH_NAMES } from "../quality-engineering-report/model.js";
+import { applyReportImport, describeImport, type ImportSummary } from "../quality-engineering-report/service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { suggestWithAi } from "./aiSuggest.js";
 import { deleteMapping, listMappings, saveMapping, updateMapping } from "./importMappings.service.js";
-import { extractFile, type ExtractedFile } from "./extract.js";
+import { extractFileWithImages, type ExtractedFile, type ExtractedImage } from "./extract.js";
 import { executeFormImport as runFormImport, planFormImport, type PlannedRow } from "./formImport.execute.js";
 import { suggestMapping } from "./formImport.match.js";
 import { interpretGrid, parseImportFile, type InterpretedImport } from "./formImport.parse.js";
@@ -39,6 +39,23 @@ const importBody = z.object({
     .max(500),
   mapping: z.record(z.string().max(40), z.number().int().nonnegative().nullable()),
 });
+
+/**
+ * Confirm is JSON, except a Monthly Quality Report import from a Word file also sends that file so its
+ * pictures can be stored: multipart with the usual body as a JSON "payload" field plus the "file".
+ */
+export function confirmUploadFile(req: Request, res: Response, next: NextFunction) {
+  if (!req.is("multipart/form-data")) return next();
+  upload.single("file")(req, res, (err: unknown) => {
+    if (err) return next(AppError.badRequest("That file couldn't be uploaded. Keep it under 8 MB."));
+    try {
+      req.body = JSON.parse(String((req.body as { payload?: unknown } | undefined)?.payload ?? "{}"));
+    } catch {
+      return next(AppError.badRequest("That import could not be saved."));
+    }
+    next();
+  });
+}
 
 export function uploadImportFile(req: Request, res: Response, next: NextFunction) {
   upload.single("file")(req, res, (err: unknown) => {
@@ -196,11 +213,17 @@ export const listImportTargetsHandler = asyncHandler(async (req, res) => {
   res.json({ targets });
 });
 
+const PREVIEW_MAX_BYTES = 1_500_000;
+
 export const extractFileHandler = asyncHandler(async (req, res) => {
   const file = req.file;
   if (!file) throw AppError.badRequest("Choose a file to import.");
-  const extracted = await extractFile(file.buffer, file.originalname || "upload");
-  res.json({ extracted, warnings: [] });
+  const { file: extracted, images } = await extractFileWithImages(file.buffer, file.originalname || "upload");
+  // Small pictures come back inline so the review can show them. Bigger ones show their name and caption only.
+  const imagePreviews = images
+    .filter((image) => image.bytes.length <= PREVIEW_MAX_BYTES)
+    .map((image) => ({ order: image.order, dataUrl: `data:${image.mimeType};base64,${image.bytes.toString("base64")}` }));
+  res.json({ extracted, warnings: [], imagePreviews });
 });
 
 /** Saved mappings only relabel a field's reason to "saved mapping" — the match itself still comes
@@ -277,6 +300,7 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   let openPath: string;
   let auditEntityType: string;
   let auditEntityId: number;
+  let reportSummary: ImportSummary | null = null;
 
   if (target.kind === "built") {
     const fill = await openBuiltFill(req.db!, actor, target.builtId!, body.recordNumber ?? null, req.siteId);
@@ -304,21 +328,21 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   } else {
     if (body.year == null || body.month == null) throw AppError.badRequest("Choose a month and year.");
     const supplier = toSupplierData(body.values, body.year);
-    const [existing] = await req.db!
-      .select()
-      .from(qualityEngineeringReports)
-      .where(and(eq(qualityEngineeringReports.year, body.year), eq(qualityEngineeringReports.month, body.month)));
-    const narrative = mergeUploadNarrative(normalizeNarrative(existing?.narrative), supplier, body.replaceNotes ?? false);
-    await saveEngineeringSupplierData(req.db!, {
-      year: body.year,
-      month: body.month,
-      narrative,
-      supplierData: supplier,
-      uploadFileName: body.fileName.slice(0, 200),
-      user: actor,
-      siteIds: req.allowedSiteIds ?? [],
-      plantId: req.allSites ? null : (req.siteId ?? null),
-    });
+    // The pictures are read from the file itself, never from the browser's copy of the review.
+    const images: ExtractedImage[] = req.file ? (await extractFileWithImages(req.file.buffer, req.file.originalname || body.fileName)).images : [];
+    reportSummary = (
+      await applyReportImport(req.db!, {
+        year: body.year,
+        month: body.month,
+        supplierData: supplier,
+        replaceNotes: body.replaceNotes ?? false,
+        fileName: body.fileName,
+        images,
+        user: actor,
+        siteIds: req.allowedSiteIds ?? [],
+        plantId: req.allSites ? null : (req.siteId ?? null),
+      })
+    ).summary;
     const [savedRow] = await req.db!
       .select({ id: qualityEngineeringReports.id })
       .from(qualityEngineeringReports)
@@ -334,7 +358,7 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
   const aiSuffix = aiAccepted.length > 0 ? `; ${aiAccepted.length} accepted from AI suggestions` : "";
   const summary =
     (target.kind === "report"
-      ? `${person.label} imported "${body.fileName}" into the Monthly Quality Report for ${MONTH_NAMES[(body.month ?? 1) - 1]} ${body.year} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`
+      ? `${person.label} imported ${reportSummary ? describeImport(reportSummary) : "the report data"} into the ${MONTH_NAMES[(body.month ?? 1) - 1]} ${body.year} Monthly Quality Report from "${body.fileName}" on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`
       : `${person.label} imported "${body.fileName}" into "${target.title}"${revLabel} on ${person.when}. ${filled} of ${target.fields.length} fields filled from the file; ${edited} edited in review.`) + aiSuffix;
   await recordAuditTrail(req.db!, {
     entityType: auditEntityType,
