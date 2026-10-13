@@ -118,4 +118,20 @@ export const attachFormSchema = z.object({
   formType: z.enum(["csa", "fuel_pump"]),
 });
 
+export const createSourceSchema = z.object({
+  partNumber: z.string().trim().min(1).max(120),
+  supplierId: z.number().int().positive().optional().nullable(),
+  supplierFactory: z.string().max(200).optional().nullable(),
+  receivingLocation: z.string().max(200).optional().nullable(),
+  status: z.enum(SOURCE_STATUS).default("fai_required"),
+});
+
+/** Status is not editable here: changing it stays with the signed manual-status route. */
+export const updateSourceSchema = z.object({
+  partNumber: z.string().trim().min(1).max(120).optional(),
+  supplierId: z.number().int().positive().optional().nullable(),
+  supplierFactory: z.string().max(200).optional().nullable(),
+  receivingLocation: z.string().max(200).optional().nullable(),
+});
+
 export { RECORD_STATUS, SOURCE_STATUS, TRIGGER_REASONS };

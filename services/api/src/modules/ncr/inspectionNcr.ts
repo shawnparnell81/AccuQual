@@ -51,6 +51,10 @@ export interface OpenInspectionNcrInput {
   severity?: string | null;
   receivingLineItemId?: number | null;
   rows: InspectionNcrRow[];
+  /** Lines printed above the failed measurements, e.g. the lot, PO and source record reference. */
+  contextLines?: string[];
+  /** Extra fields stored beside the source link on the NCR. */
+  sourceExtra?: Record<string, unknown>;
   sourceAudit: { entityType: string; entityId: number };
 }
 
@@ -67,6 +71,7 @@ export async function openInspectionNcr(db: Db, input: OpenInspectionNcrInput, p
     path: input.path,
     part: input.part,
     rows: input.rows,
+    ...(input.sourceExtra ?? {}),
   };
   const siteId = input.siteId ?? null;
   const [created] = await db

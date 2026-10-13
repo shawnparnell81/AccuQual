@@ -6,7 +6,7 @@ import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { roleHasPermission } from "../roles/rolePermissions.js";
 import {
   FAI_CREATE_PERMISSION, FAI_DELETE_PERMISSION, FAI_EDIT_PERMISSION,
-  FAI_SIGNOFF_PERMISSION, FAI_VIEW_PERMISSION, FAI_PLANS_MANAGE_PERMISSION,
+  FAI_SIGNOFF_PERMISSION, FAI_VIEW_PERMISSION, FAI_PLANS_MANAGE_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION,
 } from "../roles/roleAccess.js";
 import { inspPlans, inspPlanCharacteristics, inspApprovedSources, inspRecords, inspResultLines } from "../../drizzle/schema/faiInspection.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -18,6 +18,8 @@ import { dueStatusFor } from "./fai-due-status.js";
 import { faiRandomPullBatches, faiRandomPullItems } from "../../drizzle/schema/faiScheduling.js";
 import { notifyAwaitingSignoff, notifySignedOff } from "./fai-notifications.service.js";
 import { productTypeFor, type FaiProductType } from "./fai-product-type.js";
+import { openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
+import { suppliers } from "../../drizzle/schema/supplier.js";
 
 type Db = any;
 
@@ -571,6 +573,166 @@ export async function signRecord(db: Db, user: any, req: any, id: number, input:
   const productFamily = rec.planId ? (await db.select({ productFamily: inspPlans.productFamily }).from(inspPlans).where(eq(inspPlans.id, rec.planId)))[0]?.productFamily ?? null : null;
   await notifySignedOff(db, updated, outcome, productFamily);
   return updated;
+}
+
+
+/* ---------------- Submit for sign-off ---------------- */
+
+const STATUS_LABEL: Record<string, string> = { draft: "Draft", in_inspection: "In inspection", awaiting_signoff: "Awaiting sign-off" };
+
+/** Draft or in-inspection -> awaiting sign-off, and sends the existing "awaiting sign-off" alert. Sign-off itself is unchanged (fai.signoff + PIN). */
+export async function submitForSignoff(db: Db, user: any, id: number) {
+  await requirePerm(db, user, FAI_EDIT_PERMISSION, "submit FAI records for sign-off");
+  const [rec] = await db.select().from(inspRecords).where(eq(inspRecords.id, id));
+  if (!rec) throw AppError.notFound("FAI record not found.");
+  if (!["draft", "in_inspection"].includes(rec.status)) {
+    throw new AppError("Only a draft or in-inspection FAI record can be submitted for sign-off.", 409);
+  }
+  const [updated] = await db.update(inspRecords).set({ status: "awaiting_signoff", updatedAt: new Date() }).where(eq(inspRecords.id, id)).returning();
+  await recordAuditTrail(db, {
+    entityType: ENTITY, entityId: id, action: "status_change",
+    changes: {
+      what: "FAI submitted for sign-off",
+      description: `Submitted FAI record ${rec.faiNumber} for sign-off. Status changed from ${STATUS_LABEL[rec.status] ?? rec.status} to Awaiting sign-off.`,
+    },
+    performedBy: user?.id ?? null,
+  });
+  const productFamily = rec.planId ? (await db.select({ productFamily: inspPlans.productFamily }).from(inspPlans).where(eq(inspPlans.id, rec.planId)))[0]?.productFamily ?? null : null;
+  await notifyAwaitingSignoff(db, updated, productFamily);
+  return getRecord(db, user, id);
+}
+
+/* ---------------- Create NCR from a failed record ---------------- */
+
+function lineSpecText(line: any): string {
+  if (line.limitLow || line.limitHigh) return `${line.limitLow ?? ""} to ${line.limitHigh ?? ""}`.trim();
+  if (line.nominal) return line.nominal;
+  return line.limitType === "attribute" ? "Pass" : "(blank)";
+}
+
+/** Opens a real, new NCR for a failed FAI record, pre-filled and linked both ways. Needs fai.view plus the existing NCR create access. */
+export async function createNcrFromRecord(db: Db, user: any, req: any, id: number) {
+  await requirePerm(db, user, FAI_VIEW_PERMISSION, "view FAI record");
+  await requireNcrEdit(db, { id: user?.id, roleName: user?.roleName ?? user?.role ?? null, department: user?.department ?? null });
+  const [rec] = await db.select().from(inspRecords).where(eq(inspRecords.id, id));
+  if (!rec) throw AppError.notFound("FAI record not found.");
+  if (rec.ncrId) return { id: rec.ncrId, existing: true };
+  if (rec.status !== "failed") throw new AppError("Only a failed FAI record can open an NCR.", 409);
+  const lines = await db.select().from(inspResultLines).where(eq(inspResultLines.recordId, id)).orderBy(asc(inspResultLines.sortOrder));
+  const rows = lines
+    .filter((line: any) => line.result === "fail")
+    .map((line: any) => ({ measurement: line.characteristicName, spec: lineSpecText(line), actual: line.measuredValue || line.attributeResult || "(blank)" }));
+  if (rows.length === 0) rows.push({ measurement: "FAI result", spec: "Pass", actual: "Failed at sign-off" });
+  const supplier = rec.supplierId ? (await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, rec.supplierId)))[0]?.name ?? null : null;
+  const contextLines = [
+    `FAI record: ${rec.faiNumber}`,
+    `Part number: ${rec.partNumber}`,
+    ...(supplier ? [`Supplier: ${supplier}${rec.supplierFactory ? ` (${rec.supplierFactory})` : ""}`] : []),
+    ...(rec.poReference ? [`PO / lot reference: ${rec.poReference}`] : []),
+    ...(rec.lotSize ? [`Lot size: ${rec.lotSize}`] : []),
+  ];
+  const created = await openInspectionNcr(
+    db,
+    {
+      formTitle: `FAI ${rec.faiNumber}`,
+      part: rec.partNumber,
+      path: `/fai-inspection/records/${id}`,
+      formType: "first_article",
+      sourceId: id,
+      kind: "fai_inspection",
+      supplierId: rec.supplierId,
+      siteId: rec.siteId,
+      fallbackSiteId: req?.siteId,
+      rows,
+      contextLines,
+      sourceExtra: { faiNumber: rec.faiNumber, poReference: rec.poReference, lotSize: rec.lotSize, supplierFactory: rec.supplierFactory },
+      sourceAudit: { entityType: ENTITY, entityId: id },
+    },
+    user?.id,
+  );
+  await db.update(inspRecords).set({ ncrId: created.id, updatedAt: new Date() }).where(eq(inspRecords.id, id));
+  return { id: created.id, existing: false };
+}
+
+/* ---------------- Approved sources: add, edit, delete ---------------- */
+
+const SOURCE_ENTITY = "FaiSourceApproval";
+const SOURCE_STATUS_LABEL: Record<string, string> = { not_approved: "Not approved", fai_required: "FAI required", approved: "Approved", suspended: "Suspended" };
+
+async function supplierName(db: Db, supplierId: number | null | undefined): Promise<string | null> {
+  if (!supplierId) return null;
+  const [row] = await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, supplierId));
+  return row?.name ?? null;
+}
+
+function describeSource(src: { partNumber: string; supplierFactory?: string | null; receivingLocation?: string | null }, supplier: string | null): string {
+  return [`part ${src.partNumber}`, supplier ? `supplier ${supplier}` : null, src.supplierFactory ? `factory ${src.supplierFactory}` : null, src.receivingLocation ? `receiving location ${src.receivingLocation}` : null].filter(Boolean).join(", ");
+}
+
+async function assertSourceUnique(db: Db, key: { partNumber: string; supplierId: number | null; supplierFactory: string | null; receivingLocation: string | null }, exceptId?: number) {
+  const rows = await db.select({ id: inspApprovedSources.id }).from(inspApprovedSources).where(and(
+    eq(inspApprovedSources.partNumber, key.partNumber),
+    key.supplierId ? eq(inspApprovedSources.supplierId, key.supplierId) : sql`${inspApprovedSources.supplierId} IS NULL`,
+    key.supplierFactory ? eq(inspApprovedSources.supplierFactory, key.supplierFactory) : sql`${inspApprovedSources.supplierFactory} IS NULL`,
+    key.receivingLocation ? eq(inspApprovedSources.receivingLocation, key.receivingLocation) : sql`${inspApprovedSources.receivingLocation} IS NULL`,
+  ));
+  if (rows.some((row: any) => row.id !== exceptId)) throw new AppError("That part, supplier, factory and receiving location is already an approved source.", 409);
+}
+
+export async function createSource(db: Db, user: any, siteId: number | null, input: any) {
+  await requirePerm(db, user, FAI_SOURCES_MANAGE_PERMISSION, "add approved sources");
+  const key = {
+    partNumber: input.partNumber.trim(),
+    supplierId: input.supplierId ?? null,
+    supplierFactory: input.supplierFactory?.trim() || null,
+    receivingLocation: input.receivingLocation?.trim() || null,
+  };
+  await assertSourceUnique(db, key);
+  const status = input.status ?? "fai_required";
+  const [row] = await db.insert(inspApprovedSources).values({ ...key, status, siteId: siteId ?? null }).returning();
+  await recordAuditTrail(db, {
+    entityType: SOURCE_ENTITY, entityId: row.id, action: "create",
+    changes: { what: "approved source", description: `Added approved source: ${describeSource(key, await supplierName(db, key.supplierId))}. Starting status: ${SOURCE_STATUS_LABEL[status] ?? status}.` },
+    performedBy: user?.id ?? null,
+  });
+  return row;
+}
+
+export async function updateSource(db: Db, user: any, id: number, input: any) {
+  await requirePerm(db, user, FAI_SOURCES_MANAGE_PERMISSION, "edit approved sources");
+  const [src] = await db.select().from(inspApprovedSources).where(eq(inspApprovedSources.id, id));
+  if (!src) throw AppError.notFound("Approved source not found.");
+  const next = {
+    partNumber: input.partNumber !== undefined ? input.partNumber.trim() : src.partNumber,
+    supplierId: input.supplierId !== undefined ? input.supplierId : src.supplierId,
+    supplierFactory: input.supplierFactory !== undefined ? input.supplierFactory?.trim() || null : src.supplierFactory,
+    receivingLocation: input.receivingLocation !== undefined ? input.receivingLocation?.trim() || null : src.receivingLocation,
+  };
+  await assertSourceUnique(db, next, id);
+  const [updated] = await db.update(inspApprovedSources).set({ ...next, updatedAt: new Date() }).where(eq(inspApprovedSources.id, id)).returning();
+  const before = describeSource(src, await supplierName(db, src.supplierId));
+  const after = describeSource(next, await supplierName(db, next.supplierId));
+  await recordAuditTrail(db, {
+    entityType: SOURCE_ENTITY, entityId: id, action: "update",
+    changes: { what: "approved source", description: before === after ? `Saved approved source (${after}) with no changes.` : `Changed approved source from (${before}) to (${after}).` },
+    performedBy: user?.id ?? null,
+  });
+  return updated;
+}
+
+export async function deleteSource(db: Db, user: any, id: number) {
+  await requirePerm(db, user, FAI_SOURCES_MANAGE_PERMISSION, "delete approved sources");
+  const [src] = await db.select().from(inspApprovedSources).where(eq(inspApprovedSources.id, id));
+  if (!src) throw AppError.notFound("Approved source not found.");
+  const [onList] = await db.select({ id: faiRandomPullItems.id }).from(faiRandomPullItems).where(eq(faiRandomPullItems.sourceId, id)).limit(1);
+  if (onList) throw new AppError("This source is on a random-pull list, so it can't be deleted.", 409);
+  await db.delete(inspApprovedSources).where(eq(inspApprovedSources.id, id));
+  await recordAuditTrail(db, {
+    entityType: SOURCE_ENTITY, entityId: id, action: "delete",
+    changes: { what: "approved source", description: `Deleted approved source: ${describeSource(src, await supplierName(db, src.supplierId))}. Its status was ${SOURCE_STATUS_LABEL[src.status] ?? src.status}.` },
+    performedBy: user?.id ?? null,
+  });
+  return { deleted: true };
 }
 
 /* ---------------- Dashboard ---------------- */

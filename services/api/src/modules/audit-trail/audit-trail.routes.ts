@@ -9,6 +9,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { withResolvedActors, attachFieldChanges, labelPersonFields } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
+import { auditFilterOptions, listCompanyAudit, parseAuditListQuery } from "./auditTrailList.js";
 import { ACCOUNT_ENTITY_TYPES, ENTITY_TYPE_TO_RESOURCE, assertCanReadEntityHistory, canSeeCompanyAuditRow, filterCompanyAuditBySite, visibleEntityTypes } from "./auditTrailVisibility.js";
 
 export const auditTrailRouter = Router();
@@ -26,6 +27,11 @@ auditTrailRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const viewer = req.user!;
+    // The Audit log page asks for filters and older pages with ?paged=1. With no query the response is unchanged.
+    if (req.query.paged === "1") {
+      res.json(await listCompanyAudit(req.db! as Db, viewer, req.allowedSiteIds, parseAuditListQuery(req.query)));
+      return;
+    }
     const visible = await visibleEntityTypes(req.db! as Db, viewer);
     const rows = await req.db!.select().from(auditTrail).orderBy(desc(auditTrail.id)).limit(400);
     const byType = rows.filter((row) => canSeeCompanyAuditRow(visible, row, viewer.id));
@@ -34,6 +40,14 @@ auditTrailRouter.get(
     const withActors = await withResolvedActors(req.db! as Db, allowed);
     const withFields = await attachFieldChanges(req.db! as Db, withActors);
     res.json(await labelPersonFields(req.db! as Db, withFields));
+  }),
+);
+
+/** Record types and people for the Audit log filters. Only what this person can already see. */
+auditTrailRouter.get(
+  "/filters",
+  asyncHandler(async (req, res) => {
+    res.json(await auditFilterOptions(req.db! as Db, req.user!));
   }),
 );
 

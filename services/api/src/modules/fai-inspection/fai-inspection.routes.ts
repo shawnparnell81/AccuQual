@@ -26,6 +26,9 @@ faiInspectionRouter.get("/plans/:id", c.getPlan);
 faiInspectionRouter.put("/plans/:id", c.updatePlan);
 
 faiInspectionRouter.get("/sources", c.listSources);
+faiInspectionRouter.post("/sources", c.createSource);
+faiInspectionRouter.put("/sources/:id", c.updateSource);
+faiInspectionRouter.delete("/sources/:id", c.deleteSource);
 faiInspectionRouter.post("/sources/:id/status", c.manualSourceStatus);
 
 faiInspectionRouter.get("/records", c.listRecords);
@@ -35,6 +38,8 @@ faiInspectionRouter.patch("/records/:id", c.updateRecord);
 faiInspectionRouter.delete("/records/:id", c.deleteRecord);
 faiInspectionRouter.post("/records/:id/lines", c.saveResultLines);
 faiInspectionRouter.post("/records/:id/sign", c.signRecord);
+faiInspectionRouter.post("/records/:id/submit-signoff", c.submitForSignoff);
+faiInspectionRouter.post("/records/:id/ncr", c.createNcr);
 faiInspectionRouter.post("/records/:id/attach-form", c.attachForm);
 faiInspectionRouter.post("/records/:id/detach-form", c.detachForm);
 faiInspectionRouter.get("/records/:id/pdf", c.recordPdf);

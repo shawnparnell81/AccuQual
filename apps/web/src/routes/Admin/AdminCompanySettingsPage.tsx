@@ -34,6 +34,7 @@ export function AdminCompanySettingsPage() {
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [plannerUrl, setPlannerUrl] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -43,6 +44,7 @@ export function AdminCompanySettingsPage() {
       setContactName(profile.contactName ?? "");
       setContactEmail(profile.contactEmail ?? "");
       setContactPhone(profile.contactPhone ?? "");
+      setPlannerUrl(profile.engineeringPlannerUrl ?? "");
     }
   }, [profile]);
 
@@ -69,7 +71,7 @@ export function AdminCompanySettingsPage() {
   });
 
   const save = useMutation({
-    mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone })).data,
+    mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone, engineeringPlannerUrl: plannerUrl.trim() })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company/profile"] });
       toast.success("Company settings saved.");
@@ -103,6 +105,8 @@ export function AdminCompanySettingsPage() {
               <TextField label="Contact Email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
               <TextField label="Contact Phone" type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
             </div>
+            <TextField label="Engineering Planner link" placeholder="https://…" value={plannerUrl} onChange={(e) => setPlannerUrl(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Leave blank to hide Engineering Planner from the menu.</p>
             <p className="text-xs text-muted-foreground">
               Full color palette and PDF header/footer branding are configured on the{" "}
               <Link to="/admin/company-branding" className="text-primary hover:underline">
