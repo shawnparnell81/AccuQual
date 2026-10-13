@@ -6,6 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { canDeleteRecord, recordDeleteLabel } from "../../lib/recordDelete";
 import { useToast } from "./ToastProvider";
+import { isUnsavedRecordId } from "../../lib/blankDraft";
 import { useConfirm } from "./ConfirmDialog";
 
 interface DeleteRecordButtonProps {
@@ -50,6 +51,15 @@ export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds
   const recordName = recordDeleteLabel(kind, title, number);
 
   async function onClick() {
+    if (isUnsavedRecordId(id)) {
+      // A blank opened from Blank Forms has no record yet (id 0 / NaN). Nothing to delete on the server:
+      // discard it and leave, instead of calling DELETE /resource/NaN and failing.
+      const discard = await confirm({ title: "Discard this form?", message: "This form was never saved. Discard it?", confirmLabel: "Discard", tone: "danger" });
+      if (!discard) return;
+      if (navigateTo) navigate(navigateTo);
+      else navigate(-1);
+      return;
+    }
     const ok = await confirm({
       title: "Are you sure?",
       message: `Delete ${recordName}? This can't be undone.`,
@@ -76,7 +86,7 @@ export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds
       disabled={pending}
       className={className ?? "rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-60"}
     >
-      {pending ? "Deleting…" : label}
+      {pending ? "Deleting…" : isUnsavedRecordId(id) ? "Discard" : label}
     </button>
   );
 }

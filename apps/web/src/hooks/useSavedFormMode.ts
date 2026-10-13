@@ -2,25 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../lib/beginEdit";
-import { afterEditClick, afterSaveOrCancel, isFreshFormOpen, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../lib/savedFormLock";
+import { afterEditClick, afterSaveOrCancel, opensFresh, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../lib/savedFormLock";
 
 /**
  * A brand-new blank opens editable. Every later open of that record is locked
  * until Edit. Save keeps the session editable. Done, Cancel, navigation, and
  * reload lock it again.
  */
-export function useSavedFormMode(recordId: number | string | undefined, canEdit: boolean) {
+export function useSavedFormMode(recordId: number | string | undefined, canEdit: boolean, options?: { unsavedDraft?: boolean }) {
+  const unsavedDraft = Boolean(options?.unsavedDraft);
   const location = useLocation();
-  const freshOnArrival = useRef(isFreshFormOpen(location.state));
+  const freshOnArrival = useRef(opensFresh(location.state, unsavedDraft));
   const lockedByUser = useRef(false);
   const id = String(recordId ?? "");
   const [mode, setMode] = useState<SavedFormMode>(() => openSavedForm(freshOnArrival.current && canEdit));
 
   useEffect(() => {
-    freshOnArrival.current = isFreshFormOpen(location.state);
+    freshOnArrival.current = opensFresh(location.state, unsavedDraft);
     lockedByUser.current = false;
     setMode(openSavedForm(freshOnArrival.current && canEdit));
-  }, [id]);
+  }, [id, unsavedDraft]);
 
   useEffect(() => {
     if (!canEdit) {

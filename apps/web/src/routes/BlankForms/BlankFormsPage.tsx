@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FileText, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { FORM_TEMPLATES_QUERY_KEY, useFormTemplates, type FormTemplateCacheRow } from "../../api/formTemplatesQuery";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { blankDraftState, unsavedBlankPath } from "../../lib/blankDraft";
+import { blankDraftState, shouldStartBlank, unsavedBlankPath } from "../../lib/blankDraft";
 import { blankFormFileName, blankFormsByName, blankRenameProblem, blankTemplateTopic, templatesOnBlankShelf } from "../../lib/blankFormsList";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -227,18 +227,25 @@ export function StartBlankFormPage() {
 
   const form = templates.data?.find((row) => row.formKey === formKey);
 
+  // Workspace tabs keep this page mounted (hidden) after it hands off to the form. Without this guard,
+  // any later templates refetch re-ran the effect and yanked Back, Delete, and links back onto the blank.
+  const startedFor = useRef<string | null>(null);
+
   useEffect(() => {
     if (!formKey || templates.isLoading || !templates.data) return;
+    if (!shouldStartBlank(startedFor.current, formKey)) return;
     if (templates.isError) return;
     if (!form) {
       setError("That blank is not in Blank Forms Templates.");
       return;
     }
     if (!form.start) {
+      startedFor.current = formKey;
       navigate(form.subjectRoute, { replace: true });
       return;
     }
     const start = form.start;
+    startedFor.current = formKey;
     const deferred = blankDraftState(start);
     if (deferred) {
       // Pass formKey as query param too, so the blank page can recover if location.state is lost.

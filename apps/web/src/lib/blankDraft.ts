@@ -48,3 +48,13 @@ export function blankDraftFromTemplates(
   if (!start || start.createPath !== createPath) return null;
   return blankDraftState(start)?.blankDraft ?? null;
 }
+
+/** Blank Forms start page hands off once per mount; a refetch must not navigate again. */
+export function shouldStartBlank(startedFor: string | null, formKey: string): boolean {
+  return Boolean(formKey) && startedFor !== formKey;
+}
+
+/** True for a form that has not been saved yet (unsaved blank drafts use id 0 or NaN). */
+export function isUnsavedRecordId(id: number): boolean {
+  return !Number.isFinite(id) || id <= 0;
+}
