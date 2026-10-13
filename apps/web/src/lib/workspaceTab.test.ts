@@ -90,7 +90,7 @@ describe("workspace section tabs", () => {
     assert.notEqual(workspaceTabKey("/ncr/9"), workspaceTabKey("/ncr/10"));
     assert.notEqual(workspaceTabKey("/ncr/9"), workspaceTabKey("/8d/4"));
     assert.equal(workspaceTabKey("/documents/folders"), workspaceTabKey("/blank-forms"));
-    assert.equal(workspaceTabKey("/form-folders/sop"), workspaceTabKey("/documents"));
+    assert.equal(workspaceTabKey("/blank-forms/sop"), workspaceTabKey("/documents"));
     assert.equal(workspaceTabKey("/pareto"), workspaceTabKey("/reporting"));
     assert.equal(workspaceTabKey("/audit-log"), workspaceTabKey("/pareto"));
     assert.equal(workspaceTabKey("/feasibility"), workspaceTabKey("/folders/ecn"));

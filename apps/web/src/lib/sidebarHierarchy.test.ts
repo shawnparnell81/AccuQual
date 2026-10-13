@@ -17,7 +17,7 @@ const QUALITY_LABELS = [
   "Quarantined items",
 ];
 
-const TOP_LABELS = ["Home", "Documents", "Quality", "FAI & Inspection", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"];
+const TOP_LABELS = ["Home", "Documents", "Quality", "FAI & AQL", "Engineering", "Equipment", "Suppliers", "Reports", "Admin"];
 
 describe("sidebar hierarchy", () => {
   it("keeps the ERP groups, with Documents above Quality, and drops the Validation tab", () => {
@@ -38,8 +38,7 @@ describe("sidebar hierarchy", () => {
     assert.equal(links.filter((link) => link.key === "document-control").length, 1);
     assert.equal(links.filter((link) => link.label === "Reports").length, 1);
     assert.equal(links.filter((link) => link.key === "quality").length, 0);
-    const folders = links.find((link) => link.key === "form-folders");
-    assert.deepEqual(folders && { label: folders.label, path: folders.path }, { label: "Folders", path: "/form-folders" });
+    assert.equal(links.some((link) => link.label === "Folders" || link.path === "/form-folders"), false);
   });
 
   it("keeps Documents on templates and the explorer, and Quality on its own folders", () => {
@@ -50,10 +49,9 @@ describe("sidebar hierarchy", () => {
     assert.equal(control.path, "/documents");
     assert.deepEqual(
       control.children.map((child) => child.label),
-      ["Folder Explorer", "Folders", "Blank Forms", "Document changes", "Management System", "Drawings", "APQP", "Obsolete / Archive", "SOP", "Controlled lists", "General Uploads"],
+      ["Folder Explorer", "Blank Forms", "Document changes", "Management System", "Drawings", "APQP", "Obsolete / Archive", "SOP", "Controlled lists", "General Uploads"],
     );
-    const folderLinks = flattenSidebarLinks().filter((link) => link.label === "Folders" && link.path === "/form-folders");
-    assert.equal(folderLinks.length, 2);
+    assert.equal(flattenSidebarLinks().some((link) => link.path === "/form-folders"), false);
     assert.deepEqual(
       quality.children.map((child) => child.label),
       [...QUALITY_LABELS, "PPAP Packet", "Risk / FMEA", "Risk dashboard", "Process Change", "Customer Return Analysis", "Workflow Builder", "Form Builder", "AI Insights"],

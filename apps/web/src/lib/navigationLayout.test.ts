@@ -40,7 +40,7 @@ describe("top menu", () => {
 
   it("keeps every current sidebar section, including pages a folder itself opens", () => {
     const labels = menuLabels(SIDEBAR_FOLDERS);
-    for (const required of ["Home", "Documents", "Blank Forms", "Quality", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin", "Calendar", "Executive dashboard", "NCR", "FRM NCR", "CAPA", "Engineering Planner", "Folder Explorer", "Controlled lists"]) {
+    for (const required of ["Home", "Documents", "Blank Forms", "Quality", "Engineering", "Equipment", "Suppliers", "Reports", "Admin", "Calendar", "Executive dashboard", "NCR", "FRM NCR", "CAPA", "Engineering Planner", "Folder Explorer", "Controlled lists"]) {
       assert.equal(labels.includes(required), true, required);
     }
     assert.equal(PERMANENT_SIDEBAR_LINKS.some((link) => link.label === "Settings" && link.path === "/settings"), true);
@@ -68,7 +68,7 @@ describe("top menu", () => {
     assert.equal(acceptSidebarPath("/documents/development-log"), "/documents/development-log");
     assert.equal(acceptSidebarPath("/iso-forms/frm-dev-001"), "/iso-forms/frm-dev-001");
     assert.equal(acceptSidebarPath("/qms-forms"), "/blank-forms");
-    assert.equal(acceptSidebarPath("/qms-forms/incoming_inspection_record"), "/form-folders/incoming_inspection_record");
+    assert.equal(acceptSidebarPath("/qms-forms/incoming_inspection_record"), "/blank-forms/incoming_inspection_record");
     assert.equal(acceptSidebarPath("/qms-forms/incoming_inspection_record/4"), "/qms-forms/incoming_inspection_record/4");
     assert.equal(acceptSidebarPath("/qms-forms/master_document_register"), "/documents/master-list");
   });

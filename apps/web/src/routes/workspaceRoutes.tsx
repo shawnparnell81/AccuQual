@@ -95,7 +95,6 @@ import {
   FormBuilderEditorPage,
   FormBuilderListPage,
   FormFillPage,
-  FormFoldersPage,
   FormTemplateOpenPage,
   GeneralUploadsPage,
   HomePage,
@@ -157,6 +156,12 @@ function HomeRoute() {
 }
 
 /** Page routes under AppLayout. Called again for the right split pane so each pane gets its own element tree. */
+/** The old Folders page is gone; its URLs open the matching Blank Forms folder. */
+function FormFolderRedirect() {
+  const { formKey = "" } = useParams();
+  return <Navigate to={`/blank-forms/${encodeURIComponent(formKey)}`} replace />;
+}
+
 export function workspaceRouteElements() {
   return [
     <Route key="/" path="/" element={<HomeRoute />} />,
@@ -166,8 +171,9 @@ export function workspaceRouteElements() {
     <Route key="/kpis" path="/kpis" element={<KpisPage />} />,
     <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsListPage />} />,
     <Route key="/blank-forms/start" path="/blank-forms/start/:formKey" element={<StartBlankFormPage />} />,
-    <Route key="/form-folders" path="/form-folders" element={<FormFoldersPage />} />,
-    <Route key="/form-folders/:formKey" path="/form-folders/:formKey" element={<FormFolderDetailPage />} />,
+    <Route key="/blank-forms/:formKey" path="/blank-forms/:formKey" element={<FormFolderDetailPage />} />,
+    <Route key="/form-folders" path="/form-folders" element={<Navigate to="/blank-forms" replace />} />,
+    <Route key="/form-folders/:formKey" path="/form-folders/:formKey" element={<FormFolderRedirect />} />,
     <Route key="/calendar" path="/calendar" element={<CalendarPage />} />,
     <Route key="/audit-log" path="/audit-log" element={<AuditLogPage />} />,
     <Route key="/ncr" path="/ncr" element={<NcrListPage />} />,

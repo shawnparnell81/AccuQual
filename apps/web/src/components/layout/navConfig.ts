@@ -115,7 +115,7 @@ export interface DepartmentMeta {
 
 export const DEPARTMENTS: DepartmentMeta[] = [
   { key: "quality", label: "Quality", icon: ShieldCheck, text: "text-teal-700 dark:text-teal-400", bgSoft: "bg-teal-500/10", ring: "ring-teal-500/30" },
-  { key: "fai_inspection", label: "FAI & Inspection", icon: ClipboardCheck, text: "text-cyan-700 dark:text-cyan-400", bgSoft: "bg-cyan-500/10", ring: "ring-cyan-500/30" },
+  { key: "fai_inspection", label: "FAI & AQL", icon: ClipboardCheck, text: "text-cyan-700 dark:text-cyan-400", bgSoft: "bg-cyan-500/10", ring: "ring-cyan-500/30" },
   { key: "engineering", label: "Engineering", icon: Cog, text: "text-amber-700 dark:text-amber-400", bgSoft: "bg-amber-500/10", ring: "ring-amber-500/30" },
   { key: "production", label: "Production", icon: Factory, text: "text-slate-700 dark:text-slate-300", bgSoft: "bg-slate-500/10", ring: "ring-slate-500/30" },
   { key: "customer_service", label: "Customer Service", icon: Headset, text: "text-violet-700 dark:text-violet-400", bgSoft: "bg-violet-500/10", ring: "ring-violet-500/30" },
@@ -393,7 +393,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
     department: "fai_inspection",
     items: [
       { key: "fai-dashboard", label: "FAI Dashboard", path: "/fai-inspection", icon: ClipboardCheck, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
-      { key: "fai-plans", label: "Inspection Plans", path: "/fai-inspection/plans", icon: ClipboardList, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
+      { key: "fai-plans", label: "AQL Plans", path: "/fai-inspection/plans", icon: ClipboardList, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
       { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module" },
       { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck, access: { fai_inspection: "read" }, kpi: false, priority: 1, notes: "FAI & Inspection module" },
       { key: "fai-random-pulls", label: "Random Pulls", path: "/fai-inspection/random-pulls", icon: Shuffle, access: { fai_inspection: "read" }, kpi: false, priority: 2, notes: "FAI & Inspection module — Phase 2 scheduling" },

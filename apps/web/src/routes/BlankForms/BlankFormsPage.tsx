@@ -39,12 +39,9 @@ export function BlankFormsListPage() {
     onError: (err) => setProblem(extractErrorMessage(err, "Couldn't rename this blank form.")),
   });
 
+  /** Each blank is a folder: the blank pinned on top, its saved copies below. */
   function openForm(form: FormTemplateCacheRow) {
-    if (!form.start) {
-      navigate(form.subjectRoute);
-      return;
-    }
-    navigate(`/blank-forms/start/${form.formKey}`);
+    navigate(`/blank-forms/${encodeURIComponent(form.formKey)}`);
   }
 
   function startRename(form: FormTemplateCacheRow) {

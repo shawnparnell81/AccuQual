@@ -67,7 +67,7 @@ export function FaiInspectionDashboardPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">FAI &amp; Inspection</h1>
+      <h1 className="text-2xl font-semibold mb-6">FAI &amp; AQL</h1>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {tiles.map((t) => (
           <button
@@ -101,10 +101,10 @@ export function FaiInspectionDashboardPage() {
 
       <div className="mt-8 flex gap-4">
         <button
-          onClick={() => openTab({ path: "/fai-inspection/plans", title: "Inspection Plans", icon: "clipboard-check" })}
+          onClick={() => openTab({ path: "/fai-inspection/plans", title: "AQL Plans", icon: "clipboard-check" })}
           className="rounded border px-4 py-2 hover:bg-gray-50"
         >
-          Inspection Plans
+          AQL Plans
         </button>
         <button
           onClick={() => openTab({ path: "/fai-inspection/sources", title: "Approved Sources", icon: "clipboard-check" })}

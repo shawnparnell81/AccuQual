@@ -51,7 +51,7 @@ function locationOf(view: FormFilingView, formKey: string): FiledLocation | null
   return {
     ...location,
     path: visible.join(" / ") || location.path,
-    href: `/form-folders/${encodeURIComponent(formKey)}`,
+    href: `/blank-forms/${encodeURIComponent(formKey)}`,
   };
 }
 
@@ -317,7 +317,7 @@ export function RecordFolderField({
   const filedHref =
     filed && filing.data?.parentId != null
       ? filedInFormFolder
-        ? `/form-folders/${encodeURIComponent(formKey)}`
+        ? `/blank-forms/${encodeURIComponent(formKey)}`
         : documentsFolderHref(filing.data.parentId)
       : "";
   const filedLabel = filedInFormFolder

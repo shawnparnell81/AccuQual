@@ -59,7 +59,7 @@ export function FaiPlanDetailPage() {
   return (
     <div className="p-6 max-w-5xl">
       <h1 className="text-2xl font-semibold mb-4">
-        {isNew ? "New Inspection Plan" : `Plan ${current.partNumber} — rev ${current.revision}`}
+        {isNew ? "New AQL Plan" : `Plan ${current.partNumber} — rev ${current.revision}`}
       </h1>
       {error && <div className="bg-red-50 text-red-700 p-3 rounded mb-4">{error}</div>}
       <div className="grid grid-cols-2 gap-4 mb-6">

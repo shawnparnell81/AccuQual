@@ -14,9 +14,9 @@ export function FaiPlansPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Inspection Plans</h1>
+        <h1 className="text-2xl font-semibold">AQL Plans</h1>
         <button
-          onClick={() => openTab({ path: "/fai-inspection/plans/new", title: "New Inspection Plan", icon: "clipboard-check" })}
+          onClick={() => openTab({ path: "/fai-inspection/plans/new", title: "New AQL Plan", icon: "clipboard-check" })}
           className="rounded bg-primary text-primary-foreground px-4 py-2 hover:opacity-90"
         >
           New Plan
