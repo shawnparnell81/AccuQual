@@ -1,4 +1,10 @@
 import { and, eq } from "drizzle-orm";
+import { extractFile } from "../form-import/extract.js";
+import { proposeMonthlyQuality, toSupplierData } from "../form-import/reportTargets/monthlyQuality.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { users } from "../../drizzle/schema/users.js";
+import { company } from "../../drizzle/schema/company.js";
+import { formatUserLabel } from "../users/userDisplay.js";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +18,7 @@ import {
   assembleReport,
   emptyNarrative,
   emptySupplierData,
+  MONTH_NAMES,
   mergeUploadNarrative,
   normalizeNarrative,
   type EngineeringNarrative,
@@ -184,6 +191,26 @@ export async function saveEngineeringNarrative(
   return buildEngineeringReport(db, input);
 }
 
+/** One plain-language audit entry per supplier-file upload: who, what, when. */
+async function auditSupplierUpload(db: Db, input: { year: number; month: number; fileName: string; replaceNotes: boolean; user: { id: number } }) {
+  const [person] = await db.select({ name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, input.user.id));
+  const [profile] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const timeZone = profile?.profile?.timezone || "UTC";
+  const when = new Intl.DateTimeFormat("en-US", { timeZone, dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const label = formatUserLabel(person ? { ...person, isActive: person.isActive ?? true } : undefined, input.user.id);
+  const row = await loadRow(db, input.year, input.month);
+  await recordAuditTrail(db, {
+    entityType: "QualityEngineeringReport",
+    entityId: row!.id,
+    action: "update",
+    changes: {
+      summary: `${label} uploaded the supplier file "${input.fileName}" into the Monthly Quality Report for ${MONTH_NAMES[input.month - 1]} ${input.year} on ${when}. ${input.replaceNotes ? "Narrative already typed was replaced." : "Narrative already typed was kept."}`,
+      fileName: input.fileName,
+    },
+    performedBy: input.user.id,
+  });
+}
+
 export async function uploadEngineeringSupplier(
   db: Db,
   input: {
@@ -199,11 +226,24 @@ export async function uploadEngineeringSupplier(
 ): Promise<{ report: EngineeringReportView; warnings: string[] }> {
   const access = await engineeringAccess(db, input.user);
   if (!access.canEdit) throw AppError.forbidden("This report is read-only for your access.");
-  const parsed = await parseSupplierFile(input.buffer, input.fileName, input.year);
+  const isDocx = /\.docx$/i.test(input.fileName);
+  let supplierData: SupplierData;
+  let warnings: string[];
+  if (isDocx) {
+    // Same reader and rules as Import from file (no AI): Word headings, tables and Problem/Response lines.
+    const { proposals, warnings: found } = proposeMonthlyQuality(await extractFile(input.buffer, input.fileName));
+    supplierData = toSupplierData(Object.fromEntries(proposals.map((proposal) => [proposal.key, proposal.value])), input.year);
+    warnings = found;
+  } else {
+    const parsed = await parseSupplierFile(input.buffer, input.fileName, input.year);
+    supplierData = parsed.data;
+    warnings = parsed.warnings;
+  }
   const existing = await loadRow(db, input.year, input.month);
-  const narrative = mergeUploadNarrative(normalizeNarrative(existing?.narrative), parsed.data, input.replaceNotes);
-  const report = await saveEngineeringSupplierData(db, { ...input, narrative, supplierData: parsed.data, uploadFileName: input.fileName.slice(0, 200) });
-  return { report, warnings: parsed.warnings };
+  const narrative = mergeUploadNarrative(normalizeNarrative(existing?.narrative), supplierData, input.replaceNotes);
+  const report = await saveEngineeringSupplierData(db, { ...input, narrative, supplierData, uploadFileName: input.fileName.slice(0, 200) });
+  await auditSupplierUpload(db, input);
+  return { report, warnings };
 }
 
 function engineeringEmailCopy(report: EngineeringReportView): { subject: string; body: string } {

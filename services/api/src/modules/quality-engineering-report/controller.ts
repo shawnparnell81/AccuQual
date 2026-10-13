@@ -94,8 +94,10 @@ export const engineeringEmailHandler = asyncHandler(async (req: Request, res: Re
 
 export const engineeringUploadHandler = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
-  if (!file) throw AppError.badRequest("Choose a supplier CSV or Excel file.");
-  if (!sniffSpreadsheet(file.buffer, file.originalname)) throw AppError.badRequest("That file is not a CSV or Excel spreadsheet.");
+  if (!file) throw AppError.badRequest("Choose a supplier CSV, Excel or Word file.");
+  const isWord = /\.docx$/i.test(file.originalname);
+  // A Word file is checked by extractFile (extension and contents must match); spreadsheets keep the existing check.
+  if (!isWord && !sniffSpreadsheet(file.buffer, file.originalname)) throw AppError.badRequest("That file is not a CSV, Excel or Word document.");
   const period = periodFrom(req.body as { year?: unknown; month?: unknown });
   const replaceNotes = String((req.body as { replaceNotes?: unknown }).replaceNotes ?? "") === "true";
   const result = await uploadEngineeringSupplier(req.db!, {
