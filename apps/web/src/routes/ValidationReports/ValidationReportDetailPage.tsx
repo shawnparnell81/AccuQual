@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -43,7 +43,7 @@ import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { useToast } from "../../components/shared/ToastProvider";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
-import { readBlankDraft } from "../../lib/blankDraft";
+import { useBlankDraft } from "../../lib/useBlankDraft";
 import { headerStatusFor } from "../../lib/headerStatus";
 import { useFormFiling } from "../../components/forms/FormDocumentControls";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
@@ -83,10 +83,9 @@ function loadCells(formType: ValidationFormType, data: unknown): Record<string, 
 
 export function ValidationReportDetailPage() {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const blank = useMemo(() => (id === "new" ? readBlankDraft(location.state, "/validation-reports") : null), [id, location.state]);
+  const { draft: blank, loading: blankLoading } = useBlankDraft("/validation-reports", id === "new");
   const reportId = Number(id);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
@@ -145,6 +144,7 @@ export function ValidationReportDetailPage() {
   const dirty = report == null || cells == null ? false : sheetIsDirty(report.id, liveSnap, savedSnap);
   useReportTabDirty(dirty);
 
+  if (id === "new" && !blank && blankLoading) return <LoadingPlaceholder />;
   if (id === "new" && !blank) return <p className="text-sm text-muted-foreground">Open this form from Blank Forms. Nothing is saved until you press Save.</p>;
   if (isError) return <RecordAccessMessage error={error} fallback="Couldn't load this validation report. Refresh the page and try again." noun="this validation form" />;
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
