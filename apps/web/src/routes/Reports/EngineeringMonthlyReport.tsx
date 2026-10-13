@@ -8,6 +8,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
 import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
+import { DeleteReportDialog } from "./engineeringReportDelete";
 import { FigureProvider, hasUnmatchedImages, IMAGES_SECTION, NcrReportTable, SectionFigures, type NcrReportRow, type ReportImage } from "./engineeringReportImages";
 
 type Status = "" | "green" | "yellow" | "red";
@@ -454,6 +455,10 @@ function QaEditor({
 
 export function EngineeringMonthlyReport() {
   const toast = useToast();
+  const { effective: reportPermissions } = useEffectivePermissions();
+  const canDelete = reportPermissions?.["quality_report.delete"] === "edit";
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const initial = previousPeriod();
   const [year, setYear] = useState(initial.year);
@@ -531,6 +536,24 @@ export function EngineeringMonthlyReport() {
       else toast.error(`Sent to ${result.deliveries.length - failed.length}. Failed: ${failed.map((row) => row.to).join(", ")}`);
     },
     onError: (err) => toast.error(extractErrorMessage(err, "The report didn't send.")),
+  });
+
+  const deleteReport = useMutation({
+    mutationFn: async (pin: string) => (await apiClient.delete<ReportView>("/reports/engineering", { params: { year, month }, data: { pin } })).data,
+    onSuccess: async (fresh) => {
+      // The month reads as a fresh, empty report that can be filled again.
+      setNarrative(fresh.narrative);
+      setRecipients(fresh.recipients ?? []);
+      setDirty(false);
+      setRecipientsDirty(false);
+      setWarnings([]);
+      setExportId(null);
+      setDeleteOpen(false);
+      setDeleteError(null);
+      await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
+      toast.success("Report deleted.");
+    },
+    onError: (err) => setDeleteError(extractErrorMessage(err, "The report wasn't deleted.")),
   });
 
   // Pictures are owned by the server: only their list is taken from these replies, so text being typed is never overwritten.
@@ -689,6 +712,18 @@ export function EngineeringMonthlyReport() {
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm" onClick={() => window.print()}>
             Print
           </button>
+          {canDelete && view?.saved && (
+            <button
+              type="button"
+              className="rounded-md border border-destructive px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                setDeleteError(null);
+                setDeleteOpen(true);
+              }}
+            >
+              Delete report
+            </button>
+          )}
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm" onClick={() => setHelpOpen((open) => !open)}>
             {helpOpen ? "Hide column help" : "Supplier column help"}
           </button>
@@ -704,6 +739,15 @@ export function EngineeringMonthlyReport() {
           </ul>
         )}
         <PdfExportActions exportId={exportId} entityType="quality_engineering_report" />
+        {deleteOpen && (
+          <DeleteReportDialog
+            monthLabel={`${MONTHS[month - 1]} ${year}`}
+            pending={deleteReport.isPending}
+            error={deleteError}
+            onCancel={() => setDeleteOpen(false)}
+            onConfirm={(pin) => deleteReport.mutate(pin)}
+          />
+        )}
         {helpOpen && (
           <div className="text-sm">
             <p>{help.data?.note}</p>

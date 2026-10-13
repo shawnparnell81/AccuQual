@@ -911,6 +911,13 @@
       "when": 1795215600000,
       "tag": "0131_engineering_planner_url",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1795302000000,
+      "tag": "0132_quality_report_soft_delete",
+      "breakpoints": true
     }
   ]
 }

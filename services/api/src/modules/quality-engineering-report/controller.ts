@@ -9,7 +9,7 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { SUPPLIER_COLUMNS, SUPPLIER_UPLOAD_NOTE } from "./supplierHelp.js";
 import { renderEngineeringReportPdf } from "./pdf.js";
-import { buildEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
+import { buildEngineeringReport, deleteEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
 import { loadReportImageFiles } from "./reportImages.js";
 import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
 import { and } from "drizzle-orm";
@@ -125,6 +125,13 @@ export const engineeringImageDeleteHandler = asyncHandler(async (req: Request, r
   res.json(await deleteReportImage(req.db!, { ...actor(req), ...period, attachmentId: Number(req.params.attachmentId) }));
 });
 
+/** DELETE /reports/engineering?year=&month= { pin } — deletes that month's report. Needs the delete permission and the person's PIN. */
+export const engineeringDeleteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const period = periodFrom(req.query);
+  const { pin } = req.body as { pin: string };
+  res.json(await deleteEngineeringReport(req.db!, { ...actor(req), ...period, pin }));
+});
+
 export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const period = periodFrom(req.query);
   const report = await buildEngineeringReport(req.db!, { ...actor(req), ...period });
@@ -145,7 +152,7 @@ export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Resp
   const [saved] = await req.db!
     .select({ id: qualityEngineeringReports.id })
     .from(qualityEngineeringReports)
-    .where(and(eq(qualityEngineeringReports.year, period.year), eq(qualityEngineeringReports.month, period.month)));
+    .where(and(eq(qualityEngineeringReports.year, period.year), eq(qualityEngineeringReports.month, period.month), eq(qualityEngineeringReports.isDeleted, false)));
   const images = saved ? await loadReportImageFiles(req.db!, saved.id, report.narrative.images) : [];
   const bytes = await renderEngineeringReportPdf(report, frame, images);
   await persistPdfExport(req.db!, bytes, frame, { entityType: "quality_engineering_report", entityId: null, actorId: req.user!.id });

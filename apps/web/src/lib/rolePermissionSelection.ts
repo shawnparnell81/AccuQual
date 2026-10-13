@@ -48,6 +48,17 @@ export const ROLE_PERMISSION_GROUPS: {
     ],
   },
   {
+    id: "reports",
+    label: "Reports",
+    permissions: [
+      {
+        key: "quality_report.delete",
+        label: "Can delete monthly quality reports",
+        hint: "Delete a month's Monthly Quality Report (typed text, supplier data, NCR table rows and pictures) after entering their own PIN. Live data from other modules is not touched.",
+      },
+    ],
+  },
+  {
     id: "fai",
     label: "FAI & Inspection",
     permissions: [

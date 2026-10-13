@@ -1,4 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { attachments } from "../../drizzle/schema/attachments.js";
+import { roleHasPermission } from "../roles/rolePermissions.js";
+import { QUALITY_REPORT_DELETE_PERMISSION } from "../roles/roleAccess.js";
+import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { extractFileWithImages, type ExtractedImage } from "../form-import/extract.js";
 import { proposeMonthlyQuality, toSupplierData } from "../form-import/reportTargets/monthlyQuality.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -23,6 +27,7 @@ import {
   normalizeNarrative,
   type EngineeringNarrative,
   type EngineeringReportView,
+  REPORT_IMAGES_ENTITY,
   type NcrReportRow,
   type SupplierData,
 } from "./model.js";
@@ -75,7 +80,10 @@ function asSupplier(value: unknown): SupplierData {
 }
 
 async function loadRow(db: Db, year: number, month: number) {
-  const [row] = await db.select().from(qualityEngineeringReports).where(and(eq(qualityEngineeringReports.year, year), eq(qualityEngineeringReports.month, month)));
+  const [row] = await db
+    .select()
+    .from(qualityEngineeringReports)
+    .where(and(eq(qualityEngineeringReports.year, year), eq(qualityEngineeringReports.month, month), eq(qualityEngineeringReports.isDeleted, false)));
   return row ?? null;
 }
 
@@ -113,6 +121,7 @@ export async function saveEngineeringSupplierData(
     })
     .onConflictDoUpdate({
       target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
+      targetWhere: sql`${qualityEngineeringReports.isDeleted} = false`,
       set: {
         narrative: input.narrative as unknown as Record<string, unknown>,
         supplierData: input.supplierData as unknown as Record<string, unknown>,
@@ -275,6 +284,7 @@ export async function saveEngineeringNarrative(
     })
     .onConflictDoUpdate({
       target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
+      targetWhere: sql`${qualityEngineeringReports.isDeleted} = false`,
       set: {
         narrative: narrative as unknown as Record<string, unknown>,
         updatedBy: input.user.id,
@@ -441,6 +451,58 @@ export async function deleteReportImage(
   return buildEngineeringReport(db, input);
 }
 
+/** True when the saved supplier data holds anything at all. */
+function hasSupplierContent(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  return Object.values(value as Record<string, unknown>).some((item) => (Array.isArray(item) ? item.length > 0 : item && typeof item === "object" ? Object.keys(item).length > 0 : item != null && item !== ""));
+}
+
+/**
+ * Deletes one month's report: soft-deletes the row and removes its stored pictures (rows and files).
+ * Live data read from other modules (NCRs, claims, first articles and so on) is never touched. Needs the
+ * "Can delete monthly quality reports" permission on the role and the person's own signature PIN.
+ * Returns the month as a fresh, empty report.
+ */
+export async function deleteEngineeringReport(
+  db: Db,
+  input: { year: number; month: number; pin: string; user: Actor; siteIds: number[]; plantId?: number | null },
+): Promise<EngineeringReportView> {
+  if (!(await roleHasPermission(db, input.user.roleName, QUALITY_REPORT_DELETE_PERMISSION))) {
+    throw AppError.forbidden("You don't have permission to delete monthly quality reports. An administrator can give it to your role on the Roles page.");
+  }
+  const access = await engineeringAccess(db, input.user);
+  if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
+  await verifySignaturePin(input.user.id, input.pin);
+
+  const row = await loadRow(db, input.year, input.month);
+  if (!row) throw AppError.notFound("A saved report for that month");
+  const narrative = normalizeNarrative(row.narrative);
+  const stored = await db
+    .select({ id: attachments.id })
+    .from(attachments)
+    .where(and(eq(attachments.entityType, REPORT_IMAGES_ENTITY), eq(attachments.entityId, row.id)));
+  await deleteReportImageFiles(db, row.id, stored.map((item) => item.id));
+  const now = new Date();
+  await db
+    .update(qualityEngineeringReports)
+    .set({ isDeleted: true, deletedAt: now, deletedBy: input.user.id, updatedBy: input.user.id, updatedAt: now, narrative: { ...narrative, images: [] } as unknown as Record<string, unknown> })
+    .where(eq(qualityEngineeringReports.id, row.id));
+
+  const parts = ["narrative"];
+  if (hasSupplierContent(row.supplierData)) parts.push("supplier data");
+  if (narrative.ncrTableRows.length > 0) parts.push(plural(narrative.ncrTableRows.length, "NCR row"));
+  if (stored.length > 0) parts.push(plural(stored.length, "picture"));
+  const { label, when } = await actorLine(db, input.user.id);
+  await recordAuditTrail(db, {
+    entityType: "QualityEngineeringReport",
+    entityId: row.id,
+    action: "delete",
+    changes: { summary: `${label} deleted the ${periodName(input.year, input.month)} Monthly Quality Report (${parts.join(", ")}) on ${when}.` },
+    performedBy: input.user.id,
+  });
+  return buildEngineeringReport(db, input);
+}
+
 function engineeringEmailCopy(report: EngineeringReportView): { subject: string; body: string } {
   const status = report.executive.departmentStatus || "not set";
   const lines = [report.title, `${report.documentId} Rev ${report.revision}`, `Department status: ${status}`];
@@ -482,6 +544,7 @@ export async function emailEngineeringReport(
     })
     .onConflictDoUpdate({
       target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
+      targetWhere: sql`${qualityEngineeringReports.isDeleted} = false`,
       set: {
         recipients: input.recipients,
         updatedBy: input.user.id,

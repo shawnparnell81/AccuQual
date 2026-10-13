@@ -346,7 +346,7 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
     const [savedRow] = await req.db!
       .select({ id: qualityEngineeringReports.id })
       .from(qualityEngineeringReports)
-      .where(and(eq(qualityEngineeringReports.year, body.year), eq(qualityEngineeringReports.month, body.month)));
+      .where(and(eq(qualityEngineeringReports.year, body.year), eq(qualityEngineeringReports.month, body.month), eq(qualityEngineeringReports.isDeleted, false)));
     openPath = "/reporting";
     auditEntityType = "QualityEngineeringReport";
     auditEntityId = savedRow!.id;
