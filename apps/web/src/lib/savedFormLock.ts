@@ -9,6 +9,20 @@ export function isFreshFormOpen(state: unknown): boolean {
   return Boolean(state && typeof state === "object" && (state as { freshForm?: unknown }).freshForm === true);
 }
 
+/**
+ * A form opens editable when it is brand new: either router state says so, or it is an unsaved draft
+ * (no record id yet). Router state is empty inside workspace tabs, so a draft must not depend on it.
+ */
+export function opensFresh(state: unknown, unsavedDraft: boolean): boolean {
+  return unsavedDraft || isFreshFormOpen(state);
+}
+
+/** What Edit does: an unsaved draft needs no begin-edit call; a saved record does. */
+export function editClickAction(canEdit: boolean, mode: SavedFormMode, unsavedDraft: boolean): "none" | "unlock" | "begin-edit" {
+  if (!canEdit || mode === "editing") return "none";
+  return unsavedDraft ? "unlock" : "begin-edit";
+}
+
 export function afterEditClick(canEdit: boolean): SavedFormMode {
   return canEdit ? "editing" : "locked";
 }

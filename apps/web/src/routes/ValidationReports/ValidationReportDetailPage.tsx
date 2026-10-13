@@ -103,7 +103,7 @@ export function ValidationReportDetailPage() {
   const error = loaded.error;
   const updateReport = hooks.useUpdate();
   const signReport = hooks.useAction("sign");
-  const formLock = useSavedFormMode(reportId, Boolean(canEdit));
+  const formLock = useSavedFormMode(reportId, Boolean(canEdit), { unsavedDraft: Boolean(blank) });
   const mode = formLock.mode;
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [graph, setGraph] = useState<GraphData>(blankGraph);
@@ -211,7 +211,11 @@ export function ValidationReportDetailPage() {
   }
 
   async function startEdit() {
-    if (!canEdit || openingRef.current || mode === "editing" || savedReport.id === 0) return;
+    if (!canEdit || openingRef.current || mode === "editing") return;
+    if (savedReport.id === 0) {
+      formLock.unlock();
+      return;
+    }
     openingRef.current = true;
     setOpening(true);
     setEditError(null);

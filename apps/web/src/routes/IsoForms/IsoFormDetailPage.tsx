@@ -103,7 +103,7 @@ export function IsoFormDetailPage() {
   const draftNumber = useRef("");
   const [opening, setOpening] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const formLock = useSavedFormMode(recordId, Boolean(canEdit));
+  const formLock = useSavedFormMode(recordId, Boolean(canEdit), { unsavedDraft: Boolean(effectiveBlank) });
   const mode = formLock.mode;
   const queryClient = useQueryClient();
   const resolvedType = formByType(record?.formType)?.formType ?? record?.formType;
@@ -243,7 +243,11 @@ export function IsoFormDetailPage() {
   }
 
   async function startEdit() {
-    if (!canEdit || savedRecord.id === 0) return;
+    if (!canEdit) return;
+    if (savedRecord.id === 0) {
+      formLock.unlock();
+      return;
+    }
     setOpening(true);
     setEditError(null);
     try {
