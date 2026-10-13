@@ -508,6 +508,7 @@ const VALIDATION_TITLES: Record<string, string> = {
   air_compressor: "Air Compressor Validation",
   electric_lift: "Electric Lift Support Validation",
   gas_lift: "Gas Lift Support Validation",
+  regular_gas_lift: "Regular Gas Lift Support Validation",
   coil_spring: "Coil Spring Validation",
 };
 

@@ -14,8 +14,9 @@ const TITLES: Record<string, { title: string; revision: string }> = {
   brake_wear: { title: "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", revision: "A" },
   shock: { title: "FRM-VAL-002 SHOCK VALIDATION REPORT", revision: "B" },
   air_compressor: { title: "FRM-VAL-003 AIR COMPRESSOR VALIDATION DOCUMENT", revision: "A" },
-  electric_lift: { title: "FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", revision: "B" },
+  electric_lift: { title: "FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", revision: "C" },
   gas_lift: { title: "FRM-VAL-005 GAS LIFT SUPPORT VALIDATION DOCUMENT", revision: "B" },
+  regular_gas_lift: { title: "FRM-VAL-012 REGULAR GAS LIFT SUPPORT VALIDATION DOCUMENT", revision: "A" },
   coil_spring: { title: "FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT", revision: "A" },
 };
 

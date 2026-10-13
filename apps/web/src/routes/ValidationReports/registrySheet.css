@@ -1,0 +1,114 @@
+/* Validation forms drawn from their Excel workbook layout (RegistrySheet.tsx). A CSS grid with the workbook's column and row
+   tracks, like the other validation sheets: fixed tracks cannot stack or collapse. */
+
+.vf-wrap {
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+}
+
+.vf-sheet {
+  display: grid;
+  position: relative;
+  background: #fff;
+  color: #000;
+  color-scheme: light;
+  box-sizing: border-box;
+}
+
+.vf-sheet * {
+  box-sizing: border-box;
+}
+
+.vf-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 1px 3px;
+  line-height: 1.15;
+  text-overflow: clip;
+}
+
+.vf-cell > span {
+  display: block;
+  max-width: 100%;
+}
+
+.vf-spacer,
+.vf-blocked {
+  padding: 0;
+}
+
+.vf-in {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  resize: none;
+}
+
+.vf-in:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+select.vf-in {
+  appearance: auto;
+}
+
+.vf-check {
+  margin: auto;
+  width: 16px;
+  height: 16px;
+}
+
+.vf-tick {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+
+.vf-tick:disabled {
+  cursor: default;
+}
+
+.vf-image {
+  position: absolute;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+@media print {
+  .vf-wrap {
+    overflow: visible;
+  }
+
+  .vf-sheet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .vf-in {
+    outline: none !important;
+  }
+
+  select.vf-in {
+    appearance: none;
+  }
+
+  .vf-figure {
+    break-inside: avoid;
+  }
+}

@@ -9,6 +9,7 @@ import { cellsFromData as airCellsFromData, overallResult as airOverall } from "
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
 import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, overallBrake, overallInjector } from "../../lib/partInspection";
 import { cellsFromData, formTypeOf, overallResult, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { registryModule } from "../../lib/validation-forms/registry";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { NumberedCreateButton } from "../../components/forms/RecordNumberField";
 import { recordHeading } from "../../lib/userRecordNumber";
@@ -26,6 +27,8 @@ interface ValidationReport {
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
 function rowCells(kind: ValidationFormType, data: unknown): Record<string, CellValue> {
+  const registry = registryModule(kind);
+  if (registry) return registry.cellsFromData(data);
   if (kind === "fuel_pump") return fuelCellsFromData(data);
   if (kind === "air_strut") return airCellsFromData(data);
   if (kind === "air_spring") return springCellsFromData(data);
@@ -36,6 +39,8 @@ function rowCells(kind: ValidationFormType, data: unknown): Record<string, CellV
 }
 
 function rowResult(kind: ValidationFormType, cells: Record<string, CellValue>): string {
+  const registry = registryModule(kind);
+  if (registry) return registry.status(registry.evaluate(registry.cellsFromData({ cells })));
   if (kind === "fuel_pump") return fuelOverall(cells);
   if (kind === "air_strut") return airOverall(cells);
   if (kind === "air_spring") return springOverall(cells);

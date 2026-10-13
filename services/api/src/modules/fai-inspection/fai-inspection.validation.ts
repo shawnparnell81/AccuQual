@@ -116,7 +116,7 @@ export const manualSourceStatusSchema = z.object({
 });
 
 export const attachFormSchema = z.object({
-  formType: z.enum(["csa", "fuel_pump"]),
+  formType: z.enum(["csa", "fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear", "electric_lift", "regular_gas_lift", "coil_spring", "shock"]),
 });
 
 export const printLabelsSchema = z.object({

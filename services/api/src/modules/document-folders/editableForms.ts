@@ -34,6 +34,7 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-val-009",
   "frm-val-010",
   "frm-val-011",
+  "frm-val-012",
   "frm-val-002",
   "frm-val-003",
   "frm-val-004",
@@ -149,6 +150,7 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-val-003": subjectPath("Engineering", "Design & Development", "Design Validation"),
   "frm-val-004": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
   "frm-val-005": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
+  "frm-val-012": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
   "frm-val-006": subjectPath("Engineering", "Design & Development", "Design Validation"),
   "frm-gen-002": subjectPath("Audits"),
   "lst-vis-001": subjectPath("Quality", "Records", "Inspection Records"),
@@ -194,6 +196,7 @@ export type ValidationKind =
   | "air_compressor"
   | "electric_lift"
   | "gas_lift"
+  | "regular_gas_lift"
   | "coil_spring";
 
 const NAMED_KINDS = new Set<ValidationKind>([
@@ -206,6 +209,7 @@ const NAMED_KINDS = new Set<ValidationKind>([
   "air_compressor",
   "electric_lift",
   "gas_lift",
+  "regular_gas_lift",
   "coil_spring",
 ]);
 
@@ -227,6 +231,7 @@ const KIND_KEY: Record<ValidationKind, string> = {
   air_compressor: "frm-val-003",
   electric_lift: "frm-val-004",
   gas_lift: "frm-val-005",
+  regular_gas_lift: "frm-val-012",
   coil_spring: "frm-val-006",
 };
 
@@ -245,6 +250,7 @@ const VALIDATION_KEY_KIND: Record<string, ValidationKind> = {
   "frm-val-003": "air_compressor",
   "frm-val-004": "electric_lift",
   "frm-val-005": "gas_lift",
+  "frm-val-012": "regular_gas_lift",
   "frm-val-006": "coil_spring",
 };
 

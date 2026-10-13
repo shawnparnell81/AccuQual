@@ -148,3 +148,62 @@ describe("FAI attach existing validation form", () => {
     expect(rec.body.aqlSampleSize).toBe(50);
   });
 });
+
+describe("FAI attach: every product family", () => {
+  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+  it("auto-attaches the matching form for a new family, through the generic link", async () => {
+    const plan = await request(app).post("/fai-inspection/plans").set(auth(editorToken))
+      .send({ partNumber: `ATTACH-GAS-${suffix}`, productFamily: "Gas Lift Support", characteristics: [] });
+    const rec = await request(app).post("/fai-inspection/records").set(auth(editorToken))
+      .send({ faiNumber: `FAI-ATTACH-GAS-${suffix}`, planId: plan.body.id, partNumber: `ATTACH-GAS-${suffix}` });
+    expect(rec.status).toBe(201);
+    expect(rec.body.linkedValidationReportId).toBeTruthy();
+    expect(rec.body.linkedValidationFormType).toBe("regular_gas_lift");
+    expect(rec.body.linkedCsaFaiId).toBeFalsy();
+    expect(rec.body.linkedFuelPumpFaiId).toBeFalsy();
+    const [report] = await db.select().from(validationReports).where(eq(validationReports.id, rec.body.linkedValidationReportId));
+    expect((report!.data as any).formType).toBe("regular_gas_lift");
+    const got = await request(app).get(`/fai-inspection/records/${rec.body.id}`).set(auth(editorToken));
+    expect(got.body.productType).toBe("regular_gas_lift");
+    expect(got.body.attachedForms).toEqual([expect.objectContaining({ formType: "regular_gas_lift", title: "Regular Gas Lift Support Validation (FRM-VAL-012)", openPath: `/validation-reports/${rec.body.linkedValidationReportId}` })]);
+  });
+
+  it("manual attach and detach of a new type are audit-logged; a second generic form is 409; wrong type is 400; viewer 403", async () => {
+    const rec = await request(app).post("/fai-inspection/records").set(auth(editorToken))
+      .send({ faiNumber: `FAI-ATTACH-SHOCK-${suffix}`, partNumber: `ATTACH-SHOCK-${suffix}` });
+    const path = `/fai-inspection/records/${rec.body.id}`;
+    expect((await request(app).post(`${path}/attach-form`).set(auth(viewOnlyToken)).send({ formType: "shock" })).status).toBe(403);
+    expect((await request(app).post(`${path}/attach-form`).set(auth(editorToken)).send({ formType: "nonsense" })).status).toBe(400);
+    const attach = await request(app).post(`${path}/attach-form`).set(auth(editorToken)).send({ formType: "shock" });
+    expect(attach.status).toBe(200);
+    expect(attach.body.linkedValidationFormType).toBe("shock");
+    expect((await request(app).post(`${path}/attach-form`).set(auth(editorToken)).send({ formType: "shock" })).status).toBe(409);
+    expect((await request(app).post(`${path}/attach-form`).set(auth(editorToken)).send({ formType: "coil_spring" })).status).toBe(409);
+    // CSA still has its own link and can sit beside the generic one.
+    expect((await request(app).post(`${path}/attach-form`).set(auth(editorToken)).send({ formType: "csa" })).status).toBe(200);
+
+    const reportId = attach.body.linkedValidationReportId;
+    const detach = await request(app).post(`${path}/detach-form`).set(auth(editorToken)).send({ formType: "shock" });
+    expect(detach.status).toBe(200);
+    expect(detach.body.linkedValidationReportId).toBeNull();
+    expect(detach.body.linkedValidationFormType).toBeNull();
+    expect(detach.body.linkedCsaFaiId).toBeTruthy();
+    const [kept] = await db.select().from(validationReports).where(eq(validationReports.id, reportId));
+    expect(kept).toBeTruthy();
+    const lines = await auditDescriptions(rec.body.id);
+    expect(lines.some((d) => d.startsWith("Attached Shock Validation (FRM-VAL-002)"))).toBe(true);
+    expect(lines.some((d) => d.startsWith("Detached Shock Validation (FRM-VAL-002)"))).toBe(true);
+  });
+
+  it("existing records with the old CSA / Fuel Pump links still show their form, and the new columns exist", async () => {
+    const [report] = await db.insert(validationReports).values({ data: { formType: "csa", cells: {} } }).returning();
+    const created = await request(app).post("/fai-inspection/records").set(auth(editorToken)).send({ faiNumber: `FAI-ATTACH-OLD-${suffix}`, partNumber: `ATTACH-OLD-${suffix}` });
+    const { inspRecords } = await import("../../src/drizzle/schema/faiInspection.js");
+    await db.update(inspRecords).set({ linkedCsaFaiId: report!.id }).where(eq(inspRecords.id, created.body.id));
+    const got = await request(app).get(`/fai-inspection/records/${created.body.id}`).set(auth(editorToken));
+    expect(got.body.attachedForms).toEqual([expect.objectContaining({ formType: "csa", reportId: report!.id })]);
+    expect(got.body).toHaveProperty("linkedValidationReportId");
+    expect(got.body).toHaveProperty("linkedValidationFormType");
+  });
+});

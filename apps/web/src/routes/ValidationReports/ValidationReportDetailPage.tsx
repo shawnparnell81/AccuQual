@@ -48,18 +48,30 @@ import { headerStatusFor } from "../../lib/headerStatus";
 import { useFormFiling } from "../../components/forms/FormDocumentControls";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 import { failedValidationRows } from "../../lib/validationFailures";
+import { registryModule } from "../../lib/validation-forms/registry";
+import { blankGraph, graphFromData, type GraphData } from "../../lib/validation-forms/graph";
+import { GraphsPanel } from "./GraphsPanel";
+import { RegistrySheet } from "./RegistrySheet";
+import "./registrySheet.css";
 
 interface ValidationReport {
   id: number;
   recordNumber?: string | null;
-  data: { formType?: ValidationFormType; cells?: Record<string, CellValue>; _signatureRequired?: Record<string, SignatureChoice> };
+  data: { formType?: ValidationFormType; cells?: Record<string, CellValue>; _signatureRequired?: Record<string, SignatureChoice>; graph?: GraphData; authorizedSignature?: string; furtherSignature?: string };
   createdAt?: string | null;
   updatedAt?: string | null;
 }
 
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
+/** What "unsaved" compares: the sheet's cells and, on a form with a Graphs tab, the run's fields and points. */
+function snapOf(formType: ValidationFormType, cells: Record<string, CellValue>, graph: GraphData): string {
+  return registryModule(formType)?.def.graph ? sheetSnap({ cells, graph }) : sheetSnap(cells);
+}
+
 function loadCells(formType: ValidationFormType, data: unknown): Record<string, CellValue> {
+  const registry = registryModule(formType);
+  if (registry) return registry.cellsFromData(data);
   if (formType === "fuel_pump") return fuelCellsFromData(data);
   if (formType === "air_strut") return airCellsFromData(data);
   if (formType === "air_spring") return springCellsFromData(data);
@@ -95,6 +107,7 @@ export function ValidationReportDetailPage() {
   const formLock = useSavedFormMode(reportId, Boolean(canEdit));
   const mode = formLock.mode;
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
+  const [graph, setGraph] = useState<GraphData>(blankGraph);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const [savedSnap, setSavedSnap] = useState<{ id: number; snap: string } | null>(null);
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
@@ -121,12 +134,14 @@ export function ValidationReportDetailPage() {
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
     const next = loadCells(formTypeOf(report.data), report.data);
+    const nextGraph = graphFromData(report.data);
     setCells(next);
-    setSavedSnap({ id: report.id, snap: sheetSnap(next) });
+    setGraph(nextGraph);
+    setSavedSnap({ id: report.id, snap: snapOf(formTypeOf(report.data), next, nextGraph) });
     setLoadedFor(report.id);
   }, [loadedFor, report]);
 
-  const liveSnap = cells == null ? "" : sheetSnap(cells);
+  const liveSnap = cells == null ? "" : snapOf(formType, cells, graph);
   const dirty = report == null || cells == null ? false : sheetIsDirty(report.id, liveSnap, savedSnap);
   useReportTabDirty(dirty);
 
@@ -146,16 +161,17 @@ export function ValidationReportDetailPage() {
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
   const title = recordHeading(meta.title, report.recordNumber);
 
+  const registry = registryModule(formType);
   const multiSignature = formType === "fuel_injector" || formType === "brake_wear" || formType === "gas_lift";
   const savedReport = report;
   async function setSignatureRequired(path: string, choice: SignatureChoice) {
     await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled, _signatureRequired: withChoice(savedReport.data, path, choice) } });
-    setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
+    setSavedSnap({ id: reportId, snap: snapOf(formType, filled, graph) });
   }
 
   /** Write the sheet. Filing and locking stay with the caller. */
   async function persistRecord() {
-    const data = { formType, cells: filled };
+    const data = registry?.def.graph ? { formType, cells: filled, graph } : { formType, cells: filled };
     if (savedReport.id === 0) {
       const created = (await apiClient.post<ValidationReport>("/validation-reports", { data, recordNumber: draftNumber.current.trim() || null })).data;
       navigate(`/validation-reports/${created.id}`, { replace: true, state: { freshForm: true } });
@@ -163,7 +179,7 @@ export function ValidationReportDetailPage() {
     }
     const saved = (await apiClient.patch<ValidationReport>(`/validation-reports/${reportId}`, { data })).data;
     queryClient.setQueryData(["validation-reports", reportId], saved);
-    setSavedSnap({ id: reportId, snap: sheetSnap(filled) });
+    setSavedSnap({ id: reportId, snap: snapOf(formType, filled, graph) });
     void queryClient.invalidateQueries({ queryKey: ["validation-reports"] });
     void queryClient.invalidateQueries({ queryKey: ["workflow-history", "validation_reports", reportId] });
   }
@@ -213,8 +229,10 @@ export function ValidationReportDetailPage() {
 
   function cancelEdit() {
     const next = loadCells(formType, savedReport.data);
+    const nextGraph = graphFromData(savedReport.data);
     setCells(next);
-    setSavedSnap({ id: savedReport.id, snap: sheetSnap(next) });
+    setGraph(nextGraph);
+    setSavedSnap({ id: savedReport.id, snap: snapOf(formType, next, nextGraph) });
     formLock.lock();
   }
 
@@ -327,7 +345,22 @@ export function ValidationReportDetailPage() {
         data-doc-rev={revisionToken(rev) || undefined}
       >
         <FormHeader />
-        {formType === "fuel_pump" ? (
+        {registry ? (
+          <RegistrySheet
+            module={registry}
+            cells={cells}
+            readOnly={!fieldsEditable}
+            documentNumber={documentNumber}
+            revision={rev}
+            signatures={Object.fromEntries((registry.def.signatures ?? []).map((slot) => [slot.path, String((report.data as Record<string, unknown>)[slot.path] ?? "")]))}
+            onSign={async (path, pin) => {
+              await signReport.mutateAsync({ id: reportId, ...(path === "furtherSignature" ? { field: "furtherSignature" } : {}), pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          >
+            {registry.def.graph && <GraphsPanel spec={registry.def.graph} graph={graph} readOnly={!fieldsEditable} onChange={setGraph} />}
+          </RegistrySheet>
+        ) : formType === "fuel_pump" ? (
           <FuelPumpSheet
             cells={cells}
             readOnly={!fieldsEditable}

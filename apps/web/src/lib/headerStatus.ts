@@ -1,6 +1,7 @@
 import { blankCells as springBlank, evaluate as springEvaluate, FORMULA_TEXT as springFormulas } from "./airSpringReport";
 import { blankCells as strutBlank, evaluate as strutEvaluate, FORMULA_TEXT as strutFormulas } from "./airStrutReport";
 import { blankCells as fuelBlank, evaluate as fuelEvaluate, FORMULA_TEXT as fuelFormulas } from "./fuelPumpReport";
+import { registryModule } from "./validation-forms/registry";
 import type { CellValue } from "./validationReport";
 import { blankCells as csaBlank, evaluate as csaEvaluate, FORMULA_TEXT as csaFormulas } from "./validationReport";
 
@@ -92,8 +93,22 @@ function generic(cells: Record<string, CellValue>): HeaderStatus {
   return started ? "In progress" : "Not started";
 }
 
+/** A form drawn from its workbook: untouched is Not started, a finished sheet takes its own overall result, anything between is In progress. */
+function registryStatus(formType: string, cells: Record<string, CellValue>): HeaderStatus | null {
+  const module = registryModule(formType);
+  if (!module) return null;
+  const blank = module.blank();
+  const merged = module.cellsFromData({ cells });
+  const filled = Object.keys(merged).some((addr) => !module.formulas[addr] && !same(merged[addr], blank[addr]));
+  if (!filled) return "Not started";
+  const result = module.status(module.evaluate(merged));
+  return result === "" ? "In progress" : result;
+}
+
 /** Header pill only. Sheet disposition cells stay on the template. */
 export function headerStatusFor(formType: string, cells: Record<string, CellValue>): HeaderStatus {
+  const fromRegistry = registryStatus(formType, cells);
+  if (fromRegistry) return fromRegistry;
   const spec = SHEETS[formType];
   return spec ? statusFromSheet(spec, cells) : generic(cells);
 }

@@ -17,7 +17,7 @@ import { signatureBlocksFor, signatureRequired } from "../signatures/signatureRe
 const DAY_MS = 86_400_000;
 const RECORD_LIMIT = 300;
 
-const SIGNED_VALIDATION = new Set(["air_strut", "air_spring", "fuel_injector", "brake_wear", "air_compressor", "electric_lift", "gas_lift", "coil_spring"]);
+const SIGNED_VALIDATION = new Set(["air_strut", "air_spring", "fuel_injector", "brake_wear", "air_compressor", "electric_lift", "gas_lift", "regular_gas_lift", "coil_spring"]);
 
 const VALIDATION_TITLE: Record<string, string> = {
   csa: "CSA validation report",
@@ -30,6 +30,7 @@ const VALIDATION_TITLE: Record<string, string> = {
   air_compressor: "Air compressor validation",
   electric_lift: "Electric lift support validation",
   gas_lift: "Gas lift support validation",
+  regular_gas_lift: "Regular gas lift support validation",
   coil_spring: "Coil spring validation",
 };
 

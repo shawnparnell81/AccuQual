@@ -19,6 +19,7 @@ export type ValidationFormType =
   | "air_compressor"
   | "electric_lift"
   | "gas_lift"
+  | "regular_gas_lift"
   | "coil_spring";
 
 const NAMED_KINDS = new Set<ValidationFormType>([
@@ -31,6 +32,7 @@ const NAMED_KINDS = new Set<ValidationFormType>([
   "air_compressor",
   "electric_lift",
   "gas_lift",
+  "regular_gas_lift",
   "coil_spring",
 ]);
 
@@ -50,8 +52,9 @@ export const VALIDATION_FORMS: Record<ValidationFormType, { formKey: string; tit
   brake_wear: { formKey: "frm-val-009", title: "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
   shock: { formKey: "frm-val-002", title: "FRM-VAL-002 SHOCK VALIDATION REPORT", pass: "#4EA72E", revision: "B" },
   air_compressor: { formKey: "frm-val-003", title: "FRM-VAL-003 AIR COMPRESSOR VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
-  electric_lift: { formKey: "frm-val-004", title: "FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
+  electric_lift: { formKey: "frm-val-004", title: "FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "C" },
   gas_lift: { formKey: "frm-val-005", title: "FRM-VAL-005 GAS LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
+  regular_gas_lift: { formKey: "frm-val-012", title: "FRM-VAL-012 REGULAR GAS LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
   coil_spring: { formKey: "frm-val-006", title: "FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
 };
 

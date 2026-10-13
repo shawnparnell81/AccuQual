@@ -57,3 +57,25 @@ describe("FaiRecordDetailPage — attached validation form", () => {
     assert.doesNotMatch(html, /Attach CSA Validation Report/);
   });
 });
+
+describe("FaiRecordDetailPage — attach by product family", () => {
+  it("offers only the matching form when the record's family is known", () => {
+    const html = renderDetail(baseRecord({ attachedForms: [], productType: "regular_gas_lift" }));
+    assert.match(html, /Attach Regular Gas Lift Support Validation/);
+    assert.doesNotMatch(html, /Attach CSA Validation Report/);
+    assert.doesNotMatch(html, /Attach Shock Validation/);
+  });
+
+  it("offers every form to pick from when no family matches, and a button for each new type", () => {
+    const html = renderDetail(baseRecord({ attachedForms: [], productType: null }));
+    for (const label of ["Air Strut", "Air Spring", "Fuel Injector", "Brake Wear Sensor", "Electric Lift Support", "Regular Gas Lift Support", "Coil Spring", "Shock"]) {
+      assert.match(html, new RegExp(`Attach ${label} Validation`));
+    }
+  });
+
+  it("shows Open for an attached new-type form", () => {
+    const html = renderDetail(baseRecord({ attachedForms: [{ formType: "shock", reportId: 9, title: "Shock Validation (FRM-VAL-002)", openPath: "/validation-reports/9" }], productType: "shock" }));
+    assert.match(html, /Open (<!-- -->)?Shock Validation \(FRM-VAL-002\)/);
+    assert.doesNotMatch(html, /Attach Shock Validation/);
+  });
+});

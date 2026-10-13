@@ -177,6 +177,11 @@ export interface FaiRecord {
   reMinor?: number | null;
   linkedCsaFaiId?: number | null;
   linkedFuelPumpFaiId?: number | null;
+  /** Generic link for every validation form other than CSA and Fuel Pump. */
+  linkedValidationReportId?: number | null;
+  linkedValidationFormType?: FaiValidationFormType | null;
+  /** The family the record's plan points at, which decides the Attach button offered. Null when none matches. */
+  productType?: FaiValidationFormType | null;
   ncrId?: number | null;
   signature?: string | null;
   createdAt?: string;
@@ -186,8 +191,10 @@ export interface FaiRecord {
   canEdit?: boolean;
 }
 
+export type FaiValidationFormType = "csa" | "fuel_pump" | "air_strut" | "air_spring" | "fuel_injector" | "brake_wear" | "electric_lift" | "regular_gas_lift" | "coil_spring" | "shock";
+
 export interface FaiAttachedForm {
-  formType: "csa" | "fuel_pump";
+  formType: FaiValidationFormType;
   reportId: number;
   title: string;
   openPath: string;
@@ -272,8 +279,8 @@ export const faiInspectionApi = {
       apiClient.post(`${base}/records/${id}/lines`, { lines }).then((r) => r.data as FaiRecord),
     sign: (id: number, body: { pin: string; certified: true; outcome: "passed" | "failed"; description: string }) =>
       apiClient.post(`${base}/records/${id}/sign`, body).then((r) => r.data),
-    attachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/attach-form`, { formType }).then((r) => r.data as FaiRecord),
-    detachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/detach-form`, { formType }).then((r) => r.data as FaiRecord),
+    attachForm: (id: number, formType: FaiValidationFormType) => apiClient.post(`${base}/records/${id}/attach-form`, { formType }).then((r) => r.data as FaiRecord),
+    detachForm: (id: number, formType: FaiValidationFormType) => apiClient.post(`${base}/records/${id}/detach-form`, { formType }).then((r) => r.data as FaiRecord),
     samples: (id: number) => apiClient.get(`${base}/records/${id}/samples`).then((r) => r.data as FaiSamples),
     labelData: (id: number) => apiClient.get(`${base}/records/${id}/labels`).then((r) => r.data as FaiLabelData),
     printLabels: (id: number, body: { samples: number[]; size: string }) =>
