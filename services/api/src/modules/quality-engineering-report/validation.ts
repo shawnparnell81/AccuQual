@@ -65,6 +65,10 @@ export const saveEngineeringReportSchema = z.object({
   recipients: zodRecipients(0).optional(),
 });
 
+export const deleteEngineeringReportSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, "Enter your 4-digit PIN."),
+});
+
 export const updateReportImageSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   month: z.number().int().min(1).max(12),
