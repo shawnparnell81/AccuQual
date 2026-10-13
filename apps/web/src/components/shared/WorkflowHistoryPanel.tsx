@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, History } from "lucide-react";
-import clsx from "clsx";
+import { CollapsibleAuditPanel } from "./CollapsibleAuditPanel";
 import { useWorkflowHistory } from "../../hooks/useWorkflowHistory";
 import { WorkflowHistoryItem } from "./WorkflowHistoryItem";
 import type { WorkflowModuleName } from "../../api/types";
@@ -48,17 +48,8 @@ export function WorkflowHistoryPanel({
 
   const entries = [...(data ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  return (
-    <div className={clsx(!bare && "rounded-lg border border-border bg-card p-4")}>
-      {!bare && (
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-sm font-medium">
-            <History size={15} className="text-muted-foreground" /> {title}
-          </h3>
-          {isFetching && !isPending && <span className="text-xs text-muted-foreground">Refreshing…</span>}
-        </div>
-      )}
-
+  const body = (
+    <>
       {canLoad && isPending && data === undefined && <p className="text-sm text-muted-foreground">Loading history…</p>}
 
       {canLoad && isError && data === undefined && (
@@ -81,6 +72,20 @@ export function WorkflowHistoryPanel({
           ))}
         </ul>
       )}
-    </div>
+    </>
+  );
+
+  if (bare) return <div>{body}</div>;
+
+  return (
+    <CollapsibleAuditPanel
+      title={title}
+      count={canLoad && isSuccess ? entries.length : null}
+      icon={<History size={15} className="text-muted-foreground" />}
+      aside={isFetching && !isPending ? <span className="text-xs text-muted-foreground">Refreshing…</span> : undefined}
+      forceOpen={deepLinkedId !== null}
+    >
+      {body}
+    </CollapsibleAuditPanel>
   );
 }
