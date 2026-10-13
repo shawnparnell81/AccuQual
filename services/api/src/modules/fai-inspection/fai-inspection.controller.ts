@@ -3,9 +3,10 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
   createPlanSchema, updatePlanSchema, createRecordSchema, updateRecordSchema,
-  resultLineSchema, signRecordSchema, manualSourceStatusSchema, attachFormSchema, createSourceSchema, updateSourceSchema,
+  resultLineSchema, signRecordSchema, manualSourceStatusSchema, attachFormSchema, createSourceSchema, updateSourceSchema, printLabelsSchema,
 } from "./fai-inspection.validation.js";
 import * as svc from "./fai-inspection.service.js";
+import * as labels from "./fai-labels.service.js";
 import { recordPdf as buildPdf } from "./fai-inspection.pdf.js";
 
 function idOf(value: string | undefined, label: string): number {
@@ -92,6 +93,21 @@ export const createNcr = asyncHandler(async (req, res) => {
   const created = await svc.createNcrFromRecord(req.db!, req.user, req, idOf(req.params.id, "FAI record"));
   res.status(created.existing ? 200 : 201).json(created);
 });
+/* Sample tags (barcode labels) and Scan to find */
+export const listSamples = asyncHandler(async (req, res) => {
+  res.json(await labels.listSamples(req.db!, req.user, idOf(req.params.id, "FAI record")));
+});
+export const labelData = asyncHandler(async (req, res) => {
+  res.json(await labels.labelData(req.db!, req.user, idOf(req.params.id, "FAI record")));
+});
+export const printLabels = asyncHandler(async (req, res) => {
+  const body = printLabelsSchema.parse(req.body);
+  res.json(await labels.printSampleLabels(req.db!, req.user, idOf(req.params.id, "FAI record"), body));
+});
+export const scan = asyncHandler(async (req, res) => {
+  res.json(await labels.scanFai(req.db!, req.user, siteIdOf(req), String(req.query.code ?? "")));
+});
+
 export const attachForm = asyncHandler(async (req, res) => {
   const body = attachFormSchema.parse(req.body);
   res.json(await svc.attachForm(req.db!, req.user, idOf(req.params.id, "FAI record"), body));

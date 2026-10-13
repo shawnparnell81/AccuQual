@@ -51,6 +51,12 @@ export const FAI_SOURCES_MANAGE_PERMISSION = "fai.sources.manage";
 /** Delete a month's Monthly Quality Report (text, supplier data, NCR rows and pictures). Granted on the role, never by a role name. */
 export const QUALITY_REPORT_DELETE_PERMISSION = "quality_report.delete";
 
+/** Print barcode labels (FAI sample tags). Granted on the role, never by a role name. */
+export const LABELS_PRINT_PERMISSION = "labels.print";
+
+/** Use Scan to find on FAI & AQL (part numbers and sample tags). Opening what it finds still needs read access to FAI records. */
+export const FAI_SCAN_PERMISSION = "fai.scan";
+
 /** Import from file, Phase 3: ask AI to suggest values for fields the deterministic rules and saved mappings left empty. No role gets it by default — ticked per role on the Roles page. */
 export const IMPORT_AI_MAPPING_PERMISSION = "import.ai_mapping";
 

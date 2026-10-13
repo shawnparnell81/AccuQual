@@ -20,6 +20,9 @@ faiInspectionRouter.use("/reports", faiReportsRouter);
 
 faiInspectionRouter.get("/dashboard", c.dashboard);
 
+// Scan to find for FAI & AQL: a part number, an FAI number or a sample-tag code.
+faiInspectionRouter.get("/scan", c.scan);
+
 faiInspectionRouter.get("/plans", c.listPlans);
 faiInspectionRouter.post("/plans", c.createPlan);
 faiInspectionRouter.get("/plans/:id", c.getPlan);
@@ -34,6 +37,9 @@ faiInspectionRouter.post("/sources/:id/status", c.manualSourceStatus);
 faiInspectionRouter.get("/records", c.listRecords);
 faiInspectionRouter.post("/records", c.createRecord);
 faiInspectionRouter.get("/records/:id", c.getRecord);
+faiInspectionRouter.get("/records/:id/samples", c.listSamples);
+faiInspectionRouter.get("/records/:id/labels", c.labelData);
+faiInspectionRouter.post("/records/:id/labels/print", c.printLabels);
 faiInspectionRouter.patch("/records/:id", c.updateRecord);
 faiInspectionRouter.delete("/records/:id", c.deleteRecord);
 faiInspectionRouter.post("/records/:id/lines", c.saveResultLines);

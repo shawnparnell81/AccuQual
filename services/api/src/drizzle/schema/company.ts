@@ -233,6 +233,11 @@ export const company = pgTable("company", {
      */
     engineeringPlannerUrl?: string;
     /**
+     * Default size of the barcode labels people print: "2x1", "2.25x1.25", "3x2" or "4x6" (inches). Admin sets it in
+     * Company Settings and a person can change it for one print. Unset means 2x1. No migration: the profile column exists.
+     */
+    labelSize?: string;
+    /**
      * When login history starts being written, as a UTC instant. Unset means
      * 2026-10-12 12:00 AM Eastern (2026-10-12T04:00:00.000Z). Nothing is stored
      * before that instant. The profile column already exists, so a missing

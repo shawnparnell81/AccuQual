@@ -713,6 +713,8 @@ export interface CompanyProfile {
   digitalTwinEnabled: boolean;
   /** This company's Engineering Planner link. Null hides the menu item. */
   engineeringPlannerUrl: string | null;
+  /** Default size of the barcode labels people print: "2x1", "2.25x1.25", "3x2" or "4x6". */
+  labelSize?: string;
 }
 
 /** GET /system-health (admin only) — Phase 10's consolidated Admin Console dashboard. Each check's shape varies by domain; `status`/`detail` are the two fields every check always has. */

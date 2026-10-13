@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LABEL_SIZE_IDS } from "../labels/labelSizes.js";
 
 const hexColor = () =>
   z
@@ -69,6 +70,8 @@ export const updateCompanyProfileSchema = z.object({
   contactPhone: z.string().max(50).optional().or(z.literal("")),
   /** Company-wide Digital Twin on/off. Omitted leaves the stored value alone. Unset in the database means off. */
   digitalTwinEnabled: z.boolean().optional(),
+  /** Default label size for the barcode labels people print. */
+  labelSize: z.enum(LABEL_SIZE_IDS).optional(),
   /** Per-company Engineering Planner link. Only http or https. "" clears it and hides the menu item. */
   engineeringPlannerUrl: z
     .string()

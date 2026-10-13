@@ -59,6 +59,22 @@ export const ROLE_PERMISSION_GROUPS: {
     ],
   },
   {
+    id: "labels",
+    label: "Labels and scanning",
+    permissions: [
+      {
+        key: "labels.print",
+        label: "Can print labels",
+        hint: "Print barcode labels, such as the sample tags on an FAI record. Also needs read access to the record the label is for.",
+      },
+      {
+        key: "fai.scan",
+        label: "Can scan to find FAI",
+        hint: "Scan to find also looks up FAI & AQL plans and records by part number, and sample tags by their code. Opening what it finds still needs the FAI view permission.",
+      },
+    ],
+  },
+  {
     id: "fai",
     label: "FAI & Inspection",
     permissions: [

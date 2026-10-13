@@ -17,6 +17,7 @@ import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
 import { digitalTwinEnabled } from "./digitalTwinFlag.js";
 import { fetchPublicImage } from "./logoFetch.js";
+import { DEFAULT_LABEL_SIZE, isLabelSizeId, labelSizeText } from "../labels/labelSizes.js";
 
 /**
  * Self-service settings for the company
@@ -76,7 +77,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * convenience view over fields that already exist plus the two genuinely
  * new ones (timezone, contact), not a new source of truth for name/logo.
  */
-function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean; engineeringPlannerUrl?: string } | null }) {
+function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean; engineeringPlannerUrl?: string; labelSize?: string } | null }) {
   return {
     name: co.name,
     logoUrl: co.branding?.logoUrl ?? null,
@@ -86,6 +87,7 @@ function profileView(co: { name: string; branding: { logoUrl?: string } | null; 
     contactPhone: co.profile?.contactPhone ?? null,
     digitalTwinEnabled: digitalTwinEnabled(co.profile),
     engineeringPlannerUrl: co.profile?.engineeringPlannerUrl ?? null,
+    labelSize: isLabelSizeId(co.profile?.labelSize) ? co.profile!.labelSize : DEFAULT_LABEL_SIZE,
   };
 }
 
@@ -113,6 +115,8 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   }
   patch.profile = mergedProfile;
 
+  const sizeBefore = isLabelSizeId(co.profile?.labelSize) ? co.profile!.labelSize : DEFAULT_LABEL_SIZE;
+  const sizeAfter = isLabelSizeId(mergedProfile.labelSize) ? mergedProfile.labelSize : DEFAULT_LABEL_SIZE;
   const plannerBefore = co.profile?.engineeringPlannerUrl ?? "";
   const plannerAfter = mergedProfile.engineeringPlannerUrl ?? "";
   const [updated] = await req.db!.update(company).set(patch).returning();
@@ -124,11 +128,13 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
         : plannerBefore === ""
           ? `Set the Engineering Planner link to ${plannerAfter}.`
           : `Changed the Engineering Planner link from ${plannerBefore} to ${plannerAfter}.`;
+  const sizeNote = sizeBefore === sizeAfter ? undefined : `Changed the default label size from ${labelSizeText(sizeBefore)} to ${labelSizeText(sizeAfter)}.`;
+  const description = [plannerNote, sizeNote].filter(Boolean).join(" ");
   await recordAuditTrail(req.db!, {
     entityType: "Company",
     entityId: 1,
     action: "update",
-    changes: { action: "update_profile", fieldsChanged: Object.keys(req.body), ...(plannerNote ? { description: plannerNote } : {}) },
+    changes: { action: "update_profile", fieldsChanged: Object.keys(req.body), ...(description ? { description } : {}) },
     performedBy: req.user?.id,
   });
 

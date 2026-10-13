@@ -918,6 +918,13 @@
       "when": 1795302000000,
       "tag": "0132_quality_report_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1795388400000,
+      "tag": "0133_fai_sample_tags",
+      "breakpoints": true
     }
   ]
 }
