@@ -40,8 +40,8 @@ export function useSidebarPrefs() {
   const prefs = query.data ?? cached?.prefs ?? EMPTY_SIDEBAR_SHORTCUTS;
   const levels = !isLoading && effective ? effective : (cached?.levels ?? null);
   const aiFeatures = useAiFeaturesEnabled();
-  const { enabled: digitalTwin } = useDigitalTwinEnabled();
-  const access = useMemo<SidebarAccess>(() => ({ levels, aiFeatures, digitalTwin }), [levels, aiFeatures, digitalTwin]);
+  const { enabled: digitalTwin, plannerUrl } = useDigitalTwinEnabled();
+  const access = useMemo<SidebarAccess>(() => ({ levels, aiFeatures, digitalTwin, plannerUrl }), [levels, aiFeatures, digitalTwin, plannerUrl]);
 
   const save = useMutation({
     mutationFn: async (next: SidebarShortcutPrefs) => (await apiClient.put<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts", next)).data,

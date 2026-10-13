@@ -226,6 +226,13 @@ export const company = pgTable("company", {
      */
     digitalTwinEnabled?: boolean;
     /**
+     * Address of this company's Engineering Planner (http or https). Unset
+     * hides the Engineering Planner menu item. Admin edits it in Company
+     * Settings. Existing companies get their current link from a data
+     * migration; the profile column itself already exists.
+     */
+    engineeringPlannerUrl?: string;
+    /**
      * When login history starts being written, as a UTC instant. Unset means
      * 2026-10-12 12:00 AM Eastern (2026-10-12T04:00:00.000Z). Nothing is stored
      * before that instant. The profile column already exists, so a missing

@@ -76,7 +76,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * convenience view over fields that already exist plus the two genuinely
  * new ones (timezone, contact), not a new source of truth for name/logo.
  */
-function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean } | null }) {
+function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean; engineeringPlannerUrl?: string } | null }) {
   return {
     name: co.name,
     logoUrl: co.branding?.logoUrl ?? null,
@@ -85,6 +85,7 @@ function profileView(co: { name: string; branding: { logoUrl?: string } | null; 
     contactEmail: co.profile?.contactEmail ?? null,
     contactPhone: co.profile?.contactPhone ?? null,
     digitalTwinEnabled: digitalTwinEnabled(co.profile),
+    engineeringPlannerUrl: co.profile?.engineeringPlannerUrl ?? null,
   };
 }
 
@@ -112,12 +113,22 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   }
   patch.profile = mergedProfile;
 
+  const plannerBefore = co.profile?.engineeringPlannerUrl ?? "";
+  const plannerAfter = mergedProfile.engineeringPlannerUrl ?? "";
   const [updated] = await req.db!.update(company).set(patch).returning();
+  const plannerNote =
+    plannerBefore === plannerAfter
+      ? undefined
+      : plannerAfter === ""
+        ? `Removed the Engineering Planner link (${plannerBefore}); the menu item is now hidden.`
+        : plannerBefore === ""
+          ? `Set the Engineering Planner link to ${plannerAfter}.`
+          : `Changed the Engineering Planner link from ${plannerBefore} to ${plannerAfter}.`;
   await recordAuditTrail(req.db!, {
     entityType: "Company",
     entityId: 1,
     action: "update",
-    changes: { action: "update_profile", fieldsChanged: Object.keys(req.body) },
+    changes: { action: "update_profile", fieldsChanged: Object.keys(req.body), ...(plannerNote ? { description: plannerNote } : {}) },
     performedBy: req.user?.id,
   });
 

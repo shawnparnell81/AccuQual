@@ -69,6 +69,14 @@ export const updateCompanyProfileSchema = z.object({
   contactPhone: z.string().max(50).optional().or(z.literal("")),
   /** Company-wide Digital Twin on/off. Omitted leaves the stored value alone. Unset in the database means off. */
   digitalTwinEnabled: z.boolean().optional(),
+  /** Per-company Engineering Planner link. Only http or https. "" clears it and hides the menu item. */
+  engineeringPlannerUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((value) => /^https?:\/\/[^\s]+$/i.test(value), { message: "Enter a link that starts with http:// or https://" })
+    .optional()
+    .or(z.literal("")),
 });
 
 export const updateCompanySecuritySchema = z

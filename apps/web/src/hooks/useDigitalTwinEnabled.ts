@@ -18,6 +18,7 @@ export function useDigitalTwinEnabled() {
   });
   return {
     enabled: digitalTwinEnabled(query.data?.digitalTwinEnabled),
+    plannerUrl: query.data?.engineeringPlannerUrl ?? null,
     ready: !signedIn || query.isSuccess || query.isError,
   };
 }

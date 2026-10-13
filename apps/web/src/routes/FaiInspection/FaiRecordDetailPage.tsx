@@ -87,6 +87,22 @@ export function FaiRecordDetailPage() {
     onError: (err) => { throw err; },
   });
 
+  const submitSignoff = useMutation({
+    mutationFn: () => faiInspectionApi.records.submitForSignoff(Number(id)),
+    onSuccess: () => { invalidate(); setError(null); },
+    onError: (err) => setError(extractErrorMessage(err, "Could not submit the record for sign-off.")),
+  });
+
+  const createNcr = useMutation({
+    mutationFn: () => faiInspectionApi.records.createNcr(Number(id)),
+    onSuccess: (result) => {
+      invalidate();
+      setError(null);
+      openTab({ path: `/ncr/${result.id}`, title: "NCR (from FAI)", icon: "alert-triangle" });
+    },
+    onError: (err) => setError(extractErrorMessage(err, "Could not create the NCR.")),
+  });
+
   if (isLoading) return <div className="p-6">Loading…</div>;
 
   const lines = rec?.lines ?? [];
@@ -211,6 +227,9 @@ export function FaiRecordDetailPage() {
             <button onClick={() => setForm(null)} className="rounded border px-4 py-2">Cancel</button>
           </>
         )}
+        {!isNew && rec && ["draft", "in_inspection"].includes(rec.status) && rec.canEdit && (
+          <button onClick={() => submitSignoff.mutate()} disabled={submitSignoff.isPending} className="rounded border px-4 py-2 disabled:opacity-50">Submit for sign-off</button>
+        )}
         {!isNew && !locked && (
           <button onClick={() => setShowDelete(true)} className="rounded border border-red-300 text-red-700 px-4 py-2">Delete…</button>
         )}
@@ -241,16 +260,13 @@ export function FaiRecordDetailPage() {
       {!isNew && rec?.status === "failed" && (
         <div className="border-t pt-6">
           <button
-            onClick={() => openTab({
-              path: `/ncr/new?part=${encodeURIComponent(rec.partNumber)}&supplier=${rec.supplierId ?? ""}`,
-              title: "New NCR (from FAI)",
-              icon: "alert-triangle",
-            })}
-            className="rounded bg-primary text-primary-foreground px-4 py-2 hover:opacity-90"
+            onClick={() => createNcr.mutate()}
+            disabled={createNcr.isPending}
+            className="rounded bg-primary text-primary-foreground px-4 py-2 hover:opacity-90 disabled:opacity-50"
           >
-            Create NCR
+            {rec.ncrId ? "Open NCR" : "Create NCR"}
           </button>
-          <p className="text-xs text-gray-500 mt-2">Opens the normal NCR create screen pre-filled with part and supplier. You decide.</p>
+          <p className="text-xs text-gray-500 mt-2">Creates a new NCR pre-filled with the part, supplier, lot/PO and this FAI record, then opens it. Needs permission to create NCRs.</p>
         </div>
       )}
 

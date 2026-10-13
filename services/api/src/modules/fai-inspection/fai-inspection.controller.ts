@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
   createPlanSchema, updatePlanSchema, createRecordSchema, updateRecordSchema,
-  resultLineSchema, signRecordSchema, manualSourceStatusSchema, attachFormSchema,
+  resultLineSchema, signRecordSchema, manualSourceStatusSchema, attachFormSchema, createSourceSchema, updateSourceSchema,
 } from "./fai-inspection.validation.js";
 import * as svc from "./fai-inspection.service.js";
 import { recordPdf as buildPdf } from "./fai-inspection.pdf.js";
@@ -43,6 +43,18 @@ export const manualSourceStatus = asyncHandler(async (req, res) => {
   res.json(await svc.manualSourceStatus(req.db!, req.user, req, idOf(req.params.id, "approved source"), body));
 });
 
+export const createSource = asyncHandler(async (req, res) => {
+  const body = createSourceSchema.parse(req.body);
+  res.status(201).json(await svc.createSource(req.db!, req.user, siteIdOf(req), body));
+});
+export const updateSource = asyncHandler(async (req, res) => {
+  const body = updateSourceSchema.parse(req.body);
+  res.json(await svc.updateSource(req.db!, req.user, idOf(req.params.id, "approved source"), body));
+});
+export const deleteSource = asyncHandler(async (req, res) => {
+  res.json(await svc.deleteSource(req.db!, req.user, idOf(req.params.id, "approved source")));
+});
+
 /* Records */
 export const listRecords = asyncHandler(async (req, res) => {
   res.json(await svc.listRecords(req.db!, req.user, siteIdOf(req), {
@@ -72,6 +84,13 @@ export const deleteRecord = asyncHandler(async (req, res) => {
 export const signRecord = asyncHandler(async (req, res) => {
   const body = signRecordSchema.parse(req.body);
   res.json(await svc.signRecord(req.db!, req.user, req, idOf(req.params.id, "FAI record"), body));
+});
+export const submitForSignoff = asyncHandler(async (req, res) => {
+  res.json(await svc.submitForSignoff(req.db!, req.user, idOf(req.params.id, "FAI record")));
+});
+export const createNcr = asyncHandler(async (req, res) => {
+  const created = await svc.createNcrFromRecord(req.db!, req.user, req, idOf(req.params.id, "FAI record"));
+  res.status(created.existing ? 200 : 201).json(created);
 });
 export const attachForm = asyncHandler(async (req, res) => {
   const body = attachFormSchema.parse(req.body);

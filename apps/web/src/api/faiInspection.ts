@@ -48,6 +48,14 @@ export interface FaiSource {
   dueStatus?: "due_soon" | "overdue" | null;
 }
 
+export interface FaiSourceInput {
+  partNumber: string;
+  supplierId?: number | null;
+  supplierFactory?: string | null;
+  receivingLocation?: string | null;
+  status?: string;
+}
+
 export interface FaiDashboard {
   open: number;
   awaitingSignoff: number;
@@ -213,6 +221,9 @@ export const faiInspectionApi = {
   },
   sources: {
     list: (status?: string) => apiClient.get(`${base}/sources`, { params: { status } }).then((r) => r.data as FaiSource[]),
+    create: (body: FaiSourceInput) => apiClient.post(`${base}/sources`, body).then((r) => r.data as FaiSource),
+    update: (id: number, body: Partial<FaiSourceInput>) => apiClient.put(`${base}/sources/${id}`, body).then((r) => r.data as FaiSource),
+    delete: (id: number) => apiClient.delete(`${base}/sources/${id}`).then((r) => r.data),
     setStatus: (id: number, body: { pin: string; certified: true; status: string; reason: string; description: string }) =>
       apiClient.post(`${base}/sources/${id}/status`, body).then((r) => r.data),
   },
@@ -228,6 +239,8 @@ export const faiInspectionApi = {
       apiClient.post(`${base}/records/${id}/sign`, body).then((r) => r.data),
     attachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/attach-form`, { formType }).then((r) => r.data as FaiRecord),
     detachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/detach-form`, { formType }).then((r) => r.data as FaiRecord),
+    submitForSignoff: (id: number) => apiClient.post(`${base}/records/${id}/submit-signoff`).then((r) => r.data as FaiRecord),
+    createNcr: (id: number) => apiClient.post(`${base}/records/${id}/ncr`).then((r) => r.data as { id: number; existing: boolean }),
     pdfUrl: (id: number) => `${base}/records/${id}/pdf`,
   },
   randomPulls: {

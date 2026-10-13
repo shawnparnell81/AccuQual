@@ -16,10 +16,13 @@ export interface SidebarAccess {
   aiFeatures?: boolean;
   /** True shows Digital Twin. Omitted or false hides it, including a saved menu row. */
   digitalTwin?: boolean;
+  /** This company's Engineering Planner link. Unset hides the menu item. */
+  plannerUrl?: string | null;
 }
 
 const KEY_RESOURCE: Record<string, SidebarResource> = {
   home: "open",
+  "customer-complaints": "complaints",
   calendar: "open",
   executive: "executive.dashboard",
   "home-kpis": "open",
@@ -137,6 +140,7 @@ const PATH_RESOURCES: [string, SidebarResource][] = [
   ["/form-builder", "form_builder"],
   ["/workflow", "workflow"],
   ["/warranty", "warranty"],
+  ["/complaints", "complaints"],
   ["/labor-claims", "labor_claims"],
   ["/workers", "worker_profile"],
   ["/training", "training"],
@@ -350,12 +354,25 @@ export function acceptSidebarPath(path: string): string | null {
   return `${pathname}?${query}`;
 }
 
+export const ENGINEERING_PLANNER_KEY = "engineering-planner";
+
+/** The company's planner link when it is a plain http(s) address, otherwise null. */
+export function plannerHref(value: string | null | undefined): string | null {
+  const url = (value ?? "").trim();
+  return /^https?:\/\/[^\s]+$/i.test(url) ? url : null;
+}
+
 /** Hides rows this person cannot open. A folder with no remaining children is dropped. */
 export function filterSidebarByAccess(nodes: SidebarNode[], access: SidebarAccess): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
     if (hideDigitalTwinTarget(access.digitalTwin, node)) continue;
     if (node.key === "ai" && access.aiFeatures === false) continue;
+    if (node.key === ENGINEERING_PLANNER_KEY) {
+      const url = plannerHref(access.plannerUrl);
+      if (url) out.push({ ...node, path: url });
+      continue;
+    }
     if (node.key === "admin-login-history" && !sidebarAllows("login_history", access)) continue;
     if (isFolder(node)) {
       const children = filterSidebarByAccess(node.children, access);
