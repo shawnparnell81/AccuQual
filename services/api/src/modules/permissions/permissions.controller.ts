@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LABELS_PRINT_PERMISSION, FAI_SCAN_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -55,6 +55,8 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   effective[FAI_VIEW_PERMISSION] = granted.has(FAI_VIEW_PERMISSION) ? "read" : "none";
   effective[FAI_SOURCES_MANAGE_PERMISSION] = granted.has(FAI_SOURCES_MANAGE_PERMISSION) ? "edit" : "none";
   effective[QUALITY_REPORT_DELETE_PERMISSION] = granted.has(QUALITY_REPORT_DELETE_PERMISSION) ? "edit" : "none";
+  effective[LABELS_PRINT_PERMISSION] = granted.has(LABELS_PRINT_PERMISSION) ? "edit" : "none";
+  effective[FAI_SCAN_PERMISSION] = granted.has(FAI_SCAN_PERMISSION) ? "edit" : "none";
   effective[IMPORT_AI_MAPPING_PERMISSION] = granted.has(IMPORT_AI_MAPPING_PERMISSION) ? "edit" : "none";
   res.json({ ...effective, admin_console: adminConsole });
 });

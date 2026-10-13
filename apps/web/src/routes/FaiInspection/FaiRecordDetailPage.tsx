@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { faiInspectionApi } from "../../api/faiInspection";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { FaiSampleTags } from "../../components/labels/FaiSampleTags";
 
 const TRIGGER_REASONS = ["New part", "New supplier", "Supplier factory change", "Receiving location change", "6-month repeat", "Annual random pull", "Engineering change", "Other"];
 const LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"];
@@ -16,6 +17,8 @@ const SHOW_GENERIC_FORM = false;
 
 export function FaiRecordDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const scannedSample = Number(searchParams.get("sample")) || null;
   const isNew = id === "new";
   const navigate = useNavigate();
   const openTab = useOpenTab();
@@ -237,6 +240,8 @@ export function FaiRecordDetailPage() {
           <a href={faiInspectionApi.records.pdfUrl(Number(id))} target="_blank" rel="noreferrer" className="rounded border px-4 py-2">Download FAI Report PDF</a>
         )}
       </div>
+
+      {!isNew && rec && <FaiSampleTags recordId={Number(id)} highlightSample={scannedSample} partNumber={rec.partNumber} />}
 
       {!isNew && !locked && (
         <div className="border-t pt-6 mb-8">

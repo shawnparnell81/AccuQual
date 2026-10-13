@@ -1,4 +1,5 @@
 import { integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
@@ -140,6 +141,30 @@ export const inspResultLines = pgTable("insp_result_lines", {
   result: text("result"),
   defects: integer("defects").notNull().default(0),
 });
+
+/**
+ * The code each sample tag carries (<FAI number>-S<n>) and how often it was printed. A tag label, not an inventory record:
+ * AccuQual keeps no stock, quantity on hand or transfers. Rows go with their FAI record.
+ */
+export const inspRecordSamples = pgTable(
+  "insp_record_samples",
+  {
+    id: serial("id").primaryKey(),
+    recordId: integer("record_id")
+      .references(() => inspRecords.id, { onDelete: "cascade" })
+      .notNull(),
+    sampleNumber: integer("sample_number").notNull(),
+    code: text("code").notNull(),
+    printedCount: integer("printed_count").notNull().default(0),
+    lastPrintedAt: timestamp("last_printed_at", { withTimezone: true }),
+    lastPrintedBy: integer("last_printed_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    recordNumber: uniqueIndex("insp_record_samples_record_number_uq").on(table.recordId, table.sampleNumber),
+    codeUnique: uniqueIndex("insp_record_samples_code_uq").on(sql`lower(${table.code})`),
+  }),
+);
 
 export type InspPlan = typeof inspPlans.$inferSelect;
 export type InspPlanCharacteristic = typeof inspPlanCharacteristics.$inferSelect;

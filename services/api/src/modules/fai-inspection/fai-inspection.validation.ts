@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AQL_VALUES } from "./aql.js";
+import { LABEL_SIZE_IDS } from "../labels/labelSizes.js";
 
 const LEVELS = ["I", "II", "III", "S-1", "S-2", "S-3", "S-4"] as const;
 const SEVERITIES = ["Normal", "Tightened", "Reduced"] as const;
@@ -116,6 +117,12 @@ export const manualSourceStatusSchema = z.object({
 
 export const attachFormSchema = z.object({
   formType: z.enum(["csa", "fuel_pump"]),
+});
+
+export const printLabelsSchema = z.object({
+  /** Sample numbers to print, 1 up to the record's sample count. */
+  samples: z.array(z.number().int().min(1).max(2000)).min(1).max(2000),
+  size: z.enum(LABEL_SIZE_IDS),
 });
 
 export const createSourceSchema = z.object({

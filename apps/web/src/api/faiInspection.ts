@@ -211,7 +211,42 @@ export interface FaiResultLine {
 
 const base = "/fai-inspection";
 
+export interface FaiSampleTag {
+  number: number;
+  /** What the tag's barcode holds: <FAI number>-S<n>. */
+  code: string;
+  printedCount: number;
+  lastPrintedAt: string | null;
+}
+
+export interface FaiSamples {
+  faiNumber: string;
+  sampleCount: number;
+  /** The person has "Can print labels". */
+  canPrint: boolean;
+  samples: FaiSampleTag[];
+}
+
+export interface FaiLabelData {
+  faiNumber: string;
+  partNumber: string;
+  lotReference: string;
+  lotSize: number | null;
+  date: string;
+  sampleCount: number;
+  companyName: string;
+  defaultSize: string;
+}
+
+export interface FaiScanResponse {
+  /** A scanned sample tag: the record to open with that sample highlighted. */
+  sample: { recordId: number; faiNumber: string; partNumber: string; sampleNumber: number; sampleCount: number; code: string; path: string } | null;
+  results: { type: "FAI plan" | "FAI record"; id: number; label: string; detail: string; path: string; date: string | null }[];
+}
+
 export const faiInspectionApi = {
+  /** Scan to find: a part number, an FAI number or a sample-tag code. */
+  scan: (code: string) => apiClient.get(`${base}/scan`, { params: { code } }).then((r) => r.data as FaiScanResponse),
   dashboard: () => apiClient.get(`${base}/dashboard`).then((r) => r.data as FaiDashboard),
   plans: {
     list: (q?: string) => apiClient.get(`${base}/plans`, { params: { q } }).then((r) => r.data as FaiPlan[]),
@@ -239,6 +274,10 @@ export const faiInspectionApi = {
       apiClient.post(`${base}/records/${id}/sign`, body).then((r) => r.data),
     attachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/attach-form`, { formType }).then((r) => r.data as FaiRecord),
     detachForm: (id: number, formType: "csa" | "fuel_pump") => apiClient.post(`${base}/records/${id}/detach-form`, { formType }).then((r) => r.data as FaiRecord),
+    samples: (id: number) => apiClient.get(`${base}/records/${id}/samples`).then((r) => r.data as FaiSamples),
+    labelData: (id: number) => apiClient.get(`${base}/records/${id}/labels`).then((r) => r.data as FaiLabelData),
+    printLabels: (id: number, body: { samples: number[]; size: string }) =>
+      apiClient.post(`${base}/records/${id}/labels/print`, body).then((r) => r.data as { labels: { number: number; code: string }[]; count: number }),
     submitForSignoff: (id: number) => apiClient.post(`${base}/records/${id}/submit-signoff`).then((r) => r.data as FaiRecord),
     createNcr: (id: number) => apiClient.post(`${base}/records/${id}/ncr`).then((r) => r.data as { id: number; existing: boolean }),
     pdfUrl: (id: number) => `${base}/records/${id}/pdf`,

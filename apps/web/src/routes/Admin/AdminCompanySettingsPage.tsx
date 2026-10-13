@@ -8,6 +8,7 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { CompanyProfile } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { DEFAULT_LABEL_SIZE, LABEL_SIZES } from "../../lib/labelSizes";
 
 function useCompanyProfile() {
   return useQuery<CompanyProfile>({ queryKey: ["company/profile"], queryFn: async () => (await apiClient.get("/company/profile")).data });
@@ -35,6 +36,7 @@ export function AdminCompanySettingsPage() {
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [plannerUrl, setPlannerUrl] = useState("");
+  const [labelSize, setLabelSize] = useState<string>(DEFAULT_LABEL_SIZE);
 
   useEffect(() => {
     if (profile) {
@@ -45,6 +47,7 @@ export function AdminCompanySettingsPage() {
       setContactEmail(profile.contactEmail ?? "");
       setContactPhone(profile.contactPhone ?? "");
       setPlannerUrl(profile.engineeringPlannerUrl ?? "");
+      setLabelSize(profile.labelSize ?? DEFAULT_LABEL_SIZE);
     }
   }, [profile]);
 
@@ -71,7 +74,7 @@ export function AdminCompanySettingsPage() {
   });
 
   const save = useMutation({
-    mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone, engineeringPlannerUrl: plannerUrl.trim() })).data,
+    mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone, engineeringPlannerUrl: plannerUrl.trim(), labelSize })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company/profile"] });
       toast.success("Company settings saved.");
@@ -107,6 +110,14 @@ export function AdminCompanySettingsPage() {
             </div>
             <TextField label="Engineering Planner link" placeholder="https://…" value={plannerUrl} onChange={(e) => setPlannerUrl(e.target.value)} />
             <p className="text-xs text-muted-foreground">Leave blank to hide Engineering Planner from the menu.</p>
+            <SelectField label="Default label size" value={labelSize} onChange={(e) => setLabelSize(e.target.value)}>
+              {LABEL_SIZES.map((size) => (
+                <option key={size.id} value={size.id}>
+                  {size.label}
+                </option>
+              ))}
+            </SelectField>
+            <p className="text-xs text-muted-foreground">The size barcode labels print at. A person can pick another size each time they print.</p>
             <p className="text-xs text-muted-foreground">
               Full color palette and PDF header/footer branding are configured on the{" "}
               <Link to="/admin/company-branding" className="text-primary hover:underline">

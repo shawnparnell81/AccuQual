@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { ScanLine } from "lucide-react";
 import { apiClient } from "../../api/client";
 import type { SearchResult } from "../../api/types";
+import { faiInspectionApi } from "../../api/faiInspection";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
+import { resolveScan, type ScanRow } from "../../lib/scanToFind";
 
 /**
  * Hardware scanners type into the focused field and send Enter. The lookup
@@ -13,7 +16,10 @@ import { useDialogBehavior } from "../shared/useDialogBehavior";
 export function ScanToFindDialog() {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
-  const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [results, setResults] = useState<ScanRow[] | null>(null);
+  const { effective } = useEffectivePermissions();
+  // Scanning a part number or a sample tag for FAI & AQL needs "Can scan to find FAI" on the role; the server checks it too.
+  const canScanFai = effective?.["fai.scan"] === "edit";
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
@@ -33,12 +39,17 @@ export function ScanToFindDialog() {
     setSearching(true);
     setError(null);
     try {
-      const { data } = await apiClient.get<{ results: SearchResult[] }>("/search", { params: { q } });
-      if (data.results.length === 1) {
-        navigate(data.results[0]!.path);
+      const [{ data }, fai] = await Promise.all([
+        apiClient.get<{ results: SearchResult[] }>("/search", { params: { q } }),
+        canScanFai ? faiInspectionApi.scan(q).catch(() => null) : Promise.resolve(null),
+      ]);
+      // A sample tag, or exactly one match, opens straight away; otherwise FAI & AQL (newest first) then the rest are listed.
+      const outcome = resolveScan(fai, data.results);
+      if ("open" in outcome) {
+        navigate(outcome.open);
         close();
       } else {
-        setResults(data.results);
+        setResults(outcome.rows);
       }
     } catch {
       setError("Couldn't search.");
@@ -77,7 +88,7 @@ export function ScanToFindDialog() {
                 autoFocus
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="Scan or type a record, document, or gage"
+                placeholder={canScanFai ? "Scan or type a record, document, gage, part number, or sample tag" : "Scan or type a record, document, or gage"}
                 aria-label="Scan code"
                 className="flex-1 rounded-md border border-form-field bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
@@ -93,7 +104,7 @@ export function ScanToFindDialog() {
                 ) : (
                   <ul className="flex flex-col gap-1">
                     {results.map((result) => (
-                      <li key={`${result.type}-${result.id}`}>
+                      <li key={result.key}>
                         <button
                           type="button"
                           onClick={() => {
@@ -103,7 +114,7 @@ export function ScanToFindDialog() {
                           className="flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left text-sm hover:bg-secondary"
                         >
                           <span className="font-medium">{result.label}</span>
-                          <span className="text-xs text-muted-foreground">{result.type}</span>
+                          <span className="text-xs text-muted-foreground">{result.detail}</span>
                         </button>
                       </li>
                     ))}

@@ -136,7 +136,6 @@ describe("print document", () => {
   it("keeps a single Print control on each record view", () => {
     // These pages are not record views. A label, the monthly report, and routes the app no longer mounts.
     const outside = new Set([
-      "LotLabelPrint.tsx",
       "EngineeringMonthlyReport.tsx",
       "ErpPurchaseOrderDetailPage.tsx",
       "ErpRequisitionDetailPage.tsx",
