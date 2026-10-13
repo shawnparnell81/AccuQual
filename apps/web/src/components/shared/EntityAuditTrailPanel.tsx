@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import { formatDateTime } from "../../lib/dates";
 import type { AuditFieldChange } from "../../lib/auditLine";
 import { AuditFacts } from "./AuditFacts";
+import { CollapsibleAuditPanel } from "./CollapsibleAuditPanel";
 import { LoadingPlaceholder } from "./LoadingPlaceholder";
 
 interface AuditRow {
@@ -33,8 +34,7 @@ export function EntityAuditTrailPanel({ entityType, entityId, title = "Audit Tra
   const sorted = [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 print:hidden">
-      <h3 className="mb-2 text-sm font-medium">{title}</h3>
+    <CollapsibleAuditPanel title={title} count={isLoading ? null : sorted.length} className="print:hidden">
       {isLoading ? (
         <LoadingPlaceholder />
       ) : sorted.length === 0 ? (
@@ -48,6 +48,6 @@ export function EntityAuditTrailPanel({ entityType, entityId, title = "Audit Tra
           ))}
         </ul>
       )}
-    </div>
+    </CollapsibleAuditPanel>
   );
 }
