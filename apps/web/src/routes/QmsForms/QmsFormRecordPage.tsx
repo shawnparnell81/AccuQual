@@ -275,7 +275,7 @@ function QmsSavedForm() {
   const linkedNcrIds = [...new Set((record.rows ?? []).map((row) => Number(row.data?.linkedNcrId)).filter((value) => Number.isInteger(value) && value > 0))];
   const qmsFailed = (record.rows ?? []).some((row) => ["result", "status", "overallResult", "releaseHoldReject", "faiStatus", "finalStatus"].some((key) => /^(fail|failed|reject|rejected|hold|rework)/i.test(String(row.data?.[key] ?? ""))));
   const retired = isRetiredQmsFormType(formType);
-  const backTo = retired ? "/documents/master-list" : formType === "first_article_inspection" ? "/blank-forms" : `/form-folders/${formType}`;
+  const backTo = retired ? "/documents/master-list" : formType === "first_article_inspection" ? "/blank-forms" : `/blank-forms/${formType}`;
 
   return (
     <div className="flex flex-col gap-4">

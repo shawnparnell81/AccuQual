@@ -207,6 +207,7 @@ const ROUTE_PATTERNS = [
   /^\/documents\/\d+$/,
   /^\/form-folders$/,
   /^\/form-folders\/[A-Za-z0-9_-]+$/,
+  /^\/blank-forms\/(?!start$)[A-Za-z0-9_-]+$/,
   /^\/training$/,
   /^\/training\/employee\/\d+$/,
   /^\/training\/\d+$/,
@@ -339,7 +340,7 @@ export function acceptSidebarPath(path: string): string | null {
     const formType = qmsType[1] ?? "";
     if (formType === "master_document_register") return "/documents/master-list";
     if (formType === "first_article_inspection") return "/blank-forms";
-    return `/form-folders/${formType}`;
+    return `/blank-forms/${formType}`;
   }
   if (query.includes("?")) return null;
   if (!routeExists(pathname)) return null;

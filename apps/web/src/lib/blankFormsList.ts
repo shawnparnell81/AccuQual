@@ -48,3 +48,9 @@ export function blankRenameProblem(rows: { formKey: string; formId?: string | nu
   const clash = rows.some((row) => row.formKey !== formKey && (blankFormFileName(row).toLowerCase() === wanted || (row.displayTitle?.trim() || row.title).toLowerCase() === next.toLowerCase()));
   return clash ? "Another blank form already has that name" : null;
 }
+
+/** Blank templates that belong to one Folders entry (a folder can group several form keys). Pinned above the saved copies. */
+export function blankTemplatesForFolder<T extends { formKey: string; formId?: string | null; title: string; displayTitle?: string | null }>(templates: T[], formKeys: readonly string[]): T[] {
+  const keys = new Set(formKeys);
+  return blankFormsByName(templates.filter((template) => keys.has(template.formKey)));
+}

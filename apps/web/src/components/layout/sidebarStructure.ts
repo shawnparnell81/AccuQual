@@ -153,7 +153,6 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   path: "/documents",
   children: [
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
-    { key: "saved-form-folders", label: "Folders", path: "/form-folders", icon: Folder },
     { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: FileText },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
     { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
@@ -220,14 +219,14 @@ const QUALITY_FOLDER: SidebarFolder = {
   ],
 };
 
-/** FAI & Inspection. Every row needs fai.view (sidebarAccess maps /fai-inspection to it); nothing names a role. */
+/** FAI & AQL. Every row needs fai.view (sidebarAccess maps /fai-inspection to it); nothing names a role. */
 const FAI_INSPECTION_FOLDER: SidebarFolder = {
   key: "fai-inspection",
-  label: "FAI & Inspection",
+  label: "FAI & AQL",
   icon: ClipboardCheck,
   path: "/fai-inspection",
   children: [
-    { key: "fai-plans", label: "Inspection Plans", path: "/fai-inspection/plans", icon: ClipboardList },
+    { key: "fai-plans", label: "AQL Plans", path: "/fai-inspection/plans", icon: ClipboardList },
     { key: "fai-sources", label: "Approved Sources", path: "/fai-inspection/sources", icon: ShieldCheck },
     { key: "fai-records", label: "FAI Records", path: "/fai-inspection/records", icon: ClipboardCheck },
     { key: "fai-random-pulls", label: "Random Pulls", path: "/fai-inspection/random-pulls", icon: ClipboardList },
@@ -305,8 +304,8 @@ const ADMIN_FOLDER: SidebarFolder = {
  * ERP groups on the top bar. Every module the previous sidebar could open
  * stays under one of these groups. Wellman development is added beside
  * Engineering. Customize menu still reorders and hides rows for one person.
- * Documents → Folders and the Folders door both open /form-folders.
- * Blank Forms lists the same templates as Folder Explorer → Blank Forms Templates.
+ * Blank Forms lists the same templates as Folder Explorer → Blank Forms Templates;
+ * each blank opens as a folder holding the blank plus its saved copies (/form-folders redirects there).
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {
@@ -327,7 +326,6 @@ export const SIDEBAR_FOLDERS: SidebarNode[] = [
   ENGINEERING_FOLDER,
   EQUIPMENT_FOLDER,
   SUPPLIERS_FOLDER,
-  { key: "form-folders", label: "Folders", path: "/form-folders", icon: Folder },
   {
     key: "reporting",
     label: "Reports",

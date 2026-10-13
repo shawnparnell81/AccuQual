@@ -14,6 +14,8 @@ import { documentsFolderHref, type BrowseFolder } from "../../lib/folderBrowse";
 import { fileThumbnailKind } from "../../lib/explorerView";
 import { formatDateTime } from "../../lib/dates";
 import { useExplorerView } from "../../hooks/useExplorerView";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
+import { blankFormFileName, blankTemplatesForFolder } from "../../lib/blankFormsList";
 
 interface FormFolderSummary {
   formKey: string;
@@ -301,9 +303,12 @@ export function FormFolderDetailPage() {
     onSuccess: () => {
       toast.success("Folder deleted.");
       setDeleting(false);
-      navigate("/form-folders");
+      navigate("/blank-forms");
     },
   });
+
+  const templates = useFormTemplates();
+  const blanks = blankTemplatesForFolder(templates.data ?? [], folder.data?.formKeys ?? (folder.data ? [folder.data.formKey] : []));
 
   const needle = query.trim().toLowerCase();
   const fills = useMemo(() => {
@@ -317,12 +322,12 @@ export function FormFolderDetailPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm">
-            <Link to="/form-folders" className="text-primary hover:underline">
-              Folders
+            <Link to="/blank-forms" className="text-primary hover:underline">
+              Blank Forms
             </Link>
           </p>
           <h1 className="text-2xl font-semibold">{folder.data?.name ?? "Folder"}</h1>
-          <p className="text-sm text-muted-foreground">Saved copies of this form, newest first. Blank templates are not listed here.</p>
+          <p className="text-sm text-muted-foreground">The blank template is pinned at the top. Open it to start a new copy; saving files the copy in this folder. Saved copies follow, newest first.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ExplorerViewSwitcher view={view} onChange={setView} />
@@ -342,6 +347,34 @@ export function FormFolderDetailPage() {
           />
         </div>
       </div>
+
+      {blanks.length > 0 && (
+        <div className="rounded-lg border border-border bg-card text-sm" role="list" data-testid="folder-blank-templates">
+          {blanks.map((blank) => (
+            <div
+              key={blank.formKey}
+              role="listitem"
+              data-testid="folder-blank-template"
+              data-form-key={blank.formKey}
+              tabIndex={0}
+              className="flex cursor-default items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0 hover:bg-muted focus:bg-primary/10 outline-none"
+              onDoubleClick={() => navigate(blank.start ? `/blank-forms/start/${blank.formKey}` : blank.subjectRoute)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") navigate(blank.start ? `/blank-forms/start/${blank.formKey}` : blank.subjectRoute);
+              }}
+            >
+              <FileText size={16} className="shrink-0 text-primary" aria-hidden />
+              <Link
+                to={blank.start ? `/blank-forms/start/${blank.formKey}` : blank.subjectRoute}
+                className="min-w-0 flex-1 truncate font-medium text-primary hover:underline"
+              >
+                {blankFormFileName(blank)}
+              </Link>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Blank template</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {folder.isLoading && <p className="text-sm text-muted-foreground">Loading saved forms…</p>}
       {folder.isError && <p className="text-sm text-destructive">Couldn't load this folder.</p>}

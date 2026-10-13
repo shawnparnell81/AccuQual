@@ -58,7 +58,7 @@ describe("unknown routes stay inside the app shell", () => {
   });
 
   it("does not treat Folders or a real redirect as a missing page", () => {
-    assert.throws(() => markup("/form-folders"), /suspend/i);
+    assert.equal(markup("/form-folders").includes('data-testid="not-found"'), false);
     const reports = markup("/reports");
     assert.match(reports, /data-testid="app-shell"/);
     assert.equal(reports.includes("This page isn't in AccuQual"), false);

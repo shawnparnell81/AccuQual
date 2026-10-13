@@ -41,7 +41,7 @@ export const ALL_QMS_DOCUMENTS: QmsDocumentEntry[] = [
   ...QMS_FORM_DEFINITIONS.filter((def) => !HIDDEN_FORM_DEPARTMENTS.has(def.folderPath[0]) && !HIDDEN_FORM_TYPES.has(def.formType) && !isRetiredQmsFormType(def.formType)).map((def) => ({
     title: def.title,
     department: def.folderPath[0],
-    route: def.formType === "first_article_inspection" ? "/blank-forms" : `/form-folders/${def.formType}`,
+    route: def.formType === "first_article_inspection" ? "/blank-forms" : `/blank-forms/${def.formType}`,
     isGeneric: true,
   })),
   ...REUSED_MODULE_DOCUMENTS,

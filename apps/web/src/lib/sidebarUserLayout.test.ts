@@ -32,7 +32,7 @@ describe("per-user sidebar layout", () => {
     const shown = resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, allowAll);
     assert.deepEqual(
       shown.map((node) => node.label),
-      ["Home", "Documents", "Quality", "FAI & Inspection", "Engineering", "Equipment", "Suppliers", "Folders", "Reports", "Admin"],
+      ["Home", "Documents", "Quality", "FAI & AQL", "Engineering", "Equipment", "Suppliers", "Reports", "Admin"],
     );
     const links = flattenSidebarLinks(shown);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
@@ -101,7 +101,7 @@ describe("per-user sidebar layout", () => {
     );
     assert.equal(links.some((link) => link.label === "QMS Forms" || link.key === "qms-forms" || link.path === "/qms-forms"), false);
     assert.equal(links.some((link) => link.key === "blank-forms" && link.path === "/blank-forms" && link.label === "Blank Forms"), true);
-    assert.equal(links.some((link) => link.path === "/form-folders/incoming_inspection_record" && link.label === "Incoming Inspection Record"), true);
+    assert.equal(links.some((link) => link.path === "/blank-forms/incoming_inspection_record" && link.label === "Incoming Inspection Record"), true);
   });
 
   it("keeps a saved Blank Forms row on the Blank Forms page and drops a stale row", () => {

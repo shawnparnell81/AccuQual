@@ -115,7 +115,7 @@ export function normalizePin(pin: PinnedShortcut): PinnedShortcut | null {
   const path = acceptSidebarPath(pin.path);
   if (!path) return null;
   if (wasCatalog && path === "/blank-forms") return null;
-  const label = pin.label === "QMS Forms" ? (path.startsWith("/form-folders/") ? "Saved forms" : "Blank Forms") : pin.label;
+  const label = pin.label === "QMS Forms" ? (path.startsWith("/form-folders/") || (path.startsWith("/blank-forms/") && !path.startsWith("/blank-forms/start/")) ? "Saved forms" : "Blank Forms") : pin.label;
   return { ...pin, path, label };
 }
 

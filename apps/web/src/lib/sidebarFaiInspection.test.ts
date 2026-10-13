@@ -9,13 +9,13 @@ function topBar(levels: Record<string, string>) {
   return resolveUserSidebar(SIDEBAR_FOLDERS, EMPTY_SIDEBAR_SHORTCUTS, access);
 }
 
-describe("FAI & Inspection top-bar module", () => {
+describe("FAI & AQL top-bar module", () => {
   it("shows for a user whose role grants fai.view, right after Quality", () => {
     const nodes = topBar({ "fai.view": "read" });
     const keys = nodes.map((n) => n.key);
     assert.ok(keys.includes("fai-inspection"), `top modules were: ${keys.join(", ")}`);
     const fai = nodes.find((n) => n.key === "fai-inspection")!;
-    assert.equal(fai.label, "FAI & Inspection");
+    assert.equal(fai.label, "FAI & AQL");
     assert.equal(fai.path, "/fai-inspection");
     const paths = flattenSidebarLinks([fai]).map((l) => l.path);
     for (const p of ["/fai-inspection/plans", "/fai-inspection/sources", "/fai-inspection/records", "/fai-inspection/random-pulls"]) {
