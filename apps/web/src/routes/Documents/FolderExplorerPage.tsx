@@ -1945,7 +1945,7 @@ function FolderBrowser({
         <h2 className="text-lg font-semibold" title={folder.name}>{folder.name}</h2>
       </div>
 
-      {folder.name === FAI_VALIDATION_FOLDER_NAME && <ValidationReportsPanel />}
+      {folder.name === FAI_VALIDATION_FOLDER_NAME && <ValidationReportsPanel currentFolderId={folder.id} />}
 
       <div
         data-testid="folder-contents"

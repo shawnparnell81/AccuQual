@@ -104,7 +104,12 @@ export function RegistrySheet({ module, cells, readOnly = false, onChange, docum
   }
 
   const gridCols = layout.cols.map((w) => `${COL_PX(w)}px`).join(" ");
-  const gridRows = Array.from({ length: layout.maxRow }, (_, index) => `${ROW_PX(layout.rowHeights[String(index + 1)] ?? layout.defaultRowHeight)}px`).join(" ");
+  // Rows with a PIN signature grow to fit the stamped name and date/time; every other row keeps the workbook's height.
+  const signatureRows = new Set((def.signatures ?? []).map((slot) => parseAddr(slot.addr)?.row).filter((row): row is number => row != null));
+  const gridRows = Array.from({ length: layout.maxRow }, (_, index) => {
+    const px = `${ROW_PX(layout.rowHeights[String(index + 1)] ?? layout.defaultRowHeight)}px`;
+    return signatureRows.has(index + 1) ? `minmax(${px}, auto)` : px;
+  }).join(" ");
   const totalWidth = layout.cols.reduce((sum, w) => sum + COL_PX(w), 0);
   /** Pixels from the left edge to a zero-based column position such as 3.4 (3.4 is 40% of the way into column D). */
   const colLeft = (col: number) => {

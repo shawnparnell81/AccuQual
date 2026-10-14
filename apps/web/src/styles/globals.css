@@ -2642,3 +2642,30 @@ body.side-collapsed .aq-nav-folder-link {
 .aq-grid-selected {
   box-shadow: inset 0 0 0 2px hsl(var(--primary));
 }
+
+/* A signed stamp (name, date and time) always shows in full, on screen and in print, on every form.
+   The stamp wraps, and the box that holds it grows instead of cutting it off. */
+.aq-signature-stamp,
+.aq-signature-stamp * {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:has(> .aq-signature-stamp) {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+}
+
+@media print {
+  .aq-signature-stamp,
+  :has(> .aq-signature-stamp) {
+    break-inside: avoid;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+}

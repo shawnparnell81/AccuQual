@@ -106,6 +106,10 @@ export interface FormModule {
   display: (addr: string, value: Value | CellValue | undefined) => string;
 }
 
+function hasText(value: unknown): boolean {
+  return value != null && value !== "" && !(typeof value === "string" && value.trim() === "");
+}
+
 function grayish(hex: string | undefined): boolean {
   if (!hex) return false;
   const r = parseInt(hex.slice(1, 3), 16);
@@ -214,8 +218,9 @@ export function buildForm(input: FormDefinition): FormModule {
     else if (typeof cell.v === "boolean" || extraChecks.has(at)) kind = "check";
     else if (areas.has(at)) kind = "area";
     else if (extraInputs.has(at)) kind = "input";
-    else if (locked.has(at)) kind = cell.v != null && cell.v !== "" ? "label" : "blocked";
-    else if (cell.v != null && cell.v !== "") kind = "label";
+    else if (locked.has(at)) kind = hasText(cell.v) ? "label" : "blocked";
+    // A cell holding only spaces is an empty box in the workbook (the Shock header's Part Number, Date, ...): a place to type.
+    else if (hasText(cell.v)) kind = "label";
     else if (bands.has(at) && !extraInputs.has(at)) kind = "spacer";
     else if (grayish(style?.bg)) kind = "blocked";
     else if (hasBorder(style)) kind = "input";

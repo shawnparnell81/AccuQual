@@ -1,4 +1,5 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { reloadForStaleChunk } from "../lib/staleChunk";
 
 const preloaders = new Map<string, () => Promise<unknown>>();
 
@@ -9,8 +10,15 @@ function lazyNamed(path: string, load: () => Promise<Record<string, unknown>>, n
       if (typeof component !== "function") throw new Error(`Missing page export ${name}`);
       return { default: component as ComponentType<any> };
     });
+  // Prefetch (on hover) never reloads; only opening the page does.
   if (!preloaders.has(path)) preloaders.set(path, run);
-  return lazy(run);
+  return lazy(() =>
+    run().catch((error: unknown) => {
+      // A page file from before the last deploy is gone: reload once to get the new app instead of a dead page.
+      if (reloadForStaleChunk(error)) return new Promise<never>(() => {});
+      throw error;
+    }),
+  );
 }
 
 /** Starts loading the page for a sidebar path so the click doesn't wait on the network. */

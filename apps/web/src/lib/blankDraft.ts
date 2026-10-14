@@ -58,3 +58,11 @@ export function shouldStartBlank(startedFor: string | null, formKey: string): bo
 export function isUnsavedRecordId(id: number): boolean {
   return !Number.isFinite(id) || id <= 0;
 }
+
+/** Documents > Blank Forms. An unsaved blank was opened from here, so leaving it (crumb, Back, Discard) returns here. */
+export const BLANK_FORMS_PATH = "/blank-forms";
+
+/** Where leaving a form goes: Blank Forms for an unsaved blank, else the form's own folder. */
+export function leaveFormPath(unsavedBlank: boolean, savedPath: string): string {
+  return unsavedBlank ? BLANK_FORMS_PATH : savedPath;
+}

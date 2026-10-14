@@ -44,6 +44,7 @@ import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { useToast } from "../../components/shared/ToastProvider";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
 import { useBlankDraft } from "../../lib/useBlankDraft";
+import { leaveFormPath } from "../../lib/blankDraft";
 import { headerStatusFor } from "../../lib/headerStatus";
 import { useFormFiling } from "../../components/forms/FormDocumentControls";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
@@ -160,6 +161,7 @@ export function ValidationReportDetailPage() {
   const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
   const title = recordHeading(meta.title, report.recordNumber);
+  const leaveCrumb = blank ? { label: "Blank Forms", to: leaveFormPath(true, validationReportsCrumb().to) } : validationReportsCrumb();
 
   const registry = registryModule(formType);
   const multiSignature = formType === "fuel_injector" || formType === "brake_wear" || formType === "gas_lift";
@@ -248,7 +250,7 @@ export function ValidationReportDetailPage() {
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs
           items={[
-            validationReportsCrumb(),
+            leaveCrumb,
             { label: title },
           ]}
         />
@@ -274,8 +276,8 @@ export function ValidationReportDetailPage() {
               {doc}
               {cells.B6 ? ` · ${cells.B6}` : ""}
               {" · "}
-              <Link to={validationReportsCrumb().to} className="text-primary hover:underline">
-                {validationReportsCrumb().label}
+              <Link to={leaveCrumb.to} className="text-primary hover:underline">
+                {leaveCrumb.label}
               </Link>
             </p>
             {report.id > 0 && (
@@ -303,7 +305,7 @@ export function ValidationReportDetailPage() {
               kind={meta.title}
               title={cells.B6 == null ? null : String(cells.B6)}
               number={report.recordNumber}
-              navigateTo={validationReportsCrumb().to}
+              navigateTo={leaveCrumb.to}
               allowed={canEdit}
               assignedOnly
             />
