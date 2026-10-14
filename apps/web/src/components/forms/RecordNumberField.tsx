@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Modal } from "../modals/Modal";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DUPLICATE_RECORD_NUMBER } from "../../lib/recordNumberMessage";
@@ -92,6 +92,7 @@ export function NumberedCreateButton({
   onCreate,
   className = "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60",
   dialogTitle = "New record",
+  extra,
 }: {
   label: string;
   numberLabel: string;
@@ -99,6 +100,8 @@ export function NumberedCreateButton({
   onCreate: (recordNumber: string) => Promise<unknown>;
   className?: string;
   dialogTitle?: string;
+  /** More fields under the number, such as where the record is saved. */
+  extra?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -121,6 +124,7 @@ export function NumberedCreateButton({
           }}
         >
           <RecordNumberField label={numberLabel} value={value} error={error} onChange={(next) => { setValue(next); if (error) setError(null); }} />
+          {extra}
           <button type="submit" disabled={pending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             {pending ? "Creating…" : "Create"}
           </button>

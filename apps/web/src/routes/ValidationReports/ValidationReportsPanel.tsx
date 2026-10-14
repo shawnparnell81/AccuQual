@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
+import { useToast } from "../../components/shared/ToastProvider";
+import type { BrowseFolder } from "../../lib/folderBrowse";
+import { createFolderChoices, defaultCreateFolder, folderPathLabel } from "../../lib/createFolderChoice";
 import { useNavigate } from "react-router-dom";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -50,8 +55,18 @@ function rowResult(kind: ValidationFormType, cells: Record<string, CellValue>): 
   return overallResult(cells);
 }
 
-export function ValidationReportsPanel() {
+export function ValidationReportsPanel({ currentFolderId = null }: { currentFolderId?: number | null } = {}) {
   const navigate = useNavigate();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  // The live folder list (same query Folder Explorer refreshes), so a new folder shows up here without a reload.
+  const folders = useQuery({
+    queryKey: ["document-folders"],
+    queryFn: async () => (await apiClient.get<BrowseFolder[]>("/document-folders")).data,
+  });
+  const folderChoices = useMemo(() => createFolderChoices(folders.data ?? []), [folders.data]);
+  const [saveFolder, setSaveFolder] = useState<number | "" | null>(null);
+  const chosenFolder = saveFolder ?? defaultCreateFolder(folderChoices, currentFolderId);
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
@@ -65,6 +80,21 @@ export function ValidationReportsPanel() {
     setPendingKind(formType);
     try {
       const created = await createReport.mutateAsync({ recordNumber: recordNumber.trim() || null, data: { formType, cells: {} } } as never);
+      if (chosenFolder !== "") {
+        try {
+          const filed = (
+            await apiClient.post<{ parentPath?: string[] }>("/document-folders/form-filings", { formKey: VALIDATION_FORMS[formType].formKey, recordId: created.id, folderId: chosenFolder })
+          ).data;
+          const path = filed.parentPath?.length ? ["Documents", ...filed.parentPath].join(" > ") : folderPathLabel(folders.data ?? [], chosenFolder);
+          toast.success(`Saved to ${path}`);
+          void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+          void queryClient.invalidateQueries({ queryKey: ["form-filing"] });
+        } catch {
+          toast.error("The report was created, but it couldn't be put in that folder. Pick a folder on the report.");
+        }
+      } else {
+        toast.success("Created. It is not in a folder yet; pick one on the report.");
+      }
       navigate(`/validation-reports/${created.id}`);
     } finally {
       setPendingKind(null);
@@ -119,6 +149,24 @@ export function ValidationReportsPanel() {
                 pending={createReport.isPending && pendingKind === kind}
                 className={`rounded-md px-3 py-2 text-sm font-medium disabled:opacity-60 ${kind === "csa" ? "bg-primary text-primary-foreground" : "border border-border bg-card hover:bg-muted"}`}
                 onCreate={(recordNumber) => start(kind, recordNumber)}
+                extra={
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span>Save to folder</span>
+                    <select
+                      className="rounded-md border border-border bg-background p-2"
+                      data-testid="create-folder"
+                      value={chosenFolder === "" ? "" : String(chosenFolder)}
+                      onChange={(event) => setSaveFolder(event.target.value === "" ? "" : Number(event.target.value))}
+                    >
+                      <option value="">No folder yet (choose later on the report)</option>
+                      {folderChoices.map((choice) => (
+                        <option key={choice.id} value={choice.id}>
+                          {choice.path}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                }
               />
             ))}
           </div>

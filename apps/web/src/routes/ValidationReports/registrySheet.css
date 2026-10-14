@@ -36,6 +36,19 @@
   max-width: 100%;
 }
 
+/* A signed stamp (name, date and time) wraps and shows in full, on screen and in print. */
+.vf-signature {
+  overflow: visible;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  align-items: flex-start !important;
+}
+
+.vf-signature > * {
+  width: 100%;
+  min-width: 0;
+}
+
 .vf-spacer,
 .vf-blocked {
   padding: 0;

@@ -15,6 +15,7 @@ import { allFilled, overallOf, withinTolerance, withinToleranceAsWritten, type W
  *  - rows 41 and 42 tick Pass/Fail themselves from the G (sample 1) and H (sample 2) results; row 43 follows A3.
  *    Conditional Pass stays a manual tick.
  *  - the overall result (A3) stays blank until every graded row has a result.
+ *  - Approved By (F6) and Engineer who Approved Conditional Pass (G44) are PIN signature stamps.
  * Row 18 stays as written (E>=C: a minimum thickness).
  */
 export const SHOCK_WORDS: Words = { pass: "Passed", fail: "Failed" };
@@ -73,6 +74,8 @@ export const SHOCK_FORM = buildForm({
   revCell: "B2",
   formulas,
   inputs: ["F5"],
+  // Notes in 5.0 Final Conclusion spans two rows: a text area.
+  areas: ["B44"],
   lists: {
     G10: [SHOCK_WORDS.pass, SHOCK_WORDS.fail],
     H10: [SHOCK_WORDS.pass, SHOCK_WORDS.fail],
@@ -81,6 +84,11 @@ export const SHOCK_FORM = buildForm({
     "G10",
     "H10",
     ...NEW_RESULT_ROWS.flatMap((row) => [`D${row}`, `G${row}`, `H${row}`]),
+  ],
+  // The workbook's Approved By box and the Conditional Pass engineer box are PIN sign-offs, like the other validation forms.
+  signatures: [
+    { addr: "F6", path: "authorizedSignature", certify: "I certify that this shock validation is accurate and I approve it." },
+    { addr: "G44", path: "furtherSignature", certify: "I certify that I reviewed this shock and I approve the conditional pass." },
   ],
   defaults: { F5: DEFAULT_INSPECTOR },
   resultCells: ["A3"],

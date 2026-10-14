@@ -124,9 +124,9 @@ export function SignatureStamp({
 
   if (stamped) {
     return (
-      <div className={sheet ? "px-2 py-1.5" : undefined}>
+      <div className={sheet ? "aq-signature-stamp px-2 py-1.5" : "aq-signature-stamp"} data-testid="signature-stamp">
         {choice}
-        <p className="flex items-start gap-2 whitespace-pre-wrap text-xs text-foreground">
+        <p className="flex items-start gap-2 whitespace-pre-wrap break-words text-xs text-foreground">
           {ownStamp && <UserAvatar userId={user?.id} name={user?.name} hasPhoto size={20} />}
           <span>{stamped}</span>
         </p>
