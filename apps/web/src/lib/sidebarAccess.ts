@@ -1,4 +1,5 @@
 import { hideDigitalTwinTarget } from "./digitalTwinFlag";
+import { hideReceivingInventoryTarget } from "./receivingInventoryFlag";
 import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 import { FRM_NCR_PATH } from "./qualityEntry";
 import { ENGINEERING_PLANNER_URL, isExternalHref, isFolder, type SidebarNode } from "../components/layout/sidebarStructure";
@@ -16,6 +17,8 @@ export interface SidebarAccess {
   aiFeatures?: boolean;
   /** True shows Digital Twin. Omitted or false hides it, including a saved menu row. */
   digitalTwin?: boolean;
+  /** True shows Receiving & Inventory. Omitted or false hides it, including a saved menu row. */
+  receivingInventory?: boolean;
   /** This company's Engineering Planner link. Unset hides the menu item. */
   plannerUrl?: string | null;
 }
@@ -157,6 +160,8 @@ const PATH_RESOURCES: [string, SidebarResource][] = [
   ["/8d", "eight_d"],
   ["/ai", "open"],
   ["/digital-twin", "open"],
+  ["/inventory", "inventory"],
+  ["/erp", "erp"],
   ["/audit-log", "open"],
   ["/calendar", "open"],
   ["/kpis", "open"],
@@ -261,6 +266,17 @@ const ROUTE_PATTERNS = [
   /^\/form-builder\/fills\/\d+$/,
   /^\/ai$/,
   /^\/digital-twin$/,
+  // Receiving & Inventory. Shown only when the company turns it on (receivingInventoryFlag.ts).
+  /^\/inventory$/,
+  /^\/inventory\/alerts$/,
+  /^\/inventory\/lots$/,
+  /^\/inventory\/lots\/\d+$/,
+  /^\/inventory\/\d+$/,
+  /^\/erp$/,
+  /^\/erp\/new$/,
+  /^\/erp\/requisitions$/,
+  /^\/erp\/requisitions\/\d+$/,
+  /^\/erp\/\d+$/,
   /^\/settings$/,
   /^\/settings\/navigation$/,
   /^\/settings\/erp\/presets$/,
@@ -366,7 +382,7 @@ export function plannerHref(value: string | null | undefined): string | null {
 export function filterSidebarByAccess(nodes: SidebarNode[], access: SidebarAccess): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
-    if (hideDigitalTwinTarget(access.digitalTwin, node)) continue;
+    if (hideDigitalTwinTarget(access.digitalTwin, node) || hideReceivingInventoryTarget(access.receivingInventory, node)) continue;
     if (node.key === "ai" && access.aiFeatures === false) continue;
     if (node.key === ENGINEERING_PLANNER_KEY) {
       const url = plannerHref(access.plannerUrl);

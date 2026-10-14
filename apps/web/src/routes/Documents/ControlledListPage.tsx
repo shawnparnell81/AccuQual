@@ -251,15 +251,24 @@ function CellBody({
   onLeave: (target: EventTarget | null) => void;
 }) {
   const stored = typeof cell?.v === "string" || typeof cell?.v === "number" ? String(cell.v) : "";
-  const [draft, setDraft] = useState(columnTitle || (wrap && date) ? (columnTitle ? stored : text) : stored);
+  // Typing stays in this cell until Tab, Enter, an arrow out or a click away commits it (persistField reads the
+  // field). Writing every keystroke into the page re-rendered every sheet and trimmed/parsed the text mid-word,
+  // so spaces and leading zeros could not be typed.
+  const initial = columnTitle ? stored : wrap && date ? text : stored;
+  const [draft, setDraft] = useState(initial);
   const area = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => setDraft(columnTitle ? stored : wrap && date ? text : stored), [stored, text, columnTitle, wrap, date]);
+  useEffect(() => setDraft(initial), [initial]);
   useEffect(() => {
     const el = area.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  });
+  }, [draft]);
+  // Paste (GridClipboard) fills fields with synthetic events and no keyboard commit; save those straight away.
+  const typed = (value: string, trusted: boolean) => {
+    setDraft(value);
+    if (!trusted) onChange(addr, parseEdited(value, cell?.nf));
+  };
   if (!editable || quiet) {
     if (!editable) return <span className="controlled-list-screen-value">{text}</span>;
     return (
@@ -317,19 +326,16 @@ function CellBody({
           className="controlled-list-editor"
           aria-label={addr}
           rows={1}
-          value={date ? draft : current === null ? "" : String(current)}
-          onChange={(event) => {
-            if (date) setDraft(event.target.value);
-            else onChange(addr, parseEdited(event.target.value, cell?.nf));
-          }}
+          value={draft}
+          onChange={(event) => typed(event.target.value, event.nativeEvent.isTrusted)}
           onBlur={(event) => onLeave(event.currentTarget)}
         />
       ) : (
         <input
           className="controlled-list-editor"
           aria-label={addr}
-          value={current === null ? "" : String(current)}
-          onChange={(event) => onChange(addr, parseEdited(event.target.value, cell?.nf))}
+          value={draft}
+          onChange={(event) => typed(event.target.value, event.nativeEvent.isTrusted)}
           onBlur={(event) => onLeave(event.currentTarget)}
         />
       )}

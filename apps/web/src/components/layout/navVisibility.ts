@@ -5,6 +5,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
 import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
 import { hideDigitalTwinTarget } from "../../lib/digitalTwinFlag";
+import { hideReceivingInventoryTarget } from "../../lib/receivingInventoryFlag";
 import { ALL_MODULE_LEAVES, NAV_STRUCTURE, type AccessLevel, type Department, type NavGroup, type NavLeaf } from "./navConfig";
 
 /**
@@ -60,16 +61,16 @@ export function useNavVisibility() {
 
   const hiddenScopes = useHiddenNavScopes();
   const hidden = useMemo(() => new Set(hiddenScopes), [hiddenScopes]);
-  const { enabled: digitalTwin } = useDigitalTwinEnabled();
+  const { enabled: digitalTwin, receivingInventory } = useDigitalTwinEnabled();
 
   const visibleGroups = useMemo(() => {
     return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || g.department === userDept)
       .filter((g) => !hidden.has(departmentScope(g.department ?? "system")))
       .map((g) => ({
         ...g,
-        items: g.items.filter((item) => !hideDigitalTwinTarget(digitalTwin, item) && !hidden.has(itemScope(g.department ?? "system", item.key))),
+        items: g.items.filter((item) => !hideDigitalTwinTarget(digitalTwin, item) && !hideReceivingInventoryTarget(receivingInventory, item) && !hidden.has(itemScope(g.department ?? "system", item.key))),
       }));
-  }, [isAdmin, userDept, hidden, digitalTwin]);
+  }, [isAdmin, userDept, hidden, digitalTwin, receivingInventory]);
 
   const allVisibleLeaves = useMemo(() => {
     const seen = new Set<string>();

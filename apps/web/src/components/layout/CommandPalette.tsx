@@ -14,6 +14,7 @@ import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { faiValidationDocumentsHref } from "../../lib/folderBrowse";
 import { hideDigitalTwinTarget } from "../../lib/digitalTwinFlag";
+import { hideReceivingInventoryTarget } from "../../lib/receivingInventoryFlag";
 import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
 import { flattenSidebarLinks, sidebarLinkOpensNewTab } from "./sidebarStructure";
 import { useArrangedSidebar } from "./sidebarOrganize";
@@ -39,13 +40,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const user = useCurrentUser();
   const liveRecent = useRecentRecords();
   const { folders } = useArrangedSidebar();
-  const { enabled: digitalTwin } = useDigitalTwinEnabled();
+  const { enabled: digitalTwin, receivingInventory } = useDigitalTwinEnabled();
   const dialogRef = useDialogBehavior(open, onClose);
   const debouncedRaw = useDebouncedValue(query.trim(), 250);
   const debounced = useMemo(() => parsePaletteQuery(debouncedRaw), [debouncedRaw]);
   const live = useMemo(() => parsePaletteQuery(query), [query]);
 
-  const pages = useMemo(() => flattenSidebarLinks(folders).filter((page) => !hideDigitalTwinTarget(digitalTwin, page)), [folders, digitalTwin]);
+  const pages = useMemo(() => flattenSidebarLinks(folders).filter((page) => !hideDigitalTwinTarget(digitalTwin, page) && !hideReceivingInventoryTarget(receivingInventory, page)), [folders, digitalTwin, receivingInventory]);
 
   useEffect(() => {
     if (!open) {
@@ -136,7 +137,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const recentItems: PaletteItem[] = hideRecent
       ? []
       : recent
-          .filter((record) => !hideDigitalTwinTarget(digitalTwin, record))
+          .filter((record) => !hideDigitalTwinTarget(digitalTwin, record) && !hideReceivingInventoryTarget(receivingInventory, record))
           .filter((record) => !typeFilter || record.type.toLowerCase().includes(typeFilter))
           .map((record) => ({
           id: `recent-${record.path}`,
@@ -169,7 +170,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }));
 
     const recordItems: PaletteItem[] = (data?.results ?? [])
-      .filter((result) => !hideDigitalTwinTarget(digitalTwin, result))
+      .filter((result) => !hideDigitalTwinTarget(digitalTwin, result) && !hideReceivingInventoryTarget(receivingInventory, result))
       .map((result) => ({
       id: `record-${result.type}-${result.id}`,
       label: result.label,
@@ -181,7 +182,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }));
 
     return [...actions, ...recentItems, ...pageItems, ...recordItems];
-  }, [data?.results, digitalTwin, live.filters, navigate, needle, openTab, pages, recent, typeFilter, user?.id]);
+  }, [data?.results, digitalTwin, receivingInventory, live.filters, navigate, needle, openTab, pages, recent, typeFilter, user?.id]);
 
   useEffect(() => {
     setActive(0);

@@ -341,7 +341,8 @@ export function appendSheetRow(sheet: StoredSheet, formula?: { column: string; n
 function rowUsed(sheet: StoredSheet, row: number, columns: string[]): boolean {
   return columns.some((col) => {
     const cell = sheet.cells[cellAddr(col, row)];
-    return Boolean(cell && (textOf(cell.v) || cell.f));
+    // A formula on its own (a pre-filled due date) is not data; the new row goes right after the last typed row.
+    return Boolean(cell && textOf(cell.v));
   });
 }
 

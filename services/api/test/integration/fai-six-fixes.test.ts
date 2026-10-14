@@ -237,6 +237,30 @@ describe("Fix 5 — Engineering Planner link is a company setting", () => {
   });
 });
 
+describe("Receiving & Inventory show/hide setting", () => {
+  it("defaults off, is Admin-only, and audit-logs who turned it on or off", async () => {
+    const [before] = await db.select().from(company);
+    if (before) await db.update(company).set({ profile: { ...(before.profile ?? {}), receivingInventoryEnabled: undefined } }).where(eq(company.id, before.id));
+    expect((await request(app).get("/company/profile").set(auth(managerToken))).body.receivingInventoryEnabled).toBe(false);
+
+    const denied = await request(app).patch("/company/profile").set(auth(managerToken)).send({ receivingInventoryEnabled: true });
+    expect(denied.status).toBe(403);
+
+    const on = await request(app).patch("/company/profile").set(auth(adminToken)).send({ receivingInventoryEnabled: true });
+    expect(on.status).toBe(200);
+    expect(on.body.receivingInventoryEnabled).toBe(true);
+    const onAudit = await lastAudit("Company", 1);
+    expect(onAudit!.performedBy).toBeTruthy();
+    expect(JSON.stringify(onAudit!.changes)).toContain("Turned Receiving & Inventory on");
+
+    const off = await request(app).patch("/company/profile").set(auth(adminToken)).send({ receivingInventoryEnabled: false });
+    expect(off.body.receivingInventoryEnabled).toBe(false);
+    expect(JSON.stringify((await lastAudit("Company", 1))!.changes)).toContain("Turned Receiving & Inventory off");
+
+    if (before) await db.update(company).set({ profile: before.profile }).where(eq(company.id, before.id));
+  });
+});
+
 describe("Fix 6 — Approved Sources add / edit / delete", () => {
   it("needs the new permission (the role, not a role name)", async () => {
     const body = { partNumber: `SRC-DENIED-${suffix}` };

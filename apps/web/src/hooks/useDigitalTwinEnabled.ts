@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import type { CompanyProfile } from "../api/types";
 import { digitalTwinEnabled } from "../lib/digitalTwinFlag";
+import { receivingInventoryEnabled } from "../lib/receivingInventoryFlag";
 import { useAuthStore } from "../store/authStore";
 
 /**
@@ -18,6 +19,8 @@ export function useDigitalTwinEnabled() {
   });
   return {
     enabled: digitalTwinEnabled(query.data?.digitalTwinEnabled),
+    /** Receiving & Inventory on/off, from the same profile read. Off while loading. */
+    receivingInventory: receivingInventoryEnabled(query.data?.receivingInventoryEnabled),
     plannerUrl: query.data?.engineeringPlannerUrl ?? null,
     ready: !signedIn || query.isSuccess || query.isError,
   };

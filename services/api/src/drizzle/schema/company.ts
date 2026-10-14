@@ -226,6 +226,12 @@ export const company = pgTable("company", {
      */
     digitalTwinEnabled?: boolean;
     /**
+     * Receiving & Inventory screens (Inventory pages, the Receiving & Inventory admin settings). Unset means off:
+     * hidden from menus, search and dashboards, and a direct visit says it is not available. Nothing is deleted.
+     * The profile column already exists, so no migration is needed.
+     */
+    receivingInventoryEnabled?: boolean;
+    /**
      * Address of this company's Engineering Planner (http or https). Unset
      * hides the Engineering Planner menu item. Admin edits it in Company
      * Settings. Existing companies get their current link from a data

@@ -711,6 +711,8 @@ export interface CompanyProfile {
   contactPhone: string | null;
   /** False unless this company has turned Digital Twin on. Unset on the server reads back as false. */
   digitalTwinEnabled: boolean;
+  /** False unless an admin turned Receiving & Inventory on. Off hides it everywhere; nothing is deleted. */
+  receivingInventoryEnabled?: boolean;
   /** This company's Engineering Planner link. Null hides the menu item. */
   engineeringPlannerUrl: string | null;
   /** Default size of the barcode labels people print: "2x1", "2.25x1.25", "3x2" or "4x6". */

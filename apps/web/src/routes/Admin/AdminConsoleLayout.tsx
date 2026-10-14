@@ -57,9 +57,10 @@ export function useAdminConsoleSections(): ConsoleSection[] {
   const user = useCurrentUser();
   const admin = isFullAccessRole(user?.roleName);
   const { effective, isLoading } = useEffectivePermissions();
-  const { enabled: digitalTwin } = useDigitalTwinEnabled();
+  const { enabled: digitalTwin, receivingInventory } = useDigitalTwinEnabled();
   return SECTIONS.filter((section) => {
     if (section.key === "digital_twin" && !digitalTwin) return false;
+    if (section.key === "receiving_inventory" && !receivingInventory) return false;
     if (section.key === "import") {
       if (admin) return true;
       if (isLoading || !effective) return false;

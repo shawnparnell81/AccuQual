@@ -10,6 +10,7 @@ import { dropPosition } from "../../lib/listReorder";
 import { placementParent } from "../../lib/sidebarLayout";
 import { EXTRA_SIDEBAR_PAGES, acceptSidebarPath, resourceForPath, sidebarAllows } from "../../lib/sidebarAccess";
 import { hideDigitalTwinTarget } from "../../lib/digitalTwinFlag";
+import { hideReceivingInventoryTarget } from "../../lib/receivingInventoryFlag";
 import { EMPTY_SIDEBAR_SHORTCUTS } from "../../lib/sidebarShortcuts";
 import {
   addGroup,
@@ -97,7 +98,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   const needle = find.trim().toLowerCase();
   const pages = useMemo(() => {
     const fromMenu = flattenSidebarLinks(catalog)
-      .filter((link) => !hideDigitalTwinTarget(access.digitalTwin, link))
+      .filter((link) => !hideDigitalTwinTarget(access.digitalTwin, link) && !hideReceivingInventoryTarget(access.receivingInventory, link))
       .map((link) => ({ key: link.key, label: link.label, path: link.path }));
     const extra = EXTRA_SIDEBAR_PAGES.filter((page) => sidebarAllows(resourceForPath(page.path), access));
     const seen = new Set<string>();
@@ -139,7 +140,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   const recent = useMemo(() => {
     return recentRows
       .map((record) => ({ ...record, path: acceptSidebarPath(record.path) }))
-      .filter((record): record is { path: string; title: string; type: string } => Boolean(record.path) && sidebarAllows(resourceForPath(record.path!), access) && !hideDigitalTwinTarget(access.digitalTwin, { path: record.path! }))
+      .filter((record): record is { path: string; title: string; type: string } => Boolean(record.path) && sidebarAllows(resourceForPath(record.path!), access) && !hideDigitalTwinTarget(access.digitalTwin, { path: record.path! }) && !hideReceivingInventoryTarget(access.receivingInventory, { path: record.path! }))
       .filter((record) => !needle || `${record.title} ${record.path}`.toLowerCase().includes(needle));
   }, [recentRows, access, needle]);
 
@@ -163,7 +164,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
       toast.error("That page is not in AccuQual.");
       return;
     }
-    if (!sidebarAllows(resourceForPath(safe), access) || hideDigitalTwinTarget(access.digitalTwin, { path: safe })) return;
+    if (!sidebarAllows(resourceForPath(safe), access) || hideDigitalTwinTarget(access.digitalTwin, { path: safe }) || hideReceivingInventoryTarget(access.receivingInventory, { path: safe })) return;
     const existing = catalogByPath.get(safe);
     if (existing) {
       setDraft((current) => (current.hidden.includes(existing) ? toggleHidden(current, existing) : current));
