@@ -55,6 +55,7 @@ import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
 import { useBlankDraft } from "../../lib/useBlankDraft";
+import { leaveFormPath } from "../../lib/blankDraft";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
 
 interface IsoFormData {
@@ -494,7 +495,7 @@ function IsoFormDetailBody({
   return (
     <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`} data-print-title={meta.title} data-print-number={record.recordNumber ?? ""}>
       <div className="no-print flex flex-col gap-4">
-        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: recordHeading(documentNumber || meta.title, record.recordNumber) }]} />
+        <RecordCrumbs items={[record.id === 0 ? { label: "Blank Forms", to: leaveFormPath(true, `/iso-forms/${meta.formKey}`) } : { label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: recordHeading(documentNumber || meta.title, record.recordNumber) }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold">{recordHeading(meta.title, record.recordNumber)}</h1>
@@ -546,7 +547,7 @@ function IsoFormDetailBody({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={`/iso-forms/${meta.formKey}`} allowed={canEdit} assignedOnly />
+            <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} number={record.recordNumber} navigateTo={leaveFormPath(record.id === 0, `/iso-forms/${meta.formKey}`)} allowed={canEdit} assignedOnly />
             <SaveStatus saving={saving || pending} unsaved={dirty && !saving && !pending} />
             {queuedAction && <span className="text-xs text-muted-foreground">That action will run when the save finishes.</span>}
             <SavedFormLockBar
