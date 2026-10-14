@@ -1,3 +1,4 @@
+import { blankOpenPath } from "../../lib/retiredBlanks";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FileText, Pencil } from "lucide-react";
@@ -41,7 +42,7 @@ export function BlankFormsListPage() {
 
   /** Each blank is a folder: the blank pinned on top, its saved copies below. */
   function openForm(form: FormTemplateCacheRow) {
-    navigate(`/blank-forms/${encodeURIComponent(form.formKey)}`);
+    navigate(blankOpenPath(form.formKey));
   }
 
   function startRename(form: FormTemplateCacheRow) {

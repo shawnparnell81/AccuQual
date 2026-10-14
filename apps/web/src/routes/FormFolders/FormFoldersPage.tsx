@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { blankOpenPath, NO_FOLDER_BLANK_KEYS } from "../../lib/retiredBlanks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Folder } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -246,6 +247,12 @@ export function FormFoldersPage() {
 /** Saved filled copies of one form, newest save date first. */
 export function FormFolderDetailPage() {
   const { formKey = "" } = useParams();
+  // A retired-folder blank has no saved-copies folder on the API. Open the blank instead of "Couldn't load this folder."
+  if (NO_FOLDER_BLANK_KEYS.has(formKey)) return <Navigate to={blankOpenPath(formKey)} replace />;
+  return <FormFolderDetailBody formKey={formKey} />;
+}
+
+function FormFolderDetailBody({ formKey }: { formKey: string }) {
   const navigate = useNavigate();
   const [view, setView] = useExplorerView("form-folder");
   const [query, setQuery] = useState("");

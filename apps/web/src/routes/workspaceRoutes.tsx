@@ -11,6 +11,7 @@ export function NumericRecord({ children }: { children: ReactNode }) {
 import { DigitalTwinGate } from "./DigitalTwin/DigitalTwinGate";
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
+import { KEPT_FAI_START } from "../lib/retiredBlanks";
 import { useCurrentUser } from "../hooks/useAuth";
 import { useSites } from "../hooks/useSites";
 import { FaiInspectionDashboardPage } from "./FaiInspection/FaiInspectionDashboardPage";
@@ -234,6 +235,7 @@ export function workspaceRouteElements() {
     <Route key="/document-change-requests" path="/document-change-requests" element={<DocumentChangeRequestsPage />} />,
     <Route key="/document-change-requests/:id" path="/document-change-requests/:id" element={<DocumentChangeRequestDetailPage />} />,
     <Route key="/qms-forms" path="/qms-forms" element={<QmsFormsLibraryPage />} />,
+    <Route key="/qms-forms/first_article_inspection" path="/qms-forms/first_article_inspection/*" element={<Navigate to={KEPT_FAI_START} replace />} />,
     <Route key="/qms-forms/:formType" path="/qms-forms/:formType" element={<QmsFormTypePage />} />,
     <Route key="/qms-forms/:formType/:id" path="/qms-forms/:formType/:id" element={<QmsFormRecordPage />} />,
     <Route key="/scar-forms" path="/scar-forms" element={<ScarFormsPage />} />,

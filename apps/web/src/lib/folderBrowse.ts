@@ -1,3 +1,4 @@
+import { isHiddenBlankLink } from "./retiredBlanks";
 /**
  * How Folder Explorer opens a folder and how a save message points at it.
  * A filled form is one folder row with a linkedPath back to that record.
@@ -247,7 +248,7 @@ export function explorerHiddenIds<T extends BrowseFolder>(folders: T[]): Set<num
 /** Folder rows Folder Explorer is allowed to show. */
 export function visibleExplorerFolders<T extends BrowseFolder>(folders: T[]): T[] {
   const hidden = explorerHiddenIds(folders);
-  return folders.filter((folder) => !hidden.has(folder.id));
+  return folders.filter((folder) => !hidden.has(folder.id) && !isHiddenBlankLink(folder.linkedPath));
 }
 
 /** This folder and everything nested under a blank-template library. Filled copies are not saved here. */

@@ -1,3 +1,4 @@
+import { HIDDEN_BLANK_KEYS } from "./retiredBlanks";
 /** Same shelf Folder Explorer calls Blank Forms Templates. */
 export const BLANK_FORMS_SHELF = "Blank Forms Templates";
 
@@ -16,6 +17,7 @@ export interface BlankTemplateRow {
  */
 export function templatesOnBlankShelf<T extends BlankTemplateRow>(templates: T[]): T[] {
   return templates
+    .filter((row) => !HIDDEN_BLANK_KEYS.has(row.formKey))
     .filter((row) => (row.onBlankShelf == null ? row.isoPath.includes(BLANK_FORMS_SHELF) : row.onBlankShelf))
     .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }) || a.formKey.localeCompare(b.formKey));
 }
