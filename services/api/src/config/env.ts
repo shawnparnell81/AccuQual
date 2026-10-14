@@ -172,8 +172,9 @@ if (env.AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
     "AI_CONFIG_ENCRYPTION_KEY is still the hardcoded default (00×32) — " +
     "every company's stored AI provider API key would be encrypted with a key anyone reading " +
     "this codebase already knows. Generate a real one with `openssl rand -hex 32`.";
-  if (env.NODE_ENV === "production") {
-    throw new Error(`❌ Refusing to start in production: ${message}`);
+  // Any hosted Render service is treated like production, whatever NODE_ENV says.
+  if (env.NODE_ENV === "production" || Boolean(process.env.RENDER)) {
+    throw new Error(`❌ Refusing to start outside local development: ${message}`);
   }
   console.warn(`⚠️  ${message}`);
 }

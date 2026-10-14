@@ -1,5 +1,6 @@
 import { currentCompanyLogo } from "./companyLogoCache";
 import { formatDate } from "./dates";
+import { sanitizeBandHtml } from "./sanitizeHtml";
 import { bandHtmlForPage, bandHasContent, bandVaries, printBandChoice, resolveDocumentFields, type DocumentBand } from "./documentBands";
 import type { PreviewKind } from "./filePreview";
 import { recordSurface } from "./recordSurface";
@@ -227,7 +228,7 @@ function mountDocumentPrint(root: HTMLElement, now: Date): () => void {
       const body = root.querySelector(`[data-testid="document-${kind}"] .fb-band-body`);
       if (!(body instanceof HTMLElement)) return;
       saved.push({ kind, html: body.innerHTML });
-      body.innerHTML = html;
+      body.innerHTML = sanitizeBandHtml(html);
     };
     if (choice.header === "custom" && header) {
       paint("header", resolveDocumentFields(header.defaultHtml, { page: "counter", pages: "counter", ...identity, date }));
@@ -256,7 +257,7 @@ function mountDocumentPrint(root: HTMLElement, now: Date): () => void {
     if (choice.header === "custom" && header) {
       const node = document.createElement("div");
       node.className = "fb-print-page-header";
-      node.innerHTML = resolveDocumentFields(bandHtmlForPage(header, page), { page, pages: pages.length, ...identity, date });
+      node.innerHTML = sanitizeBandHtml(resolveDocumentFields(bandHtmlForPage(header, page), { page, pages: pages.length, ...identity, date }));
       section.appendChild(node);
     }
     const body = document.createElement("div");
@@ -266,7 +267,7 @@ function mountDocumentPrint(root: HTMLElement, now: Date): () => void {
     if (choice.footer === "custom" && footer) {
       const node = document.createElement("div");
       node.className = "fb-print-page-footer";
-      node.innerHTML = resolveDocumentFields(bandHtmlForPage(footer, page), { page, pages: pages.length, ...identity, date });
+      node.innerHTML = sanitizeBandHtml(resolveDocumentFields(bandHtmlForPage(footer, page), { page, pages: pages.length, ...identity, date }));
       section.appendChild(node);
     }
     host.appendChild(section);

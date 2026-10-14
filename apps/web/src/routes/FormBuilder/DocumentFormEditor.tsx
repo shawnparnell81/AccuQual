@@ -13,6 +13,7 @@ import {
 } from "../../lib/documentBands";
 import type { DocumentChromeField, DocumentFormStructure } from "../../lib/formGrid";
 import { isExactLocationLabel } from "../../lib/folderPath";
+import { sanitizeBandHtml } from "../../lib/sanitizeHtml";
 import "./formBuilder.css";
 
 const FOLDER_PATH_SPAN = /<span class="fb-folder-path"[^>]*>[\s\S]*?<\/span>/gi;
@@ -40,9 +41,9 @@ function BandSource({ name, band, folderPath }: { name: "header" | "footer"; ban
       data-different-first={String(band.differentFirstPage)}
       data-different-even={String(band.differentOddEven)}
     >
-      <div data-variant="default" dangerouslySetInnerHTML={{ __html: showFolderPath(band.defaultHtml, folderPath) }} />
-      <div data-variant="first" dangerouslySetInnerHTML={{ __html: showFolderPath(band.firstHtml, folderPath) }} />
-      <div data-variant="even" dangerouslySetInnerHTML={{ __html: showFolderPath(band.evenHtml, folderPath) }} />
+      <div data-variant="default" dangerouslySetInnerHTML={{ __html: sanitizeBandHtml(showFolderPath(band.defaultHtml, folderPath)) }} />
+      <div data-variant="first" dangerouslySetInnerHTML={{ __html: sanitizeBandHtml(showFolderPath(band.firstHtml, folderPath)) }} />
+      <div data-variant="even" dangerouslySetInnerHTML={{ __html: sanitizeBandHtml(showFolderPath(band.evenHtml, folderPath)) }} />
     </div>
   );
 }
@@ -79,14 +80,14 @@ function BandEditor({
 
   useEffect(() => {
     if (!editable) return;
-    if (ref.current && document.activeElement !== ref.current) ref.current.innerHTML = html;
+    if (ref.current && document.activeElement !== ref.current) ref.current.innerHTML = sanitizeBandHtml(html);
   }, [html, editable]);
 
   if (!editable) {
     if (!bandHasContent(band)) return null;
     return (
       <div className={`fb-band fb-band-${kind}`} data-testid={`document-${kind}`}>
-        <div className="fb-band-body" dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="fb-band-body" dangerouslySetInnerHTML={{ __html: sanitizeBandHtml(html) }} />
       </div>
     );
   }

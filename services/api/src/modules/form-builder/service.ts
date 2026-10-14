@@ -21,6 +21,7 @@ import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder, type FormBuilderAccessInput, type ModuleLevel } from "./access.js";
 import { scalarEdits } from "../forms/formEditAudit.js";
+import { sanitizeBandHtml } from "./bandSanitize.js";
 import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
@@ -119,8 +120,8 @@ function assertStructure(kind: FormKind, structure: unknown) {
   if (kind === "document") {
     if (typeof record.html === "string") record.html = sanitizeDocumentHtml(record.html);
     const document = record as { header?: unknown; footer?: unknown };
-    document.header = cleanBand(document.header, sanitizeDocumentHtml);
-    document.footer = cleanBand(document.footer, sanitizeDocumentHtml);
+    document.header = cleanBand(document.header, sanitizeBandHtml);
+    document.footer = cleanBand(document.footer, sanitizeBandHtml);
   }
   const text = JSON.stringify(structure);
   if (text.length > MAX_STRUCTURE) throw AppError.badRequest("That form is too large to save.");
@@ -769,8 +770,8 @@ export async function importDocx(db: Db, actor: Actor, file: Buffer) {
     const imported = htmlFromDocx(file);
     return {
       html: sanitizeDocumentHtml(imported.html),
-      header: cleanBand(imported.header, sanitizeDocumentHtml),
-      footer: cleanBand(imported.footer, sanitizeDocumentHtml),
+      header: cleanBand(imported.header, sanitizeBandHtml),
+      footer: cleanBand(imported.footer, sanitizeBandHtml),
     };
   } catch {
     throw AppError.badRequest("Couldn't read that Word file. A .docx with headings and paragraphs can be imported. Older .doc files cannot.");
@@ -822,8 +823,8 @@ export async function exportDocx(db: Db, actor: Actor, id: number) {
   const headerNote = (structure.chrome ?? []).filter((field) => field.place === "header" && field.kind === "folderPath").map(() => `<p>Folder path: ${escapeFolderPath(path)}</p>`).join("");
   const footerNote = (structure.chrome ?? []).filter((field) => field.place === "footer" && field.kind === "folderPath").map(() => `<p>Folder path: ${escapeFolderPath(path)}</p>`).join("");
   const bytes = await docxFromHtml(html, { docId: form.formNumber, rev: form.revision }, {
-    header: withFolderPath(prependFolderNote(cleanBand(structure.header, sanitizeDocumentHtml), headerNote), path),
-    footer: withFolderPath(prependFolderNote(cleanBand(structure.footer, sanitizeDocumentHtml), footerNote), path),
+    header: withFolderPath(prependFolderNote(cleanBand(structure.header, sanitizeBandHtml), headerNote), path),
+    footer: withFolderPath(prependFolderNote(cleanBand(structure.footer, sanitizeBandHtml), footerNote), path),
   });
   return { filename: `${form.title || "document"}.docx`, bytes };
 }
