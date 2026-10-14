@@ -186,6 +186,17 @@ export interface SupplierNote {
   response: string;
 }
 
+/** One tech-support call as DMA's 6.9 table shows it (from the tech-call log). */
+export interface TechCallRow {
+  contact: string;
+  date: string;
+  customerType: string;
+  partNumber: string;
+  partName: string;
+  concern: string;
+  resolution: string;
+}
+
 export interface SupplierData {
   monthlyMetrics: MonthMetric[];
   financials: FinancialMonth[];
@@ -246,6 +257,8 @@ export interface EngineeringReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  /** Set once the month is verified: its raw source rows are deleted and only its totals are kept. */
+  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean };
   /** Inboxes that receive this saved report. */
   recipients: string[];
   importedDatasets: ImportedDatasetLine[];
@@ -291,7 +304,7 @@ export interface EngineeringReportView {
   };
   charts: {
     /** month = points in the selected month. file = the upload had dates, none in that month. */
-    claimsSeriesScope: "month" | "file" | "empty";
+    claimsSeriesScope: "month" | "empty";
     claimsReturns: ClaimPoint[];
     fuelPumpReturns: NamedCount[];
     topVehicles: TopVehicle[];
@@ -320,6 +333,7 @@ export interface EngineeringReportView {
     productInfo: QaItem[];
     ncrNotes: string;
     ncrTableRows: NcrReportRow[];
+    techCalls: TechCallRow[];
     pir: { status: "not_tracked"; note: string };
   };
   live: LivePull;
@@ -535,6 +549,8 @@ export function assembleReport(input: {
   importedDatasets?: ImportedDatasetLine[];
   importsAvailable?: boolean;
   importedMonths?: ImportedMonthTotals;
+  /** Section 6.9 table rows from the tech-call log for this month. */
+  techCalls?: TechCallRow[];
 }): EngineeringReportView {
   const { year, month, narrative, supplier, live } = input;
   const selected = monthKey(year, month);
@@ -654,8 +670,9 @@ export function assembleReport(input: {
       },
     },
     charts: {
-      claimsSeriesScope: claimsReturns.length > 0 ? "month" : supplier.claimsSeries.length > 0 ? "file" : "empty",
-      claimsReturns: claimsReturns.length > 0 ? claimsReturns : supplier.claimsSeries,
+      // Only this month's own days. Another month's points are never shown in their place.
+      claimsSeriesScope: claimsReturns.length > 0 ? "month" : "empty",
+      claimsReturns,
       fuelPumpReturns: supplier.fuelPumpReturns,
       topVehicles: [...supplier.topVehicles].sort((a, b) => b.claims - a.claims),
       emailIssues: months.map((key) => {
@@ -701,6 +718,7 @@ export function assembleReport(input: {
       productInfo: narrative.productInfo,
       ncrNotes: narrative.ncrNotes,
       ncrTableRows: narrative.ncrTableRows,
+      techCalls: input.techCalls ?? [],
       pir: { status: "not_tracked", note: "AccuQual does not keep a PIR log. This line is left blank rather than shown as zero." },
     },
     live,

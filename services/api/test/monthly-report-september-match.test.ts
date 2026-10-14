@@ -79,7 +79,7 @@ describe("imported datasets feed the trend tables by month", () => {
     },
   ];
   const months = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"];
-  it("splits by Report date, keeps undated rows in the report month, and drops months outside the window", () => {
+  it("splits by Report date, leaves undated rows out (no guessing into the report month), and drops months outside the window", () => {
     const totals = importedMonthTotals(
       [
         { importId: 7, section: "labor", field: "labor_amount" },
@@ -90,7 +90,7 @@ describe("imported datasets feed the trend tables by month", () => {
       "2026-09",
     );
     expect(totals["2026-08"]).toEqual({ total: null, parts: null, labor: 1500, claims: 3 });
-    expect(totals["2026-09"]).toEqual({ total: null, parts: null, labor: 350, claims: 4 });
+    expect(totals["2026-09"]).toEqual({ total: null, parts: null, labor: 300, claims: 4 });
     expect(Object.keys(totals).sort()).toEqual(["2026-08", "2026-09"]);
   });
 
