@@ -15,7 +15,7 @@ import { formatUserLabel } from "../users/userDisplay.js";
 import { env } from "../../config/env.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { sessionLengthHoursFromProfile } from "../auth/sessionLength.js";
-import { digitalTwinEnabled } from "./digitalTwinFlag.js";
+import { digitalTwinEnabled, receivingInventoryEnabled } from "./digitalTwinFlag.js";
 import { fetchPublicImage } from "./logoFetch.js";
 import { DEFAULT_LABEL_SIZE, isLabelSizeId, labelSizeText } from "../labels/labelSizes.js";
 
@@ -77,7 +77,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * convenience view over fields that already exist plus the two genuinely
  * new ones (timezone, contact), not a new source of truth for name/logo.
  */
-function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean; engineeringPlannerUrl?: string; labelSize?: string } | null }) {
+function profileView(co: { name: string; branding: { logoUrl?: string } | null; profile: { timezone?: string; contactName?: string; contactEmail?: string; contactPhone?: string; digitalTwinEnabled?: boolean; receivingInventoryEnabled?: boolean; engineeringPlannerUrl?: string; labelSize?: string } | null }) {
   return {
     name: co.name,
     logoUrl: co.branding?.logoUrl ?? null,
@@ -86,6 +86,7 @@ function profileView(co: { name: string; branding: { logoUrl?: string } | null; 
     contactEmail: co.profile?.contactEmail ?? null,
     contactPhone: co.profile?.contactPhone ?? null,
     digitalTwinEnabled: digitalTwinEnabled(co.profile),
+    receivingInventoryEnabled: receivingInventoryEnabled(co.profile),
     engineeringPlannerUrl: co.profile?.engineeringPlannerUrl ?? null,
     labelSize: isLabelSizeId(co.profile?.labelSize) ? co.profile!.labelSize : DEFAULT_LABEL_SIZE,
   };
@@ -98,10 +99,11 @@ export const getProfileHandler = asyncHandler(async (req: Request, res: Response
 
 export const updateProfileHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
-  const { name, logoUrl, digitalTwinEnabled: twinFlag, ...profileFields } = req.body as {
+  const { name, logoUrl, digitalTwinEnabled: twinFlag, receivingInventoryEnabled: receivingFlag, ...profileFields } = req.body as {
     name?: string;
     logoUrl?: string;
     digitalTwinEnabled?: boolean;
+    receivingInventoryEnabled?: boolean;
   } & Record<string, string | undefined>;
 
   const patch: { name?: string; branding?: typeof co.branding; profile?: typeof co.profile } = {};
@@ -110,6 +112,8 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
 
   const mergedProfile = { ...co.profile };
   if (twinFlag !== undefined) mergedProfile.digitalTwinEnabled = twinFlag;
+  const receivingBefore = receivingInventoryEnabled(co.profile);
+  if (receivingFlag !== undefined) mergedProfile.receivingInventoryEnabled = receivingFlag;
   for (const [key, value] of Object.entries(profileFields)) {
     if (value !== undefined) (mergedProfile as Record<string, string | undefined>)[key] = value === "" ? undefined : value;
   }
@@ -129,7 +133,14 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
           ? `Set the Engineering Planner link to ${plannerAfter}.`
           : `Changed the Engineering Planner link from ${plannerBefore} to ${plannerAfter}.`;
   const sizeNote = sizeBefore === sizeAfter ? undefined : `Changed the default label size from ${labelSizeText(sizeBefore)} to ${labelSizeText(sizeAfter)}.`;
-  const description = [plannerNote, sizeNote].filter(Boolean).join(" ");
+  const receivingAfter = receivingInventoryEnabled(mergedProfile);
+  const receivingNote =
+    receivingBefore === receivingAfter
+      ? undefined
+      : receivingAfter
+        ? "Turned Receiving & Inventory on; its screens show in menus, search and dashboards again."
+        : "Turned Receiving & Inventory off; its screens are hidden from menus, search and dashboards. No data was deleted.";
+  const description = [plannerNote, sizeNote, receivingNote].filter(Boolean).join(" ");
   await recordAuditTrail(req.db!, {
     entityType: "Company",
     entityId: 1,

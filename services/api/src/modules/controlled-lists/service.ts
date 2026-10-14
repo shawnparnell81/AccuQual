@@ -31,6 +31,7 @@ import {
   changeSummary,
   freshSheets,
   insertDataRow,
+  dropEmptyDataRows,
   insertLocationPath,
   isLivingListPath,
   planListCleanup,
@@ -534,8 +535,19 @@ async function requireLevel(req: Request, key: ListKey, level: "read" | "edit") 
 async function refreshOpenedList(req: Request, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }) {
   if (!req.db || !req.user) return row;
   const repaired = await repairStoredHeader(req.db, key, row, req.user.id);
-  const sheets = await absorbOutsideRows(req.db, key, repaired.sheets, req.user.id, repaired.id);
-  return sheets === repaired.sheets ? repaired : { ...repaired, sheets };
+  const absorbed = await absorbOutsideRows(req.db, key, repaired.sheets, req.user.id, repaired.id);
+  const cleaned = dropEmptyDataRows(key, absorbed);
+  if (cleaned.removed.length === 0) return absorbed === repaired.sheets ? repaired : { ...repaired, sheets: absorbed };
+  await req.db.update(controlledLists).set({ sheets: cleaned.sheets, updatedAt: new Date() }).where(eq(controlledLists.id, repaired.id));
+  const counts = cleaned.removed.map((item) => `${item.rows} on ${item.sheet.trim()}`).join(", ");
+  await recordAuditTrail(req.db, {
+    entityType: "ControlledList",
+    entityId: repaired.id,
+    action: "update",
+    performedBy: req.user.id,
+    changes: { summary: `Removed empty rows with no data (formula-only or blank after the last entry): ${counts}. Revision stayed ${repaired.revision}.`, removed: cleaned.removed },
+  });
+  return { ...repaired, sheets: cleaned.sheets };
 }
 
 export async function openControlledList(req: Request, key: ListKey): Promise<ControlledListView> {
@@ -560,9 +572,23 @@ export async function openControlledList(req: Request, key: ListKey): Promise<Co
   return present(req, key, row);
 }
 
+/** Only the first visit creates the lists; a save does not re-run the whole list/folder/template pass. */
+/**
+ * Edits used to rebuild all seven lists, re-file every folder and re-prune
+ * the form templates on each save, which made typing in a list lag.
+ * An existing list now only gets the superseded-copy cleanup.
+ */
+async function ensureListExists(req: Request, key: ListKey): Promise<void> {
+  if (!(await loadRow(req.db!, key))) {
+    await ensureLivingControlledLists(req);
+    return;
+  }
+  await retireSupersededLists(req);
+}
+
 export async function saveControlledList(req: Request, key: ListKey, patches: Array<{ name: string; cells: Record<string, CellPatch> }>): Promise<ControlledListView> {
   await requireLevel(req, key, "edit");
-  await ensureLivingControlledLists(req);
+  await ensureListExists(req, key);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
   const applied = applyInputPatch(key, row.sheets, patches);
@@ -592,7 +618,7 @@ export async function insertControlledListLocation(req: Request, key: ListKey, s
   const trimmed = path.trim();
   if (!trimmed) throw AppError.badRequest("The folder path is empty.");
   if (trimmed.length > 500) throw AppError.badRequest("That path is too long.");
-  await ensureLivingControlledLists(req);
+  await ensureListExists(req, key);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
   const sheet = row.sheets.find((item) => item.name === sheetName);
@@ -626,7 +652,7 @@ export async function changeControlledListRows(
   place?: "above" | "below",
 ): Promise<ControlledListView> {
   await requireLevel(req, key, "edit");
-  await ensureLivingControlledLists(req);
+  await ensureListExists(req, key);
   const current = await loadRow(req.db!, key);
   if (!current) throw AppError.notFound(LISTS[key].title);
   const { who, when } = await acted(req.db!, req.user!.id);
@@ -682,7 +708,7 @@ export async function changeControlledListColumns(
 ): Promise<ControlledListView> {
   await requireLevel(req, key, "edit");
   if (!(await structureAllowed(req))) throw AppError.forbidden(STRUCTURE_DENIED);
-  await ensureLivingControlledLists(req);
+  await ensureListExists(req, key);
   const current = await loadRow(req.db!, key);
   if (!current) throw AppError.notFound(LISTS[key].title);
   const edited =

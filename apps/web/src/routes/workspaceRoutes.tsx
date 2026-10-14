@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, useParams } from "react-router-dom";
 import { NotFoundPage } from "./NotFoundPage";
 
@@ -9,6 +9,12 @@ export function NumericRecord({ children }: { children: ReactNode }) {
   return children;
 }
 import { DigitalTwinGate } from "./DigitalTwin/DigitalTwinGate";
+import { ReceivingInventoryGate } from "./ReceivingInventory/ReceivingInventoryGate";
+import { LoadingPlaceholder } from "../components/shared/LoadingPlaceholder";
+
+// Loaded on first visit. The purchase order page pulls in the PDF viewer, which the rest of the app does not need up front.
+const InventoryRoutes = lazy(() => import("./ReceivingInventory/ReceivingInventoryRoutes").then((m) => ({ default: m.InventoryRoutes })));
+const ErpRoutes = lazy(() => import("./ReceivingInventory/ReceivingInventoryRoutes").then((m) => ({ default: m.ErpRoutes })));
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { KEPT_FAI_START } from "../lib/retiredBlanks";
@@ -267,9 +273,8 @@ export function workspaceRouteElements() {
     <Route key="/quarantine/:id" path="/quarantine/:id" element={<QuarantineDetailPage />} />,
     <Route key="/complaints" path="/complaints" element={<ComplaintsPage />} />,
     <Route key="/complaints/:id" path="/complaints/:id" element={<ComplaintDetailPage />} />,
-    <Route key="/inventory/*" path="/inventory/*" element={<RetiredModulePage name="Inventory" />} />,
-    <Route key="/erp/*" path="/erp/*" element={<RetiredModulePage name="ERP" />} />,
-    <Route key="/erp" path="/erp" element={<RetiredModulePage name="ERP" />} />,
+    <Route key="/inventory/*" path="/inventory/*" element={<ReceivingInventoryGate><Suspense fallback={<LoadingPlaceholder />}><InventoryRoutes /></Suspense></ReceivingInventoryGate>} />,
+    <Route key="/erp/*" path="/erp/*" element={<ReceivingInventoryGate><Suspense fallback={<LoadingPlaceholder />}><ErpRoutes /></Suspense></ReceivingInventoryGate>} />,
     <Route key="/rma" path="/rma" element={<RetiredModulePage name="RMA" />} />,
     <Route key="/rma/:id" path="/rma/:id" element={<RmaDetailPage />} />,
     <Route key="/warranty" path="/warranty" element={<WarrantyClaimsList />} />,
@@ -313,7 +318,7 @@ export function workspaceRouteElements() {
       <Route path="ai-settings" element={<AdminAiSettingsPage />} />
       <Route path="supplier-settings" element={<AdminSupplierSettingsPage />} />
       <Route path="quality-settings" element={<AdminQualitySettingsPage />} />
-      <Route path="receiving-inventory-settings" element={<AdminReceivingInventorySettingsPage />} />
+      <Route path="receiving-inventory-settings" element={<ReceivingInventoryGate><AdminReceivingInventorySettingsPage /></ReceivingInventoryGate>} />
       <Route path="system-health" element={<AdminSystemHealthPage />} />
       <Route path="api-docs" element={<AdminApiDocsPage />} />
       <Route path="company-settings" element={<AdminCompanySettingsPage />} />

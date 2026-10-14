@@ -5,6 +5,7 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SystemHealthReport } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { useDigitalTwinEnabled } from "../../hooks/useDigitalTwinEnabled";
 
 function useSystemHealth() {
   return useQuery<SystemHealthReport>({
@@ -164,6 +165,7 @@ function HealthCard({ def, report }: { def: CardDef; report: SystemHealthReport 
 }
 
 export function AdminSystemHealthPage() {
+  const { receivingInventory } = useDigitalTwinEnabled();
   const { data: report, isLoading, dataUpdatedAt } = useSystemHealth();
 
   return (
@@ -187,7 +189,7 @@ export function AdminSystemHealthPage() {
             )}
             <MonitoringPanel report={report} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {CARDS.map((def) => (
+              {CARDS.filter((def) => receivingInventory || def.key !== "receivingInventory").map((def) => (
                 <HealthCard key={def.key} def={def} report={report} />
               ))}
             </div>

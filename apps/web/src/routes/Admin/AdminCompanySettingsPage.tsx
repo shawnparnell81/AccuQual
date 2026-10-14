@@ -82,6 +82,15 @@ export function AdminCompanySettingsPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save company settings.")),
   });
 
+  const saveReceivingInventory = useMutation({
+    mutationFn: async (receivingInventoryEnabled: boolean) => (await apiClient.patch("/company/profile", { receivingInventoryEnabled })).data,
+    onSuccess: (_data, on) => {
+      queryClient.invalidateQueries({ queryKey: ["company/profile"] });
+      toast.success(on ? "Receiving & Inventory turned on." : "Receiving & Inventory turned off. Nothing was deleted.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't change Receiving & Inventory.")),
+  });
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -129,6 +138,21 @@ export function AdminCompanySettingsPage() {
               {save.isPending ? "Saving…" : "Save Company Settings"}
             </button>
           </form>
+
+          <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+            <h2 className="text-sm font-medium">Receiving &amp; Inventory</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                aria-label="Show Receiving & Inventory"
+                checked={profile?.receivingInventoryEnabled === true}
+                disabled={saveReceivingInventory.isPending || !profile}
+                onChange={(e) => saveReceivingInventory.mutate(e.target.checked)}
+              />
+              Show Receiving &amp; Inventory
+            </label>
+            <p className="text-xs text-muted-foreground">Off hides inventory, purchase orders and receiving from menus, search and dashboards, and those pages say they are not available. Turning it off deletes nothing. Each change is recorded in the audit log.</p>
+          </div>
 
           <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
             <h2 className="text-sm font-medium">Sign-in security</h2>

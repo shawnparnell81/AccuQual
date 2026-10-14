@@ -7,3 +7,8 @@
 export function digitalTwinEnabled(profile: { digitalTwinEnabled?: boolean } | null | undefined): boolean {
   return profile?.digitalTwinEnabled === true;
 }
+
+/** Receiving & Inventory on/off. Unset means off (hidden). Mirrored in apps/web/src/lib/receivingInventoryFlag.ts. */
+export function receivingInventoryEnabled(profile: { receivingInventoryEnabled?: boolean } | null | undefined): boolean {
+  return profile?.receivingInventoryEnabled === true;
+}

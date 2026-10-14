@@ -559,6 +559,42 @@ export function applyInputPatch(key: ListKey, sheets: StoredSheet[], patches: Ar
   };
 }
 
+/**
+ * Data rows that hold no typed value: only a formula (an Excel row pre-filled with "Next Cal Due" that shows a red
+ * 1900 date), or nothing at all after the last real row. They are removed. Rows with data keep their formulas.
+ */
+export function dropEmptyDataRows(key: ListKey, sheets: StoredSheet[]): { sheets: StoredSheet[]; removed: Array<{ sheet: string; rows: number }> } {
+  const spec = LISTS[key];
+  const removed: Array<{ sheet: string; rows: number }> = [];
+  const next = sheets.map((sheet) => {
+    const start = spec.dataStart[sheet.name];
+    if (start == null) return sheet;
+    const byRow = new Map<number, { values: boolean; formula: boolean }>();
+    for (const [addr, cell] of Object.entries(sheet.cells)) {
+      const { row } = parseAddr(addr);
+      if (row < start) continue;
+      const slot = byRow.get(row) ?? { values: false, formula: false };
+      if (cell.f || cell.kind === "formula") slot.formula = true;
+      else if (textOf(cell.v)) slot.values = true;
+      byRow.set(row, slot);
+    }
+    let lastData = start - 1;
+    for (const [row, slot] of byRow) if (slot.values && row > lastData) lastData = row;
+    const drop: number[] = [];
+    for (let row = start; row <= sheet.maxRow; row += 1) {
+      const slot = byRow.get(row);
+      if (slot?.values) continue;
+      if (slot?.formula || row > lastData) drop.push(row);
+    }
+    if (drop.length === 0) return sheet;
+    let current = sheet;
+    for (const row of drop.sort((a, b) => b - a)) current = deleteSheetRow(current, row);
+    removed.push({ sheet: sheet.name, rows: drop.length });
+    return current;
+  });
+  return { sheets: removed.length ? next : sheets, removed };
+}
+
 export function addDataRow(key: ListKey, sheets: StoredSheet[], sheetName: string): { sheets: StoredSheet[]; row: number } | null {
   const spec = LISTS[key];
   const start = spec.dataStart[sheetName];

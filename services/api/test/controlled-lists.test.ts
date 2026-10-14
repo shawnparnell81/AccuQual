@@ -4,6 +4,7 @@ import { formulaSerial, listOptions, shownCell, toneFill } from "../src/modules/
 import {
   LISTS,
   addDataRow,
+  dropEmptyDataRows,
   addListColumn,
   appendDocuments,
   appendEquipment,
@@ -105,12 +106,30 @@ describe("living controlled lists", () => {
   });
 
   it("extends the due-date formula when a row is added and shifts it when a row is deleted", () => {
-    const added = addDataRow("lst-eqp-001", freshSheets("lst-eqp-001"), "LST-EQP-001 - Master Equipment ");
-    expect(added?.row).toBe(111);
-    expect(added?.sheets[0]?.cells.I111?.f).toBe("H111+(G111*30)");
+    // Pre-filled formula-only rows are not data: a new row goes right after the last typed row.
+    const cleaned = dropEmptyDataRows("lst-eqp-001", freshSheets("lst-eqp-001")).sheets;
+    const last = cleaned[0]!.maxRow;
+    const added = addDataRow("lst-eqp-001", cleaned, "LST-EQP-001 - Master Equipment ");
+    expect(added?.row).toBe(last + 1);
+    expect(added?.sheets[0]?.cells[`I${last + 1}`]?.f).toBe(`H${last + 1}+(G${last + 1}*30)`);
     const removed = removeDataRow("lst-eqp-001", added!.sheets, "LST-EQP-001 - Master Equipment ", 6);
-    expect(removed?.[0]?.cells.I110?.f).toBe("H110+(G110*30)");
+    expect(removed?.[0]?.cells[`I${last}`]?.f).toBe(`H${last}+(G${last}*30)`);
     expect(removed?.[0]?.cells.B2?.v).toBe("Rev: A");
+  });
+
+  it("drops rows with only a formula or nothing after the last entry, and keeps formulas on rows with data", () => {
+    const fresh = freshSheets("lst-eqp-001");
+    const { sheets, removed } = dropEmptyDataRows("lst-eqp-001", fresh);
+    const sheet = sheets[0]!;
+    expect(removed[0]?.rows).toBeGreaterThan(0);
+    expect(sheet.maxRow).toBeLessThan(fresh[0]!.maxRow);
+    expect(sheet.cells.I6?.f).toBe("H6+(G6*30)");
+    expect(sheet.cells.A6?.v).toBe("DMA-001");
+    for (let row = 6; row <= sheet.maxRow; row += 1) {
+      const values = Object.entries(sheet.cells).filter(([addr, cell]) => Number(addr.replace(/^[A-Z]+/, "")) === row && !cell.f && cell.v != null && cell.v !== "");
+      expect(values.length, `row ${row}`).toBeGreaterThan(0);
+    }
+    expect(dropEmptyDataRows("lst-eqp-001", sheets).removed).toEqual([]);
   });
 
   it("writes a workbook with live formulas, merges, and the equipment colors", async () => {
