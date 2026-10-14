@@ -1,6 +1,7 @@
 import { useMemo, type CSSProperties } from "react";
 import { conditionalFill, evaluate, FORMULA_TEXT, parseInput, showValue, type CellValue } from "../../lib/validationReport";
-import { buildSheetRows, type SheetCell } from "../../lib/validationReportSheet";
+import { buildSheetRows, type SheetCell, CSA_SIGNATURES } from "../../lib/validationReportSheet";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import "./validationReport.css";
 
 interface ValidationReportSheetProps {
@@ -11,6 +12,9 @@ interface ValidationReportSheetProps {
   revision?: string;
   failedAddrs?: string[];
   onCreateNcr?: (addr: string) => void;
+  /** Saved PIN signatures by data path (authorizedSignature, furtherSignature). */
+  signatures?: Record<string, string>;
+  onSign?: (path: string, pin: string) => Promise<unknown>;
 }
 
 type Slot = SheetCell | "covered" | "empty" | "gap";
@@ -39,7 +43,7 @@ function shownText(spec: SheetCell, cells: Record<string, CellValue>, calculated
   return showValue(spec.addr, cells[spec.addr] ?? "");
 }
 
-export function ValidationReportSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C", failedAddrs = [], onCreateNcr }: ValidationReportSheetProps) {
+export function ValidationReportSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C", failedAddrs = [], onCreateNcr, signatures = {}, onSign }: ValidationReportSheetProps) {
   const rows = useMemo(() => buildSheetRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
@@ -82,6 +86,8 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange, docum
                 revision={revision}
                 failed={failedAddrs.includes(slot.addr)}
                 onCreateNcr={onCreateNcr}
+                signatures={signatures}
+                onSign={onSign}
               />
             );
           }),
@@ -90,6 +96,8 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange, docum
     </div>
   );
 }
+
+const SIGNATURE_AT = new Map<string, { path: string; certify: string }>(CSA_SIGNATURES.map((item) => [item.addr, item]));
 
 function Cell({
   spec,
@@ -102,6 +110,8 @@ function Cell({
   revision,
   failed = false,
   onCreateNcr,
+  signatures = {},
+  onSign,
 }: {
   spec: SheetCell;
   place: CSSProperties;
@@ -113,7 +123,10 @@ function Cell({
   revision: string;
   failed?: boolean;
   onCreateNcr?: (addr: string) => void;
+  signatures?: Record<string, string>;
+  onSign?: (path: string, pin: string) => Promise<unknown>;
 }) {
+  const slot = SIGNATURE_AT.get(spec.addr);
   const text = shownText(spec, cells, calculated, documentNumber, revision);
   const cf = conditionalFill(spec.addr, spec.kind === "calc" || spec.kind === "label" || spec.kind === "input" ? text : "");
   const pastel = spec.fill;
@@ -146,7 +159,18 @@ function Cell({
 
   return (
     <div className={className} style={style} role="cell" data-addr={spec.addr} title={spec.kind === "calc" && FORMULA_TEXT[spec.addr] ? `calc: ${FORMULA_TEXT[spec.addr]}` : undefined}>
-      {spec.kind === "input" && (
+      {slot && (
+        <SignatureStamp
+          value={signatures[slot.path] ?? ""}
+          certify={slot.certify}
+          disabled={readOnly || !onSign}
+          variant="sheet"
+          onSign={async (pin) => {
+            if (onSign) await onSign(slot.path, pin);
+          }}
+        />
+      )}
+      {!slot && spec.kind === "input" && (
         <input
           className="csa-in"
           type={spec.inputType ?? "text"}

@@ -241,3 +241,9 @@ function disposition(addr: "A52" | "A59"): FuelCell[] {
 }
 
 export const FUEL_YN = YN_OPTIONS;
+
+/** PIN sign-offs on the Fuel Pump sheet: the two "Authorized By (Signature)" boxes. Signed into data under `path`. */
+export const FUEL_PUMP_SIGNATURES = [
+  { addr: "B53", path: "authorizedSignature", certify: "I certify that this fuel pump validation is accurate and I authorize the disposition." },
+  { addr: "B60", path: "furtherSignature", certify: "I certify that the further review of this fuel pump is accurate and I authorize the later disposition." },
+] as const;
