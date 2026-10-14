@@ -49,15 +49,27 @@ export const getHandler = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const saveHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { title?: string; formNumber?: string | null; structure?: unknown; mode?: "autosave" | "save" | "publish" };
+  const body = req.body as {
+    title?: string;
+    formNumber?: string | null;
+    structure?: unknown;
+    mode?: "autosave" | "save" | "publish";
+    newRevision?: unknown;
+    changeDescription?: unknown;
+  };
   res.json(await saveBuiltForm(req.db!, actor(req), idOf(req.params.id), body));
 });
 
 export const publishHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { folderId?: number; structure?: unknown };
+  const body = req.body as { folderId?: number; structure?: unknown; newRevision?: unknown; changeDescription?: unknown };
   const folderId = Number(body.folderId);
   if (!Number.isInteger(folderId) || folderId < 1) throw AppError.badRequest("Choose a folder under Blank Forms Templates.");
-  res.json(await publishBuiltForm(req.db!, actor(req), idOf(req.params.id), folderId, body.structure));
+  res.json(
+    await publishBuiltForm(req.db!, actor(req), idOf(req.params.id), folderId, body.structure, {
+      newRevision: body.newRevision,
+      changeDescription: body.changeDescription,
+    }),
+  );
 });
 
 export const deleteHandler = asyncHandler(async (req: Request, res: Response) => {

@@ -19,6 +19,7 @@ COPY services/api/src/modules/roles/roleAccess.ts ./services/api/src/modules/rol
 COPY services/api/src/modules/fai/fai.logic.ts ./services/api/src/modules/fai/fai.logic.ts
 COPY services/api/src/modules/csa-fai/csaFai.logic.ts ./services/api/src/modules/csa-fai/csaFai.logic.ts
 COPY services/api/src/modules/fuel-pump-fai/fuelPumpFai.logic.ts ./services/api/src/modules/fuel-pump-fai/fuelPumpFai.logic.ts
+COPY services/api/src/modules/form-builder/cellInput.ts ./services/api/src/modules/form-builder/cellInput.ts
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Optional browser error tracking (see apps/web/src/lib/errorTracking.ts). Empty = the Sentry code is never loaded.
