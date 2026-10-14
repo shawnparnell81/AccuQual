@@ -1,10 +1,9 @@
 /**
- * Engineering, a quality manager, and an administrator or owner may change a
+ * Engineering, and any role Admin gives forms.edit_number, may change a
  * document number. Everyone else can read it.
  */
-export function canEditFormNumber(user: { roleName?: string | null; department?: string | null } | null | undefined): boolean {
-  const role = user?.roleName;
-  if (role === "admin" || role === "owner" || role === "quality_manager") return true;
+export function canEditFormNumber(user: { canEditNumbers?: boolean; department?: string | null } | null | undefined): boolean {
+  if (user?.canEditNumbers) return true;
   return user?.department === "engineering";
 }
 

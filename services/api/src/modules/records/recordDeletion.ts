@@ -6,6 +6,7 @@ import { scheduleAfterCommit, type Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { canDeleteAnyRecord } from "../roles/roleAccess.js";
+import { loadRolePermissions } from "../roles/rolePermissions.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -118,8 +119,8 @@ export function deletionSummary(label: string, recordNumber: string | number, ti
 
 const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
 
-export function userMayDeleteRecord(roleName: string | null | undefined, userId: number | undefined, owners: number[]): boolean {
-  if (canDeleteAnyRecord(roleName)) return true;
+export function userMayDeleteRecord(permissions: readonly string[] | null | undefined, userId: number | undefined, owners: number[]): boolean {
+  if (canDeleteAnyRecord(permissions)) return true;
   return userId != null && owners.includes(userId);
 }
 
@@ -916,7 +917,7 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
     : kind === "document"
       ? (await getUserAccessLevel(req.db, req.user, "documents")) === "edit"
       : false;
-  const allowed = ASSIGNED_DELETE.has(kind) ? assignedEdit : assignedEdit || userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row));
+  const allowed = ASSIGNED_DELETE.has(kind) ? assignedEdit : assignedEdit || userMayDeleteRecord(await loadRolePermissions(req.db, req.user.roleName), req.user.id, ownerIdsOf(row));
   if (!allowed) {
     throw AppError.forbidden("You don't have permission to delete this record.");
   }

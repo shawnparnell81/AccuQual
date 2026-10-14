@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { createModelSchema, updateModelSchema, simulateSchema, iotIngestSchema, registerDeviceSchema, updateDeviceSchema } from "./digital-twin.validation.js";
@@ -19,20 +20,20 @@ digitalTwinRouter.use(requireAuth, withDb);
 // regression, not a tightening. Viewing (GET) stays open to the whole
 // company throughout, unchanged.
 digitalTwinRouter.get("/models", baseHandlers.list);
-digitalTwinRouter.post("/models", requireRole("admin"), validate(createModelSchema), baseHandlers.create);
+digitalTwinRouter.post("/models", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(createModelSchema), baseHandlers.create);
 digitalTwinRouter.get("/models/:id", baseHandlers.getOne);
-digitalTwinRouter.patch("/models/:id", requireRole("admin"), validate(updateModelSchema), baseHandlers.update);
+digitalTwinRouter.patch("/models/:id", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(updateModelSchema), baseHandlers.update);
 
 digitalTwinRouter.post("/simulate", validate(simulateSchema), simulateDigitalTwin);
 digitalTwinRouter.get("/simulations/:id", getSimulation);
 
 digitalTwinRouter.get("/devices", listDevicesHandler);
-digitalTwinRouter.post("/devices", requireRole("admin"), validate(registerDeviceSchema), registerDeviceHandler);
-digitalTwinRouter.patch("/devices/:id", requireRole("admin"), validate(updateDeviceSchema), updateDeviceHandler);
-digitalTwinRouter.delete("/devices/:id", requireRole("admin"), deleteDeviceHandler);
+digitalTwinRouter.post("/devices", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(registerDeviceSchema), registerDeviceHandler);
+digitalTwinRouter.patch("/devices/:id", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(updateDeviceSchema), updateDeviceHandler);
+digitalTwinRouter.delete("/devices/:id", requireRolePermission(ADMIN_CONSOLE_PERMISSION), deleteDeviceHandler);
 
-digitalTwinRouter.post("/devices/:id/api-key", requireRole("admin"), rotateDeviceKeyHandler);
-digitalTwinRouter.delete("/devices/:id/api-key", requireRole("admin"), revokeDeviceKeyHandler);
+digitalTwinRouter.post("/devices/:id/api-key", requireRolePermission(ADMIN_CONSOLE_PERMISSION), rotateDeviceKeyHandler);
+digitalTwinRouter.delete("/devices/:id/api-key", requireRolePermission(ADMIN_CONSOLE_PERMISSION), revokeDeviceKeyHandler);
 
 // Drift alerts the worker recorded — viewing stays open to the whole company, like every other GET here.
 digitalTwinRouter.get("/alerts", listAlertsHandler);

@@ -7,7 +7,8 @@ import { getImportEntity, type AnyImportEntity, type ImportContext } from "./imp
 import { parseSpreadsheet, type ParsedSheet } from "./import.parser.js";
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 
 const MAX_REPORTED_ERRORS = 200;
 
@@ -19,7 +20,7 @@ export function entityGate(req: Request, res: Response, next: NextFunction) {
     case "inventory_items":
       return requireDepartmentAccess("inventory")(req, res, next);
     case "people":
-      return requireRole("admin")(req, res, next);
+      return requireRolePermission(ADMIN_CONSOLE_PERMISSION)(req, res, next);
     default:
       return next(AppError.notFound("Import type"));
   }

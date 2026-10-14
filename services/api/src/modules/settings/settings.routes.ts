@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
+import { rejectSupplierReads, requireRolePermission } from "../../middleware/rbac.js";
+import { QUALITY_AUTOMATION_MANAGE_PERMISSION, ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { requireAnyDepartment } from "../../middleware/departmentAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
@@ -43,10 +44,10 @@ settingsRouter.post("/feasibility", requireAnyDepartment("quality", "engineering
 settingsRouter.get("/inventory", getInventorySettingsHandler);
 settingsRouter.post("/inventory", requireAnyDepartment("production", "purchasing"), validate(updateInventorySettingsSchema), updateInventorySettingsHandler);
 
-settingsRouter.get("/erp-sync", requireRole("admin"), getErpSyncSettingsHandler);
-settingsRouter.post("/erp-sync", requireRole("admin"), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
-settingsRouter.post("/erp-sync/test", requireRole("admin"), testErpConnectionHandler);
-settingsRouter.post("/erp-sync/trigger", requireRole("admin"), validate(triggerErpSyncSchema), triggerErpSyncHandler);
+settingsRouter.get("/erp-sync", requireRolePermission(ADMIN_CONSOLE_PERMISSION), getErpSyncSettingsHandler);
+settingsRouter.post("/erp-sync", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
+settingsRouter.post("/erp-sync/test", requireRolePermission(ADMIN_CONSOLE_PERMISSION), testErpConnectionHandler);
+settingsRouter.post("/erp-sync/trigger", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(triggerErpSyncSchema), triggerErpSyncHandler);
 
 // Supplier Risk formula weights. PATCH-equivalent restricted to
 // Quality (the "suppliers" ResourceKey's own edit-level department, same as
@@ -63,5 +64,5 @@ settingsRouter.post("/supplier-risk", requireAnyDepartment("quality"), validate(
 settingsRouter.get("/receiving", getReceivingSettingsHandler);
 settingsRouter.post("/receiving", requireAnyDepartment("quality"), validate(updateReceivingSettingsSchema), updateReceivingSettingsHandler);
 
-settingsRouter.get("/quality-automation", requireRole("admin", "quality_manager"), getQualityAutomationSettingsHandler);
-settingsRouter.post("/quality-automation", requireRole("admin", "quality_manager"), validate(updateQualityAutomationSettingsSchema), updateQualityAutomationSettingsHandler);
+settingsRouter.get("/quality-automation", requireRolePermission(QUALITY_AUTOMATION_MANAGE_PERMISSION), getQualityAutomationSettingsHandler);
+settingsRouter.post("/quality-automation", requireRolePermission(QUALITY_AUTOMATION_MANAGE_PERMISSION), validate(updateQualityAutomationSettingsSchema), updateQualityAutomationSettingsHandler);

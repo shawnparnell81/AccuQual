@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
@@ -71,7 +72,7 @@ aiRouter.post("/inspection-notes", validate(inspectionNotesSchema), inspectionNo
 
 // Real browsable AI suggestion history — admin-only, same gate as
 // GET /company/ai-usage (the page this feeds — see AdminAiUsagePage.tsx).
-aiRouter.get("/suggestions", requireRole("admin"), listSuggestions);
+aiRouter.get("/suggestions", requireRolePermission(ADMIN_CONSOLE_PERMISSION), listSuggestions);
 
 // explicit accept/reject on an already-generated suggestion.
 aiRouter.post("/suggestions/:id/decision", validate(suggestionDecisionSchema), recordSuggestionDecision);

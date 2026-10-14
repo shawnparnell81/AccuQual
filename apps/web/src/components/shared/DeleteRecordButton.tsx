@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { canDeleteRecord, recordDeleteLabel } from "../../lib/recordDelete";
 import { useToast } from "./ToastProvider";
@@ -31,6 +32,7 @@ interface DeleteRecordButtonProps {
 
 export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds = [], navigateTo, className, allowed = false, assignedOnly = false, label = "Delete" }: DeleteRecordButtonProps) {
   const user = useCurrentUser();
+  const { effective } = useEffectivePermissions();
   const confirm = useConfirm();
   const toast = useToast();
   const navigate = useNavigate();
@@ -46,7 +48,7 @@ export function DeleteRecordButton({ resource, id, kind, title, number, ownerIds
 
   if (assignedOnly) {
     if (!allowed) return null;
-  } else if (!allowed && !canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
+  } else if (!allowed && !canDeleteRecord(effective?.["records.delete"] === "edit", user?.id, ownerIds)) return null;
 
   const recordName = recordDeleteLabel(kind, title, number);
 

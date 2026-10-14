@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_APPROVE_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LABELS_PRINT_PERMISSION, FAI_SCAN_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { ADMIN_CONSOLE_PERMISSION, USERS_LIST_PERMISSION, QUALITY_AUTOMATION_MANAGE_PERMISSION, RECORDS_DELETE_PERMISSION, FORMS_EDIT_NUMBER_PERMISSION, DIGEST_RECEIVE_PERMISSION, EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_APPROVE_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LABELS_PRINT_PERMISSION, FAI_SCAN_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -41,11 +41,15 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   const user = { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department };
 
   const entries = await Promise.all(VISIBLE_RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
-  // Not a grantable module. The Admin menu row reads this so it does not keep its own role list.
-  // Roles & Permissions still lists only VISIBLE_RESOURCE_KEYS.
-  const adminConsole = isFullAccessRole(user.roleName) ? "edit" : "none";
   const effective = Object.fromEntries(entries) as Record<string, AccessLevel>;
   const granted = await rolePermissionSet(db, user.roleName);
+  // Assigned on the role. The Admin menu row reads this so it does not keep its own role list.
+  const adminConsole = granted.has(ADMIN_CONSOLE_PERMISSION) ? "edit" : "none";
+  effective[USERS_LIST_PERMISSION] = granted.has(USERS_LIST_PERMISSION) ? "read" : "none";
+  effective[QUALITY_AUTOMATION_MANAGE_PERMISSION] = granted.has(QUALITY_AUTOMATION_MANAGE_PERMISSION) ? "edit" : "none";
+  effective[RECORDS_DELETE_PERMISSION] = granted.has(RECORDS_DELETE_PERMISSION) ? "edit" : "none";
+  effective[FORMS_EDIT_NUMBER_PERMISSION] = granted.has(FORMS_EDIT_NUMBER_PERMISSION) ? "edit" : "none";
+  effective[DIGEST_RECEIVE_PERMISSION] = granted.has(DIGEST_RECEIVE_PERMISSION) ? "read" : "none";
   if (granted.has(FORM_BUILDER_PERMISSION)) effective.form_builder = "edit";
   effective[FORM_BUILDER_APPROVE_PERMISSION] = granted.has(FORM_BUILDER_APPROVE_PERMISSION) ? "edit" : "none";
   effective["folders.delete"] = granted.has(FOLDERS_DELETE_PERMISSION) ? "edit" : "none";

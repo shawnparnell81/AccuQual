@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
@@ -44,7 +45,7 @@ permissionsRouter.get("/effective", getMyEffectivePermissionsHandler);
 // Everything below configures company-wide access control — admin only,
 // same as every other company-config surface in this app (settings.routes.ts,
 // AdminOnlyGuard-backed pages).
-permissionsRouter.use(requireRole("admin"));
+permissionsRouter.use(requireRolePermission(ADMIN_CONSOLE_PERMISSION));
 
 permissionsRouter.get("/department-permissions", listDepartmentPermissionsHandler);
 permissionsRouter.patch("/department-permissions/bulk", validate(bulkDepartmentPermissionSchema), bulkUpsertDepartmentPermissionsHandler);

@@ -6,6 +6,7 @@ import { logger } from "../../utils/logger.js";
 import { company } from "../../drizzle/schema/company.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
+import { DIGEST_RECEIVE_PERMISSION } from "../roles/roleAccess.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
@@ -74,12 +75,18 @@ async function loadPeople(db: Db): Promise<PersonWithPrefs[]> {
       isActive: users.isActive,
       managerId: users.managerId,
       roleName: roles.name,
+      rolePermissions: roles.permissions,
       department: users.department,
       notificationPreferences: users.notificationPreferences,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id));
   return rows;
+}
+
+/** Review and approval reminders go to roles Admin gives digest.receive. */
+function receivesDigest(person: { rolePermissions?: string[] | null }): boolean {
+  return (person.rolePermissions ?? []).includes(DIGEST_RECEIVE_PERMISSION);
 }
 
 function wantsEmail(person: EscalationPerson & { notificationPreferences?: { email?: boolean } | null }): boolean {
@@ -134,6 +141,7 @@ function dueDetail(kind: DueKind, due: Date, timeZone: string): string {
 
 interface PersonWithPrefs extends EscalationPerson {
   notificationPreferences?: { inApp?: boolean; email?: boolean; dailyDigest?: boolean } | null;
+  rolePermissions?: string[] | null;
 }
 
 export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ emails: number }> {
@@ -259,12 +267,12 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
     const item = { label: doc.title || `Document #${doc.id}`, detail: `In review for ${waiting} day${waiting === 1 ? "" : "s"}`, href: href(`/documents/${doc.id}`) };
     addDigest(doc.ownerId, item);
     for (const person of people) {
-      if (person.roleName === "quality_manager" || person.roleName === "admin" || person.roleName === "owner" || person.roleName === "president" || person.roleName === "vice_president") addDigest(person.id, item);
+      if (receivesDigest(person)) addDigest(person.id, item);
     }
     if (waiting < settings.approvalStuckDays) continue;
     const recipients = [
       ownerEmail(doc.ownerId, people),
-      ...people.filter((person) => person.isActive && (person.roleName === "quality_manager" || person.roleName === "admin" || person.roleName === "owner" || person.roleName === "president" || person.roleName === "vice_president")).map((person) => person.email),
+      ...people.filter((person) => person.isActive && receivesDigest(person)).map((person) => person.email),
     ].filter((email): email is string => !!email);
     remind({ kind: "approval", entityType: "Document", entityId: doc.id, bucket: `stuck:${calendarDay(touched, timeZone)}`, recipients, item });
   }

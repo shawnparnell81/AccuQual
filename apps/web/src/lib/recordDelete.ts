@@ -1,6 +1,6 @@
-/** Owner, Administrator, and Quality Manager may delete any record. A record's owner may delete that record. */
-export function canDeleteRecord(roleName: string | null | undefined, userId: number | undefined, ownerIds: Array<number | null | undefined>): boolean {
-  if (roleName === "admin" || roleName === "owner" || roleName === "quality_manager") return true;
+/** A role with records.delete may delete any record. A record's owner may delete that record. */
+export function canDeleteRecord(deleteAny: boolean, userId: number | undefined, ownerIds: Array<number | null | undefined>): boolean {
+  if (deleteAny) return true;
   if (userId == null) return false;
   return ownerIds.some((id) => id != null && id === userId);
 }

@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { Db } from "../../lib/requestDb.js";
 import { retryFailedNotifications } from "./notification.service.js";
 
 export const notificationsRouter = Router();
-notificationsRouter.use(requireAuth, withDb, requireRole("admin"));
+notificationsRouter.use(requireAuth, withDb, requireRolePermission(ADMIN_CONSOLE_PERMISSION));
 
 /**
  * POST /notifications/retry-failed — Phase 1 email infrastructure's

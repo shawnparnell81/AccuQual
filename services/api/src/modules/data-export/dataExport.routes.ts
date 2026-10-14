@@ -11,13 +11,13 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { authRateLimiter } from "../../middleware/rateLimit.js";
 import { confirmIdentity } from "../auth/auth.service.js";
 import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { describeExport, newArchive, writeCompanyExport, type ExportFormat } from "./dataExport.service.js";
-import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Company data export. Two steps on purpose:
@@ -74,7 +74,7 @@ interface TokenPayload {
 dataExportRouter.get(
   "/contents",
   requireAuth,
-  requireRole("admin"),
+  requireRolePermission(ADMIN_CONSOLE_PERMISSION),
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await describeExport());
   }),
@@ -84,7 +84,7 @@ dataExportRouter.post(
   "/requests",
   authRateLimiter,
   requireAuth,
-  requireRole("admin"),
+  requireRolePermission(ADMIN_CONSOLE_PERMISSION),
   validate(requestSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as z.infer<typeof requestSchema>;
@@ -118,11 +118,11 @@ dataExportRouter.get(
 
     // The link was minted for an admin; make sure they still are one, still.
     const [row] = await db
-      .select({ id: users.id, email: users.email, isActive: users.isActive, roleName: roles.name })
+      .select({ id: users.id, email: users.email, isActive: users.isActive, roleName: roles.name, permissions: roles.permissions })
       .from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(users.id, Number(payload.sub))));
-    if (!row || !row.isActive || (!isFullAccessRole(row.roleName))) throw AppError.forbidden("This account can no longer export data.");
+    if (!row || !row.isActive || !(row.permissions ?? []).includes(ADMIN_CONSOLE_PERMISSION)) throw AppError.forbidden("This account can no longer export data.");
     if (running.has(COMPANY_KEY)) throw new AppError("An export is already running.", 409);
 
     running.add(COMPANY_KEY);
