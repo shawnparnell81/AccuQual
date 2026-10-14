@@ -11,10 +11,10 @@ const FIGURE: Record<ImportPull["section"], "labor" | "parts" | "total" | "claim
 
 /**
  * Totals of each chosen import field, split by the month in the row's Report date.
- * A row without a readable date counts toward the report's own month, so a one-month export still lands.
- * Months outside the report's six-month window are dropped.
+ * A row without a readable date is left out: it is never guessed into the report's own month
+ * (that would fill a month that has no data of its own). Months outside the report's six-month window are dropped.
  */
-export function importedMonthTotals(pulls: ImportPull[], sources: ImportSourceRows[], months: string[], reportMonth: string): ImportedMonthTotals {
+export function importedMonthTotals(pulls: ImportPull[], sources: ImportSourceRows[], months: string[], _reportMonth: string): ImportedMonthTotals {
   const window = new Set(months);
   const byId = new Map(sources.map((source) => [source.importId, source]));
   const out: ImportedMonthTotals = {};
@@ -25,9 +25,8 @@ export function importedMonthTotals(pulls: ImportPull[], sources: ImportSourceRo
     for (const row of source.rows) {
       const amount = parseNumber(row.mapped[pull.field] ?? "");
       if (amount == null) continue;
-      const dated = parseMonthKey(row.mapped.report_date ?? "");
-      const month = dated ?? reportMonth;
-      if (!window.has(month)) continue;
+      const month = parseMonthKey(row.mapped.report_date ?? "");
+      if (!month || !window.has(month)) continue;
       const slot = (out[month] ??= { total: null, parts: null, labor: null, claims: null });
       slot[figure] = Math.round(((slot[figure] ?? 0) + amount) * 100) / 100;
     }

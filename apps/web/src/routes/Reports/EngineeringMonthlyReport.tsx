@@ -8,7 +8,8 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
 import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
-import { DeleteReportDialog } from "./engineeringReportDelete";
+import { DeleteReportDialog, verifyReportMessage } from "./engineeringReportDelete";
+import { SourceImportPanel } from "./engineeringSourceImport";
 import { FigureProvider, hasUnmatchedImages, IMAGES_SECTION, NcrReportTable, SectionFigures, type NcrReportRow, type ReportImage } from "./engineeringReportImages";
 
 type Status = "" | "green" | "yellow" | "red";
@@ -80,6 +81,7 @@ interface ReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean };
   recipients?: string[];
   narrative: Narrative;
   executive: {
@@ -121,7 +123,7 @@ interface ReportView {
     };
   };
   charts: {
-    claimsSeriesScope: "month" | "file" | "empty";
+    claimsSeriesScope: "month" | "empty";
     claimsReturns: { date: string; claims: number; returns: number }[];
     fuelPumpReturns: { source: string; count: number }[];
     topVehicles: { vehicle: string; claims: number }[];
@@ -297,7 +299,7 @@ function ImportedDatasets({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium">Imported datasets</p>
-      <p className="text-sm text-muted-foreground">Pick an O'Reilly's or NAPA import and the field to total. Rows are split by their Report date into the trend table above (a row with no date counts toward this month). The uploaded monthly report's own figures take precedence.</p>
+      <p className="text-sm text-muted-foreground">Pick an O'Reilly's or NAPA import and the field to total. Rows are split by their Report date into the trend table above (a row with no date is left out). The uploaded monthly report's own figures take precedence.</p>
       {!available && <p className="text-sm text-muted-foreground">Imported datasets aren't available until the database update runs.</p>}
       {lines.length === 0 && <p className="text-sm text-muted-foreground">No imported fields on this report yet.</p>}
       {lines.map((line, index) => (
@@ -538,6 +540,19 @@ export function EngineeringMonthlyReport() {
     onError: (err) => toast.error(extractErrorMessage(err, "The report didn't send.")),
   });
 
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const verifyReport = useMutation({
+    mutationFn: async (pin: string) => (await apiClient.post<ReportView>("/reports/engineering/verify", { pin }, { params: { year, month } })).data,
+    onSuccess: async () => {
+      setVerifyOpen(false);
+      setVerifyError(null);
+      await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
+      toast.success("Report verified. This month's raw source rows were deleted.");
+    },
+    onError: (err) => setVerifyError(extractErrorMessage(err, "The report wasn't verified.")),
+  });
+
   const deleteReport = useMutation({
     mutationFn: async (pin: string) => (await apiClient.delete<ReportView>("/reports/engineering", { params: { year, month }, data: { pin } })).data,
     onSuccess: async (fresh) => {
@@ -712,6 +727,18 @@ export function EngineeringMonthlyReport() {
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm" onClick={() => window.print()}>
             Print
           </button>
+          {view?.verification?.canVerify && (
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              onClick={() => {
+                setVerifyError(null);
+                setVerifyOpen(true);
+              }}
+            >
+              Verify report
+            </button>
+          )}
           {canDelete && view?.saved && (
             <button
               type="button"
@@ -728,6 +755,8 @@ export function EngineeringMonthlyReport() {
             {helpOpen ? "Hide column help" : "Supplier column help"}
           </button>
         </div>
+        {view?.verification?.verifiedAt && <p className="text-sm text-muted-foreground">Verified {new Date(view.verification.verifiedAt).toLocaleString()}. This month's raw source rows were deleted; its totals are kept.</p>}
+        {view && !locked && <SourceImportPanel disabled={locked} />}
         {view?.uploadFileName && <p className="text-sm text-muted-foreground">Last supplier file: {view.uploadFileName}</p>}
         {locked && view && <p className="text-sm text-muted-foreground">You can read this report. Saving and uploading need edit access on a quality module an admin has granted.</p>}
         {report.isError && <p className="text-sm text-destructive">{extractErrorMessage(report.error, "The report didn't load.")}</p>}
@@ -746,6 +775,20 @@ export function EngineeringMonthlyReport() {
             error={deleteError}
             onCancel={() => setDeleteOpen(false)}
             onConfirm={(pin) => deleteReport.mutate(pin)}
+          />
+        )}
+        {verifyOpen && (
+          <DeleteReportDialog
+            monthLabel={`${MONTHS[month - 1]} ${year}`}
+            title="Verify report"
+            message={verifyReportMessage(`${MONTHS[month - 1]} ${year}`)}
+            note="Uploaded workbooks are never stored, so there are no files to remove. The deletion is recorded in the audit trail."
+            confirmLabel="Verify report"
+            pendingLabel="Verifying…"
+            pending={verifyReport.isPending}
+            error={verifyError}
+            onCancel={() => setVerifyOpen(false)}
+            onConfirm={(pin) => verifyReport.mutate(pin)}
           />
         )}
         {helpOpen && (

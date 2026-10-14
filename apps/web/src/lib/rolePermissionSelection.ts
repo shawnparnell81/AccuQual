@@ -56,6 +56,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Can delete monthly quality reports",
         hint: "Delete a month's Monthly Quality Report (typed text, supplier data, NCR table rows and pictures) after entering their own PIN. Live data from other modules is not touched.",
       },
+      {
+        key: "quality_report.verify",
+        label: "Can verify monthly quality reports",
+        hint: "Mark a month's Monthly Quality Report as verified. This deletes that month's raw imported source rows and keeps only its monthly totals for later trends. It cannot be undone.",
+      },
     ],
   },
   {

@@ -16,11 +16,10 @@ function EmptyChart({ label }: { label: string }) {
   return <p className="text-sm text-muted-foreground">{label}</p>;
 }
 
-export function ClaimsReturnsChart({ rows, scope }: { rows: { date: string; claims: number; returns: number }[]; scope: "month" | "file" | "empty" }) {
-  if (rows.length === 0) return <EmptyChart label="Upload a supplier file with a claims_series dataset to draw claims and returns." />;
+export function ClaimsReturnsChart({ rows }: { rows: { date: string; claims: number; returns: number }[]; scope?: "month" | "empty" }) {
+  if (rows.length === 0) return <EmptyChart label="No claims are dated in this month." />;
   return (
     <div className="flex flex-col gap-2">
-      {scope === "file" && <p className="text-xs text-muted-foreground">None of these dates fall in the selected month, so the chart shows every date in the file.</p>}
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={rows}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={grid} />

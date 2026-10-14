@@ -15,8 +15,14 @@ import {
   engineeringSaveHandler,
   engineeringTemplateHandler,
   engineeringUploadHandler,
+  engineeringSourceCommitHandler,
+  engineeringVerifyHandler,
+  engineeringSourceListHandler,
+  engineeringSourcePreviewHandler,
 } from "./controller.js";
 
+// Source workbooks (claim trackers) run larger than a supplier summary file.
+const sourceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 
 /** Mounted at /reports/engineering. Auth, database, and plant context come from the reports router. */
@@ -33,3 +39,7 @@ engineeringReportRouter.post("/email", validate(emailEngineeringReportSchema), e
 engineeringReportRouter.patch("/images/:attachmentId", validate(updateReportImageSchema), engineeringImageCaptionHandler);
 engineeringReportRouter.delete("/images/:attachmentId", engineeringImageDeleteHandler);
 engineeringReportRouter.post("/upload", upload.single("file"), scanUploads("Monthly Quality Report > supplier file"), engineeringUploadHandler);
+engineeringReportRouter.get("/sources", engineeringSourceListHandler);
+engineeringReportRouter.post("/sources/preview", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourcePreviewHandler);
+engineeringReportRouter.post("/sources", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourceCommitHandler);
+engineeringReportRouter.post("/verify", validate(deleteEngineeringReportSchema), engineeringVerifyHandler);

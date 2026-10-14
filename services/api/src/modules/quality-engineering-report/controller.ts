@@ -9,8 +9,9 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { SUPPLIER_COLUMNS, SUPPLIER_UPLOAD_NOTE } from "./supplierHelp.js";
 import { renderEngineeringReportPdf } from "./pdf.js";
-import { buildEngineeringReport, deleteEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
+import { buildEngineeringReport, deleteEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, verifyEngineeringReport, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
 import { loadReportImageFiles } from "./reportImages.js";
+import { commitSourceFile, listSourceCoverage, previewSourceFile } from "./sourceStore.js";
 import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
 import { and } from "drizzle-orm";
 import { engineeringAccess } from "./livePull.js";
@@ -160,4 +161,42 @@ export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Resp
   res.setHeader("X-Export-Id", chrome.exportId);
   res.setHeader("Content-Disposition", `attachment; filename="quality-engineering-${period.year}-${String(period.month).padStart(2, "0")}.pdf"`);
   res.send(Buffer.from(bytes));
+});
+
+async function requireSourceEdit(req: Request) {
+  const access = await engineeringAccess(req.db!, { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department });
+  if (!access.canEdit) throw AppError.forbidden("You can't import monthly source files.");
+}
+
+function sourceFile(req: Request) {
+  const file = req.file;
+  if (!file) throw AppError.badRequest("Choose a monthly source spreadsheet (.xlsx).");
+  if (!/\.xlsx$/i.test(file.originalname) || !sniffSpreadsheet(file.buffer, file.originalname)) throw AppError.badRequest("That file is not an Excel workbook (.xlsx).");
+  return { fileName: file.originalname, buffer: file.buffer };
+}
+
+/** POST /reports/engineering/sources/preview (multipart file) — what an import would add, update and remove. Writes nothing. */
+export const engineeringSourcePreviewHandler = asyncHandler(async (req: Request, res: Response) => {
+  await requireSourceEdit(req);
+  res.json(await previewSourceFile(req.db!, sourceFile(req)));
+});
+
+/** POST /reports/engineering/sources (multipart file) — stores the rows by their own months and logs the import. */
+export const engineeringSourceCommitHandler = asyncHandler(async (req: Request, res: Response) => {
+  await requireSourceEdit(req);
+  res.json(await commitSourceFile(req.db!, { ...sourceFile(req), userId: req.user!.id }));
+});
+
+/** GET /reports/engineering/sources — recent imports and the rows stored per source and month. */
+export const engineeringSourceListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const access = await engineeringAccess(req.db!, { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department });
+  if (!access.canRead) throw AppError.forbidden("You don't have access to this report.");
+  res.json(await listSourceCoverage(req.db!));
+});
+
+/** POST /reports/engineering/verify?year&month { pin } — finalizes the month and deletes its raw source rows. */
+export const engineeringVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
+  const period = periodFrom(req.query);
+  const { pin } = req.body as { pin: string };
+  res.json(await verifyEngineeringReport(req.db!, { ...actor(req), ...period, pin }));
 });

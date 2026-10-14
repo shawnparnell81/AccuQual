@@ -51,6 +51,9 @@ export const FAI_SOURCES_MANAGE_PERMISSION = "fai.sources.manage";
 /** Delete a month's Monthly Quality Report (text, supplier data, NCR rows and pictures). Granted on the role, never by a role name. */
 export const QUALITY_REPORT_DELETE_PERMISSION = "quality_report.delete";
 
+/** Verify (finalize) a month's Monthly Quality Report; this deletes that month's raw source rows. Granted on the role, never by a role name. */
+export const QUALITY_REPORT_VERIFY_PERMISSION = "quality_report.verify";
+
 /** Print barcode labels (FAI sample tags). Granted on the role, never by a role name. */
 export const LABELS_PRINT_PERMISSION = "labels.print";
 

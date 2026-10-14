@@ -17,7 +17,17 @@ export function DeleteReportDialog({
   error,
   onCancel,
   onConfirm,
+  title = "Delete report",
+  message,
+  note = "Claims, NCRs, first articles and the other live data in this report come from other modules and are not touched.",
+  confirmLabel = "Delete report",
+  pendingLabel = "Deleting…",
 }: {
+  title?: string;
+  message?: string;
+  note?: string;
+  confirmLabel?: string;
+  pendingLabel?: string;
   monthLabel: string;
   pending: boolean;
   error: string | null;
@@ -39,12 +49,12 @@ export function DeleteReportDialog({
         className="qe-no-print modal-in fixed left-1/2 top-24 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-card p-4 shadow-xl outline-none"
       >
         <h2 id="qe-delete-title" className="text-sm font-medium">
-          Delete report
+          {title}
         </h2>
         <p id="qe-delete-message" className="mt-2 text-sm text-muted-foreground">
-          {deleteReportMessage(monthLabel)}
+          {message ?? deleteReportMessage(monthLabel)}
         </p>
-        <p className="mt-2 text-xs text-muted-foreground">Claims, NCRs, first articles and the other live data in this report come from other modules and are not touched.</p>
+        <p className="mt-2 text-xs text-muted-foreground">{note}</p>
         <form
           className="mt-3 flex flex-col gap-3"
           onSubmit={(event) => {
@@ -75,11 +85,16 @@ export function DeleteReportDialog({
               disabled={!isFourDigitPin(pin) || pending}
               className="rounded-md bg-destructive px-3 py-1.5 text-sm text-destructive-foreground disabled:opacity-60"
             >
-              {pending ? "Deleting…" : "Delete report"}
+              {pending ? pendingLabel : confirmLabel}
             </button>
           </div>
         </form>
       </div>
     </>
   );
+}
+
+/** What the verify dialog says: verifying is final and removes the month's raw imported rows. */
+export function verifyReportMessage(monthLabel: string): string {
+  return `Verify the ${monthLabel} Monthly Quality Report? This deletes that month's raw imported source rows and keeps only its monthly totals for later trend tables. It cannot be undone.`;
 }

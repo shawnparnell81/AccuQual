@@ -246,6 +246,8 @@ export interface EngineeringReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  /** Set once the month is verified: its raw source rows are deleted and only its totals are kept. */
+  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean };
   /** Inboxes that receive this saved report. */
   recipients: string[];
   importedDatasets: ImportedDatasetLine[];
@@ -291,7 +293,7 @@ export interface EngineeringReportView {
   };
   charts: {
     /** month = points in the selected month. file = the upload had dates, none in that month. */
-    claimsSeriesScope: "month" | "file" | "empty";
+    claimsSeriesScope: "month" | "empty";
     claimsReturns: ClaimPoint[];
     fuelPumpReturns: NamedCount[];
     topVehicles: TopVehicle[];
@@ -654,8 +656,9 @@ export function assembleReport(input: {
       },
     },
     charts: {
-      claimsSeriesScope: claimsReturns.length > 0 ? "month" : supplier.claimsSeries.length > 0 ? "file" : "empty",
-      claimsReturns: claimsReturns.length > 0 ? claimsReturns : supplier.claimsSeries,
+      // Only this month's own days. Another month's points are never shown in their place.
+      claimsSeriesScope: claimsReturns.length > 0 ? "month" : "empty",
+      claimsReturns,
       fuelPumpReturns: supplier.fuelPumpReturns,
       topVehicles: [...supplier.topVehicles].sort((a, b) => b.claims - a.claims),
       emailIssues: months.map((key) => {
