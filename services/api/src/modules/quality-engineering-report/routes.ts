@@ -42,4 +42,4 @@ engineeringReportRouter.post("/upload", upload.single("file"), scanUploads("Mont
 engineeringReportRouter.get("/sources", engineeringSourceListHandler);
 engineeringReportRouter.post("/sources/preview", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourcePreviewHandler);
 engineeringReportRouter.post("/sources", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourceCommitHandler);
-engineeringReportRouter.post("/verify", validate(deleteEngineeringReportSchema), engineeringVerifyHandler);
+engineeringReportRouter.post("/verify", engineeringVerifyHandler);

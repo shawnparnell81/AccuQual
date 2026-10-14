@@ -125,6 +125,7 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     oreilly: dash(row.orIssues),
     napa: dash(row.napaIssues),
   }));
+  data.techCalls = view.sections.techCalls.map((row) => ({ ...row }));
   data.fai = view.tables.fai.rows.map((row) => ({
     category: row.category,
     completed: String(row.totalCompleted),
@@ -232,6 +233,19 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
         title: "OR/NAPA Email Issues",
         blocks: [
           { type: "textarea", name: "emailNotes", label: "Notes" },
+          {
+            type: "table",
+            name: "techCalls",
+            columns: [
+              { key: "contact", label: "DMA Initial Contact", kind: "text" },
+              { key: "date", label: "Date", kind: "text" },
+              { key: "customerType", label: "Type of customer", kind: "text" },
+              { key: "partNumber", label: "Part Number", kind: "text" },
+              { key: "partName", label: "Part Name", kind: "text" },
+              { key: "concern", label: "Concern description/concern", kind: "text" },
+              { key: "resolution", label: "Resolution", kind: "text" },
+            ],
+          },
           { type: "table", name: "emailChart", columns: [{ key: "month", label: "Month", kind: "text" }, { key: "total", label: "Total", kind: "text" }, { key: "oreilly", label: "O'Reilly", kind: "text" }, { key: "napa", label: "NAPA", kind: "text" }] },
         ],
       },

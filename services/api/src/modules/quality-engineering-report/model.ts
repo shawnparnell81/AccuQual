@@ -186,6 +186,17 @@ export interface SupplierNote {
   response: string;
 }
 
+/** One tech-support call as DMA's 6.9 table shows it (from the tech-call log). */
+export interface TechCallRow {
+  contact: string;
+  date: string;
+  customerType: string;
+  partNumber: string;
+  partName: string;
+  concern: string;
+  resolution: string;
+}
+
 export interface SupplierData {
   monthlyMetrics: MonthMetric[];
   financials: FinancialMonth[];
@@ -322,6 +333,7 @@ export interface EngineeringReportView {
     productInfo: QaItem[];
     ncrNotes: string;
     ncrTableRows: NcrReportRow[];
+    techCalls: TechCallRow[];
     pir: { status: "not_tracked"; note: string };
   };
   live: LivePull;
@@ -537,6 +549,8 @@ export function assembleReport(input: {
   importedDatasets?: ImportedDatasetLine[];
   importsAvailable?: boolean;
   importedMonths?: ImportedMonthTotals;
+  /** Section 6.9 table rows from the tech-call log for this month. */
+  techCalls?: TechCallRow[];
 }): EngineeringReportView {
   const { year, month, narrative, supplier, live } = input;
   const selected = monthKey(year, month);
@@ -704,6 +718,7 @@ export function assembleReport(input: {
       productInfo: narrative.productInfo,
       ncrNotes: narrative.ncrNotes,
       ncrTableRows: narrative.ncrTableRows,
+      techCalls: input.techCalls ?? [],
       pir: { status: "not_tracked", note: "AccuQual does not keep a PIR log. This line is left blank rather than shown as zero." },
     },
     live,

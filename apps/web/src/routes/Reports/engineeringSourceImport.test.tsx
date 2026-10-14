@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { renderToString } from "react-dom/server";
-import { ROLE_PERMISSION_GROUPS } from "../../lib/rolePermissionSelection";
-import { DeleteReportDialog, verifyReportMessage } from "./engineeringReportDelete";
+import { VerifyReportDialog } from "./engineeringReportDelete";
 import { previewLines } from "./engineeringSourceImport";
 
 describe("Monthly source import preview", () => {
@@ -29,15 +28,10 @@ describe("Monthly source import preview", () => {
 });
 
 describe("Verify report", () => {
-  it("says the raw rows are deleted and asks for the PIN", () => {
-    const html = renderToString(
-      <DeleteReportDialog monthLabel="September 2026" title="Verify report" message={verifyReportMessage("September 2026")} confirmLabel="Verify report" pending={false} error={null} onCancel={() => {}} onConfirm={() => {}} />,
-    );
+  it("is a plain confirm that says the raw rows are deleted, with no PIN", () => {
+    const html = renderToString(<VerifyReportDialog monthLabel="September 2026" pending={false} error={null} onCancel={() => {}} onConfirm={() => {}} />);
+    assert.match(html, /Verify the September 2026 Monthly Quality Report\?/);
     assert.match(html, /deletes that month&#x27;s raw imported source rows/);
-    assert.match(html, /Your 4-digit PIN/);
-  });
-  it("is a permission on the Roles page, not a role name", () => {
-    const all = ROLE_PERMISSION_GROUPS.flatMap((group) => group.permissions);
-    assert.ok(all.some((item) => item.key === "quality_report.verify"));
+    assert.doesNotMatch(html, /PIN|type="password"/);
   });
 });

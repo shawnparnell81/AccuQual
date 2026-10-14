@@ -8,8 +8,8 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
 import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
-import { DeleteReportDialog, verifyReportMessage } from "./engineeringReportDelete";
-import { SourceImportPanel } from "./engineeringSourceImport";
+import { DeleteReportDialog, VerifyReportDialog } from "./engineeringReportDelete";
+import { SourceImportPanel, TechCallTable, type TechCallRow } from "./engineeringSourceImport";
 import { FigureProvider, hasUnmatchedImages, IMAGES_SECTION, NcrReportTable, SectionFigures, type NcrReportRow, type ReportImage } from "./engineeringReportImages";
 
 type Status = "" | "green" | "yellow" | "red";
@@ -148,6 +148,7 @@ interface ReportView {
   };
   sections: {
     pir: { note: string };
+    techCalls?: TechCallRow[];
   };
   live: {
     ncr: Gated<{ total: number; open: number; closed: number; rows: { id: number; number: string; partNumber: string; description: string; disposition: string; status: string }[] }>;
@@ -543,7 +544,7 @@ export function EngineeringMonthlyReport() {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const verifyReport = useMutation({
-    mutationFn: async (pin: string) => (await apiClient.post<ReportView>("/reports/engineering/verify", { pin }, { params: { year, month } })).data,
+    mutationFn: async () => (await apiClient.post<ReportView>("/reports/engineering/verify", {}, { params: { year, month } })).data,
     onSuccess: async () => {
       setVerifyOpen(false);
       setVerifyError(null);
@@ -778,17 +779,12 @@ export function EngineeringMonthlyReport() {
           />
         )}
         {verifyOpen && (
-          <DeleteReportDialog
+          <VerifyReportDialog
             monthLabel={`${MONTHS[month - 1]} ${year}`}
-            title="Verify report"
-            message={verifyReportMessage(`${MONTHS[month - 1]} ${year}`)}
-            note="Uploaded workbooks are never stored, so there are no files to remove. The deletion is recorded in the audit trail."
-            confirmLabel="Verify report"
-            pendingLabel="Verifying…"
             pending={verifyReport.isPending}
             error={verifyError}
             onCancel={() => setVerifyOpen(false)}
-            onConfirm={(pin) => verifyReport.mutate(pin)}
+            onConfirm={() => verifyReport.mutate()}
           />
         )}
         {helpOpen && (
@@ -1093,6 +1089,7 @@ export function EngineeringMonthlyReport() {
 
           <Section number="6.9" title="OR/NAPA Email Issues">
             <EmailIssuesChart rows={view.charts.emailIssues} />
+            {(view.sections.techCalls?.length ?? 0) > 0 && <TechCallTable rows={view.sections.techCalls ?? []} />}
             <TextAreaField allowPictures={false} label="Notes" value={narrative.emailIssuesNotes} disabled={locked} onChange={(event) => patch({ emailIssuesNotes: event.target.value })} />
           </Section>
 

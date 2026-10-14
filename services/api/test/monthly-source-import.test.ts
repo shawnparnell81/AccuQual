@@ -12,21 +12,18 @@ import { qualityEngineeringReports } from "../src/drizzle/schema/qualityEngineer
 import { monthlySourceMonths, monthlySourceRows, monthlySourceUploads } from "../src/drizzle/schema/monthlySourceRows.js";
 import { signAccessToken } from "../src/utils/jwt.js";
 import { seedDefaultPermissions, seedTestRoles } from "./helpers/seedDefaults.js";
-import { setTestPin, TEST_PIN } from "./helpers/signaturePin.js";
 import { parseSourceWorkbook } from "../src/modules/quality-engineering-report/sourceParse.js";
 import { mergeSourceFigures, sourceMonthFigures } from "../src/modules/quality-engineering-report/sourceReport.js";
 import { emptySupplierData } from "../src/modules/quality-engineering-report/model.js";
-import { updateRoleSchema } from "../src/modules/roles/roles.validation.js";
+import { readFileSync, existsSync } from "node:fs";
 
 // Months far from any real report so this suite never touches other data.
 const YEAR = 2031;
 const MONTHS = ["2031-01", "2031-02", "2031-03"];
-const VERIFY = "quality_report.verify";
 const app = createApp();
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const userIds: number[] = [];
 let editorToken: string;
-let plainToken: string;
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const d = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -67,7 +64,6 @@ async function makeUser(roleName: string, label: string) {
     .values({ email: `msrc-${label}-${suffix}@test.local`, passwordHash: "unused", department: "quality", roleId: role?.id ?? null, name: `Source Tester ${label}` })
     .returning();
   userIds.push(user!.id);
-  await setTestPin(user!.id);
   return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: "quality" });
 }
 
@@ -86,19 +82,12 @@ beforeAll(async () => {
   const co = await ensureTestCompany();
   await seedDefaultPermissions(co!.id);
   await seedTestRoles();
-  const [lead] = await db.select().from(roles).where(eq(roles.name, "lead"));
-  if (lead) await db.update(roles).set({ permissions: [...new Set([...(lead.permissions ?? []), VERIFY])] }).where(eq(roles.id, lead.id));
-  const [operator] = await db.select().from(roles).where(eq(roles.name, "operator"));
-  if (operator) await db.update(roles).set({ permissions: (operator.permissions ?? []).filter((item) => item !== VERIFY) }).where(eq(roles.id, operator.id));
   editorToken = await makeUser("lead", "editor");
-  plainToken = await makeUser("operator", "plain");
   await wipe();
 });
 
 afterAll(async () => {
   await wipe();
-  const [lead] = await db.select().from(roles).where(eq(roles.name, "lead"));
-  if (lead) await db.update(roles).set({ permissions: (lead.permissions ?? []).filter((item) => item !== VERIFY) }).where(eq(roles.id, lead.id));
   for (const id of userIds) await db.delete(users).where(eq(users.id, id)).catch(() => {});
 });
 
@@ -141,6 +130,18 @@ describe("no carry-forward", () => {
     expect(later.supplier.monthlyMetrics).toEqual([]);
     const merged = mergeSourceFigures({ ...emptySupplierData(), productAlerts: { total: 28, open: 8, hoursSpent: null, avgDaysToClose: 2.45 } }, sourceMonthFigures(rows, ["2031-01"], "2031-01", spans).supplier);
     expect(merged.productAlerts).toEqual({ total: 28, open: 8, hoursSpent: 2, avgDaysToClose: 2.45 });
+  });
+});
+
+describe("tech-call log (section 6.9 table)", () => {
+  it("lists only the selected month's calls with DMA's columns, oldest first", () => {
+    const call = (date: string, part: string) => ({ source: "tech_calls", month: date.slice(0, 7), data: { dma_initial_contact: "JH", date, type_of_customer: "Garage", part_number: part, part_name: "Mechanical Fuel Pump", concern_description_concern: "fit", resolution: "yes", __date: date } });
+    const figures = sourceMonthFigures([call("2031-02-18", "B0115P"), call("2031-02-01", "A1"), call("2031-01-30", "OLD")], ["2031-02"], "2031-02", new Map([["tech_calls", { first: "2031-01", last: "2031-02" }]]));
+    expect(figures.techCalls).toEqual([
+      { contact: "JH", date: "02/01/2031", customerType: "Garage", partNumber: "A1", partName: "Mechanical Fuel Pump", concern: "fit", resolution: "yes" },
+      { contact: "JH", date: "02/18/2031", customerType: "Garage", partNumber: "B0115P", partName: "Mechanical Fuel Pump", concern: "fit", resolution: "yes" },
+    ]);
+    expect(sourceMonthFigures([call("2031-01-30", "OLD")], ["2031-03"], "2031-03", new Map([["tech_calls", { first: "2031-01", last: "2031-03" }]])).techCalls).toEqual([]);
   });
 });
 
@@ -191,20 +192,16 @@ describe("monthly source import", () => {
 });
 
 describe("verify a month", () => {
-  it("is a role permission and needs a saved report and the person's PIN", async () => {
-    expect(updateRoleSchema.safeParse({ permissions: [VERIFY] }).success).toBe(true);
-    expect((await request(app).get("/permissions/effective").set(bearer(editorToken))).body[VERIFY]).toBe("edit");
-    expect((await request(app).get("/permissions/effective").set(bearer(plainToken))).body[VERIFY]).toBe("none");
-    const verify = (token: string, body: object) => request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(token)).send(body);
-    expect((await verify(editorToken, { pin: TEST_PIN })).status).toBe(400);
+  it("needs a saved report; no separate permission and no PIN", async () => {
+    const verify = () => request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({});
+    expect((await verify()).status).toBe(400);
     await db.insert(qualityEngineeringReports).values({ year: YEAR, month: 1, narrative: {}, supplierData: {} });
-    expect((await verify(plainToken, { pin: TEST_PIN })).status).toBe(403);
-    expect((await verify(editorToken, {})).status).toBe(400);
+    expect((await report(editorToken, 1)).body.verification.canVerify).toBe(true);
     expect((await rowsIn("2031-01")).length).toBe(2);
   });
 
   it("deletes only that month's raw rows, keeps its totals for later trends, and audit-logs it", async () => {
-    const res = await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({ pin: TEST_PIN });
+    const res = await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({});
     expect(res.status).toBe(200);
     expect(res.body.verification.verifiedAt).toBeTruthy();
     expect(await rowsIn("2031-01")).toHaveLength(0);
@@ -221,7 +218,7 @@ describe("verify a month", () => {
     const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "QualityEngineeringReport"), eq(auditTrail.entityId, row!.id)));
     const text = entries.map((entry) => String((entry.changes as { summary?: string }).summary)).join(" ");
     expect(text).toMatch(/verified the January 2031 report and deleted its raw source data \(2 source rows: 1 ncr, 1 product alerts/);
-    expect((await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({ pin: TEST_PIN })).status).toBe(400);
+    expect((await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({})).status).toBe(400);
   });
 
   it("a later upload skips rows dated in a verified month", async () => {
@@ -234,9 +231,26 @@ describe("verify a month", () => {
   it("drops an upload's record once every month it covered is verified", async () => {
     expect((await db.select().from(monthlySourceUploads).where(like(monthlySourceUploads.fileName, `msrc-${suffix}%`))).length).toBeGreaterThan(0);
     await db.insert(qualityEngineeringReports).values({ year: YEAR, month: 3, narrative: {}, supplierData: {} });
-    const res = await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 3 }).set(bearer(editorToken)).send({ pin: TEST_PIN });
+    const res = await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 3 }).set(bearer(editorToken)).send({});
     expect(res.status).toBe(200);
     expect(await rowsIn("2031-03")).toHaveLength(0);
     expect(await db.select().from(monthlySourceUploads).where(like(monthlySourceUploads.fileName, `msrc-${suffix}%`))).toHaveLength(0);
+  });
+});
+
+// The September O'Reilly export compared with DMA's September report. The workbook is customer data, so it is not
+// committed; set MONTHLY_SOURCE_SEPT_EXPORT to its path to run this check.
+const SEPT = process.env.MONTHLY_SOURCE_SEPT_EXPORT;
+describe.skipIf(!SEPT || !existsSync(SEPT))("September labor export vs the real report", () => {
+  it("reproduces the claim count, MTTF, median, top parts, vehicle counts and daily chart", async () => {
+    const parsed = await parseSourceWorkbook(readFileSync(SEPT!), "sept.xlsx");
+    const figures = sourceMonthFigures(parsed.rows, ["2026-09"], "2026-09", new Map([["labor_export", { first: "2026-09", last: "2026-09" }]]));
+    expect(figures.supplier.monthlyMetrics[0]!.totalClaims).toBe(461);
+    expect(figures.supplier.financials[0]!.partsAmount).toBe(10529.32);
+    expect(figures.supplier.warrantyMetrics[0]).toMatchObject({ mttfDays: 122.7, medianDays: 42 });
+    expect(figures.supplier.topParts.map((part) => part.totalClaims)).toEqual([10, 9, 9, 7, 5, 5, 5, 5, 5, 5]);
+    expect(figures.supplier.topParts.every((part) => part.description === "Precision Fuel Pump")).toBe(true);
+    expect(figures.supplier.topVehicles.map((row) => row.claims)).toEqual([24, 19, 19, 17, 12, 12, 12, 11, 9, 8]);
+    expect(figures.supplier.claimsSeries.map((point) => point.claims)).toEqual([16, 19, 24, 24, 3, 1, 2, 22, 22, 15, 18, 3, 21, 20, 27, 16, 22, 10, 13, 28, 27, 25, 17, 2, 1, 16, 24, 23]);
   });
 });

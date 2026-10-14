@@ -92,3 +92,53 @@ export function SourceImportPanel({ disabled }: { disabled: boolean }) {
     </div>
   );
 }
+
+export interface TechCallRow {
+  contact: string;
+  date: string;
+  customerType: string;
+  partNumber: string;
+  partName: string;
+  concern: string;
+  resolution: string;
+}
+
+const TECH_CALL_COLUMNS: [keyof TechCallRow, string][] = [
+  ["contact", "DMA Initial Contact"],
+  ["date", "Date"],
+  ["customerType", "Type of customer"],
+  ["partNumber", "Part Number"],
+  ["partName", "Part Name"],
+  ["concern", "Concern description/concern"],
+  ["resolution", "Resolution"],
+];
+
+/** Section 6.9's table of the month's tech-support calls, with DMA's column headings. */
+export function TechCallTable({ rows }: { rows: TechCallRow[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            {TECH_CALL_COLUMNS.map(([key, label]) => (
+              <th key={key} className="border border-border px-2 py-1 text-left font-medium">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={`${row.date}-${index}`}>
+              {TECH_CALL_COLUMNS.map(([key]) => (
+                <td key={key} className="border border-border px-2 py-1 align-top">
+                  {row[key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { roleHasPermission } from "../roles/rolePermissions.js";
-import { QUALITY_REPORT_DELETE_PERMISSION, QUALITY_REPORT_VERIFY_PERMISSION } from "../roles/roleAccess.js";
+import { QUALITY_REPORT_DELETE_PERMISSION } from "../roles/roleAccess.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { extractFileWithImages, type ExtractedImage } from "../form-import/extract.js";
 import { importedMonthTotals } from "./importMonths.js";
@@ -215,7 +215,7 @@ export async function buildEngineeringReport(
   const narrative = stored.ncrTableRows.length === 0 && supplier.ncrTable.length > 0 ? { ...stored, ncrTableRows: supplier.ncrTable.map((item) => ({ ...item })) } : stored;
   const imported = await loadImportSources(db, narrative.importPulls, input.plantId ?? null);
   const verified = await isSourceMonthVerified(db, monthKey(input.year, input.month));
-  const canVerify = row != null && verified.verifiedAt == null && (await roleHasPermission(db, input.user.roleName, QUALITY_REPORT_VERIFY_PERMISSION));
+  const canVerify = row != null && verified.verifiedAt == null && access.canEdit;
   const view = assembleReport({
     year: input.year,
     month: input.month,
@@ -229,6 +229,8 @@ export async function buildEngineeringReport(
     importedDatasets: resolveImportPulls(narrative.importPulls, imported.sources),
     importedMonths: importedMonthTotals(narrative.importPulls, imported.sources, monthWindow(input.year, input.month), monthKey(input.year, input.month)),
     importsAvailable: imported.available,
+    // A month whose uploaded Word report already carries the 6.9 picture of this table shows that picture only.
+    techCalls: narrative.images.some((image) => image.sectionKey === "6.9") ? [] : sources.techCalls,
   });
   return { ...view, verification: { ...verified, canVerify } };
 }
@@ -236,18 +238,14 @@ export async function buildEngineeringReport(
 /**
  * Verifies (finalizes) one month's saved report. That month's raw source rows are deleted and only its monthly
  * totals are kept for later months' trends. Uploaded workbooks are never stored, so there are no files to remove.
- * Needs the "Can verify monthly quality reports" permission on the role and the person's own signature PIN.
+ * Same edit access as the rest of the monthly report; no separate permission and no PIN.
  */
 export async function verifyEngineeringReport(
   db: Db,
-  input: { year: number; month: number; pin: string; user: Actor; siteIds: number[]; plantId?: number | null },
+  input: { year: number; month: number; user: Actor; siteIds: number[]; plantId?: number | null },
 ): Promise<EngineeringReportView> {
-  if (!(await roleHasPermission(db, input.user.roleName, QUALITY_REPORT_VERIFY_PERMISSION))) {
-    throw AppError.forbidden("You don't have permission to verify monthly quality reports. An administrator can give it to your role on the Roles page.");
-  }
   const access = await engineeringAccess(db, input.user);
-  if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
-  await verifySignaturePin(input.user.id, input.pin);
+  if (!access.canEdit) throw AppError.forbidden("You can read this report. Verifying it needs edit access on a quality module.");
   const row = await loadRow(db, input.year, input.month);
   if (!row) throw AppError.badRequest("Save this month's report before verifying it.");
   const result = await finalizeSourceMonth(db, monthKey(input.year, input.month), input.user.id);

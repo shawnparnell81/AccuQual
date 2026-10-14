@@ -110,7 +110,7 @@ export function usableDate(value: unknown): Date | null {
   }
   if (typeof value === "string") {
     const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
-    const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+    const us = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(value.trim());
     const date = iso ? new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))) : us ? new Date(Date.UTC(Number(us[3]), Number(us[1]) - 1, Number(us[2]))) : null;
     return date ? usableDate(date) : null;
   }
@@ -122,7 +122,11 @@ function cellValue(value: ExcelJS.CellValue): SourceValue | Date {
   if (value instanceof Date) return value;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "boolean") return value ? "Y" : "N";
-  if (typeof value === "string") return value.trim() === "" ? null : value.trim().slice(0, 2000);
+  // A leading apostrophe is Excel's "keep as text" marker ('A30495), not part of the value.
+  if (typeof value === "string") {
+    const trimmed = value.trim().replace(/^'/, "");
+    return trimmed === "" ? null : trimmed.slice(0, 2000);
+  }
   if (typeof value === "object") {
     if ("result" in value) return cellValue((value as { result?: ExcelJS.CellValue }).result ?? null);
     if ("richText" in value && Array.isArray(value.richText)) return cellValue(value.richText.map((part) => part.text).join(""));
@@ -188,7 +192,8 @@ export async function parseSourceWorkbook(buffer: Buffer, fileName: string): Pro
       keys.forEach((key, index) => {
         if (!key || key in data) return;
         const value = cells[index] ?? null;
-        data[key] = value instanceof Date ? (usableDate(value) ? isoDay(value) : null) : value;
+        const asDate = value instanceof Date ? usableDate(value) : typeof value === "string" && /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(value) ? usableDate(value) : null;
+        data[key] = asDate ? isoDay(asDate) : value instanceof Date ? null : value;
       });
       data.__date = isoDay(date);
       const keyParts = rule.key.map((name) => String(data[name] ?? "").trim().toLowerCase());

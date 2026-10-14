@@ -189,6 +189,7 @@ export async function loadSourceFigures(db: Db, window: string[], selected: stri
 export interface VerifiedFigures {
   supplier: SupplierData;
   logs: SourceMonthFigures["logs"];
+  techCalls?: SourceMonthFigures["techCalls"];
   kinds: string[];
   rowCounts: Record<string, number>;
 }
@@ -203,6 +204,7 @@ export function withVerifiedTotals(computed: SourceMonthFigures, finals: { month
   };
   let logs = computed.logs;
   let kinds = computed.kinds;
+  let techCalls = computed.techCalls;
   for (const { month, figures } of finals) {
     const replace = <T extends { month: string }>(list: T[], from: T[]) => {
       const kept = list.filter((row) => row.month !== month);
@@ -226,13 +228,14 @@ export function withVerifiedTotals(computed: SourceMonthFigures, finals: { month
       });
       logs = figures.logs;
       kinds = figures.kinds;
+      techCalls = figures.techCalls ?? [];
     }
   }
   const order = (a: { month: string }, b: { month: string }) => a.month.localeCompare(b.month);
   supplier.monthlyMetrics.sort(order);
   supplier.financials.sort(order);
   supplier.warrantyMetrics.sort(order);
-  return { supplier, logs, kinds };
+  return { supplier, logs, kinds, techCalls };
 }
 
 export async function isSourceMonthVerified(db: Db, month: string): Promise<{ verifiedAt: string | null; verifiedBy: number | null }> {
@@ -255,7 +258,7 @@ export async function finalizeSourceMonth(db: Db, month: string, userId: number)
   const figures = sourceMonthFigures(rows as StoredSourceRow[], [month], month, new Map(kinds.map((row) => [row.source, { first: row.first, last: row.last }])));
   const rowCounts: Record<string, number> = {};
   for (const row of rows) rowCounts[row.source] = (rowCounts[row.source] ?? 0) + 1;
-  const kept: VerifiedFigures = { supplier: figures.supplier, logs: figures.logs, kinds: figures.kinds, rowCounts };
+  const kept: VerifiedFigures = { supplier: figures.supplier, logs: figures.logs, techCalls: figures.techCalls, kinds: figures.kinds, rowCounts };
   await db.insert(monthlySourceMonths).values({ month, figures: kept as unknown as Record<string, unknown>, verifiedBy: userId });
   await db.delete(monthlySourceRows).where(eq(monthlySourceRows.month, month));
   // An upload record lists a file name and counts only. Once none of its rows remain, drop the record too.

@@ -194,9 +194,8 @@ export const engineeringSourceListHandler = asyncHandler(async (req: Request, re
   res.json(await listSourceCoverage(req.db!));
 });
 
-/** POST /reports/engineering/verify?year&month { pin } — finalizes the month and deletes its raw source rows. */
+/** POST /reports/engineering/verify?year&month — finalizes the month and deletes its raw source rows. */
 export const engineeringVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
   const period = periodFrom(req.query);
-  const { pin } = req.body as { pin: string };
-  res.json(await verifyEngineeringReport(req.db!, { ...actor(req), ...period, pin }));
+  res.json(await verifyEngineeringReport(req.db!, { ...actor(req), ...period }));
 });

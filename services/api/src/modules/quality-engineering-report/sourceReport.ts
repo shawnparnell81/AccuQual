@@ -3,7 +3,7 @@
  * own month. A month with no rows gives null/empty (never another month's numbers).
  */
 import type { SourceData, SourceKind } from "./sourceParse.js";
-import type { ClaimPoint, FaiCategoryRow, FinancialMonth, MonthMetric, NamedCount, NcrReportRow, ProductAlertSummary, SupplierData, TopPart, TopVehicle, WarrantyMonth } from "./model.js";
+import type { ClaimPoint, FaiCategoryRow, FinancialMonth, MonthMetric, NamedCount, NcrReportRow, ProductAlertSummary, SupplierData, TechCallRow, TopPart, TopVehicle, WarrantyMonth } from "./model.js";
 
 export interface StoredSourceRow {
   source: SourceKind | string;
@@ -18,13 +18,19 @@ export interface SourceMonthFigures {
   kinds: string[];
   /** NCR / CAR / RPN / QTN logged in the selected month (null when that log was never uploaded). */
   logs: { ncr: LogCount | null; car: LogCount | null; rpn: LogCount | null; qtn: LogCount | null };
+  /** The selected month's tech-support calls (section 6.9 table), oldest first. */
+  techCalls: TechCallRow[];
 }
+
 
 export interface LogCount {
   total: number;
   open: number;
   closed: number;
 }
+
+/** Fuel pump part numbers: A/B/C/E/M + digits, or 43GM.... */
+const FUEL_PUMP_PART = /^([ABCEM]\d|43GM)/i;
 
 const LINE_NAMES: Record<string, string> = {
   PFP: "Precision Fuel Pump",
@@ -146,19 +152,23 @@ export function sourceMonthFigures(rows: StoredSourceRow[], window: string[], se
     const part = text(row.data, "item");
     if (!part) continue;
     const line = text(row.data, "line").toUpperCase();
-    const found = partCounts.get(part) ?? { partNumber: part, description: LINE_NAMES[line] ?? line, totalClaims: 0 };
+    // DMA's report names every fuel-pump part number "Precision Fuel Pump", whatever O'Reilly line it was filed under.
+    const description = FUEL_PUMP_PART.test(part) ? "Precision Fuel Pump" : (LINE_NAMES[line] ?? line);
+    const found = partCounts.get(part) ?? { partNumber: part, description, totalClaims: 0 };
     found.totalClaims += 1;
     partCounts.set(part, found);
   }
-  const topParts = [...partCounts.values()].sort((a, b) => b.totalClaims - a.totalClaims || a.partNumber.localeCompare(b.partNumber)).slice(0, 10);
+  // Ties keep the order each part first appears in the export, as DMA's report does.
+  const topParts = [...partCounts.values()].sort((a, b) => b.totalClaims - a.totalClaims).slice(0, 10);
 
   const vehicleCounts = new Map<string, number>();
   for (const row of claims) {
-    const vehicle = [text(row.data, "year"), text(row.data, "make"), text(row.data, "model")].filter(Boolean).join(" ");
+    // DMA's "Top 10 Vehicle Models" chart counts by Model alone (all years and makes together).
+    const vehicle = text(row.data, "model");
     if (vehicle) vehicleCounts.set(vehicle, (vehicleCounts.get(vehicle) ?? 0) + 1);
   }
   const topVehicles: TopVehicle[] = [...vehicleCounts.entries()]
-    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .sort(([, x], [, y]) => y - x)
     .slice(0, 10)
     .map(([vehicle, count]) => ({ vehicle, claims: count }));
 
@@ -178,7 +188,7 @@ export function sourceMonthFigures(rows: StoredSourceRow[], window: string[], se
   const fuelPumpReturns: NamedCount[] = [];
   if (covers("labor_tracker", selected)) {
     // Fuel pump part numbers (A/B/C/E/M + digits, 43GM...). The tracker's "DMA Part (Y/N)" column splits them.
-    const pumps = tracker.filter((row) => /^([ABCEM]\d|43GM)/i.test(text(row.data, "part")));
+    const pumps = tracker.filter((row) => FUEL_PUMP_PART.test(text(row.data, "part")));
     const flag = (row: StoredSourceRow) => text(row.data, "dma_part_y_n").toUpperCase();
     fuelPumpReturns.push({ source: "DMA Parts", count: pumps.filter((row) => flag(row).startsWith("Y")).length });
     fuelPumpReturns.push({ source: "Carter / Non-DMA Pumps", count: pumps.filter((row) => flag(row).startsWith("N")).length });
@@ -225,6 +235,19 @@ export function sourceMonthFigures(rows: StoredSourceRow[], window: string[], se
       status: text(row.data, "status"),
     }));
 
+  const usDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : iso);
+  const techCalls: TechCallRow[] = inMonth("tech_calls", selected)
+    .sort((a, b) => text(a.data, "__date").localeCompare(text(b.data, "__date")))
+    .map((row) => ({
+      contact: text(row.data, "dma_initial_contact"),
+      date: usDate(text(row.data, "__date")),
+      customerType: text(row.data, "type_of_customer"),
+      partNumber: text(row.data, "part_number"),
+      partName: text(row.data, "part_name"),
+      concern: text(row.data, "concern_description_concern"),
+      resolution: text(row.data, "resolution"),
+    }));
+
   const log = (source: string) => (covers(source, selected) ? logCount(inMonth(source, selected)) : null);
   return {
     supplier: {
@@ -244,6 +267,7 @@ export function sourceMonthFigures(rows: StoredSourceRow[], window: string[], se
     },
     kinds: [...new Set(rows.filter((row) => row.month === selected).map((row) => row.source))].sort(),
     logs: { ncr: log("ncr"), car: log("car"), rpn: log("rpn"), qtn: log("qtn") },
+    techCalls,
   };
 }
 
