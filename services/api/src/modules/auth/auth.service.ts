@@ -530,7 +530,7 @@ export async function endBrowserSession(refreshToken: string | undefined, client
     userName: person?.name ?? null,
     eventType: "signed_out",
     success: true,
-    reason: "Signed out",
+    reason: "Signed out: every AccuQual window was closed",
     method: "browser",
     client,
   });

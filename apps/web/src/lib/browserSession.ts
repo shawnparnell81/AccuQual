@@ -1,15 +1,17 @@
 /**
  * Marks which tabs of this browser are part of the current sign-in.
  *
- * The refresh cookie is a session cookie. The browser sends it on a reload,
- * a new tab, and a typed address in the same browser, and drops it when the
- * browser closes. That cookie is what keeps the person signed in. This
- * module must not treat a missing tab marker as a reason to revoke it.
+ * The refresh cookie is a session cookie, but a browser often keeps running
+ * after its last window closes (macOS, background apps, an installed app
+ * window) or restores session cookies ("continue where you left off"). So the
+ * cookie alone is not proof that AccuQual is still open.
  *
- * A reload or a typed address in the same tab keeps the marker in
- * sessionStorage. A new tab does not, but a recent heartbeat from another
- * tab shows the browser is still open. The 30-day trusted-browser cookie
- * is not consulted here and is not a sign-in.
+ * Each open tab holds a browser lock, answers pings, and writes a heartbeat.
+ * A reload or typed address in the same tab, or a new tab while another
+ * AccuQual tab is open, keeps the sign-in. A visit after every AccuQual tab
+ * closed ends it: useAuthBootstrap revokes the cookie on the server (audited)
+ * and shows the sign-in page. The 30-day trusted-browser cookie is not
+ * consulted here and is not a sign-in.
  */
 
 export const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
@@ -115,11 +117,17 @@ export function coldLoadKeepsSession(input: { refreshCookieAccepted: boolean; na
 }
 
 /**
- * Continue when this tab, or another tab in this browser, still looks open.
- * A reload, a typed address, and back/forward in the same tab keep the
- * session marker. A new tab joins a recent heartbeat from another tab.
- * An empty visit with no recent tab does not continue. This must not be
- * used to revoke a session cookie the browser is still sending.
+ * Continue only when this visit belongs to a browser window that still has
+ * AccuQual open:
+ * - the same tab reloading or loading a typed address (sessionStorage marker
+ *   plus a pagehide stamp from a few seconds ago),
+ * - the same tab coming back with back/forward or after the browser discarded it,
+ *   while its last heartbeat is recent,
+ * - or another open AccuQual tab that holds the browser lock or answers a ping.
+ * An old heartbeat from a tab that has since closed does not count, so closing
+ * every AccuQual tab ends the sign-in even when the browser itself keeps running
+ * (and keeps its session cookies). A browser that restores tabs and their
+ * sessionStorage after closing is caught by the stamp age.
  */
 export function decideBrowserSession(input: BrowserSessionInput): BrowserSessionDecision {
   if (input.peerAlive) return "continue";
@@ -127,19 +135,18 @@ export function decideBrowserSession(input: BrowserSessionInput): BrowserSession
   const stampAge = ageOf(input.reloadStamp, input.now);
   const ownBeat = input.tabId != null ? input.beats[input.tabId] : undefined;
   const ownAge = ownBeat == null ? Infinity : input.now - ownBeat;
-  const sameTab = input.hasSessionMarker;
-  const freshSameTab = stampAge <= HEARTBEAT_STALE_MS || ownAge <= HEARTBEAT_STALE_MS;
-
-  // Same-tab full loads keep sessionStorage. That includes a reload and an
-  // address typed in this tab (navigation type "navigate").
-  if (sameTab && freshSameTab && (input.navigation === "reload" || input.navigation === "navigate" || input.navigation === "back_forward" || input.navigation === "unknown" || input.resumedDocument)) {
-    return "continue";
+  if (input.hasSessionMarker) {
+    // Reload or a typed address in this tab: pagehide stamped the time just before.
+    // A missed stamp falls back to this tab's own heartbeat, which is at most one interval old while it is open.
+    if ((input.navigation === "reload" || input.navigation === "navigate" || input.navigation === "unknown") && Math.min(stampAge, ownAge) <= RELOAD_GRACE_MS + HEARTBEAT_INTERVAL_MS) return "continue";
+    if ((input.navigation === "back_forward" || input.resumedDocument) && Math.min(stampAge, ownAge) <= HEARTBEAT_STALE_MS) return "continue";
   }
 
-  // A new tab has no session marker. A heartbeat from another tab in this
-  // browser, still inside the window, means the browser is still open.
   const otherAge = freshestOtherBeatAge(input.beats, input.tabId, input.now);
-  if (otherAge <= HEARTBEAT_STALE_MS) return "continue";
+  // No way to ask other tabs: a recent heartbeat is the only signal.
+  if (!input.peerCheckAvailable) return otherAge <= HEARTBEAT_STALE_MS ? "continue" : "sign-in";
+  // A tab that just started may not hold the lock yet.
+  if (otherAge <= LOCK_ACQUIRE_GRACE_MS) return "continue";
   return "sign-in";
 }
 
@@ -316,11 +323,7 @@ function holdLock(): void {
   });
 }
 
-/**
- * Whether this document still looks like an open tab. A cold page load
- * does not use this to revoke the session cookie — the cookie itself is
- * the sign-in.
- */
+/** Whether this page load belongs to a still-open AccuQual window. Call before using the refresh cookie. */
 export async function evaluateBrowserSessionOnLoad(now = Date.now()): Promise<BrowserSessionDecision> {
   installListeners();
   const base = readLiveInput(now);
@@ -329,10 +332,10 @@ export async function evaluateBrowserSessionOnLoad(now = Date.now()): Promise<Br
   const lock = await peerLockHeld();
   if (lock === true) return "continue";
 
-  const otherAge = freshestOtherBeatAge(base.beats, base.tabId, base.now);
   const canPing = typeof BroadcastChannel !== "undefined";
   let peerAlive = false;
-  if (canPing && otherAge <= HEARTBEAT_STALE_MS) peerAlive = await pingPeers(PEER_PING_MS);
+  // Only needed when the lock list cannot be read. An open tab answers right away.
+  if (canPing && lock === null) peerAlive = await pingPeers(PEER_PING_MS);
 
   return decideBrowserSession({
     ...base,

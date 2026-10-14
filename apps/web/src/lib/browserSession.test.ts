@@ -155,7 +155,7 @@ describe("browser session persistence", () => {
     );
   });
 
-  it("a new tab stays signed in while another tab's heartbeat is still new", () => {
+  it("a new tab after the last AccuQual tab closed asks for the password, even though that tab's heartbeat is recent", () => {
     assert.equal(
       decideBrowserSession(
         input({
@@ -166,7 +166,7 @@ describe("browser session persistence", () => {
           peerCheckAvailable: true,
         }),
       ),
-      "continue",
+      "sign-in",
     );
   });
 
@@ -296,7 +296,7 @@ describe("browser session persistence", () => {
     assert.deepEqual(record.beats, { "tab-a": NOW - 40 });
   });
 
-  it("a new tab does not see the session marker, and a recent heartbeat from another tab keeps the sign-in", () => {
+  it("a new tab does not see the session marker, and a recent heartbeat from a closed tab does not keep the sign-in", () => {
     const session = memoryStorage();
     const local = memoryStorage();
     writeBeat(local, "tab-a", NOW - 30_000);
@@ -311,7 +311,29 @@ describe("browser session persistence", () => {
         peerCheckAvailable: true,
         ...record,
       }),
-      "continue",
+      "sign-in",
     );
+  });
+
+  it("closing the window and coming back later asks for the password even if the browser restored the tab and its marker", () => {
+    assert.equal(
+      decideBrowserSession(
+        input({ navigation: "reload", tabId: "tab-a", hasSessionMarker: true, reloadStamp: NOW - 5 * 60_000, beats: { "tab-a": NOW - 5 * 60_000 } }),
+      ),
+      "sign-in",
+    );
+    assert.equal(
+      decideBrowserSession(input({ navigation: "navigate", tabId: "tab-a", hasSessionMarker: true, reloadStamp: NOW - 60_000, beats: { "tab-a": NOW - 60_000 } })),
+      "sign-in",
+    );
+  });
+
+  it("a reload and a typed address in the same tab stay signed in", () => {
+    assert.equal(decideBrowserSession(input({ navigation: "reload", tabId: "tab-a", hasSessionMarker: true, reloadStamp: NOW - 800 })), "continue");
+    assert.equal(decideBrowserSession(input({ navigation: "navigate", tabId: "tab-a", hasSessionMarker: true, reloadStamp: NOW - 2_000 })), "continue");
+  });
+
+  it("a new tab joins while another AccuQual tab is open", () => {
+    assert.equal(decideBrowserSession(input({ beats: { "tab-a": NOW - 40_000 }, peerAlive: true })), "continue");
   });
 });

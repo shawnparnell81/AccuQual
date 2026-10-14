@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, refreshSession } from "../api/client";
+import { abandonRestoredBrowserSession, apiClient, refreshSession } from "../api/client";
 import { bootstrapSessionDecision } from "../api/sessionRefresh";
-import { adoptBrowserSession, releaseBrowserSessionTab } from "../lib/browserSession";
+import { adoptBrowserSession, evaluateBrowserSessionOnLoad, releaseBrowserSessionTab } from "../lib/browserSession";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
@@ -86,11 +86,11 @@ export function useCurrentCompany() {
 
 /**
  * A page load starts with no access token in memory (see authStore.ts).
- * The httpOnly refresh cookie is still sent on a reload, a new tab, and a
- * typed address in the same browser. Closing the browser drops that cookie,
- * so the next visit is signed out. This always tries the cookie. It does
- * not revoke it because a tab marker is missing. The trusted-browser cookie
- * is not cleared. Runs once per app load, before ProtectedRoute has to
+ * The httpOnly refresh cookie is used on a reload, a typed address in the
+ * same tab, and a new tab while another AccuQual tab is open. A visit after
+ * every AccuQual tab closed revokes it and shows the sign-in page, even if
+ * the browser kept or restored the cookie (see browserSession.ts). The
+ * trusted-browser cookie is not cleared. Runs once per app load, before ProtectedRoute has to
  * decide whether to bounce to /login.
  */
 export function useAuthBootstrap() {
@@ -117,6 +117,21 @@ export function useAuthBootstrap() {
       setBootstrapped();
     };
     void (async () => {
+      // Closing every AccuQual tab ends the sign-in, even when the browser keeps
+      // running or restores its session cookie. The cookie is revoked on the
+      // server (recorded in login history) before the sign-in page shows.
+      let visit: "continue" | "sign-in" = "sign-in";
+      try {
+        visit = await evaluateBrowserSessionOnLoad();
+      } catch {
+        visit = "continue";
+      }
+      if (cancelled) return;
+      if (visit === "sign-in") {
+        await abandonRestoredBrowserSession();
+        finishSignedOut();
+        return;
+      }
       try {
         const result = await refreshSession("bootstrap");
         if (cancelled) return;
