@@ -89,7 +89,7 @@ export function FaiQueuePage() {
       <div className="flex flex-wrap gap-3 text-sm">
         <Link to="/fai/sources" className="text-primary hover:underline">Source list</Link>
         <Link to="/fai/pull" className="text-primary hover:underline">Yearly pull</Link>
-        <Link to="/iso-forms/frm-fai-001" className="text-primary hover:underline">First Article blank</Link>
+        <Link to="/blank-forms/start/frm-fai-001" className="text-primary hover:underline">First Article blank</Link>
       </div>
 
       {open && (

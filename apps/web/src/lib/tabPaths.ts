@@ -79,7 +79,6 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/audits\/\d+$/,
   /^\/folders\/[^/]+$/,
   /^\/form-folders\/[^/]+$/,
-  /^\/blank-forms\/start\/[^/]+$/,
   /^\/blank-forms\/[^/]+$/,
   /^\/documents\/\d+$/,
   /^\/training\/employee\/\d+$/,
@@ -126,6 +125,8 @@ export function normalizeTabPath(path: string): string {
 /** True when this path still opens a real page (not a redirect left behind for an old bookmark). */
 export function isLiveTabPath(path: string): boolean {
   const pathname = normalizeTabPath(path);
+  // A blank start page hands off to a new form at once. As a tab, returning to it started another copy (the bounce).
+  if (isTransientTabPath(pathname)) return false;
   if (EXACT.has(pathname)) return true;
   if (ONE_SEGMENT.some((pattern) => pattern.test(pathname))) return true;
   return sectionPathIsLive?.(pathname) ?? false;
@@ -135,4 +136,9 @@ export function selectRestoredTabs<T extends SavedTab>(tabs: T[], activeId: stri
   const live = tabs.filter((tab) => typeof tab?.path === "string" && isLiveTabPath(tab.path));
   const active = live.some((tab) => tab.id === activeId) ? activeId : (live[0]?.id ?? null);
   return { tabs: live, activeId: active };
+}
+
+/** Pages that only redirect somewhere else and must never become, or be restored as, a tab. */
+export function isTransientTabPath(path: string): boolean {
+  return /^\/blank-forms\/start\/[^/]+$/.test(normalizeTabPath(path));
 }

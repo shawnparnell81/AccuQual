@@ -111,7 +111,8 @@ export function IsoFormDetailPage() {
   const requestKind = changeRequestByFormType(resolvedType);
   const ecrView = useQuery({
     queryKey: ["change-request-workflow", recordId],
-    enabled: requestKind != null,
+    // An unsaved blank has no id yet; asking for /NaN/workflow only fails and refetches.
+    enabled: requestKind != null && Number.isFinite(recordId) && recordId > 0,
     queryFn: async () => (await apiClient.get<EcrWorkflowView>(`/iso-quality-forms/${recordId}/workflow`)).data,
   });
   const ecrTransition = useMutation({
