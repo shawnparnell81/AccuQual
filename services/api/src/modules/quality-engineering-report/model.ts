@@ -4,7 +4,10 @@ export const DOCUMENT_ID = "TMP-ENG-001";
 export const DOCUMENT_REVISION = "C";
 export const DOCUMENT_TITLE = "Monthly Engineering Development Report";
 
-import { normalizeFinancialEntries, resolveMonthMoney, type BookGate, type FinancialEntry, type MoneySource } from "./financials.js";
+import { normalizeFinancialEntries, resolveMonthMoney, type BookGate, type FinancialEntry, type MonthFigures, type MoneySource } from "./financials.js";
+
+/** Per-month totals of the imported files chosen on the report, keyed "YYYY-MM". */
+export type ImportedMonthTotals = Record<string, MonthFigures & { claims: number | null }>;
 
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
 
@@ -52,13 +55,18 @@ export function sectionKeyForHeading(heading: string | null | undefined): string
     [/ncr|\bcars\b|rpn/, "6.6"],
     [/recall/, "6.7"],
     [/tech line|collabtic/, "6.8"],
-    [/email issue/, "6.10"],
-    [/field question/, "6.11"],
-    [/fitment/, "6.12"],
-    [/product information/, "6.13"],
-    [/pallet/, "6.14"],
+    [/email issue/, "6.9"],
+    [/field question/, "6.10"],
+    [/fitment/, "6.11"],
+    [/product information/, "6.12"],
+    [/pallet/, "6.13"],
   ];
   return rules.find(([pattern]) => pattern.test(text))?.[1] ?? null;
+}
+
+/** A stored picture's section, worked out again from its Word heading so a renumbered report still places it. */
+export function currentImageSectionKey(section: string | null, stored: string | null): string | null {
+  return section ? sectionKeyForHeading(section) : stored;
 }
 
 export interface EngineeringNarrative {
@@ -526,6 +534,7 @@ export function assembleReport(input: {
   recipients?: string[];
   importedDatasets?: ImportedDatasetLine[];
   importsAvailable?: boolean;
+  importedMonths?: ImportedMonthTotals;
 }): EngineeringReportView {
   const { year, month, narrative, supplier, live } = input;
   const selected = monthKey(year, month);
@@ -535,14 +544,19 @@ export function assembleReport(input: {
   const selectedWarranty = warranty.get(selected);
   const selectedMetrics = metrics.get(selected);
   const entries = new Map(narrative.financialEntries.map((entry) => [entry.month, entry]));
-  const moneyRows = months.map((key) =>
-    resolveMonthMoney({
+  const reportedMoney = byMonth(supplier.financials);
+  const importedMonths = input.importedMonths ?? {};
+  const moneyRows = months.map((key) => {
+    const reported = reportedMoney.get(key);
+    return resolveMonthMoney({
       month: key,
       labor: live.laborBooks,
       warranty: live.warrantyBooks,
       entry: entries.get(key),
-    }),
-  );
+      reported: reported ? { total: reported.totalAmount, parts: reported.partsAmount, labor: reported.laborAmount } : null,
+      imported: importedMonths[key] ?? null,
+    });
+  });
   const selectedMoney = moneyRows[moneyRows.length - 1] ?? resolveMonthMoney({ month: selected, labor: live.laborBooks, warranty: live.warrantyBooks });
 
   const rawClaimCount = executiveNumber(supplier.executive, "raw_claim_count");
@@ -554,10 +568,11 @@ export function assembleReport(input: {
   const deniedLaborSavingsDerived = givenSavings == null && claimsDenied != null && flatRate != null;
 
   const ratioFor = (index: number): string | null => {
+    const written = warranty.get(months[index]!)?.laborToPartsRatio?.trim();
+    if (written) return written;
     const moneyRow = moneyRows[index];
     if (!moneyRow || moneyRow.labor.value == null || moneyRow.warranty.value == null || moneyRow.warranty.value === 0) return null;
-    const ratio = Math.round((moneyRow.labor.value / moneyRow.warranty.value) * 100) / 100;
-    return `${ratio}:1`;
+    return `${(moneyRow.labor.value / moneyRow.warranty.value).toFixed(2)}:1`;
   };
 
   const monthBook = (gate: BookGate) => {
@@ -612,7 +627,7 @@ export function assembleReport(input: {
     tables: {
       months: months.map((key) => ({ key, label: monthLabel(key) })),
       metrics: {
-        totalClaims: months.map((key) => metrics.get(key)?.totalClaims ?? null),
+        totalClaims: months.map((key) => metrics.get(key)?.totalClaims ?? importedMonths[key]?.claims ?? null),
         totalProductAlerts: months.map((key) => metrics.get(key)?.totalProductAlerts ?? null),
       },
       financials: {
@@ -720,7 +735,7 @@ export function asReportImages(value: unknown): ReportImage[] {
     out.push({
       attachmentId: row.attachmentId,
       section: typeof row.section === "string" ? row.section : null,
-      sectionKey: typeof row.sectionKey === "string" ? row.sectionKey : null,
+      sectionKey: currentImageSectionKey(typeof row.section === "string" ? row.section : null, typeof row.sectionKey === "string" ? row.sectionKey : null),
       order: typeof row.order === "number" ? row.order : out.length + 1,
       caption: typeof row.caption === "string" ? row.caption : "",
       fileName: typeof row.fileName === "string" ? row.fileName : "",

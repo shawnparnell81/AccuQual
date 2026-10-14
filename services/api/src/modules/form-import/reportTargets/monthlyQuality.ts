@@ -36,10 +36,15 @@ const MONTH_NUM: Record<string, number> = {
   december: 12,
 };
 
-function monthKeyFor(monthName: string, year: number): string | null {
+/**
+ * A trend-table header names months without a year. With the report month known, a month later in the
+ * calendar than the report month belongs to the year before (a January report shows Aug..Jan).
+ */
+function monthKeyFor(monthName: string, year: number, reportMonth?: number): string | null {
   const num = MONTH_NUM[monthName.trim().toLowerCase()];
   if (!num) return null;
-  return `${year}-${String(num).padStart(2, "0")}`;
+  const y = reportMonth != null && num > reportMonth ? year - 1 : year;
+  return `${y}-${String(num).padStart(2, "0")}`;
 }
 
 /** parseNumber already strips "$" and ",". This also drops a trailing "Days"/"days". */
@@ -390,13 +395,14 @@ function fillMonthRows(
   byMonth: Map<string, Record<string, unknown>>,
   rowMap: Record<string, string>,
   numeric: Set<string>,
+  reportMonth?: number,
 ): void {
   const header = rows[0] ?? [];
   for (const row of rows.slice(1)) {
     const field = rowMap[(row[0] ?? "").trim().toLowerCase()];
     if (!field) continue;
     header.slice(1).forEach((monthName, index) => {
-      const key = monthKeyFor(monthName, year);
+      const key = monthKeyFor(monthName, year, reportMonth);
       if (!key) return;
       const entry = byMonth.get(key) ?? {};
       const raw = row[index + 1] ?? "";
@@ -430,13 +436,13 @@ export function ncrRowsFromTable(rows: string[][]): NcrReportRow[] {
     .filter((row) => Object.values(row).some((value) => value !== ""));
 }
 
-export function toSupplierData(values: Record<string, string | string[][] | null | undefined>, year: number): SupplierData {
+export function toSupplierData(values: Record<string, string | string[][] | null | undefined>, year: number, reportMonth?: number): SupplierData {
   const data = emptySupplierData();
 
   const monthlyRows = asTable(values["monthly_metrics"]);
   if (monthlyRows) {
     const byMonth = new Map<string, Record<string, unknown>>();
-    fillMonthRows(monthlyRows, year, byMonth, { "total claims": "totalClaims", "total product alerts": "totalProductAlerts" }, new Set(["totalClaims", "totalProductAlerts"]));
+    fillMonthRows(monthlyRows, year, byMonth, { "total claims": "totalClaims", "total product alerts": "totalProductAlerts" }, new Set(["totalClaims", "totalProductAlerts"]), reportMonth);
     const metrics: MonthMetric[] = [];
     for (const [month, entry] of byMonth) {
       metrics.push({ month, totalClaims: (entry.totalClaims as number | null) ?? null, totalProductAlerts: (entry.totalProductAlerts as number | null) ?? null });
@@ -453,6 +459,7 @@ export function toSupplierData(values: Record<string, string | string[][] | null
       byMonth,
       { "total amount requested": "totalAmount", "parts amount requested": "partsAmount", "labor amount requested": "laborAmount" },
       new Set(["totalAmount", "partsAmount", "laborAmount"]),
+      reportMonth,
     );
     const financials: FinancialMonth[] = [];
     for (const [month, entry] of byMonth) {
@@ -473,7 +480,7 @@ export function toSupplierData(values: Record<string, string | string[][] | null
     for (const row of warrantyRows.slice(1)) {
       const label = (row[0] ?? "").trim().toLowerCase();
       header.slice(1).forEach((monthName, index) => {
-        const key = monthKeyFor(monthName, year);
+        const key = monthKeyFor(monthName, year, reportMonth);
         if (!key) return;
         const entry = byMonth.get(key) ?? { laborToPartsRatio: null, mttfDays: null, medianDays: null };
         const raw = (row[index + 1] ?? "").trim();

@@ -23,7 +23,14 @@ export interface FinancialEntry {
   totalAmount: string;
 }
 
-export type MoneySource = "labor_claims" | "warranty" | "entered" | "combined" | "empty" | "no_access";
+export type MoneySource = "labor_claims" | "warranty" | "entered" | "combined" | "empty" | "no_access" | "report" | "imported";
+
+/** Dollars for one month from an uploaded report or an imported file. Null where that source has no figure. */
+export interface MonthFigures {
+  total: number | null;
+  parts: number | null;
+  labor: number | null;
+}
 
 export interface MoneyLine {
   value: number | null;
@@ -65,7 +72,32 @@ export function resolveMonthMoney(input: {
   labor: BookGate;
   warranty: BookGate;
   entry?: FinancialEntry;
+  /** The uploaded monthly report's own Financials table. It is the company's figure, so it wins. */
+  reported?: MonthFigures | null;
+  /** Totals of a chosen imported file (O'Reilly, NAPA) for this month. */
+  imported?: MonthFigures | null;
 }): { labor: MoneyLine; warranty: MoneyLine; total: MoneyLine } {
+  const outside = (key: keyof MonthFigures): MoneyLine | null => {
+    const reported = input.reported?.[key];
+    if (reported != null) return { value: round2(reported), source: "report", editable: false };
+    const imported = input.imported?.[key];
+    if (imported != null) return { value: round2(imported), source: "imported", editable: false };
+    return null;
+  };
+  const outLabor = outside("labor");
+  const outParts = outside("parts");
+  const outTotal = outside("total");
+  if (outLabor || outParts || outTotal) {
+    const base = resolveMonthMoney({ month: input.month, labor: input.labor, warranty: input.warranty, entry: input.entry });
+    const labor = outLabor ?? base.labor;
+    const warranty = outParts ?? base.warranty;
+    const total =
+      outTotal ??
+      (labor.value != null && warranty.value != null
+        ? { value: round2(labor.value + warranty.value), source: (outLabor ?? outParts)!.source, editable: false }
+        : base.total);
+    return { labor, warranty, total };
+  }
   const laborBook = monthBook(input.labor, input.month);
   const warrantyBook = monthBook(input.warranty, input.month);
   const labor = lineFrom(laborBook?.cost ?? null, parseEnteredAmount(input.entry?.laborAmount), "labor_claims", input.labor.status === "no_access");
@@ -92,6 +124,8 @@ export function financialSourceLabel(source: MoneySource): string {
   if (source === "combined") return "Labor Claims + Warranty";
   if (source === "entered") return "Entered";
   if (source === "no_access") return "No access";
+  if (source === "report") return "Uploaded report";
+  if (source === "imported") return "Imported file";
   return "";
 }
 

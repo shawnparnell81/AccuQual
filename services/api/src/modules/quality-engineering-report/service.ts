@@ -4,6 +4,7 @@ import { roleHasPermission } from "../roles/rolePermissions.js";
 import { QUALITY_REPORT_DELETE_PERMISSION } from "../roles/roleAccess.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { extractFileWithImages, type ExtractedImage } from "../form-import/extract.js";
+import { importedMonthTotals } from "./importMonths.js";
 import { proposeMonthlyQuality, toSupplierData } from "../form-import/reportTargets/monthlyQuality.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -23,6 +24,8 @@ import {
   emptyNarrative,
   emptySupplierData,
   MONTH_NAMES,
+  monthKey,
+  monthWindow,
   mergeUploadNarrative,
   normalizeNarrative,
   type EngineeringNarrative,
@@ -77,6 +80,39 @@ function asSupplier(value: unknown): SupplierData {
     notes: Array.isArray(row.notes) ? row.notes : [],
     ncrTable: [],
   };
+}
+
+/**
+ * Trend months this report's own upload did not cover are filled from the saved report of that month
+ * (its own figures for its own month). A month the upload did cover keeps the upload's numbers.
+ */
+async function withEarlierMonths(db: Db, supplier: SupplierData, year: number, month: number): Promise<SupplierData> {
+  const window = monthWindow(year, month).slice(0, -1);
+  const missing = window.filter(
+    (key) => !supplier.monthlyMetrics.some((row) => row.month === key) || !supplier.financials.some((row) => row.month === key) || !supplier.warrantyMetrics.some((row) => row.month === key),
+  );
+  if (missing.length === 0) return supplier;
+  const next: SupplierData = { ...supplier, monthlyMetrics: [...supplier.monthlyMetrics], financials: [...supplier.financials], warrantyMetrics: [...supplier.warrantyMetrics] };
+  for (const key of missing) {
+    const [y, m] = key.split("-").map(Number) as [number, number];
+    const other = await loadRow(db, y, m);
+    if (!other) continue;
+    const saved = asSupplier(other.supplierData);
+    const own = <T extends { month: string }>(rows: T[]) => rows.find((row) => row.month === key);
+    if (!next.monthlyMetrics.some((row) => row.month === key)) {
+      const found = own(saved.monthlyMetrics);
+      if (found) next.monthlyMetrics.push(found);
+    }
+    if (!next.financials.some((row) => row.month === key)) {
+      const found = own(saved.financials);
+      if (found) next.financials.push(found);
+    }
+    if (!next.warrantyMetrics.some((row) => row.month === key)) {
+      const found = own(saved.warrantyMetrics);
+      if (found) next.warrantyMetrics.push(found);
+    }
+  }
+  return next;
 }
 
 async function loadRow(db: Db, year: number, month: number) {
@@ -146,6 +182,7 @@ export async function buildEngineeringReport(
   const access = await engineeringAccess(db, input.user);
   if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
   const row = await loadRow(db, input.year, input.month);
+  const supplier = await withEarlierMonths(db, asSupplier(row?.supplierData), input.year, input.month);
   const live = await pullLive(db, { year: input.year, month: input.month, siteIds: input.siteIds, plantId: input.plantId ?? null, level: access.level });
   const narrative = normalizeNarrative(row?.narrative);
   const imported = await loadImportSources(db, narrative.importPulls, input.plantId ?? null);
@@ -153,13 +190,14 @@ export async function buildEngineeringReport(
     year: input.year,
     month: input.month,
     narrative,
-    supplier: asSupplier(row?.supplierData),
+    supplier,
     live,
     saved: row != null,
     uploadFileName: row?.uploadFileName ?? null,
     canEdit: access.canEdit,
     recipients: readStoredRecipients(row?.recipients),
     importedDatasets: resolveImportPulls(narrative.importPulls, imported.sources),
+    importedMonths: importedMonthTotals(narrative.importPulls, imported.sources, monthWindow(input.year, input.month), monthKey(input.year, input.month)),
     importsAvailable: imported.available,
   });
 }
@@ -386,7 +424,7 @@ export async function uploadEngineeringSupplier(
     // Same reader and rules as Import from file (no AI): Word headings, tables, text and pictures.
     const extracted = await extractFileWithImages(input.buffer, input.fileName);
     const { proposals, warnings: found } = proposeMonthlyQuality(extracted.file);
-    supplierData = toSupplierData(Object.fromEntries(proposals.map((proposal) => [proposal.key, proposal.value])), input.year);
+    supplierData = toSupplierData(Object.fromEntries(proposals.map((proposal) => [proposal.key, proposal.value])), input.year, input.month);
     warnings = found;
     images = extracted.images;
   } else {

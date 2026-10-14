@@ -21,7 +21,7 @@ export interface ReportImage {
 }
 
 /** The section numbers the report page draws. A picture whose section is not one of these goes to Images. */
-export const REPORT_SECTION_KEYS = new Set(["6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "6.7", "6.8", "6.10", "6.11", "6.12", "6.13", "6.14"]);
+export const REPORT_SECTION_KEYS = new Set(["6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "6.7", "6.8", "6.9", "6.10", "6.11", "6.12", "6.13"]);
 export const IMAGES_SECTION = "7";
 
 /** Pictures for one section, in document order. Section "7" takes every picture no other section claims. */
