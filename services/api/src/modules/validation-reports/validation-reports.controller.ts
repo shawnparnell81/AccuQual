@@ -140,6 +140,11 @@ const SIGNATURE_COPY: Record<string, Record<string, string>> = {
     authorizedSignature: "I certify that this regular gas lift support validation is accurate and I authorize the disposition.",
     furtherSignature: "I certify that the further review of this regular gas lift support is accurate and I authorize the later disposition.",
   },
+  csa: { authorizedSignature: "I certify that I reviewed this CSA validation and I approve the conditional pass." },
+  fuel_pump: {
+    authorizedSignature: "I certify that this fuel pump validation is accurate and I authorize the disposition.",
+    furtherSignature: "I certify that the further review of this fuel pump is accurate and I authorize the later disposition.",
+  },
   shock: {
     authorizedSignature: "I certify that this shock validation is accurate and I approve it.",
     furtherSignature: "I certify that I reviewed this shock and I approve the conditional pass.",

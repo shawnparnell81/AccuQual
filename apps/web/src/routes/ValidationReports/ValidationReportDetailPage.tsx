@@ -374,6 +374,10 @@ export function ValidationReportDetailPage() {
             onCreateNcr={(addr) => void createNcr(failures.filter((row) => row.addr === addr))}
             documentNumber={documentNumber}
             revision={rev}
+            signatures={{ authorizedSignature: authorizedSignatureOf(report.data), furtherSignature: furtherSignatureOf(report.data) }}
+            onSign={async (path, pin) => {
+              await signReport.mutateAsync({ id: reportId, ...(path === "furtherSignature" ? { field: "furtherSignature" } : {}), pin, certified: true });
+            }}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : formType === "air_strut" ? (
@@ -454,6 +458,10 @@ export function ValidationReportDetailPage() {
             onCreateNcr={(addr) => void createNcr(failures.filter((row) => row.addr === addr))}
             documentNumber={documentNumber}
             revision={rev}
+            signatures={{ authorizedSignature: authorizedSignatureOf(report.data), furtherSignature: furtherSignatureOf(report.data) }}
+            onSign={async (path, pin) => {
+              await signReport.mutateAsync({ id: reportId, ...(path === "furtherSignature" ? { field: "furtherSignature" } : {}), pin, certified: true });
+            }}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         )}

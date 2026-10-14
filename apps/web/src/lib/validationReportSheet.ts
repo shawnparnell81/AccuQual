@@ -232,3 +232,8 @@ export function buildSheetRows(): SheetCell[][] {
 }
 
 export const CHECKBOX_ADDRS = CHECKS;
+
+/** PIN sign-off on the CSA sheet: the Conditional Pass engineer box (G52). Signed into data under `path`. */
+export const CSA_SIGNATURES = [
+  { addr: "G52", path: "authorizedSignature", certify: "I certify that I reviewed this CSA validation and I approve the conditional pass." },
+] as const;
