@@ -1,78 +1,93 @@
 import { describe, expect, it } from "vitest";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder } from "../../src/modules/form-builder/access.js";
 import { openFillCopy, saveFillAnswers, type BuiltTemplate } from "../../src/modules/form-builder/fillCopy.js";
-import { bumpRevision, decideStructureSave } from "../../src/modules/form-builder/revision.js";
+import { decideStructureSave } from "../../src/modules/form-builder/revision.js";
 import { roleNameGetsFormBuilderSeed } from "../../src/modules/form-builder/seedNames.js";
 
 const grid = { kind: "grid", sheets: [{ name: "Sheet1", cells: [] }] };
 const edited = { kind: "grid", sheets: [{ name: "Sheet1", cells: [{ value: "x" }] }] };
 
 describe("form builder revision", () => {
-  it("bumps the letter only when a published structure changes", () => {
-    expect(bumpRevision("A")).toBe("B");
-    expect(bumpRevision("Z")).toBe("AA");
+  const published = { status: "published" as const, revision: "B", publishedStructure: grid, nextStructure: edited };
 
-    const draft = decideStructureSave({
-      mode: "autosave",
-      status: "draft",
-      revision: "A",
-      publishedStructure: null,
-      nextStructure: edited,
-    });
-    expect(draft.bumped).toBe(false);
-    expect(draft.revision).toBe("A");
-    expect(draft.recordHistory).toBe(false);
+  it("keeps the REV on autosave and on a draft save", () => {
+    const autosave = decideStructureSave({ mode: "autosave", status: "draft", revision: "A", publishedStructure: null, nextStructure: edited });
+    expect(autosave.revision).toBe("A");
+    expect(autosave.change).toBeNull();
+    expect(autosave.recordHistory).toBe(false);
 
-    const first = decideStructureSave({
-      mode: "publish",
-      status: "draft",
-      revision: "A",
-      publishedStructure: null,
-      nextStructure: grid,
-    });
-    expect(first.bumped).toBe(false);
-    expect(first.revision).toBe("A");
-    expect(first.status).toBe("published");
-    expect(first.recordHistory).toBe(true);
-
-    const same = decideStructureSave({
-      mode: "save",
-      status: "published",
-      revision: "A",
-      publishedStructure: grid,
-      nextStructure: grid,
-    });
-    expect(same.bumped).toBe(false);
-    expect(same.recordHistory).toBe(false);
-
-    const changed = decideStructureSave({
-      mode: "publish",
-      status: "published",
-      revision: "A",
-      publishedStructure: grid,
-      nextStructure: edited,
-    });
-    expect(changed.bumped).toBe(true);
-    expect(changed.revision).toBe("B");
-    expect(changed.recordHistory).toBe(true);
+    const save = decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: edited });
+    expect(save.revision).toBe("A");
+    expect(save.change).toBeNull();
+    expect(save.status).toBe("draft");
+    expect(save.recordHistory).toBe(true);
   });
 
-  it("bumps the revision when a published document header changes", () => {
-    const published = { kind: "document", html: "<p>Body</p>", showLogo: true, showPageNumbers: true, header: null, footer: null };
+  it("lets a draft take the REV a person typed, and keeps it on the first publish", () => {
+    const typed = decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: grid, newRevision: " 01 " });
+    expect(typed.revision).toBe("01");
+    const first = decideStructureSave({ mode: "publish", status: "draft", revision: "01", publishedStructure: null, nextStructure: grid });
+    expect(first.revision).toBe("01");
+    expect(first.change).toBeNull();
+    expect(first.status).toBe("published");
+    expect(first.recordHistory).toBe(true);
+    expect(first.publishedStructure).toEqual(grid);
+    expect(() => decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: grid, newRevision: "   " })).toThrow();
+    expect(() => decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: grid, newRevision: "ABCDEFGHIJK" })).toThrow(/at most 10/);
+  });
+
+  it("rejects a structural change to a published form without a new REV", () => {
+    for (const mode of ["save", "publish"] as const) {
+      expect(() => decideStructureSave({ ...published, mode, changeDescription: "Added a row" })).toThrow("Enter the new revision. It must be different from REV B.");
+      expect(() => decideStructureSave({ ...published, mode, newRevision: "   ", changeDescription: "Added a row" })).toThrow("Enter the new revision. It must be different from REV B.");
+    }
+  });
+
+  it("rejects the same REV, in any letter case", () => {
+    for (const typed of ["B", "b", " B "]) {
+      expect(() => decideStructureSave({ ...published, mode: "save", newRevision: typed, changeDescription: "Added a row" })).toThrow("different from REV B");
+    }
+  });
+
+  it("rejects a missing description and a REV that is too long", () => {
+    expect(() => decideStructureSave({ ...published, mode: "save", newRevision: "C" })).toThrow("Describe what changed");
+    expect(() => decideStructureSave({ ...published, mode: "save", newRevision: "C", changeDescription: "  " })).toThrow("Describe what changed");
+    expect(() => decideStructureSave({ ...published, mode: "save", newRevision: "C".repeat(11), changeDescription: "Added a row" })).toThrow(/at most 10/);
+  });
+
+  it("applies a valid new REV exactly as typed", () => {
+    for (const mode of ["save", "publish"] as const) {
+      const decision = decideStructureSave({ ...published, mode, newRevision: " C2 ", changeDescription: " Added a row " });
+      expect(decision.revision).toBe("C2");
+      expect(decision.change).toEqual({ from: "B", to: "C2", description: "Added a row" });
+      expect(decision.recordHistory).toBe(true);
+      expect(decision.status).toBe("published");
+      expect(decision.publishedStructure).toEqual(edited);
+    }
+  });
+
+  it("never moves the REV by itself", () => {
+    const same = decideStructureSave({ ...published, mode: "save", nextStructure: grid });
+    expect(same.revision).toBe("B");
+    expect(same.change).toBeNull();
+    expect(same.recordHistory).toBe(false);
+    const autosave = decideStructureSave({ ...published, mode: "autosave" });
+    expect(autosave.revision).toBe("B");
+    expect(autosave.publishedStructure).toEqual(grid);
+    // A typed REV is ignored when the published structure did not change.
+    expect(decideStructureSave({ ...published, mode: "publish", nextStructure: grid, newRevision: "Z" }).revision).toBe("B");
+  });
+
+  it("asks for a new REV when a published document header changes", () => {
+    const doc = { kind: "document", html: "<p>Body</p>", showLogo: true, showPageNumbers: true, header: null, footer: null };
     const withHeader = {
-      ...published,
+      ...doc,
       header: { differentFirstPage: false, differentOddEven: false, defaultHtml: "<p>ACME Quality</p>", firstHtml: "", evenHtml: "" },
     };
-    const decision = decideStructureSave({
-      mode: "save",
-      status: "published",
-      revision: "A",
-      publishedStructure: published,
-      nextStructure: withHeader,
-    });
-    expect(decision.bumped).toBe(true);
-    expect(decision.revision).toBe("B");
-    expect(decision.recordHistory).toBe(true);
+    const base = { mode: "save" as const, status: "published" as const, revision: "A", publishedStructure: doc, nextStructure: withHeader };
+    expect(() => decideStructureSave(base)).toThrow("different from REV A");
+    const decision = decideStructureSave({ ...base, newRevision: "B", changeDescription: "Added the header" });
+    expect(decision.change?.to).toBe("B");
     expect(decision.publishedStructure).toEqual(withHeader);
   });
 });

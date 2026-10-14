@@ -22,7 +22,8 @@ import { scalarEdits } from "../forms/formEditAudit.js";
 import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
-import { decideStructureSave, type SaveMode } from "./revision.js";
+import { validateGridStructure } from "./gridStructure.js";
+import { decideStructureSave, descriptionOf, type SaveMode } from "./revision.js";
 
 const AUDIT = "BuiltForm";
 const CERTIFY = "I certify that this record is accurate and that I approve this sign-off.";
@@ -95,10 +96,16 @@ function assertKind(kind: string): FormKind {
   return kind as FormKind;
 }
 
+/** The description a person typed, as the end of a sentence. */
+function endSentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
 function assertStructure(kind: FormKind, structure: unknown) {
   if (!structure || typeof structure !== "object" || Array.isArray(structure)) throw AppError.badRequest("The form structure is missing.");
   const record = structure as { kind?: unknown; html?: unknown };
   if (record.kind !== kind) throw AppError.badRequest("The form structure does not match this form.");
+  if (kind === "grid") validateGridStructure(structure);
   if (kind === "document") {
     if (typeof record.html === "string") record.html = sanitizeDocumentHtml(record.html);
     const document = record as { header?: unknown; footer?: unknown };
@@ -198,14 +205,38 @@ export async function listRevisions(db: Db, actor: Actor, id: number) {
   await requireReader(db, actor);
   const [row] = await db.select({ id: builtForms.id }).from(builtForms).where(eq(builtForms.id, id));
   if (!row) throw AppError.notFound("Form");
-  return db.select().from(builtFormRevisions).where(eq(builtFormRevisions.formId, id)).orderBy(desc(builtFormRevisions.createdAt));
+  const rows = await db
+    .select({
+      id: builtFormRevisions.id,
+      revision: builtFormRevisions.revision,
+      summary: builtFormRevisions.summary,
+      savedBy: builtFormRevisions.savedBy,
+      createdAt: builtFormRevisions.createdAt,
+      name: users.name,
+      email: users.email,
+      isActive: users.isActive,
+    })
+    .from(builtFormRevisions)
+    .leftJoin(users, eq(users.id, builtFormRevisions.savedBy))
+    .where(eq(builtFormRevisions.formId, id))
+    .orderBy(desc(builtFormRevisions.createdAt), desc(builtFormRevisions.id));
+  return rows.map((row) => ({
+    id: row.id,
+    revision: row.revision,
+    summary: row.summary,
+    description: descriptionOf(row.summary),
+    savedBy: row.savedBy,
+    savedByName: row.savedBy == null ? null : formatUserLabel(row.email == null ? undefined : { name: row.name, email: row.email, isActive: row.isActive ?? true }, row.savedBy),
+    createdAt: row.createdAt,
+  }));
 }
+
 
 export async function saveBuiltForm(
   db: Db,
   actor: Actor,
   id: number,
-  input: { title?: string; formNumber?: string | null; structure?: unknown; mode?: SaveMode },
+  input: { title?: string; formNumber?: string | null; structure?: unknown; mode?: SaveMode; newRevision?: unknown; changeDescription?: unknown },
 ) {
   await requireEditor(db, actor);
   const [current] = await db.select().from(builtForms).where(eq(builtForms.id, id));
@@ -222,6 +253,8 @@ export async function saveBuiltForm(
     revision: current.revision,
     publishedStructure: current.publishedStructure,
     nextStructure: structure,
+    newRevision: input.newRevision,
+    changeDescription: input.changeDescription,
   });
   const [updated] = await db
     .update(builtForms)
@@ -240,9 +273,12 @@ export async function saveBuiltForm(
   if (!updated) throw AppError.notFound("Form");
   const person = await who(db, actor);
   if (decision.recordHistory) {
-    const summary = decision.bumped
-      ? `${person.label} edited the structure of "${title}" and saved revision ${decision.revision} on ${person.when}. Filling a copy does not change this revision.`
-      : `${person.label} saved the structure of "${title}" on ${person.when}. Revision stays ${decision.revision}.`;
+    const name = formNumber ? `${formNumber} ${title}` : title;
+    const summary = decision.change
+      ? `${person.label} changed ${name} from REV ${decision.change.from} to REV ${decision.change.to} on ${person.when}: ${endSentence(decision.change.description)}`
+      : decision.revision !== current.revision
+        ? `${person.label} set the revision of "${title}" to ${decision.revision} on ${person.when}.`
+        : `${person.label} saved the structure of "${title}" on ${person.when}. Revision stays ${decision.revision}.`;
     await db.insert(builtFormRevisions).values({
       formId: id,
       revision: decision.revision,
@@ -254,7 +290,9 @@ export async function saveBuiltForm(
       entityType: AUDIT,
       entityId: id,
       action: "update",
-      changes: { summary, revision: decision.revision, title },
+      changes: decision.change
+        ? { summary, revision: decision.revision, previousRevision: decision.change.from, description: decision.change.description, title }
+        : { summary, revision: decision.revision, title },
       performedBy: actor.id,
     });
   } else if (mode === "save" && (title !== current.title || formNumber !== current.formNumber)) {
@@ -296,7 +334,14 @@ async function renameTemplateLeaf(db: Db, form: typeof builtForms.$inferSelect) 
   await db.update(documentFolders).set({ name, updatedAt: new Date() }).where(eq(documentFolders.id, leaf.id));
 }
 
-export async function publishBuiltForm(db: Db, actor: Actor, id: number, folderId: number, structure?: unknown) {
+export async function publishBuiltForm(
+  db: Db,
+  actor: Actor,
+  id: number,
+  folderId: number,
+  structure?: unknown,
+  revision?: { newRevision?: unknown; changeDescription?: unknown },
+) {
   await requireEditor(db, actor);
   const [current] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!current) throw AppError.notFound("Form");
@@ -306,7 +351,12 @@ export async function publishBuiltForm(db: Db, actor: Actor, id: number, folderI
   if (!underBlank(folders, chosen.id)) throw AppError.badRequest("Publish the blank into Blank Forms Templates, or a folder under it.");
   const parentId = chosen.linkedPath ? chosen.parentId : chosen.id;
   if (parentId == null) throw AppError.badRequest("Choose a folder under Blank Forms Templates.");
-  const saved = await saveBuiltForm(db, actor, id, { structure: structure ?? current.structure, mode: "publish" });
+  const saved = await saveBuiltForm(db, actor, id, {
+    structure: structure ?? current.structure,
+    mode: "publish",
+    newRevision: revision?.newRevision,
+    changeDescription: revision?.changeDescription,
+  });
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!form) throw AppError.notFound("Form");
   const path = `${TEMPLATE_PREFIX}${form.id}`;

@@ -1,11 +1,28 @@
-/** Revision rules for a built form. Filling a copy never calls this. */
+/**
+ * Revision rules for a built form. Filling a copy never calls this.
+ *
+ * The app never changes a form's REV by itself. A draft keeps the REV a person
+ * typed (A when the form is created). Once a form is published, a structural
+ * change can only be saved or published with a new REV and a description of the
+ * change, both entered by the person making it.
+ */
+import { AppError } from "../../utils/appError.js";
 
 export type SaveMode = "autosave" | "save" | "publish";
 export type FormStatus = "draft" | "published";
 
+export const MAX_REVISION_LENGTH = 10;
+
+export interface RevisionChange {
+  from: string;
+  to: string;
+  description: string;
+}
+
 export interface RevisionDecision {
   revision: string;
-  bumped: boolean;
+  /** Set when a published form moved to a new REV. */
+  change: RevisionChange | null;
   recordHistory: boolean;
   status: FormStatus;
   /** Structure that fillers should open. Null while the form is still a draft. */
@@ -16,7 +33,22 @@ export function structuresEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** A, B, C … Z, AA. A revision that is not letters restarts at B on the next bump. */
+function asText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** A REV a person typed. Empty, too long, or not text is rejected with a plain message. */
+function cleanRevision(value: unknown, message: string): string {
+  const text = asText(value);
+  if (!text) throw AppError.badRequest(message);
+  if (text.length > MAX_REVISION_LENGTH) throw AppError.badRequest(`The revision can be at most ${MAX_REVISION_LENGTH} characters.`);
+  return text;
+}
+
+/**
+ * A, B, C ... Z, AA. Form Builder never calls this: a built form's REV only changes when a person types one.
+ * Controlled lists still step their own revision with it.
+ */
 export function bumpRevision(current: string): string {
   const rev = current.trim().toUpperCase();
   if (!/^[A-Z]+$/.test(rev)) return "B";
@@ -33,69 +65,56 @@ export function bumpRevision(current: string): string {
   return `A${chars.join("")}`;
 }
 
-/**
- * Autosave keeps the draft and the current revision.
- * The revision moves forward only when a published form's structure changes
- * and someone saves or publishes that change. The first publish stays on the
- * current letter (A, until a later edit).
- */
 export function decideStructureSave(input: {
   mode: SaveMode;
   status: FormStatus;
   revision: string;
   publishedStructure: unknown | null;
   nextStructure: unknown;
+  /** The REV a person entered. Optional on a draft, required to change a published structure. */
+  newRevision?: unknown;
+  changeDescription?: unknown;
 }): RevisionDecision {
-  const revision = input.revision.trim() || "A";
-  if (input.mode === "autosave") {
-    return {
-      revision,
-      bumped: false,
-      recordHistory: false,
-      status: input.status,
-      publishedStructure: input.publishedStructure,
-    };
-  }
-
-  const firstPublish = input.mode === "publish" && (input.status !== "published" || input.publishedStructure == null);
-  const changed = input.publishedStructure != null && !structuresEqual(input.publishedStructure, input.nextStructure);
-
-  if (input.mode === "publish") {
-    const bumped = !firstPublish && changed;
-    return {
-      revision: bumped ? bumpRevision(revision) : revision,
-      bumped,
-      recordHistory: firstPublish || bumped,
-      status: "published",
-      publishedStructure: input.nextStructure,
-    };
-  }
-
-  if (input.status === "published" && changed) {
-    return {
-      revision: bumpRevision(revision),
-      bumped: true,
-      recordHistory: true,
-      status: "published",
-      publishedStructure: input.nextStructure,
-    };
-  }
+  const current = input.revision.trim() || "A";
 
   if (input.status !== "published") {
+    // A draft has no published REV to protect, so the person can set it freely.
+    const typed = input.newRevision === undefined || input.newRevision === null ? null : cleanRevision(input.newRevision, "Enter a revision, such as A.");
+    const publishing = input.mode === "publish";
     return {
-      revision,
-      bumped: false,
-      recordHistory: true,
-      status: "draft",
-      publishedStructure: input.publishedStructure,
+      revision: typed ?? current,
+      change: null,
+      recordHistory: input.mode !== "autosave",
+      status: publishing ? "published" : "draft",
+      publishedStructure: publishing ? input.nextStructure : input.publishedStructure,
     };
   }
 
+  if (input.mode === "autosave") {
+    return { revision: current, change: null, recordHistory: false, status: "published", publishedStructure: input.publishedStructure };
+  }
+
+  const changed = input.publishedStructure != null && !structuresEqual(input.publishedStructure, input.nextStructure);
+  if (!changed) {
+    return { revision: current, change: null, recordHistory: false, status: "published", publishedStructure: input.publishedStructure };
+  }
+
+  const message = `Enter the new revision. It must be different from REV ${current}.`;
+  const revision = cleanRevision(input.newRevision, message);
+  if (revision.toLowerCase() === current.toLowerCase()) throw AppError.badRequest(message);
+  const description = asText(input.changeDescription);
+  if (!description) throw AppError.badRequest("Describe what changed in this revision.");
   return {
     revision,
-    bumped: false,
-    recordHistory: false,
+    change: { from: current, to: revision, description },
+    recordHistory: true,
     status: "published",
-    publishedStructure: input.publishedStructure,
+    publishedStructure: input.nextStructure,
   };
+}
+
+/** The person's own words from a "<who> changed … on <when>: <description>" summary. Other summaries come back whole. */
+export function descriptionOf(summary: string): string {
+  const match = /\b[AP]M:\s+([\s\S]+)$/.exec(summary);
+  return match?.[1]?.trim() || summary;
 }

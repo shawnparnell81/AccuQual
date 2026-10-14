@@ -1,3 +1,4 @@
+import { checkCellInput } from "../../../../services/api/src/modules/form-builder/cellInput";
 import { columnLetter } from "./spreadsheetFormat";
 import { displayFormulaValue, evaluateCells, passFailFill, type FormulaValue } from "./excelFormulas";
 import { loadEditableSpreadsheet, type EditableImportSheet } from "./spreadsheetPreview";
@@ -57,12 +58,22 @@ export interface FormCellStyle {
   borderLeft?: string;
 }
 
+export type FormCellType = "label" | "text" | "number" | "date" | "passfail" | "dropdown" | "signature";
+
 export interface FormCell {
   value: string;
   formula?: string;
   locked: boolean;
   rowSpan: number;
   colSpan: number;
+  /** What the cell holds. Missing means a label when locked and text when unlocked, so older grids load unchanged. */
+  type?: FormCellType;
+  /** Choices for a dropdown cell (1 to 50, none empty). */
+  options?: string[];
+  /** Number cells: digits allowed after the point (0 to 6), and the lowest and highest value. */
+  decimals?: number;
+  min?: number;
+  max?: number;
   /** Paint Passed green and Failed red, the same colors as the validation sheets. */
   conditional?: boolean;
   /** Shows the form's current folder path. The text is not stored, so a move updates it. */
@@ -118,6 +129,32 @@ export interface FieldFormStructure {
 }
 
 export type BuiltStructure = GridFormStructure | DocumentFormStructure | FieldFormStructure;
+
+/** Grid size limits. The API checks the same numbers. */
+export const MAX_GRID_ROWS = 500;
+export const MAX_GRID_COLS = 60;
+export const MAX_GRID_SHEETS = 10;
+export const MIN_CELL_SIZE = 8;
+export const MAX_CELL_SIZE = 1000;
+
+export function clampSize(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, Math.round(value)));
+}
+
+/** A label when locked and text when unlocked, unless the cell says otherwise. */
+export function effectiveCellType(cell: FormCell): FormCellType {
+  return cell.type ?? (cell.locked ? "label" : "text");
+}
+
+/** The message for a default value that does not fit the cell's type, or null. The text itself is always kept. */
+export function cellValueProblem(cell: FormCell): string | null {
+  if (cell.formula || cell.folderPath || cell.value === "") return null;
+  const type = effectiveCellType(cell);
+  if (type !== "number" && type !== "date" && type !== "dropdown" && type !== "passfail") return null;
+  const result = checkCellInput(cell, cell.value);
+  return result.ok ? null : result.message;
+}
 
 export function blankCell(): FormCell {
   return { value: "", locked: false, rowSpan: 1, colSpan: 1, style: {} };
@@ -211,8 +248,8 @@ export function gridFromImport(sheets: EditableImportSheet[]): GridFormStructure
     kind: "grid",
     sheets: sheets.map((sheet) => ({
       name: sheet.name || "Sheet",
-      colWidths: sheet.colWidths.length ? sheet.colWidths : [110],
-      rowHeights: sheet.rowHeights.length ? sheet.rowHeights : [24],
+      colWidths: sheet.colWidths.length ? sheet.colWidths.map((width) => clampSize(width, 110)) : [110],
+      rowHeights: sheet.rowHeights.length ? sheet.rowHeights.map((height) => clampSize(height, 24)) : [24],
       cells: sheet.rows.map((row) =>
         row.map((cell) => {
           if (!cell) return null;
