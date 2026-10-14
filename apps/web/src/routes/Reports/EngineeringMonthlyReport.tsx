@@ -186,6 +186,8 @@ function moneySource(source: string | undefined): string {
   if (source === "combined") return "Labor Claims + Warranty";
   if (source === "entered") return "Entered";
   if (source === "no_access") return "No access";
+  if (source === "report") return "Uploaded report";
+  if (source === "imported") return "Imported file";
   return "";
 }
 
@@ -225,7 +227,7 @@ function TrendTable({ months, rows }: { months: { key: string; label: string }[]
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-foreground">
-            <th className="p-2 font-semibold">Metric</th>
+            <th className="p-2 font-semibold">Financial Category</th>
             {months.map((month) => (
               <th key={month.key} className="p-2 font-semibold">
                 {month.label}
@@ -251,20 +253,18 @@ function TrendTable({ months, rows }: { months: { key: string; label: string }[]
 }
 
 const PULL_SECTIONS: { value: ImportPull["section"]; label: string }[] = [
-  { value: "returns", label: "Returns" },
-  { value: "warranty", label: "Warranty" },
-  { value: "labor", label: "Labor" },
-  { value: "financials", label: "Financials" },
+  { value: "returns", label: "Total Claims" },
+  { value: "warranty", label: "Parts Amount Requested" },
+  { value: "labor", label: "Labor Amount Requested" },
+  { value: "financials", label: "Total Amount Requested" },
 ];
 
+/** Only number columns can be totaled. Rows are split by month using the import's Report date. */
 const PULL_FIELDS = [
   { key: "returns_count", label: "Returns" },
   { key: "warranty_amount", label: "Warranty amount" },
   { key: "labor_amount", label: "Labor amount" },
   { key: "total_amount", label: "Total amount" },
-  { key: "report_date", label: "Report date" },
-  { key: "part_number", label: "Part number" },
-  { key: "claim_number", label: "Claim number" },
 ];
 
 function ImportedDatasets({
@@ -297,7 +297,7 @@ function ImportedDatasets({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium">Imported datasets</p>
-      <p className="text-sm text-muted-foreground">Pick an O'Reilly's or NAPA import and the field to total. Each value is labeled with that import.</p>
+      <p className="text-sm text-muted-foreground">Pick an O'Reilly's or NAPA import and the field to total. Rows are split by their Report date into the trend table above (a row with no date counts toward this month). The uploaded monthly report's own figures take precedence.</p>
       {!available && <p className="text-sm text-muted-foreground">Imported datasets aren't available until the database update runs.</p>}
       {lines.length === 0 && <p className="text-sm text-muted-foreground">No imported fields on this report yet.</p>}
       {lines.map((line, index) => (
@@ -359,9 +359,9 @@ function MoneyTable({
   onChange: (entries: FinancialEntry[]) => void;
 }) {
   const rows: { label: string; values: Array<number | null>; sources?: string[]; editable?: boolean[]; field: keyof FinancialEntry }[] = [
-    { label: "Labor (Labor Claims)", values: financials.labor, sources: financials.laborSource, editable: financials.laborEditable, field: "laborAmount" },
-    { label: "Warranty (Warranty claims)", values: financials.parts, sources: financials.partsSource, editable: financials.partsEditable, field: "warrantyAmount" },
-    { label: "Total (Labor Claims + Warranty)", values: financials.total, sources: financials.totalSource, editable: financials.totalEditable, field: "totalAmount" },
+    { label: "Total Amount Requested", values: financials.total, sources: financials.totalSource, editable: financials.totalEditable, field: "totalAmount" },
+    { label: "Parts Amount Requested", values: financials.parts, sources: financials.partsSource, editable: financials.partsEditable, field: "warrantyAmount" },
+    { label: "Labor Amount Requested", values: financials.labor, sources: financials.laborSource, editable: financials.laborEditable, field: "laborAmount" },
   ];
   const entries = narrative.financialEntries ?? [];
 
@@ -789,15 +789,15 @@ export function EngineeringMonthlyReport() {
                 <dd>{view.executive.fuelPumpReturns.length === 0 ? "—" : view.executive.fuelPumpReturns.map((row) => `${row.source}: ${row.count}`).join(" · ")}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Total (Labor Claims + Warranty)</dt>
+                <dt className="text-muted-foreground">Total Amount Requested</dt>
                 <dd>{money(view.executive.totalAmountRequested)}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Warranty</dt>
+                <dt className="text-muted-foreground">Parts Amount Requested</dt>
                 <dd>{money(view.executive.partsAmountRequested)}</dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Labor</dt>
+                <dt className="text-muted-foreground">Labor Amount Requested</dt>
                 <dd>{money(view.executive.laborAmountRequested)}</dd>
               </div>
               <div>
@@ -828,7 +828,10 @@ export function EngineeringMonthlyReport() {
             <TextAreaField allowPictures={false} label="Payout policy" value={narrative.payoutPolicy} disabled={locked} onChange={(event) => patch({ payoutPolicy: event.target.value })} />
           </Section>
 
-          <Section number="" title="Trend tables">
+          <Section number="6.2" title="Labor Claims">
+            <p className="text-sm">
+              Mean time to failure: {view.labor.mttfDays == null ? "—" : `${view.labor.mttfDays} days`}. Median time to failure: {view.labor.medianDays == null ? "—" : `${view.labor.medianDays} days`}.
+            </p>
             <TrendTable
               months={view.tables.months}
               rows={[
@@ -836,21 +839,18 @@ export function EngineeringMonthlyReport() {
                 { label: "Total Product Alerts", values: view.tables.metrics.totalProductAlerts.map(plain) },
               ]}
             />
-            <p className="text-sm text-muted-foreground">Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.</p>
+            <p className="text-sm text-muted-foreground">Dollars come from the uploaded monthly report first, then the imported files chosen below, then AccuQual Labor Claims and Warranty claims. A month with none of those can be typed.</p>
             <MoneyTable months={view.tables.months} financials={view.tables.financials} narrative={narrative} locked={locked} onChange={(financialEntries) => patch({ financialEntries })} />
             <ImportedDatasets narrative={narrative} lines={view.importedDatasets ?? []} available={view.importsAvailable !== false} locked={locked} onChange={(importPulls) => patch({ importPulls })} />
             <TrendTable
               months={view.tables.months}
               rows={[
-                { label: "Labor-to-Warranty", values: view.tables.warranty.ratio.map(plain) },
+                { label: "Labor-to-Parts Ratio", values: view.tables.warranty.ratio.map(plain) },
                 { label: "Mean Time to Failure", values: view.tables.warranty.mttfDays.map((value) => (value == null ? "—" : `${value} days`)) },
                 { label: "Median Time to Failure", values: view.tables.warranty.medianDays.map((value) => (value == null ? "—" : `${value} days`)) },
               ]}
             />
-          </Section>
-
-          <Section number="6.2" title="Labor Claims">
-            <dl className="grid gap-2 text-sm sm:grid-cols-3">
+                      <dl className="grid gap-2 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-muted-foreground">Labor claims</dt>
                 <dd>{plain(view.claimMonth?.laborCount)}</dd>
@@ -872,9 +872,6 @@ export function EngineeringMonthlyReport() {
                 <dd>{money(view.claimMonth?.warrantyCost ?? null)}</dd>
               </div>
             </dl>
-            <p className="text-sm">
-              Mean time to failure: {view.labor.mttfDays == null ? "—" : `${view.labor.mttfDays} days`}. Median time to failure: {view.labor.medianDays == null ? "—" : `${view.labor.medianDays} days`}.
-            </p>
             <h4 className="text-sm font-semibold">Claims and returns</h4>
             <ClaimsReturnsChart rows={view.charts.claimsReturns} scope={view.charts.claimsSeriesScope} />
             <h4 className="text-sm font-semibold">Top returning parts</h4>
@@ -1051,24 +1048,24 @@ export function EngineeringMonthlyReport() {
             <QaEditor label="Questions" items={narrative.techLine} disabled={locked} onChange={(techLine) => patch({ techLine })} />
           </Section>
 
-          <Section number="6.10" title="OR/NAPA Email Issues">
+          <Section number="6.9" title="OR/NAPA Email Issues">
             <EmailIssuesChart rows={view.charts.emailIssues} />
             <TextAreaField allowPictures={false} label="Notes" value={narrative.emailIssuesNotes} disabled={locked} onChange={(event) => patch({ emailIssuesNotes: event.target.value })} />
           </Section>
 
-          <Section number="6.11" title="Field questions">
+          <Section number="6.10" title="Field question regarding fuel pumps">
             <TextAreaField allowPictures={false} label="Notes" value={narrative.fieldQuestions} disabled={locked} onChange={(event) => patch({ fieldQuestions: event.target.value })} />
           </Section>
 
-          <Section number="6.12" title="Fitment Verification">
+          <Section number="6.11" title="Fitment Verification">
             <QaEditor label="Fitment questions" items={narrative.fitment} disabled={locked} onChange={(fitment) => patch({ fitment })} />
           </Section>
 
-          <Section number="6.13" title="Product Information">
+          <Section number="6.12" title="Product Information">
             <QaEditor label="Product questions" items={narrative.productInfo} disabled={locked} onChange={(productInfo) => patch({ productInfo })} />
           </Section>
 
-          <Section number="6.14" title="NAPA black label pallet work">
+          <Section number="6.13" title="NAPA black label defective fuel pump pallets">
             <TextAreaField allowPictures={false} label="Notes" value={narrative.palletNotes} disabled={locked} onChange={(event) => patch({ palletNotes: event.target.value })} />
           </Section>
 

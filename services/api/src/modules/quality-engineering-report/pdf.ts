@@ -21,7 +21,7 @@ function gatedCount(gate: Gated<{ count: number }>): string {
 }
 
 function importedDatasetNote(view: EngineeringReportView): string {
-  const base = "Dollars are AccuQual Labor Claims and Warranty claims. A month with no records uses the amount entered on this report.";
+  const base = "Dollars come from the uploaded monthly report first, then chosen imported files, then AccuQual Labor Claims and Warranty claims, then amounts typed on this report.";
   const lines = (view.importedDatasets ?? []).map((line) => {
     const amount = line.total == null ? "—" : String(line.total);
     return `${line.fieldLabel} (${line.section}): ${amount} from ${line.source}`;
@@ -104,12 +104,12 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
     { metric: "Total Product Alerts", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.metrics.totalProductAlerts[index] ?? null)])) },
   ];
   const financialRows = [
-    { metric: "Total (Labor Claims + Warranty)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.total[index] ?? null)])) },
-    { metric: "Warranty (Warranty claims)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.parts[index] ?? null)])) },
-    { metric: "Labor (Labor Claims)", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.labor[index] ?? null)])) },
+    { metric: "Total Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.total[index] ?? null)])) },
+    { metric: "Parts Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.parts[index] ?? null)])) },
+    { metric: "Labor Amount Requested", ...Object.fromEntries(months.map((month, index) => [month.key, moneyCell(view.tables.financials.labor[index] ?? null)])) },
   ];
   const warrantyRows = [
-    { metric: "Labor-to-Warranty", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.warranty.ratio[index] ?? null)])) },
+    { metric: "Labor-to-Parts Ratio", ...Object.fromEntries(months.map((month, index) => [month.key, dash(view.tables.warranty.ratio[index] ?? null)])) },
     { metric: "Mean Time to Failure", ...Object.fromEntries(months.map((month, index) => [month.key, view.tables.warranty.mttfDays[index] == null ? "—" : `${view.tables.warranty.mttfDays[index]} days`])) },
     { metric: "Median Time to Failure", ...Object.fromEntries(months.map((month, index) => [month.key, view.tables.warranty.medianDays[index] == null ? "—" : `${view.tables.warranty.medianDays[index]} days`])) },
   ];
@@ -164,20 +164,10 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
           { type: "textarea", name: "achievement", label: "Primary achievement" },
           { type: "textarea", name: "risk", label: "Critical risk / blocker" },
           { type: "row", fields: [{ kind: "text", name: "claims", label: "Total claims" }, { kind: "text", name: "pumps", label: "Fuel pump returns" }] },
-          { type: "row", fields: [{ kind: "text", name: "requested", label: "Total (Labor Claims + Warranty)" }, { kind: "text", name: "partsAmount", label: "Warranty" }, { kind: "text", name: "labor", label: "Labor" }] },
+          { type: "row", fields: [{ kind: "text", name: "requested", label: "Total Amount Requested" }, { kind: "text", name: "partsAmount", label: "Parts Amount Requested" }, { kind: "text", name: "labor", label: "Labor Amount Requested" }] },
           { type: "row", fields: [{ kind: "text", name: "liability", label: "Potential liability" }, { kind: "text", name: "flat", label: "Flat rate" }, { kind: "text", name: "savings", label: "Denied labor savings" }] },
           { type: "row", fields: [{ kind: "text", name: "approved", label: "Approved" }, { kind: "text", name: "denied", label: "Denied" }, { kind: "text", name: "pending", label: "Pending" }] },
           { type: "textarea", name: "payout", label: "Payout policy" },
-        ],
-      },
-      {
-        number: "6.1b",
-        title: "Trend tables",
-        blocks: [
-          { type: "table", name: "metrics", columns: [{ key: "metric", label: "Metric", kind: "text" }, ...monthColumns] },
-          { type: "textarea", name: "financialNote", label: "Dollar source" },
-          { type: "table", name: "financials", columns: [{ key: "metric", label: "Financial category", kind: "text" }, ...monthColumns] },
-          { type: "table", name: "warranty", columns: [{ key: "metric", label: "Warranty metric", kind: "text" }, ...monthColumns] },
         ],
       },
       {
@@ -187,6 +177,10 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
           { type: "row", fields: [{ kind: "text", name: "laborCount", label: "Labor claims" }, { kind: "text", name: "laborHours", label: "Labor hours" }, { kind: "text", name: "laborCost", label: "Labor cost" }] },
           { type: "row", fields: [{ kind: "text", name: "warrantyCount", label: "Warranty claims" }, { kind: "text", name: "warrantyCost", label: "Warranty cost" }] },
           { type: "row", fields: [{ kind: "text", name: "mttf", label: "Mean time to failure" }, { kind: "text", name: "median", label: "Median time to failure" }] },
+          { type: "table", name: "metrics", columns: [{ key: "metric", label: "Metric", kind: "text" }, ...monthColumns] },
+          { type: "table", name: "financials", columns: [{ key: "metric", label: "Financial Category", kind: "text" }, ...monthColumns] },
+          { type: "table", name: "warranty", columns: [{ key: "metric", label: "Warranty Metric", kind: "text" }, ...monthColumns] },
+          { type: "textarea", name: "financialNote", label: "Dollar source" },
           { type: "table", name: "claimsChart", columns: [{ key: "date", label: "Date", kind: "text" }, { key: "claims", label: "Claims", kind: "text" }, { key: "returns", label: "Returns", kind: "text" }] },
           { type: "table", name: "topParts", columns: [{ key: "part", label: "Part number", kind: "text" }, { key: "description", label: "Description", kind: "text" }, { key: "claims", label: "Total claims", kind: "text" }] },
           { type: "table", name: "vehicles", columns: [{ key: "vehicle", label: "Vehicle", kind: "text" }, { key: "claims", label: "Claims", kind: "text" }] },
@@ -234,19 +228,25 @@ export async function renderEngineeringReportPdf(view: EngineeringReportView, fr
       { number: "6.7", title: "Recalls", blocks: [{ type: "row", fields: [{ kind: "text", name: "recallDocs", label: "Recall documents filed" }] }, { type: "textarea", name: "recallNotes", label: "Notes" }] },
       { number: "6.8", title: "NAPA Tech Line / Collabtic", blocks: [{ type: "textarea", name: "tech", label: "Questions and responses" }] },
       {
-        number: "6.10",
+        number: "6.9",
         title: "OR/NAPA Email Issues",
         blocks: [
           { type: "textarea", name: "emailNotes", label: "Notes" },
           { type: "table", name: "emailChart", columns: [{ key: "month", label: "Month", kind: "text" }, { key: "total", label: "Total", kind: "text" }, { key: "oreilly", label: "O'Reilly", kind: "text" }, { key: "napa", label: "NAPA", kind: "text" }] },
         ],
       },
-      { number: "6.11", title: "Field questions", blocks: [{ type: "textarea", name: "field", label: "Notes" }] },
-      { number: "6.12", title: "Fitment Verification", blocks: [{ type: "textarea", name: "fitment", label: "Questions and responses" }] },
-      { number: "6.13", title: "Product Information", blocks: [{ type: "textarea", name: "productInfo", label: "Questions and responses" }] },
-      { number: "6.14", title: "NAPA black label pallet work", blocks: [{ type: "textarea", name: "pallet", label: "Notes" }] },
+      { number: "6.10", title: "Field question regarding fuel pumps", blocks: [{ type: "textarea", name: "field", label: "Notes" }] },
+      { number: "6.11", title: "Fitment Verification", blocks: [{ type: "textarea", name: "fitment", label: "Questions and responses" }] },
+      { number: "6.12", title: "Product Information", blocks: [{ type: "textarea", name: "productInfo", label: "Questions and responses" }] },
+      { number: "6.13", title: "NAPA black label defective fuel pump pallets", blocks: [{ type: "textarea", name: "pallet", label: "Notes" }] },
     ],
   };
+
+  // A table with no rows (a chart DMA sends as a picture, an empty hold list) prints only its header. Leave it out.
+  if (view.charts.emailIssues.every((row) => row.totalIssues == null && row.orIssues == null && row.napaIssues == null)) data.emailChart = [];
+  for (const section of layout.sections) {
+    section.blocks = section.blocks.filter((block) => block.type !== "table" || (Array.isArray(data[block.name]) && (data[block.name] as unknown[]).length > 0));
+  }
 
   // Pictures go in the section their Word heading belongs to; any left over close out an Images section.
   const known = new Set(layout.sections.map((section) => section.number));

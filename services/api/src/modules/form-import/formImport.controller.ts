@@ -327,7 +327,7 @@ export const confirmImportHandler = asyncHandler(async (req, res) => {
     auditEntityId = written.id;
   } else {
     if (body.year == null || body.month == null) throw AppError.badRequest("Choose a month and year.");
-    const supplier = toSupplierData(body.values, body.year);
+    const supplier = toSupplierData(body.values, body.year, body.month);
     // The pictures are read from the file itself, never from the browser's copy of the review.
     const images: ExtractedImage[] = req.file ? (await extractFileWithImages(req.file.buffer, req.file.originalname || body.fileName)).images : [];
     reportSummary = (

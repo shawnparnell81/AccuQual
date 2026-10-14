@@ -73,8 +73,9 @@ describe("quality engineering supplier upload", () => {
     expect(view.charts.topVehicles[0]?.vehicle).toContain("Silverado");
     expect(view.charts.emailIssues.find((row) => row.month === "2026-08")?.totalIssues).toBe(42);
     expect(view.labor).toEqual({ mttfDays: 125.9, medianDays: 41 });
-    expect(view.executive.totalAmountRequested).toBeNull();
-    expect(view.tables.financials.total.every((value) => value == null)).toBe(true);
+    // The uploaded report's own Financials table fills the dollars (DMA's figures, not re-derived).
+    expect(view.executive.totalAmountRequested).toBe(108871.03);
+    expect(view.tables.financials.totalSource.at(-1)).toBe("report");
     expect(view.live.ncr).toMatchObject({ status: "ok", data: { total: 11 } });
 
     const blank = assembleReport({
@@ -103,7 +104,8 @@ describe("quality engineering supplier upload", () => {
     const text = await pdfVisibleText(pdf);
     expect(text).toContain("459");
     expect(text).toContain("A60076");
-    expect(text).not.toContain("108,871.03");
+    expect(text).toContain("108,871.03");
+    expect(text).toContain("Labor-to-Parts");
     expect(text).toContain("Labor Claims");
     expect(text).toContain("DMA Parts");
     expect(text).toContain("YELLOW");
@@ -162,11 +164,18 @@ describe("labor and warranty dollars", () => {
       uploadFileName: null,
       canEdit: true,
     });
-    expect(view.executive.laborAmountRequested).toBe(80);
-    expect(view.executive.partsAmountRequested).toBe(20);
-    expect(view.executive.totalAmountRequested).toBe(100);
-    expect(view.tables.financials.laborSource.at(-1)).toBe("labor_claims");
-    expect(view.tables.warranty.ratio.at(-1)).toBe("4:1");
+    // The uploaded report wins over the books and over typed amounts.
+    expect(view.executive.laborAmountRequested).toBe(94842.76);
+    expect(view.executive.partsAmountRequested).toBe(14028.27);
+    expect(view.executive.totalAmountRequested).toBe(108871.03);
+    expect(view.tables.financials.laborSource.at(-1)).toBe("report");
+    expect(view.tables.warranty.ratio.at(-1)).toBe("6.76:1");
+
+    const booksOnly = assembleReport({ year: 2026, month: 8, narrative: emptyNarrative(), supplier: emptySupplierData(), live, saved: true, uploadFileName: null, canEdit: true });
+    expect(booksOnly.executive.laborAmountRequested).toBe(80);
+    expect(booksOnly.executive.totalAmountRequested).toBe(100);
+    expect(booksOnly.tables.financials.laborSource.at(-1)).toBe("labor_claims");
+    expect(booksOnly.tables.warranty.ratio.at(-1)).toBe("4.00:1");
     expect(view.claimMonth).toEqual({ laborCount: 2, laborHours: 4, laborCost: 80, warrantyCount: 1, warrantyCost: 20 });
   });
 });
