@@ -4,6 +4,8 @@ export const IMPORT_DATA_PERMISSION = "import_data";
 
 /** Create forms and edit their structure. Filling a copy does not use this. Owner and Administrator are not listed; they already have full access. */
 export const FORM_BUILDER_PERMISSION = "form_builder";
+/** Approve or reject a built form's new revision before fillers see it. Granted on the role, never by a role name. */
+export const FORM_BUILDER_APPROVE_PERMISSION = "form_builder.approve";
 
 /** Delete a folder. Assigned on the role. Not implied by a role name. */
 export const FOLDERS_DELETE_PERMISSION = "folders.delete";

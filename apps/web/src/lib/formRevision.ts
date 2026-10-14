@@ -7,3 +7,11 @@ export function newRevisionProblem(current: string, typed: string): string | nul
   if (text.length > MAX_REVISION) return `The revision can be at most ${MAX_REVISION} characters.`;
   return null;
 }
+
+/** Draft, Pending approval, or Live REV X: the words the editor and the list both show. */
+export function formStatusLabel(form: { status: string; revision: string; pendingRevision: string | null }): string {
+  if (form.pendingRevision) {
+    return form.status === "published" ? `Live REV ${form.revision} · REV ${form.pendingRevision} pending approval` : `Pending approval · REV ${form.pendingRevision}`;
+  }
+  return form.status === "published" ? `Live REV ${form.revision}` : "Draft";
+}

@@ -20,6 +20,7 @@ describe("form builder revision", () => {
     expect(save.revision).toBe("A");
     expect(save.change).toBeNull();
     expect(save.status).toBe("draft");
+    expect(save.submit).toBe(false);
     expect(save.recordHistory).toBe(true);
   });
 
@@ -29,9 +30,11 @@ describe("form builder revision", () => {
     const first = decideStructureSave({ mode: "publish", status: "draft", revision: "01", publishedStructure: null, nextStructure: grid });
     expect(first.revision).toBe("01");
     expect(first.change).toBeNull();
-    expect(first.status).toBe("published");
-    expect(first.recordHistory).toBe(true);
-    expect(first.publishedStructure).toEqual(grid);
+    // The first publish goes to approval: nothing is live until someone approves it.
+    expect(first.submit).toBe(true);
+    expect(first.submitRevision).toBe("01");
+    expect(first.status).toBe("draft");
+    expect(first.publishedStructure).toBeNull();
     expect(() => decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: grid, newRevision: "   " })).toThrow();
     expect(() => decideStructureSave({ mode: "save", status: "draft", revision: "A", publishedStructure: null, nextStructure: grid, newRevision: "ABCDEFGHIJK" })).toThrow(/at most 10/);
   });
@@ -58,11 +61,13 @@ describe("form builder revision", () => {
   it("applies a valid new REV exactly as typed", () => {
     for (const mode of ["save", "publish"] as const) {
       const decision = decideStructureSave({ ...published, mode, newRevision: " C2 ", changeDescription: " Added a row " });
-      expect(decision.revision).toBe("C2");
       expect(decision.change).toEqual({ from: "B", to: "C2", description: "Added a row" });
-      expect(decision.recordHistory).toBe(true);
+      expect(decision.submit).toBe(true);
+      expect(decision.submitRevision).toBe("C2");
+      // The live REV and structure wait for approval.
+      expect(decision.revision).toBe("B");
       expect(decision.status).toBe("published");
-      expect(decision.publishedStructure).toEqual(edited);
+      expect(decision.publishedStructure).toEqual(grid);
     }
   });
 
@@ -70,6 +75,7 @@ describe("form builder revision", () => {
     const same = decideStructureSave({ ...published, mode: "save", nextStructure: grid });
     expect(same.revision).toBe("B");
     expect(same.change).toBeNull();
+    expect(same.submit).toBe(false);
     expect(same.recordHistory).toBe(false);
     const autosave = decideStructureSave({ ...published, mode: "autosave" });
     expect(autosave.revision).toBe("B");
@@ -88,7 +94,8 @@ describe("form builder revision", () => {
     expect(() => decideStructureSave(base)).toThrow("different from REV A");
     const decision = decideStructureSave({ ...base, newRevision: "B", changeDescription: "Added the header" });
     expect(decision.change?.to).toBe("B");
-    expect(decision.publishedStructure).toEqual(withHeader);
+    expect(decision.submit).toBe(true);
+    expect(decision.publishedStructure).toEqual(doc);
   });
 });
 

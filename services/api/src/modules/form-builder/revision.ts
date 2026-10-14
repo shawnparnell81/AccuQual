@@ -4,7 +4,8 @@
  * The app never changes a form's REV by itself. A draft keeps the REV a person
  * typed (A when the form is created). Once a form is published, a structural
  * change can only be saved or published with a new REV and a description of the
- * change, both entered by the person making it.
+ * change, both entered by the person making it. The change then waits for
+ * approval: the live REV and structure move only when it is approved.
  */
 import { AppError } from "../../utils/appError.js";
 
@@ -20,12 +21,17 @@ export interface RevisionChange {
 }
 
 export interface RevisionDecision {
+  /** What built_forms.revision becomes. A published form keeps its live REV until the new one is approved. */
   revision: string;
-  /** Set when a published form moved to a new REV. */
+  /** Set when a published form's structure changed and is going to approval under a new REV. */
   change: RevisionChange | null;
+  /** True when this save or publish creates a revision that waits for approval. */
+  submit: boolean;
+  /** The REV the pending revision carries. */
+  submitRevision: string | null;
   recordHistory: boolean;
   status: FormStatus;
-  /** Structure that fillers should open. Null while the form is still a draft. */
+  /** Structure that fillers open. It only moves when a revision is approved. */
   publishedStructure: unknown | null;
 }
 
@@ -78,39 +84,34 @@ export function decideStructureSave(input: {
   const current = input.revision.trim() || "A";
 
   if (input.status !== "published") {
-    // A draft has no published REV to protect, so the person can set it freely.
+    // A draft has no live REV to protect, so the person can set it freely. Publishing it sends it for approval.
     const typed = input.newRevision === undefined || input.newRevision === null ? null : cleanRevision(input.newRevision, "Enter a revision, such as A.");
+    const revision = typed ?? current;
     const publishing = input.mode === "publish";
     return {
-      revision: typed ?? current,
+      revision,
       change: null,
-      recordHistory: input.mode !== "autosave",
-      status: publishing ? "published" : "draft",
-      publishedStructure: publishing ? input.nextStructure : input.publishedStructure,
+      submit: publishing,
+      submitRevision: publishing ? revision : null,
+      recordHistory: input.mode === "save",
+      status: "draft",
+      publishedStructure: input.publishedStructure,
     };
   }
 
-  if (input.mode === "autosave") {
-    return { revision: current, change: null, recordHistory: false, status: "published", publishedStructure: input.publishedStructure };
-  }
+  const live = { revision: current, change: null, submit: false, submitRevision: null, recordHistory: false, status: "published" as const, publishedStructure: input.publishedStructure };
+  if (input.mode === "autosave") return live;
 
   const changed = input.publishedStructure != null && !structuresEqual(input.publishedStructure, input.nextStructure);
-  if (!changed) {
-    return { revision: current, change: null, recordHistory: false, status: "published", publishedStructure: input.publishedStructure };
-  }
+  if (!changed) return live;
 
   const message = `Enter the new revision. It must be different from REV ${current}.`;
   const revision = cleanRevision(input.newRevision, message);
   if (revision.toLowerCase() === current.toLowerCase()) throw AppError.badRequest(message);
   const description = asText(input.changeDescription);
   if (!description) throw AppError.badRequest("Describe what changed in this revision.");
-  return {
-    revision,
-    change: { from: current, to: revision, description },
-    recordHistory: true,
-    status: "published",
-    publishedStructure: input.nextStructure,
-  };
+  // The live REV and structure stay as they are until someone approves this one.
+  return { ...live, change: { from: current, to: revision, description }, submit: true, submitRevision: revision };
 }
 
 /** The person's own words from a "<who> changed … on <when>: <description>" summary. Other summaries come back whole. */

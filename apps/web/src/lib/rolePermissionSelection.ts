@@ -41,6 +41,11 @@ export const ROLE_PERMISSION_GROUPS: {
         hint: "Creating a form and editing its structure, including adding, renaming, or removing columns on a living controlled list. Filling a published copy does not use this. Owner and Administrator can always build forms.",
       },
       {
+        key: "form_builder.approve",
+        label: "Can approve form revisions",
+        hint: "Approve or reject a form's new revision before it goes live. Until it is approved, people filling a copy keep opening the last approved version. Anyone with this can approve any revision, including their own. Stored on the role; a role name does not grant it.",
+      },
+      {
         key: "ncr.closure_signoff",
         label: "Can sign NCR closure sign-off",
         hint: "Sign the required Quality Manager row on NCR closure. Stored on the role; a role name does not grant it.",
