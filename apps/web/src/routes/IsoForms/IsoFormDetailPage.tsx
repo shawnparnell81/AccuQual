@@ -53,7 +53,7 @@ import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { savedFieldsEditable, type SavedFormMode } from "../../lib/savedFormLock";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
-import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
+import { BEGIN_EDIT_ERROR, postBeginEdit, postEditSession } from "../../lib/beginEdit";
 import { useBlankDraft } from "../../lib/useBlankDraft";
 import { leaveFormPath } from "../../lib/blankDraft";
 import { filedToast, saveShouldLock } from "../../lib/saveFiling";
@@ -317,6 +317,10 @@ export function IsoFormDetailPage() {
       editError={editError}
       onLock={() => formLock.lock()}
       onCancel={cancelEdit}
+      onEditSession={(action) => {
+        if (savedRecord.id === 0) return;
+        void postEditSession(`/iso-quality-forms/${recordId}/begin-edit`, action).then(() => queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] }), () => undefined);
+      }}
       onDone={() => {
         if (dirty) void saveRecord();
         else formLock.lock();
@@ -381,6 +385,7 @@ function IsoFormDetailBody({
   editError = null,
   onLock,
   onCancel,
+  onEditSession,
   onDone,
   dirty,
   saving,
@@ -423,6 +428,7 @@ function IsoFormDetailBody({
   editError?: string | null;
   onLock: () => void;
   onCancel: () => void;
+  onEditSession?: (action: "save" | "cancel") => void;
   onDone: () => void;
   dirty: boolean;
   saving: boolean;
@@ -557,8 +563,18 @@ function IsoFormDetailBody({
               pending={saving || pending}
               opening={opening}
               onEdit={onEdit}
-              onSave={() => void save(false)}
-              onCancel={onCancel}
+              saveLocks
+              onSave={() => {
+                if (dirty) void save(true).then(() => onEditSession?.("save"));
+                else {
+                  onDone();
+                  onEditSession?.("save");
+                }
+              }}
+              onCancel={() => {
+                onCancel();
+                onEditSession?.("cancel");
+              }}
               onDone={() => {
                 if (dirty) void save(true);
                 else onDone();

@@ -92,7 +92,7 @@ export function ChangeDetailPage() {
           <StatusBadge value={change.status} />
         </div>
         <div className="flex gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateChange.isPending} onEdit={() => formLock.onEdit()} onSave={() => void persistChange()} onLock={formLock.lock} onDone={() => void persistChange().then(formLock.lock, () => undefined)} />
+          <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={permitted} pending={updateChange.isPending} onEdit={() => formLock.onEdit()} onSave={() => void persistChange()} onLock={formLock.lock} onDone={() => void persistChange().then(formLock.lock, () => undefined)} />
           <SaveStatus saving={updateChange.isPending} unsaved={descriptionDirty || impactDirty} />
           <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} number={change.recordNumber} ownerIds={[change.requestedBy]} navigateTo="/change" allowed={permitted} assignedOnly />
           <OpenFormButton formType="pcn" entityId={change.id} title={`${recordHeading("Change", change.recordNumber)} Form`} label="PCN Document" />

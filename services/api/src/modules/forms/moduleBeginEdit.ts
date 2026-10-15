@@ -36,7 +36,7 @@ export const beginEightDEdit = beginFormEditHandler("8D Report", async (db, id) 
 export const beginRiskEdit = beginFormEditHandler("RiskAssessment", async (db, id) => {
   const [row] = await db.select({ id: riskAssessments.id }).from(riskAssessments).where(eq(riskAssessments.id, id));
   return row;
-});
+}, "Risk");
 
 export const beginAuditEdit = beginFormEditHandler("Audit", async (db, id) => {
   const [row] = await db.select({ id: audits.id }).from(audits).where(eq(audits.id, id));
@@ -46,22 +46,22 @@ export const beginAuditEdit = beginFormEditHandler("Audit", async (db, id) => {
 export const beginEquipmentEdit = beginFormEditHandler("Equipment", async (db, id) => {
   const [row] = await db.select({ id: equipment.id }).from(equipment).where(eq(equipment.id, id));
   return row;
-});
+}, "Equipment");
 
 export const beginDcrEdit = beginFormEditHandler("DocumentChangeRequest", async (db, id) => {
   const [row] = await db.select({ id: documentChangeRequests.id }).from(documentChangeRequests).where(eq(documentChangeRequests.id, id));
   return row;
-});
+}, "DCR");
 
 export const beginTrainingCourseEdit = beginFormEditHandler("TrainingCourse", async (db, id) => {
   const [row] = await db.select({ id: trainingCourses.id }).from(trainingCourses).where(eq(trainingCourses.id, id));
   return row;
-});
+}, "Training course");
 
 export const beginChangeEdit = beginFormEditHandler("Change request", async (db, id) => {
   const [row] = await db.select({ id: changeRequests.id }).from(changeRequests).where(eq(changeRequests.id, id));
   return row;
-});
+}, "Change request");
 
 export const beginQuarantineEdit = beginFormEditHandler("Quarantine", async (db, id) => {
   const [row] = await db.select({ id: quarantineRecords.id }).from(quarantineRecords).where(eq(quarantineRecords.id, id));
@@ -71,4 +71,4 @@ export const beginQuarantineEdit = beginFormEditHandler("Quarantine", async (db,
 export const beginScarEdit = beginFormEditHandler("ScarForm", async (db, id) => {
   const [row] = await db.select({ id: scarForms.id }).from(scarForms).where(eq(scarForms.id, id));
   return row;
-});
+}, "SCAR");

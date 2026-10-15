@@ -42,7 +42,7 @@ import { sheetIsDirty, sheetSnap } from "../../lib/sheetDirty";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useSavedFormMode } from "../../hooks/useSavedFormMode";
 import { useToast } from "../../components/shared/ToastProvider";
-import { BEGIN_EDIT_ERROR, postBeginEdit } from "../../lib/beginEdit";
+import { BEGIN_EDIT_ERROR, postBeginEdit, postEditSession } from "../../lib/beginEdit";
 import { useBlankDraft } from "../../lib/useBlankDraft";
 import { leaveFormPath } from "../../lib/blankDraft";
 import { headerStatusFor } from "../../lib/headerStatus";
@@ -233,6 +233,11 @@ export function ValidationReportDetailPage() {
     }
   }
 
+  function endEditSession(action: "save" | "cancel") {
+    if (savedReport.id === 0) return;
+    void postEditSession(`/validation-reports/${savedReport.id}/begin-edit`, action).then(() => queryClient.invalidateQueries({ queryKey: ["workflow-history"] }), () => undefined);
+  }
+
   function cancelEdit() {
     const next = loadCells(formType, savedReport.data);
     const nextGraph = graphFromData(savedReport.data);
@@ -324,8 +329,18 @@ export function ValidationReportDetailPage() {
               pending={updateReport.isPending || pending}
               opening={opening}
               onEdit={() => startEdit()}
-              onSave={() => void saveRecord(false)}
-              onCancel={cancelEdit}
+              saveLocks
+              onSave={() => {
+                if (dirty) void saveRecord(true).then(() => endEditSession("save"));
+                else {
+                  formLock.lock();
+                  endEditSession("save");
+                }
+              }}
+              onCancel={() => {
+                cancelEdit();
+                endEditSession("cancel");
+              }}
               onDone={() => {
                 if (dirty) void saveRecord(true);
                 else formLock.lock();

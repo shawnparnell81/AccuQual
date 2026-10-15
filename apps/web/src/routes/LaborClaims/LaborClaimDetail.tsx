@@ -107,7 +107,7 @@ export function LaborClaimDetail() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={canEdit} pending={updateClaim.isPending} onEdit={() => formLock.onEdit()} onSave={() => void save()} onLock={formLock.lock} />
+          <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={canEdit} pending={updateClaim.isPending} onEdit={() => formLock.onEdit()} onSave={() => void save()} onLock={formLock.lock} />
           <DeleteRecordButton resource="labor-claims" id={claim.id} kind="Labor claim" title={claim.partName} number={claim.claimNumber} ownerIds={[claim.createdByUserId]} navigateTo="/labor-claims" />
         </div>
       </div>

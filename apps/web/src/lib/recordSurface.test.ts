@@ -31,3 +31,17 @@ describe("record surfaces", () => {
     assert.equal(recordSurface("/ncr/9")?.kind, "form");
   });
 });
+
+it("record detail pages open locked and record Edit, Save and Cancel in one place", async () => {
+  const { isLockedRecordPath, recordEditPath } = await import("./recordSurface");
+  for (const path of ["/risk/4", "/capa/4", "/ncr/4", "/suppliers/4", "/ppap/4", "/complaints/4", "/fai-inspection/records/4", "/work-orders/4", "/documents/4"]) {
+    assert.equal(isLockedRecordPath(path), true, path);
+  }
+  for (const path of ["/risk", "/qms-forms/frm-1/4", "/form-builder/fills/4", "/quality/4", "/fai-inspection/records/new"]) {
+    assert.equal(isLockedRecordPath(path), false, path);
+  }
+  assert.equal(recordEditPath("/suppliers/7"), "/record-edits/suppliers/7");
+  assert.equal(recordEditPath("/complaints/7"), "/complaints/7/begin-edit");
+  assert.equal(recordEditPath("/fai-inspection/plans/7"), "/record-edits/fai-plans/7");
+  assert.equal(recordEditPath("/risk/7"), null);
+});

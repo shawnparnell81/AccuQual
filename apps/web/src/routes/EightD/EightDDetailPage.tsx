@@ -265,7 +265,7 @@ export function EightDDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
             <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} number={report.recordNumber} navigateTo="/8d" allowed={permitted} assignedOnly />
             {linkedNcr && canEdit && (
               <AiStructuredSuggestion<EightDSuggestion>

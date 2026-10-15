@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
-import { BEGIN_EDIT_ERROR, postBeginEdit } from "../lib/beginEdit";
+import { BEGIN_EDIT_ERROR, postBeginEdit, postEditSession } from "../lib/beginEdit";
+import { registerManagedRecord, setRecordEditing } from "../components/shared/RecordEditBar";
 import { afterEditClick, afterSaveOrCancel, opensFresh, openSavedForm, savedFieldsEditable, type SavedFormMode } from "../lib/savedFormLock";
 
 /**
@@ -30,6 +31,13 @@ export function useSavedFormMode(recordId: number | string | undefined, canEdit:
     }
     if (freshOnArrival.current && !lockedByUser.current) setMode("editing");
   }, [canEdit, id]);
+
+  const pathname = location.pathname;
+  useEffect(() => registerManagedRecord(pathname), [pathname]);
+  useEffect(() => {
+    setRecordEditing(pathname, mode === "editing");
+  }, [pathname, mode]);
+  useEffect(() => () => setRecordEditing(pathname, false), [pathname]);
 
   function lock() {
     lockedByUser.current = true;
@@ -76,5 +84,11 @@ export function useModuleFormLock(recordId: number, canEdit: boolean, beginPath:
       setOpening(false);
     }
   }
-  return { ...session, onEdit, opening, editError };
+  /** Records Save or Cancel in the history, then locks. The history line never blocks the lock. */
+  function endSession(action: "save" | "cancel") {
+    if (session.mode === "editing") void postEditSession(beginPath, action).then(() => queryClient.invalidateQueries({ queryKey: ["workflow-history"] }), () => undefined);
+    if (action === "cancel") void queryClient.invalidateQueries({ type: "active" });
+    session.lock();
+  }
+  return { ...session, onEdit, opening, editError, endSession };
 }

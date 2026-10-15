@@ -326,27 +326,62 @@ function lockTimeout(err: unknown): boolean {
   return code === "55P03" || /lock timeout/i.test(message);
 }
 
+export type EditSessionAction = "start" | "save" | "cancel";
+
+const EDIT_VERBS: Record<EditSessionAction, string> = { start: "started editing", save: "saved and locked", cancel: "canceled editing of" };
+
+/** "Pat Lee started editing NCR 12 on Oct 15, 2026, 5:20 PM." Shown in the audit trail as who / what / when. */
+export async function editSessionSummary(db: Db, userId: number | undefined, label: string, id: number, action: EditSessionAction): Promise<string> {
+  const people = userId ? await db.execute(sql`SELECT coalesce(nullif(trim(name), ''), email) AS who FROM users WHERE id = ${userId}`) : null;
+  const who = String((people?.rows?.[0] as { who?: string } | undefined)?.who ?? "Someone");
+  const zone = await db.execute(sql`SELECT profile->>'timezone' AS tz FROM company LIMIT 1`);
+  const timeZone = String((zone.rows?.[0] as { tz?: string } | undefined)?.tz || "UTC");
+  let when: string;
+  try {
+    when = new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date());
+  } catch {
+    when = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date());
+  }
+  const tail = action === "cancel" ? " Unsaved changes were discarded and the record is locked." : action === "save" ? " The record is locked." : "";
+  return `${who} ${EDIT_VERBS[action]} ${label} ${id} on ${when}.${tail}`;
+}
+
+export function editActionFrom(body: unknown): EditSessionAction {
+  const action = (body as { action?: unknown } | undefined)?.action;
+  if (action === undefined || action === "start") return "start";
+  if (action === "save" || action === "cancel") return action;
+  throw AppError.badRequest("Choose start, save, or cancel.");
+}
+
+const EVENTS: Record<EditSessionAction, string> = { start: "edit_started", save: "edit_saved", cancel: "edit_canceled" };
+
+/** Writes one edit-session line (start, save, cancel). Every record type uses this. */
+export async function recordEditSession(db: Db, input: { entityType: string; label: string; id: number; userId: number | undefined; action: EditSessionAction }) {
+  await recordAuditTrail(db, {
+    entityType: input.entityType,
+    entityId: input.id,
+    action: "update",
+    changes: { event: EVENTS[input.action], summary: await editSessionSummary(db, input.userId, input.label, input.id, input.action) },
+    performedBy: input.userId,
+  });
+}
+
 /** POST /:id/begin-edit — records that someone unlocked a saved form. The route's department gate decides who may write. */
-export function beginFormEditHandler(entityType: string, load: (db: Db, id: number) => Promise<unknown>) {
+export function beginFormEditHandler(entityType: string, load: (db: Db, id: number) => Promise<unknown>, label = entityType) {
   return asyncHandler(async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Record is required");
+    const action = editActionFrom(req.body);
     try {
       await req.db!.execute(sql`SELECT set_config('lock_timeout', '3s', true)`);
       const row = await load(req.db!, id);
       if (!row) throw AppError.notFound(entityType);
-      await recordAuditTrail(req.db!, {
-        entityType,
-        entityId: id,
-        action: "update",
-        changes: { event: "edit_started" },
-        performedBy: req.user?.id,
-      });
+      await recordEditSession(req.db!, { entityType, label, id, userId: req.user?.id, action });
     } catch (err) {
       if (err instanceof AppError) throw err;
       if (lockTimeout(err)) throw new AppError("Couldn't open this form for editing. Try again.", 409);
       throw err;
     }
-    res.json({ editing: true });
+    res.json({ editing: action === "start" });
   });
 }
