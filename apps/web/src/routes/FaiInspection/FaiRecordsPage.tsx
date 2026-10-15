@@ -67,6 +67,9 @@ export function FaiRecordsPage() {
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={6} className="p-4 text-gray-500">No FAI records yet. Use New FAI Record to add one.</td></tr>
+            )}
             {rows.map((r) => (
               <tr key={r.id} className="border-b hover:bg-gray-50">
                 <td className="p-2">

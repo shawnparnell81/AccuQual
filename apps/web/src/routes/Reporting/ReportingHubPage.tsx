@@ -201,7 +201,7 @@ function SupplierOverview() {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader title="Supplier Risk Distribution" reportKey="supplier-performance" aiKind="supplier_risk_changes" />
-      <RiskHeatmap cells={(data?.riskDistribution ?? []).map((d) => ({ label: d.riskScore, value: d.count }))} />
+      <RiskHeatmap cells={(data?.riskDistribution ?? []).map((d) => ({ label: d.riskScore === "no_data" ? "No data for this period" : d.riskScore, value: d.count }))} />
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="border-b border-border text-left text-xs text-muted-foreground">
@@ -217,7 +217,7 @@ function SupplierOverview() {
               <tr key={s.id} className="border-b border-border last:border-0">
                 <td className="p-3">{s.name}</td>
                 <td className="p-3">
-                  <StatusBadge value={s.riskScore} />
+                  {s.riskScore === "no_data" ? <span className="text-muted-foreground">No data for this period</span> : <StatusBadge value={s.riskScore} />}
                 </td>
                 <td className="p-3">{s.onTimeAvgDays !== null ? `${s.onTimeAvgDays}d` : "—"}</td>
                 <td className="p-3">{s.accuracyAvgPercent !== null ? `${s.accuracyAvgPercent}%` : "—"}</td>

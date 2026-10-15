@@ -19,7 +19,8 @@ export function FaiRecordDetailPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const scannedSample = Number(searchParams.get("sample")) || null;
-  const isNew = id === "new";
+  // /records/new has no :id, so a missing id means a new record.
+  const isNew = id === undefined || id === "new";
   const navigate = useNavigate();
   const openTab = useOpenTab();
   const queryClient = useQueryClient();
@@ -62,6 +63,7 @@ export function FaiRecordDetailPage() {
       for (const k of ["planId", "lotSize", "linkedCsaFaiId", "linkedFuelPumpFaiId"]) {
         if (body[k] === "") body[k] = null; else if (body[k] != null) body[k] = Number(body[k]);
       }
+      for (const k of Object.keys(body)) if (body[k] === "" && k !== "faiNumber" && k !== "partNumber") body[k] = null;
       return isNew ? faiInspectionApi.records.create(body) : faiInspectionApi.records.update(Number(id), body);
     },
     onSuccess: (created) => {
