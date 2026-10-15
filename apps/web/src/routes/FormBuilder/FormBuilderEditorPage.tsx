@@ -13,6 +13,7 @@ import { blankDocument, blankFields, blankGrid, downloadGridWorkbook, importGrid
 import { DocumentFormEditor } from "./DocumentFormEditor";
 import { FieldsFormEditor } from "./FieldsFormEditor";
 import { FormMasthead, Paper } from "./FormChrome";
+import { ApprovalSignatureFields, approvalReady } from "../../components/forms/FormRevisionHistory";
 import { GridFormEditor } from "./GridFormEditor";
 
 interface BuiltForm {
@@ -43,6 +44,7 @@ interface RevisionRow {
   approvedByName: string | null;
   approvedAt: string | null;
   decisionNote: string | null;
+  approvalSignature: string | null;
 }
 
 interface SaveInput {
@@ -122,6 +124,8 @@ export function FormBuilderEditorPage() {
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
+  const [approvalPin, setApprovalPin] = useState("");
+  const [approvalCertified, setApprovalCertified] = useState(false);
   const [approvedNotice, setApprovedNotice] = useState("");
   const [revisionText, setRevisionText] = useState("");
   const [newRevision, setNewRevision] = useState("");
@@ -198,10 +202,17 @@ export function FormBuilderEditorPage() {
 
   const decide = useMutation({
     mutationFn: async (input: { kind: "approve" | "reject"; revId: number; note: string }) =>
-      (await apiClient.post<{ notice?: string }>(`/form-builder/${formId}/revisions/${input.revId}/${input.kind}`, { note: input.note })).data,
+      (
+        await apiClient.post<{ notice?: string }>(
+          `/form-builder/${formId}/revisions/${input.revId}/${input.kind}`,
+          input.kind === "approve" ? { note: input.note, pin: approvalPin, certified: approvalCertified } : { note: input.note },
+        )
+      ).data,
     onSuccess: (data, input) => {
       setDecision(null);
       setDecisionNote("");
+      setApprovalPin("");
+      setApprovalCertified(false);
       if (input.kind === "approve") {
         setApprovedNotice(data.notice ?? "Update the Master Document List with the new revision.");
         toast.success("Revision approved. It is now live.");
@@ -211,7 +222,10 @@ export function FormBuilderEditorPage() {
       void queryClient.invalidateQueries({ queryKey: ["form-builder"] });
       void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Could not record that decision.")),
+    onError: (err) => {
+      setApprovalPin("");
+      toast.error(extractErrorMessage(err, "Could not record that decision."));
+    },
   });
 
   const publish = useMutation({
@@ -450,7 +464,7 @@ export function FormBuilderEditorPage() {
                 {row.description}
                 {row.status !== "pending" && row.approvedByName ? (
                   <span className="block text-xs text-muted-foreground">
-                    {row.status === "rejected" ? "Rejected" : "Approved"} by {row.approvedByName}{row.approvedAt ? ` on ${formatDateTime(row.approvedAt)}` : ""}{row.decisionNote ? `: ${row.decisionNote}` : ""}
+                    {row.status === "approved" && row.approvalSignature ? `Approved: ${row.approvalSignature}` : `${row.status === "rejected" ? "Rejected" : "Approved"} by ${row.approvedByName}${row.approvedAt ? ` on ${formatDateTime(row.approvedAt)}` : ""}`}{row.decisionNote ? `: ${row.decisionNote}` : ""}
                   </span>
                 ) : null}
               </span>
@@ -483,15 +497,16 @@ export function FormBuilderEditorPage() {
               {decision === "approve" ? "Note (optional)" : "Note (required)"}
               <textarea className="mt-1 h-20 w-full rounded border border-border bg-background px-2 py-1" value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} />
             </label>
+            {decision === "approve" ? <ApprovalSignatureFields pin={approvalPin} certified={approvalCertified} onPin={setApprovalPin} onCertified={setApprovalCertified} /> : null}
             {decision === "reject" && decisionNote.trim() === "" ? <p role="alert" className="text-xs text-destructive">Enter a note explaining why this revision is rejected.</p> : null}
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
-                disabled={decide.isPending || (decision === "reject" && decisionNote.trim() === "")}
+                disabled={decide.isPending || (decision === "reject" ? decisionNote.trim() === "" : !approvalReady(approvalPin, approvalCertified))}
                 onClick={() => decide.mutate({ kind: decision, revId: form.data.pendingRevisionId!, note: decisionNote.trim() })}
               >
-                {decision === "approve" ? "Approve" : "Reject"}
+                {decision === "approve" ? "Sign and approve" : "Reject"}
               </button>
               <button type="button" className="text-sm text-primary" onClick={() => setDecision(null)}>Cancel</button>
             </div>

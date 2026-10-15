@@ -13,6 +13,7 @@ import { FORM_BUILDER_APPROVE_PERMISSION, FORM_BUILDER_PERMISSION } from "../../
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { ensureTestCompany } from "../helpers/company.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { setTestPin, TEST_PIN } from "../helpers/signaturePin.js";
 
 const app = createApp();
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -33,6 +34,7 @@ async function makeUser(label: string, permissions: string[], name: string) {
   const roleName = `fb-${label}-${suffix}`;
   await db.insert(roles).values({ name: roleName, description: label, hierarchyLevel: 80, isProtected: false, permissions });
   const [user] = await db.insert(users).values({ email: `fb-${label}-${suffix}@test.local`, passwordHash: "unused", name }).returning();
+  await setTestPin(user!.id);
   return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: null });
 }
 
@@ -50,7 +52,8 @@ function withText(structure: Structure, text: string): Structure {
 
 const patch = (token: string, body: Record<string, unknown>) => request(app).patch(`/form-builder/${formId}`).set(as(token)).send(body);
 const revisions = async (token = editor) => (await request(app).get(`/form-builder/${formId}/revisions`).set(as(token))).body as Revision[];
-const approve = (token: string, revId: number, note?: string) => request(app).post(`/form-builder/${formId}/revisions/${revId}/approve`).set(as(token)).send({ note });
+const approve = (token: string, revId: number, note?: string, pin: string = TEST_PIN) =>
+  request(app).post(`/form-builder/${formId}/revisions/${revId}/approve`).set(as(token)).send({ note, pin, certified: true });
 const reject = (token: string, revId: number, note?: string) => request(app).post(`/form-builder/${formId}/revisions/${revId}/reject`).set(as(token)).send({ note });
 const latestAudit = async (action: string) =>
   (
@@ -130,6 +133,12 @@ describe("form builder: manual revisions, approval and change history", () => {
 
   it("approves the first revision: it goes live at the typed REV and the approver is told to update the master list", async () => {
     const pending = (await load()).pendingRevisionId!;
+    const wrongPin = await approve(approver, pending, "Checked", "0000");
+    expect(wrongPin.status).toBe(401);
+    const unchecked = await request(app).post(`/form-builder/${formId}/revisions/${pending}/approve`).set(as(approver)).send({ pin: TEST_PIN });
+    expect(unchecked.status).toBe(400);
+    expect(message(unchecked.body)).toBe("Check the certification box before approving.");
+    expect((await load()).pendingRevisionId).toBe(pending);
     const res = await approve(approver, pending, "Checked against the paper form");
     expect(res.status).toBe(200);
     expect(res.body.notice).toBe("Update the Master Document List with the new revision.");
@@ -141,6 +150,7 @@ describe("form builder: manual revisions, approval and change history", () => {
 
     const row = (await revisions())[0]!;
     expect(row).toMatchObject({ status: "approved", approvedByName: "Approver One", decisionNote: "Checked against the paper form" });
+    expect((row as Revision & { approvalSignature: string }).approvalSignature).toMatch(/Approver One/);
     const audit = await latestAudit("status_change");
     expect((audit.changes as { summary: string }).summary).toMatch(/^Approver One approved FRM-TEST-1 Rev Test Form REV A on .+: Checked against the paper form\.$/);
 
@@ -287,7 +297,7 @@ describe("form builder: the blank is filed when the revision is approved", () =>
     expect(await db.select().from(documentFolders).where(eq(documentFolders.linkedPath, path))).toHaveLength(0);
 
     const form = (await request(app).get(`/form-builder/${id}`).set(as(selfApprover))).body as { pendingRevisionId: number };
-    const approved = await request(app).post(`/form-builder/${id}/revisions/${form.pendingRevisionId}/approve`).set(as(selfApprover)).send({});
+    const approved = await request(app).post(`/form-builder/${id}/revisions/${form.pendingRevisionId}/approve`).set(as(selfApprover)).send({ pin: TEST_PIN, certified: true });
     expect(approved.status).toBe(200);
     const [leaf] = await db.select().from(documentFolders).where(eq(documentFolders.linkedPath, path));
     expect(leaf?.parentId).toBe(folder!.id);

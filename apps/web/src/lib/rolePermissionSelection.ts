@@ -48,7 +48,7 @@ export const ROLE_PERMISSION_GROUPS: {
       {
         key: "form_builder.approve",
         label: "Can approve form revisions",
-        hint: "Approve or reject a form's new revision before it goes live. Until it is approved, people filling a copy keep opening the last approved version. Anyone with this can approve any revision, including their own. Stored on the role; a role name does not grant it.",
+        hint: "Approve or reject a form's new revision before it goes live, signing with your own PIN. This covers Form Builder forms and the revision history of the built-in forms. Until it is approved, people filling a copy keep opening the last approved version. Anyone with this can approve any revision, including their own. Stored on the role; a role name does not grant it.",
       },
       {
         key: "ncr.closure_signoff",

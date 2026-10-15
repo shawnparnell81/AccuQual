@@ -90,7 +90,7 @@ function revIdOf(value: string | undefined): number {
 }
 
 export const approveRevisionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { note?: unknown };
+  const body = (req.body ?? {}) as { note?: unknown; pin?: unknown; certified?: unknown };
   res.json(await approveRevision(req.db!, actor(req), idOf(req.params.id), revIdOf(req.params.revId), body));
 });
 
