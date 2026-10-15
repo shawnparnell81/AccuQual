@@ -4,6 +4,7 @@ import { blankOpenPath, NO_FOLDER_BLANK_KEYS } from "../../lib/retiredBlanks";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Folder } from "lucide-react";
 import { apiClient } from "../../api/client";
+import { FormRevisionHistory } from "../../components/forms/FormRevisionHistory";
 import { ExplorerCatalog } from "../../components/documents/ExplorerCatalog";
 import { ExplorerViewSwitcher } from "../../components/documents/ExplorerViewSwitcher";
 import { FileThumbnail } from "../../components/documents/FileThumbnail";
@@ -382,6 +383,8 @@ function FormFolderDetailBody({ formKey }: { formKey: string }) {
           ))}
         </div>
       )}
+
+      <FormRevisionHistory formKey={folder.data?.formKey ?? formKey} />
 
       {folder.isLoading && <p className="text-sm text-muted-foreground">Loading saved forms…</p>}
       {folder.isError && <p className="text-sm text-destructive">Couldn't load this folder.</p>}

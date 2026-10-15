@@ -55,7 +55,7 @@ describe("0138 removes only blank calibration placeholder equipment", () => {
     const entry = journal.entries.find((row) => row.tag === "0138_remove_placeholder_equipment");
     const previous = journal.entries.find((row) => row.tag === "0137_role_permission_keys");
     expect(entry?.idx).toBe((previous?.idx ?? 0) + 1);
-    expect(entry!.when).toBeGreaterThan(Math.max(...journal.entries.filter((row) => row !== entry).map((row) => row.when)));
+    expect(entry!.when).toBeGreaterThan(Math.max(...journal.entries.filter((row) => row.idx < entry!.idx).map((row) => row.when)));
   });
 
   it("deletes the blank placeholders, keeps everything with data or links, and writes the audit trail", async () => {

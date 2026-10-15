@@ -249,6 +249,7 @@ export async function listRevisions(db: Db, actor: Actor, id: number) {
       approvedBy: builtFormRevisions.approvedBy,
       approvedAt: builtFormRevisions.approvedAt,
       decisionNote: builtFormRevisions.decisionNote,
+      approvalSignature: builtFormRevisions.approvalSignature,
       name: users.name,
       email: users.email,
       isActive: users.isActive,
@@ -275,6 +276,7 @@ export async function listRevisions(db: Db, actor: Actor, id: number) {
       row.approvedBy == null ? null : formatUserLabel(row.approverEmail == null ? undefined : { name: row.approverName, email: row.approverEmail, isActive: row.approverActive ?? true }, row.approvedBy),
     approvedAt: row.approvedAt,
     decisionNote: row.decisionNote,
+    approvalSignature: row.approvalSignature,
   }));
 }
 
@@ -489,14 +491,27 @@ async function loadPendingRevision(db: Db, formId: number, revId: number) {
   return { form, row };
 }
 
+/**
+ * The approver signs with their own signature PIN and the certification box, the same as any other sign-off.
+ * Returns the name and date stamp kept on the revision.
+ */
+export async function approvalSignature(db: Db, actor: { id: number }, input: { pin?: unknown; certified?: unknown }): Promise<string> {
+  if (input.certified !== true) throw AppError.badRequest("Check the certification box before approving.");
+  if (typeof input.pin !== "string") throw AppError.badRequest("Enter a 4-digit PIN.");
+  const verified = await verifySignaturePin(actor.id, input.pin);
+  const [profile] = await db.select({ profile: company.profile }).from(company).limit(1);
+  return formatSignatureStamp(verified.displayName, new Date(), profile?.profile?.timezone || "UTC");
+}
+
 /** Makes a pending revision the one fillers open. The REV is the one its author typed. */
-export async function approveRevision(db: Db, actor: Actor, formId: number, revId: number, input: { note?: unknown }) {
+export async function approveRevision(db: Db, actor: Actor, formId: number, revId: number, input: { note?: unknown; pin?: unknown; certified?: unknown }) {
   await requireApprover(db, actor);
   const { form, row } = await loadPendingRevision(db, formId, revId);
   const note = decisionNote(input.note);
+  const signature = await approvalSignature(db, actor, input);
   const [decided] = await db
     .update(builtFormRevisions)
-    .set({ status: "approved", approvedBy: actor.id, approvedAt: new Date(), decisionNote: note || null })
+    .set({ status: "approved", approvedBy: actor.id, approvedAt: new Date(), decisionNote: note || null, approvalSignature: signature })
     .where(and(eq(builtFormRevisions.id, revId), eq(builtFormRevisions.status, "pending")))
     .returning();
   if (!decided) throw new AppError(`REV ${row.revision} was already decided.`, 409);
@@ -514,7 +529,7 @@ export async function approveRevision(db: Db, actor: Actor, formId: number, revI
     entityType: AUDIT,
     entityId: formId,
     action: "status_change",
-    changes: { summary, revision: row.revision, previousRevision: form.revision, decision: "approved", note: note || null },
+    changes: { summary, revision: row.revision, previousRevision: form.revision, decision: "approved", note: note || null, signature },
     performedBy: actor.id,
   });
   return { form: publicForm(live, null), notice: MASTER_LIST_NOTICE };

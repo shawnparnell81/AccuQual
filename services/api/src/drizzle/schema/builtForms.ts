@@ -36,6 +36,8 @@ export const builtFormRevisions = pgTable("built_form_revisions", {
   approvedBy: integer("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   decisionNote: text("decision_note"),
+  /** Name and date stamp from the approver's PIN signature. */
+  approvalSignature: text("approval_signature"),
 });
 
 /** A filled copy. Its structure is the template at the revision it was opened from. */
@@ -55,6 +57,26 @@ export const builtFormFills = pgTable("built_form_fills", {
   updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
+});
+
+/**
+ * Revision history of a built-in form (validation sheets, ISO and QMS forms). The structure lives in the app,
+ * so a row records the REV a person typed, what changed, and who approved it. Filled copies keep the REV stamped on them.
+ */
+export const formRevisionRecords = pgTable("form_revision_records", {
+  id: serial("id").primaryKey(),
+  formKey: text("form_key").notNull(),
+  revision: text("revision").notNull(),
+  previousRevision: text("previous_revision"),
+  description: text("description").notNull(),
+  /** pending, approved, or rejected. */
+  status: text("status").notNull().default("pending"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  decisionNote: text("decision_note"),
+  approvalSignature: text("approval_signature"),
 });
 
 export type BuiltForm = typeof builtForms.$inferSelect;

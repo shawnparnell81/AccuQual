@@ -68,6 +68,7 @@ import { attachmentsRouter } from "../modules/attachments/attachments.routes.js"
 import { importRouter } from "../modules/import/import.routes.js";
 import { formImportRouter } from "../modules/form-import/formImport.routes.js";
 import { formBuilderRouter } from "../modules/form-builder/routes.js";
+import { formRevisionsRouter } from "../modules/form-revisions/routes.js";
 import { adminImportRouter } from "../modules/import/adminImport.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
 import { laborClaimsRouter } from "../modules/labor-claims/laborClaims.routes.js";
@@ -175,6 +176,7 @@ apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/import", importRouter);
 apiRouter.use("/form-import", formImportRouter);
 apiRouter.use("/form-builder", formBuilderRouter);
+apiRouter.use("/form-revisions", formRevisionsRouter);
 apiRouter.use("/admin/imports", adminImportRouter);
 apiRouter.use("/warranty", warrantyRouter);
 apiRouter.use("/labor-claims", laborClaimsRouter);
