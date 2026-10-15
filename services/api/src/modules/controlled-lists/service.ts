@@ -182,6 +182,17 @@ function intervalMonths(days: number, metadata: Record<string, unknown> | null):
   return Math.max(1, Math.round((days * 12) / 365));
 }
 
+// Opening the blank Calibration forms used to create equipment rows named after the form.
+// Those were never real gages, so they are not added to the Master Equipment List.
+const PLACEHOLDER_EQUIPMENT_NAMES = new Set(["", "calibration record", "calibration equipment register"]);
+
+export function isPlaceholderEquipment(item: { name: string | null; serialNumber?: string | null; metadata?: unknown }, hasEvents: boolean): boolean {
+  if (hasEvents || item.serialNumber?.trim()) return false;
+  const metadata = (item.metadata ?? {}) as Record<string, unknown>;
+  if (typeof metadata.assetId === "string" && metadata.assetId.trim()) return false;
+  return PLACEHOLDER_EQUIPMENT_NAMES.has((item.name ?? "").trim().toLowerCase());
+}
+
 async function equipmentAppends(db: Db) {
   const items = await db.select().from(equipment);
   const events = await db.execute<{ equipment_id: number; performed_at: Date | string | null }>(sql`
@@ -195,7 +206,7 @@ async function equipmentAppends(db: Db) {
     if (!event.performed_at) continue;
     latest.set(event.equipment_id, new Date(event.performed_at).toISOString().slice(0, 10));
   }
-  return items.map((item) => {
+  return items.filter((item) => !isPlaceholderEquipment(item, latest.has(item.id))).map((item) => {
     const metadata = (item.metadata ?? {}) as Record<string, unknown>;
     const asset = typeof metadata.assetId === "string" && metadata.assetId.trim() ? metadata.assetId.trim() : String(item.id);
     return {

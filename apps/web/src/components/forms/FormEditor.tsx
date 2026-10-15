@@ -189,8 +189,14 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
         <button
           type="button"
           disabled={createVersion.isPending}
-          onClick={() => {
+          onClick={async () => {
             if (createVersion.isPending) return;
+            // The version endpoint reads the saved form, so finish any pending autosave first.
+            try {
+              await saveNow();
+            } catch {
+              return; // the save already showed its error
+            }
             createVersion.mutate(undefined, {
               onSuccess: (version) => {
                 if (formType === "calibration") {
