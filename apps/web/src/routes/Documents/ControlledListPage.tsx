@@ -272,7 +272,15 @@ function CellBody({
   if (!editable || quiet) {
     if (!editable) return <span className="controlled-list-screen-value">{text}</span>;
     return (
-      <button type="button" className="controlled-list-screen-value controlled-list-pick" onClick={onOpen}>
+      <button
+        type="button"
+        className="controlled-list-screen-value controlled-list-pick"
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          // Typing into a selected cell starts editing it, like a spreadsheet.
+          if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) onOpen();
+        }}
+      >
         {text || " "}
       </button>
     );
@@ -788,7 +796,10 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               activeAddr: active && active.sheet === item.name ? active.addr : null,
               selectedRows: active && active.sheet === item.name ? selectedRows : [],
               editing,
-              onOpen: (addr: string) => setEditing(addr),
+              onOpen: (addr: string) => {
+                focusAddr.current = addr;
+                setEditing(addr);
+              },
               onPick: (row: number, addr: string, extend: boolean) => pick(item.name, row, addr, extend),
               onChange: (addr: string, value: string | number | null) => edit(item.name, addr, value),
               onRename: (col: string, name: string) => void changeColumn({ op: "rename", col, name }),
