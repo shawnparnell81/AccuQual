@@ -7,6 +7,9 @@ export const FORM_BUILDER_PERMISSION = "form_builder";
 /** Approve or reject a built form's new revision before fillers see it. Granted on the role, never by a role name. */
 export const FORM_BUILDER_APPROVE_PERMISSION = "form_builder.approve";
 
+/** Edit the controlled lists: master lists and LST logs. They open read-only; this shows Edit. Granted on the role, never by a role name. */
+export const CONTROLLED_LISTS_EDIT_PERMISSION = "controlled_lists.edit";
+
 /** Delete a folder. Assigned on the role. Not implied by a role name. */
 export const FOLDERS_DELETE_PERMISSION = "folders.delete";
 

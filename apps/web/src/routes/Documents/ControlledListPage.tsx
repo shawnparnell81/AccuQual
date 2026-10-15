@@ -9,6 +9,7 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useCanEditSurface } from "../../components/shared/RecordEditBar";
+import { RecordEditButton } from "../../components/shared/RecordEditButton";
 import { useToast } from "../../components/shared/ToastProvider";
 import { commitAndReload, gestureFromKey, gestureSavesEdit, headerBandEnd, moveAddr, moveTab, placedCells, type EditGesture, type GridMove } from "../../lib/controlledListGrid";
 import { useAuthStore } from "../../store/authStore";
@@ -56,6 +57,10 @@ interface ControlledListView {
   statuses: string[];
   dataStart?: Record<string, number>;
   canEditStructure?: boolean;
+  /** Master lists open read-only. True when this person sees Edit. */
+  canEditList?: boolean;
+  locked?: boolean;
+  editSession?: { byId: number; byName: string; startedAt: string; mine: boolean } | null;
   sheets: StoredSheet[];
 }
 
@@ -465,7 +470,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const folderPath = useItemFolderPath();
   const queryClient = useQueryClient();
   const surface = recordSurface(LIST_ROUTES[listKey]);
-  const canEdit = useCanEditSurface(surface);
+  const canEditArea = useCanEditSurface(surface);
   const list = useQuery({
     queryKey: ["controlled-list", listKey],
     queryFn: async () => (await apiClient.get<ControlledListView>(`/controlled-lists/${listKey}`)).data,
@@ -497,10 +502,16 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const lastCommit = useRef<string | null>(null);
   const mounted = useRef(true);
   viewRef.current = view;
+  const [switching, setSwitching] = useState(false);
+  // Master lists stay read-only until this person clicks Edit. Logs keep editing in place.
+  const locked = Boolean(view?.locked);
+  const editMode = locked ? Boolean(view?.editSession?.mine) : true;
+  const canEdit = canEditArea && editMode;
+  const otherEditor = locked && view?.editSession && !view.editSession.mine ? view.editSession : null;
 
   useEffect(() => {
     if (!list.data) return;
-    setView((current) => current ?? list.data);
+    setView((current) => (current && (pending.current.size > 0 || current.editSession?.mine) ? current : list.data));
     setSheetName((current) => current || list.data.sheets[0]?.name || "");
   }, [list.data]);
 
@@ -610,6 +621,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   }
 
   function edit(name: string, addr: string, value: string | number | null) {
+    if (!canEdit) return;
     const existing = viewRef.current?.sheets.find((sheet) => sheet.name === name)?.cells[addr];
     if (existing?.f || existing?.kind === "formula") return;
     const prev = existing?.v ?? null;
@@ -788,11 +800,80 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     }
   }
 
+  function resetLocal(next: ControlledListView) {
+    if (timer.current != null) window.clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = new Map();
+    undoStack.current = [];
+    typingField.current = false;
+    setEditing(null);
+    setSelectedRows([]);
+    setDirty(false);
+    setSaveError(null);
+    remember(next);
+    setSaved(false);
+  }
+
+  async function startEdit() {
+    setSavedAt(null);
+    setSwitching(true);
+    try {
+      resetLocal((await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/edit`, { action: "start" })).data);
+    } catch (err) {
+      toast.error(errorMessage(err));
+      void list.refetch().then((res) => res.data && setView(res.data));
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  /** Save: send every edit, then close the edit and lock the list again. */
+  async function saveAndLock() {
+    await saveAll();
+    if (pending.current.size > 0 || inflight.current) return;
+    setSwitching(true);
+    try {
+      resetLocal((await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/edit`, { action: "save" })).data);
+      setSavedAt(new Date());
+      toast.success("Saved. The list is locked again.");
+    } catch (err) {
+      toast.error(errorMessage(err));
+      setSaveError(errorMessage(err));
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  /** Cancel: put the list back the way it was when Edit was clicked, and lock it. */
+  async function cancelEdit() {
+    const ok = await confirm({
+      title: "Cancel editing?",
+      message: "Every change since you clicked Edit is discarded, including added or deleted rows. The audit trail records the cancel.",
+      confirmLabel: "Discard changes",
+      tone: "danger",
+    });
+    if (!ok) return;
+    if (timer.current != null) window.clearTimeout(timer.current);
+    pending.current = new Map();
+    if (inflight.current) await inflight.current;
+    setSwitching(true);
+    try {
+      resetLocal((await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/edit`, { action: "cancel" })).data);
+      setSavedAt(null);
+      toast.success("Changes discarded. The list is locked again.");
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setSwitching(false);
+    }
+  }
+
   // The app's unsaved-changes guard (leaving the tab, closing or reloading the window) follows this list's own state,
   // so it clears once the edits reach the server instead of staying on after autosave.
   useEffect(() => {
-    setDirtyPath(draftPath, dirty);
-  }, [dirty, draftPath, setDirtyPath]);
+    // An open Edit on a master list counts as unsaved until Save or Cancel, even after autosave.
+    setDirtyPath(draftPath, dirty || (locked && editMode));
+  }, [dirty, draftPath, editMode, locked, setDirtyPath]);
   useEffect(() => () => setDirtyPath(draftPath, false), [draftPath, setDirtyPath]);
 
   const sheet = view?.sheets.find((item) => item.name === sheetName) ?? view?.sheets[0];
@@ -881,6 +962,16 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               <p className="text-sm text-muted-foreground">{view ? `${view.docId} · Rev ${view.revision}` : "Loading"}</p>
             </div>
             <div className="controlled-list-tools flex flex-wrap items-center gap-2">
+              {locked && !editMode && (
+                  <span className="text-sm text-muted-foreground" data-testid="controlled-list-lock-status">
+                    {otherEditor
+                      ? `Read-only. ${otherEditor.byName} is editing since ${new Date(otherEditor.startedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}.`
+                      : "Read-only"}
+                  </span>
+              )}
+              {locked && !editMode && canEditArea && view?.canEditList && !otherEditor && (
+                <RecordEditButton editing={false} onClick={() => void startEdit()} />
+              )}
               {canEdit && (
                 <>
                   <span
@@ -899,11 +990,18 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
                             ? `All changes saved at ${savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
                             : saved
                               ? "All changes saved"
-                              : ""}
+                              : locked
+                                ? "Editing. Save keeps your changes, Cancel discards them."
+                                : ""}
                   </span>
-                  <button type="button" onClick={() => void saveAll()} disabled={saving} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+                  <button type="button" onClick={() => void (locked ? saveAndLock() : saveAll())} disabled={saving || switching} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
                     Save
                   </button>
+                  {locked && (
+                    <button type="button" onClick={() => void cancelEdit()} disabled={saving || switching} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
+                      Cancel
+                    </button>
+                  )}
                 </>
               )}
               <button type="button" onClick={() => void download()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -1017,7 +1115,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
                       if (!col) return;
                       void confirm({
                         title: "Remove this column?",
-                        message: `Remove column ${col}? The revision moves forward, and the audit trail records the change.`,
+                        message: `Remove column ${col} and every value in it? The audit trail records the change. The revision is not changed; change it by hand if this needs a new revision.`,
                         confirmLabel: "Remove column",
                         tone: "danger",
                       }).then((ok) => {
