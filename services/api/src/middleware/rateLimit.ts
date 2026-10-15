@@ -63,11 +63,12 @@ export const authRateLimiter = rateLimit({
 /**
  * How often one person may renew a session. Separate from the sign-in limit:
  * an active browser renews on its own, about once per 15-minute access token.
- * 10 per minute covers a few tabs that miss the shared lock, and a tight loop
- * is told to wait at most a minute. The previous 60-per-15-minutes budget was
+ * 20 per minute covers a few tabs that miss the shared lock and quick page
+ * reloads (each reload renews once), and a tight loop is told to wait at most
+ * a minute. The previous 60-per-15-minutes budget was
  * spent by that loop during a deploy, and the rest of the quarter hour was 429s.
  */
-export const REFRESH_RATE_LIMIT_MAX = 10;
+export const REFRESH_RATE_LIMIT_MAX = 20;
 export const REFRESH_RATE_WINDOW_MS = 60 * 1000;
 
 const REFRESH_COOKIE = "accuqual_rt";

@@ -52,7 +52,8 @@ export const getCompanyLogoHandler = asyncHandler(async (req: Request, res: Resp
     res.setHeader("Cache-Control", "private, max-age=300");
     res.send(image.bytes);
   } catch {
-    throw AppError.badRequest("The company logo didn't load.");
+    // An unreachable logo shows the default mark instead of failing every page load.
+    res.status(204).end();
   }
 });
 
