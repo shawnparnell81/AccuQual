@@ -2,7 +2,7 @@ import { Router } from "express";
 import { scanUploads } from "../upload-scan/uploadScan.js";
 import multer from "multer";
 import { validate } from "../../middleware/validate.js";
-import { emailEngineeringReportSchema, deleteEngineeringReportSchema, saveEngineeringReportSchema, updateReportImageSchema } from "./validation.js";
+import { emailEngineeringReportSchema, saveEngineeringReportSchema, updateReportImageSchema } from "./validation.js";
 import {
   engineeringDeleteHandler,
   engineeringEmailHandler,
@@ -34,7 +34,7 @@ engineeringReportRouter.get("/template.csv", engineeringTemplateHandler);
 engineeringReportRouter.get("/pdf", engineeringPdfHandler);
 engineeringReportRouter.get("/", engineeringGetHandler);
 engineeringReportRouter.put("/", validate(saveEngineeringReportSchema), engineeringSaveHandler);
-engineeringReportRouter.delete("/", validate(deleteEngineeringReportSchema), engineeringDeleteHandler);
+engineeringReportRouter.delete("/", engineeringDeleteHandler);
 engineeringReportRouter.post("/email", validate(emailEngineeringReportSchema), engineeringEmailHandler);
 engineeringReportRouter.patch("/images/:attachmentId", validate(updateReportImageSchema), engineeringImageCaptionHandler);
 engineeringReportRouter.delete("/images/:attachmentId", engineeringImageDeleteHandler);

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { renderToString } from "react-dom/server";
 import { ROLE_PERMISSION_GROUPS } from "../../lib/rolePermissionSelection";
-import { DeleteReportDialog, deleteReportMessage, isFourDigitPin } from "./engineeringReportDelete";
+import { DeleteReportDialog, deleteReportMessage } from "./engineeringReportDelete";
 
 describe("Delete report confirm dialog", () => {
   it("names the month and says what is removed", () => {
@@ -13,19 +13,16 @@ describe("Delete report confirm dialog", () => {
     );
     const html = renderToString(<DeleteReportDialog monthLabel="September 2026" pending={false} error={null} onCancel={() => {}} onConfirm={() => {}} />);
     assert.ok(html.includes("Delete the September 2026 Monthly Quality Report?"));
-    assert.match(html, /Your 4-digit PIN/);
-    assert.match(html, /type="password"/);
+    assert.doesNotMatch(html, /PIN/);
+    assert.doesNotMatch(html, /type="password"/);
     assert.match(html, /not touched/);
   });
 
-  it("keeps Delete report disabled until a 4-digit PIN is typed, and shows a refused PIN", () => {
-    const html = renderToString(<DeleteReportDialog monthLabel="September 2026" pending={false} error="That PIN is not correct." onCancel={() => {}} onConfirm={() => {}} />);
-    assert.ok(/<button[^>]*type="submit"[^>]*disabled/.test(html) || /<button[^>]*disabled[^>]*type="submit"/.test(html));
-    assert.match(html, /That PIN is not correct\./);
-    assert.equal(isFourDigitPin("1234"), true);
-    assert.equal(isFourDigitPin("123"), false);
-    assert.equal(isFourDigitPin("12a4"), false);
-    assert.equal(isFourDigitPin("12345"), false);
+  it("lets Delete report be clicked right away and shows a refused delete", () => {
+    const ready = renderToString(<DeleteReportDialog monthLabel="September 2026" pending={false} error={null} onCancel={() => {}} onConfirm={() => {}} />);
+    assert.doesNotMatch(ready, /disabled=""/);
+    const refused = renderToString(<DeleteReportDialog monthLabel="September 2026" pending={false} error="The report wasn't deleted." onCancel={() => {}} onConfirm={() => {}} />);
+    assert.match(refused, /The report wasn(&#x27;|')t deleted\./);
   });
 
   it("is hidden from print and styled as a danger action", () => {
@@ -48,8 +45,8 @@ describe("Delete report button on the Monthly Quality Report", () => {
     assert.match(page, /border-destructive/);
   });
 
-  it("sends the PIN with the delete and resets the month to a fresh report", () => {
-    assert.match(page, /apiClient\.delete<ReportView>\("\/reports\/engineering", \{ params: \{ year, month \}, data: \{ pin \} \}\)/);
+  it("sends the delete without a PIN and resets the month to a fresh report", () => {
+    assert.match(page, /apiClient\.delete<ReportView>\("\/reports\/engineering", \{ params: \{ year, month \} \}\)/);
     assert.match(page, /setNarrative\(fresh\.narrative\)/);
   });
 });
