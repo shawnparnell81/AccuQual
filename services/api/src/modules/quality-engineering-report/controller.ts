@@ -9,7 +9,7 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { SUPPLIER_COLUMNS, SUPPLIER_UPLOAD_NOTE } from "./supplierHelp.js";
 import { renderEngineeringReportPdf } from "./pdf.js";
-import { buildEngineeringReport, deleteEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, verifyEngineeringReport, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
+import { buildEngineeringReport, deleteEngineeringReport, deleteReportImage, emailEngineeringReport, saveEngineeringNarrative, unlockEngineeringReport, verifyEngineeringReport, supplierTemplateFile, updateReportImageCaption, uploadEngineeringSupplier } from "./service.js";
 import { loadReportImageFiles } from "./reportImages.js";
 import { commitSourceFile, listSourceCoverage, previewSourceFile } from "./sourceStore.js";
 import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
@@ -198,4 +198,10 @@ export const engineeringSourceListHandler = asyncHandler(async (req: Request, re
 export const engineeringVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
   const period = periodFrom(req.query);
   res.json(await verifyEngineeringReport(req.db!, { ...actor(req), ...period }));
+});
+
+/** POST /reports/engineering/unlock?year&month — reopens a verified month for editing (plain confirm in the app, audit-logged). */
+export const engineeringUnlockHandler = asyncHandler(async (req: Request, res: Response) => {
+  const period = periodFrom(req.query);
+  res.json(await unlockEngineeringReport(req.db!, { ...actor(req), ...period }));
 });

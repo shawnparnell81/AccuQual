@@ -12,6 +12,7 @@ export interface SourcePreview {
   updated: number;
   removed: number;
   skippedVerified: { month: string; rows: number }[];
+  warnings?: string[];
 }
 
 /** One line per recognized source: rows per month and what the import changes. */
@@ -24,6 +25,7 @@ export function previewLines(preview: SourcePreview): string[] {
   const undated = preview.sheets.reduce((sum, sheet) => sum + sheet.undated, 0);
   if (undated) lines.push(`${undated} rows had no usable date and are left out.`);
   if (preview.skippedVerified.length) lines.push(`Skipped (month already verified): ${preview.skippedVerified.map((item) => `${item.month} ${item.rows}`).join(", ")}`);
+  for (const warning of preview.warnings ?? []) lines.push(`Check: ${warning}`);
   return lines;
 }
 

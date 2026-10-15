@@ -16,7 +16,7 @@ import {
   engineeringTemplateHandler,
   engineeringUploadHandler,
   engineeringSourceCommitHandler,
-  engineeringVerifyHandler,
+  engineeringVerifyHandler, engineeringUnlockHandler,
   engineeringSourceListHandler,
   engineeringSourcePreviewHandler,
 } from "./controller.js";
@@ -43,3 +43,4 @@ engineeringReportRouter.get("/sources", engineeringSourceListHandler);
 engineeringReportRouter.post("/sources/preview", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourcePreviewHandler);
 engineeringReportRouter.post("/sources", sourceUpload.single("file"), scanUploads("Monthly Quality Report > source file"), engineeringSourceCommitHandler);
 engineeringReportRouter.post("/verify", engineeringVerifyHandler);
+engineeringReportRouter.post("/unlock", engineeringUnlockHandler);

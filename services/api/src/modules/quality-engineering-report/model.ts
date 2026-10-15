@@ -95,6 +95,8 @@ export interface EngineeringNarrative {
   financialEntries: FinancialEntry[];
   /** Fields summed from a chosen imported file. The value is labeled with that import. */
   importPulls: ImportPull[];
+  /** Set when someone unlocks a verified month for editing. Server-owned; the narrative save never changes it. */
+  unlockedAt: string | null;
 }
 
 export const IMPORT_PULL_SECTIONS = ["returns", "warranty", "labor", "financials"] as const;
@@ -258,7 +260,7 @@ export interface EngineeringReportView {
   uploadFileName: string | null;
   canEdit: boolean;
   /** Set once the month is verified: its raw source rows are deleted and only its totals are kept. */
-  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean };
+  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean; locked: boolean; canUnlock: boolean };
   /** Inboxes that receive this saved report. */
   recipients: string[];
   importedDatasets: ImportedDatasetLine[];
@@ -361,6 +363,7 @@ export function emptyNarrative(): EngineeringNarrative {
     images: [],
     financialEntries: [],
     importPulls: [],
+    unlockedAt: null,
   };
 }
 
@@ -804,6 +807,7 @@ export function normalizeNarrative(value: unknown): EngineeringNarrative {
     images: asReportImages(row.images),
     financialEntries: normalizeFinancialEntries(row.financialEntries),
     importPulls: normalizeImportPulls(row.importPulls),
+    unlockedAt: typeof row.unlockedAt === "string" ? row.unlockedAt : null,
   };
 }
 
