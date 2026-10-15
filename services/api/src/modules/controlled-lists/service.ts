@@ -32,6 +32,8 @@ import {
   freshSheets,
   insertDataRow,
   dropEmptyDataRows,
+  dropPlaceholderEquipmentRows,
+  PLACEHOLDER_EQUIPMENT_NAMES,
   insertLocationPath,
   isLivingListPath,
   planListCleanup,
@@ -182,10 +184,7 @@ function intervalMonths(days: number, metadata: Record<string, unknown> | null):
   return Math.max(1, Math.round((days * 12) / 365));
 }
 
-// Opening the blank Calibration forms used to create equipment rows named after the form.
-// Those were never real gages, so they are not added to the Master Equipment List.
-const PLACEHOLDER_EQUIPMENT_NAMES = new Set(["", "calibration record", "calibration equipment register"]);
-
+// Blank Calibration placeholders (see PLACEHOLDER_EQUIPMENT_NAMES) are not added to the Master Equipment List.
 export function isPlaceholderEquipment(item: { name: string | null; serialNumber?: string | null; metadata?: unknown }, hasEvents: boolean): boolean {
   if (hasEvents || item.serialNumber?.trim()) return false;
   const metadata = (item.metadata ?? {}) as Record<string, unknown>;
@@ -233,6 +232,21 @@ async function absorbOutsideRows(db: Db, key: ListKey, sheets: StoredSheet[], us
     if (merged.added.length > 0) notes.push(`Added ${merged.added.length} controlled documents that were not already on Internal Documents: ${merged.added.join(", ")}.`);
   }
   if (key === "lst-eqp-001") {
+    const live = await db.select({ id: equipment.id }).from(equipment);
+    const cleared = dropPlaceholderEquipmentRows(current, new Set(live.map((item) => String(item.id))));
+    if (cleared.removed.length > 0) {
+      current = cleared.sheets;
+      await db.update(controlledLists).set({ sheets: current, updatedAt: new Date() }).where(eq(controlledLists.id, listId));
+      await recordAuditTrail(db, {
+        entityType: "ControlledList",
+        entityId: listId,
+        action: "update",
+        changes: {
+          summary: `System migration 0138_remove_placeholder_equipment removed ${cleared.removed.length} blank calibration placeholder rows from ${LISTS[key].docId}: ${cleared.removed.join(", ")}. Their equipment records were removed by the migration. Revision stayed ${LISTS[key].revision}.`,
+          removed: cleared.removed,
+        },
+      });
+    }
     const merged = appendEquipment(current, await equipmentAppends(db));
     current = merged.sheets;
     if (merged.added.length > 0) notes.push(`Added ${merged.added.length} equipment records that were not already on the list: ${merged.added.join(", ")}.`);

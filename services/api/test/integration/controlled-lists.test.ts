@@ -369,7 +369,7 @@ describe("living controlled lists API", () => {
       .send({ sheet: engName, op: "insert", row: 6, place: "above" });
     expect(inserted.status).toBe(200);
     expect(inserted.body.revision).toBe("A");
-    expect(inserted.body.sheets[0].cells.A6).toBeUndefined();
+    expect(inserted.body.sheets[0].cells.A6?.v ?? null).toBeNull();
     expect(inserted.body.sheets[0].cells.A7.v).toBe("ECR-2026-001");
     expect(inserted.body.sheets[0].cells.F7.v).toBe(`Height ${suffix}`);
     expect(JSON.stringify(inserted.body.sheets[0].cells)).not.toContain("ECR-2026-051");
@@ -429,7 +429,7 @@ describe("living controlled lists API", () => {
       .send({ sheet: "LST-NCR-001 - NCR", op: "insert", row: 5, place: "below" });
     expect(ncrInsert.status).toBe(200);
     expect(ncrInsert.body.sheets[0].cells.A5.v).toBe("NCR-2026-001");
-    expect(ncrInsert.body.sheets[0].cells.A6).toBeUndefined();
+    expect(ncrInsert.body.sheets[0].cells.A6?.v ?? null).toBeNull();
     const ncrDelete = await request(app)
       .post("/controlled-lists/lst-ncr-001/rows")
       .set("Authorization", `Bearer ${token}`)

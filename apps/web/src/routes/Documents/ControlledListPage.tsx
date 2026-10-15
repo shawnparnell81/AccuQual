@@ -15,6 +15,7 @@ import { siteHeaderValue } from "../../store/siteStore";
 import { isLocationLine } from "../../lib/folderPath";
 import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
+import { clickOpensCell, keyOpensCell } from "../../lib/controlledListOpen";
 import {
   columnLetter,
   listOptions,
@@ -122,7 +123,7 @@ function SheetGrid({
   activeAddr: string | null;
   selectedRows: number[];
   editing: string | null;
-  onOpen: (addr: string) => void;
+  onOpen: (addr: string, seed?: string) => void;
   onPick: (row: number, addr: string, extend: boolean) => void;
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
@@ -159,6 +160,11 @@ function SheetGrid({
           if (active instanceof HTMLElement && !event.currentTarget.contains(active)) onLeave(active, "click");
           onPick(row, addr, event.shiftKey);
         }}
+        onClick={(event) => {
+          // A click anywhere in an editable cell opens it, including blank cells and the padding around the text.
+          const targetTag = event.target instanceof Element ? event.target.tagName : "";
+          if (clickOpensCell({ editable, formula }, { targetTag, shiftKey: event.shiftKey })) onOpen(addr);
+        }}
         style={{
           gridColumn: `${col} / span ${cols}`,
           gridRow: `${row - fromRow + 1} / span ${rows}`,
@@ -187,7 +193,7 @@ function SheetGrid({
             date={date}
             wrap={band}
             quiet={long && editing !== addr}
-            onOpen={() => onOpen(addr)}
+            onOpen={(seed?: string) => onOpen(addr, seed)}
             onChange={onChange}
             onRename={onRename}
             onLeave={onLeave}
@@ -245,7 +251,7 @@ function CellBody({
   date: boolean;
   wrap: boolean;
   quiet: boolean;
-  onOpen: () => void;
+  onOpen: (seed?: string) => void;
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
   onLeave: (target: EventTarget | null) => void;
@@ -275,10 +281,16 @@ function CellBody({
       <button
         type="button"
         className="controlled-list-screen-value controlled-list-pick"
-        onClick={onOpen}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
         onKeyDown={(event) => {
-          // Typing into a selected cell starts editing it, like a spreadsheet.
-          if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) onOpen();
+          // Typing into a selected cell starts editing it, like a spreadsheet, and keeps the key that was typed.
+          const opened = keyOpensCell(event, { choices: Boolean(choices), date });
+          if (!opened.open) return;
+          event.preventDefault();
+          onOpen(opened.seed);
         }}
       >
         {text || " "}
@@ -403,6 +415,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const undoing = useRef(false);
   const anchorRow = useRef<number | null>(null);
   const focusAddr = useRef<string | null>(null);
+  const seedKey = useRef<{ addr: string; key: string } | null>(null);
   const timer = useRef<number | null>(null);
   const saveSeq = useRef(0);
   const viewRef = useRef<ControlledListView | null>(null);
@@ -674,6 +687,16 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     if (field instanceof HTMLElement) {
       field.focus();
       focusAddr.current = null;
+      const seed = seedKey.current;
+      seedKey.current = null;
+      if (seed && seed.addr === addr && (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && field.type !== "date") {
+        // The key that opened the cell is the start of the new text.
+        const next = field.value + seed.key;
+        const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+        setter?.call(field, next);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.setSelectionRange(next.length, next.length);
+      }
     }
   }, [editing, view]);
 
@@ -796,8 +819,9 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               activeAddr: active && active.sheet === item.name ? active.addr : null,
               selectedRows: active && active.sheet === item.name ? selectedRows : [],
               editing,
-              onOpen: (addr: string) => {
+              onOpen: (addr: string, seed?: string) => {
                 focusAddr.current = addr;
+                seedKey.current = seed ? { addr, key: seed } : null;
                 setEditing(addr);
               },
               onPick: (row: number, addr: string, extend: boolean) => pick(item.name, row, addr, extend),
