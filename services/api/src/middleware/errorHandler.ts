@@ -128,12 +128,23 @@ function errorChain(err: unknown): string[] {
   return messages;
 }
 
+/** Names the fields that failed, in words, so the person can fix them: "Check these fields: Customer name, RMA number." */
+export function validationMessage(err: ZodError): string {
+  const names = [...new Set(err.issues.map((issue) => issue.path.filter((part) => typeof part === "string").join(" ")).filter(Boolean))];
+  if (names.length === 0) return "Request failed validation";
+  const words = names.slice(0, 5).map((name) => {
+    const spaced = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_/g, " ").toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  });
+  return `Check ${words.length === 1 ? "this field" : "these fields"}: ${words.join(", ")}${names.length > 5 ? " and more" : ""}.`;
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
     logFailedTransition(req, err, 400);
     return res.status(400).json({
       error: "ValidationError",
-      message: "Request failed validation",
+      message: validationMessage(err),
       details: err.flatten(),
       requestId: getRequestId(),
     });

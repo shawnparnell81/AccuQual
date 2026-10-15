@@ -72,6 +72,13 @@ export function ChangeDetailPage() {
     else await apiClient.post(`/change/${change.id}/save`);
   }
 
+  // Save while typing, a moment after the last keystroke, so a reload or leaving the page keeps the text.
+  useEffect(() => {
+    if (!descriptionDirty && !impactDirty) return;
+    const timer = setTimeout(() => void persistChange().catch(() => undefined), 800);
+    return () => clearTimeout(timer);
+  }, [description, impact]);
+
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !change) return <LoadingPlaceholder />;
 
@@ -85,7 +92,7 @@ export function ChangeDetailPage() {
           <StatusBadge value={change.status} />
         </div>
         <div className="flex gap-2">
-          <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateChange.isPending} onEdit={() => formLock.onEdit()} onSave={() => void persistChange()} onLock={formLock.lock} />
+          <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateChange.isPending} onEdit={() => formLock.onEdit()} onSave={() => void persistChange()} onLock={formLock.lock} onDone={() => void persistChange().then(formLock.lock, () => undefined)} />
           <SaveStatus saving={updateChange.isPending} unsaved={descriptionDirty || impactDirty} />
           <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} number={change.recordNumber} ownerIds={[change.requestedBy]} navigateTo="/change" allowed={permitted} assignedOnly />
           <OpenFormButton formType="pcn" entityId={change.id} title={`${recordHeading("Change", change.recordNumber)} Form`} label="PCN Document" />

@@ -14,6 +14,9 @@ export const CRAR_STATUSES = ["new", "quality_review", "warranty_review", "compl
  * crar.controller.ts, the same validate()-vs-inline-guard split every
  * other module in this app uses.
  */
+/** A cleared date box arrives as "". Store it as no date instead of refusing the whole save. */
+const blankableDate = z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? null : value), reasonableDate.nullable().optional());
+
 const crarContentFields = {
   // 1. Return / Customer Identification
   customerName: z.string().nullable().optional(),
@@ -23,13 +26,13 @@ const crarContentFields = {
   partDescription: z.string().nullable().optional(),
   qtyReturned: z.string().nullable().optional(),
   reportInitiatedBy: z.string().nullable().optional(),
-  reportDate: reasonableDate.nullable().optional(),
+  reportDate: blankableDate,
   approvedBy: z.string().nullable().optional(),
   customerComplaint: z.string().nullable().optional(),
 
   // 3. Customer Complaint & Initial Assessment
   complaintDetail: z.string().nullable().optional(),
-  dateReceived: reasonableDate.nullable().optional(),
+  dateReceived: blankableDate,
   receivedBy: z.string().nullable().optional(),
   conditionOnReceipt: z.string().nullable().optional(),
 
@@ -45,7 +48,7 @@ const crarContentFields = {
   // 5. Investigation Plan
   investigationPlan: z.string().nullable().optional(),
   investigator: z.string().nullable().optional(),
-  targetCompletion: reasonableDate.nullable().optional(),
+  targetCompletion: blankableDate,
   priority: z.string().nullable().optional(),
 
   // 6. Receiving Documentation / Evidence
@@ -60,7 +63,7 @@ const crarContentFields = {
   // 9. Tests Performed & Test Results
   testResults: z.string().nullable().optional(),
   testedBy: z.string().nullable().optional(),
-  testDate: reasonableDate.nullable().optional(),
+  testDate: blankableDate,
   overallTestResult: z.string().nullable().optional(),
 
   // 10. Findings & Conclusion
@@ -77,15 +80,15 @@ const crarContentFields = {
   correctiveActionRequired: z.boolean().optional(),
   engineeringReviewRequired: z.boolean().optional(),
   carNumber: z.string().nullable().optional(),
-  customerCommunicationDate: reasonableDate.nullable().optional(),
-  dispositionDate: reasonableDate.nullable().optional(),
+  customerCommunicationDate: blankableDate,
+  dispositionDate: blankableDate,
 
   // 12. Approval / Final Record
   finalReviewComments: z.string().nullable().optional(),
   preparedByFinal: z.string().nullable().optional(),
-  preparedDate: reasonableDate.nullable().optional(),
+  preparedDate: blankableDate,
   approvedByFinal: z.string().nullable().optional(),
-  approvedDate: reasonableDate.nullable().optional(),
+  approvedDate: blankableDate,
 
   // 13. Record Retention / Closeout
   recordLocation: z.string().nullable().optional(),
