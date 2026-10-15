@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { loadRolePermissions } from "../roles/rolePermissions.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
@@ -135,7 +136,7 @@ export async function updateFormNumber(
   performedBy: number | undefined,
   actor: { roleName?: string | null; department?: string | null } | null | undefined,
 ) {
-  if (!canEditFormNumber(actor)) throw AppError.forbidden("Only Engineering, a quality manager, or an administrator can change a form number");
+  if (!canEditFormNumber({ permissions: await loadRolePermissions(db, actor?.roleName), department: actor?.department })) throw AppError.forbidden("Your role doesn't have permission to change a form number");
   if (!seedFor(formKey)) throw AppError.badRequest("Unknown form");
   const next = formId.trim();
   if (next.length > 40) throw AppError.badRequest("Form number must be 40 characters or fewer");

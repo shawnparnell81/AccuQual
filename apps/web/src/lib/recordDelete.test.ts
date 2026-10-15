@@ -3,13 +3,13 @@ import test from "node:test";
 import { canDeleteRecord, canViewAuditLog, recordDeleteLabel } from "./recordDelete";
 
 test("only an administrator, owner, quality manager, or the record owner can delete", () => {
-  assert.equal(canDeleteRecord("admin", 1, []), true);
-  assert.equal(canDeleteRecord("owner", 2, []), true);
-  assert.equal(canDeleteRecord("quality_manager", 3, []), true);
-  assert.equal(canDeleteRecord("operator", 4, [4]), true);
-  assert.equal(canDeleteRecord("operator", 4, [9]), false);
-  assert.equal(canDeleteRecord("operator", 4, [null]), false);
-  assert.equal(canDeleteRecord("read_only", 5, []), false);
+  assert.equal(canDeleteRecord(true, 1, []), true);
+  assert.equal(canDeleteRecord(true, 2, [9]), true);
+  assert.equal(canDeleteRecord(true, 3, [null]), true);
+  assert.equal(canDeleteRecord(false, 4, [4]), true);
+  assert.equal(canDeleteRecord(false, 4, [9]), false);
+  assert.equal(canDeleteRecord(false, 4, [null]), false);
+  assert.equal(canDeleteRecord(false, 5, []), false);
 });
 
 test("any signed-in role can open the company audit log", () => {

@@ -247,6 +247,12 @@ export const ROLE_PERMISSION_PHRASES: Record<string, string> = {
   login_history: "Can view login history",
   "sites.view_all": "Can view every site",
   "executive.dashboard": "Can open the executive dashboard",
+  admin_console: "Can use the Admin console",
+  "users.list": "Can see the user list",
+  "quality_automation.manage": "Can change quality reminders",
+  "records.delete": "Can delete any record",
+  "forms.edit_number": "Can change form numbers",
+  "digest.receive": "Receives review reminders",
 };
 
 export function describeStoredPermissions(keys: readonly string[]): string[] {

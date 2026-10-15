@@ -29,6 +29,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Can restore archived documents",
         hint: "Returns a document from Obsolete / Archive. The permission is stored on the role.",
       },
+      {
+        key: "records.delete",
+        label: "Can delete any record",
+        hint: "Delete records other people created. Anyone can still delete a record they created. Owner, Administrator and Quality Manager start with it.",
+      },
     ],
   },
   {
@@ -50,6 +55,11 @@ export const ROLE_PERMISSION_GROUPS: {
         label: "Can sign NCR closure sign-off",
         hint: "Sign the required Quality Manager row on NCR closure. Stored on the role; a role name does not grant it.",
       },
+      {
+        key: "forms.edit_number",
+        label: "Can change form numbers",
+        hint: "Change the document number on the editable quality forms. Engineering can always change it. Owner, Administrator and Quality Manager start with it.",
+      },
     ],
   },
   {
@@ -60,6 +70,11 @@ export const ROLE_PERMISSION_GROUPS: {
         key: "quality_report.delete",
         label: "Can delete monthly quality reports",
         hint: "Delete a month's Monthly Quality Report (typed text, supplier data, NCR table rows and pictures) after entering their own PIN. Live data from other modules is not touched.",
+      },
+      {
+        key: "digest.receive",
+        label: "Receives review reminders",
+        hint: "Documents waiting for review show in this role's daily digest and approval reminders. Owner, Administrator, President, Vice President and Quality Manager start with it.",
       },
     ],
   },
@@ -141,6 +156,21 @@ export const ROLE_PERMISSION_GROUPS: {
         key: "roles.manage",
         label: "Can manage roles",
         hint: "Delete and restore roles, including built-in ones. Owner and Administrator start with this. It is stored on the role.",
+      },
+      {
+        key: "admin_console",
+        label: "Can use the Admin console",
+        hint: "Company settings, users, roles, plants, integrations and system health. Owner and Administrator start with it.",
+      },
+      {
+        key: "users.list",
+        label: "Can see the user list",
+        hint: "See every user account. Owner, Administrator and Quality Manager start with it.",
+      },
+      {
+        key: "quality_automation.manage",
+        label: "Can change quality reminders",
+        hint: "Reminder and escalation settings for quality work. Owner, Administrator and Quality Manager start with it.",
       },
     ],
   },

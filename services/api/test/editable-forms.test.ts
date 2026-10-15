@@ -3,13 +3,13 @@ import { canEditFormNumber, resolveFolderPath, folderPathNames, recordLinkedPath
 import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
 
 describe("form number editors", () => {
-  it("allows engineering, quality managers, and administrators", () => {
-    expect(canEditFormNumber({ roleName: "admin", department: "quality" })).toBe(true);
-    expect(canEditFormNumber({ roleName: "owner", department: null })).toBe(true);
-    expect(canEditFormNumber({ roleName: "quality_manager", department: "production" })).toBe(true);
-    expect(canEditFormNumber({ roleName: "operator", department: "engineering" })).toBe(true);
-    expect(canEditFormNumber({ roleName: "operator", department: "quality" })).toBe(false);
-    expect(canEditFormNumber({ roleName: "staff", department: "production" })).toBe(false);
+  it("allows engineering and roles with forms.edit_number", () => {
+    expect(canEditFormNumber({ permissions: ["forms.edit_number"], department: "quality" })).toBe(true);
+    expect(canEditFormNumber({ permissions: ["forms.edit_number"], department: null })).toBe(true);
+    expect(canEditFormNumber({ permissions: ["forms.edit_number"], department: "production" })).toBe(true);
+    expect(canEditFormNumber({ permissions: [], department: "engineering" })).toBe(true);
+    expect(canEditFormNumber({ permissions: [], department: "quality" })).toBe(false);
+    expect(canEditFormNumber({ permissions: ["import_data"], department: "production" })).toBe(false);
   });
 });
 

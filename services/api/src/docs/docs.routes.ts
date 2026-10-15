@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireRolePermission } from "../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../modules/roles/roleAccess.js";
 import { buildOpenApiDocument } from "./openapi.js";
 
 // Admin-only, same gating pattern as system-health.routes.ts. Consumed by
@@ -12,7 +13,7 @@ import { buildOpenApiDocument } from "./openapi.js";
 // already-authenticated SPA gets the identical interactive result and
 // actually works with this app's real auth model.
 export const docsRouter = Router();
-docsRouter.use(requireAuth, requireRole("admin"));
+docsRouter.use(requireAuth, requireRolePermission(ADMIN_CONSOLE_PERMISSION));
 docsRouter.get("/openapi.json", (_req, res) => {
   res.json(buildOpenApiDocument());
 });

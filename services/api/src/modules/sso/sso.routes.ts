@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { authRateLimiter } from "../../middleware/rateLimit.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -14,7 +15,7 @@ ssoPublicRouter.get("/callback", authRateLimiter, ssoCallback);
 
 /** The administrator's SSO settings. Mounted at /sso. */
 export const ssoAdminRouter = Router();
-ssoAdminRouter.use(requireAuth, withDb, requireRole("admin"));
+ssoAdminRouter.use(requireAuth, withDb, requireRolePermission(ADMIN_CONSOLE_PERMISSION));
 ssoAdminRouter.get("/", getSsoConfig);
 ssoAdminRouter.put("/", validate(saveConnectionSchema), saveSsoConfig);
 ssoAdminRouter.delete("/", deleteSsoConfig);

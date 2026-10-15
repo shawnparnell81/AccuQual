@@ -144,7 +144,8 @@ export function useFormFiling(formKey: string | null, recordId: number, moduleCo
 /** Sets the document number on the blank master. Filled copies keep the number they were given. */
 export function FormNumberEditor({ formKey, compact = false }: { formKey: string; compact?: boolean }) {
   const user = useCurrentUser();
-  const canEdit = canEditFormNumber(user);
+  const { effective } = useEffectivePermissions();
+  const canEdit = canEditFormNumber({ canEditNumbers: effective?.["forms.edit_number"] === "edit", department: user?.department });
   const queryClient = useQueryClient();
   const templates = useFormTemplates({ enabled: formKey.length > 0 });
   const current = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";

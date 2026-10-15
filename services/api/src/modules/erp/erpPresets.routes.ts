@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { createErpPresetSchema, updateErpPresetSchema } from "./erpPresets.validation.js";
@@ -40,7 +41,7 @@ import {
  * regression in erp-module.test.ts's own suite.
  */
 export const erpPresetsRouter = Router();
-const gate = [requireAuth, withDb, requireRole("admin")];
+const gate = [requireAuth, withDb, requireRolePermission(ADMIN_CONSOLE_PERMISSION)];
 
 erpPresetsRouter.get("/active-preset/:module", ...gate, getActivePresetHandler);
 

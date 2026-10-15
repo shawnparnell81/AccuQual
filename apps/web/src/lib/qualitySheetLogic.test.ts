@@ -92,11 +92,11 @@ test("a filled copy prints its stored document number and stays blank when it ha
 });
 
 test("engineering, quality managers, and administrators can change a form number", () => {
-  assert.equal(canEditFormNumber({ roleName: "admin", department: "production" }), true);
-  assert.equal(canEditFormNumber({ roleName: "owner", department: null }), true);
-  assert.equal(canEditFormNumber({ roleName: "quality_manager", department: "production" }), true);
-  assert.equal(canEditFormNumber({ roleName: "operator", department: "engineering" }), true);
-  assert.equal(canEditFormNumber({ roleName: "operator", department: "quality" }), false);
-  assert.equal(canEditFormNumber({ roleName: "lead", department: "production" }), false);
+  assert.equal(canEditFormNumber({ canEditNumbers: true, department: "production" }), true);
+  assert.equal(canEditFormNumber({ canEditNumbers: true, department: null }), true);
+  assert.equal(canEditFormNumber({ canEditNumbers: true, department: "quality" }), true);
+  assert.equal(canEditFormNumber({ canEditNumbers: false, department: "engineering" }), true);
+  assert.equal(canEditFormNumber({ canEditNumbers: false, department: "quality" }), false);
+  assert.equal(canEditFormNumber({ department: "production" }), false);
   assert.equal(canEditFormNumber(null), false);
 });

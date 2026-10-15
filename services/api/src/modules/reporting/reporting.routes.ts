@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withSiteContext } from "../sites/siteContext.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireRolePermission } from "../../middleware/rbac.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../roles/roleAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
@@ -88,9 +89,9 @@ reportingRouter.post("/summary", validate(reportSummarySchema), reportSummaryHan
  * thing" (Settings → ERP Sync, company AI config, notification retry) is
  * already admin-only throughout.
  */
-reportingRouter.get("/recipient-people", requireRole("admin"), recipientPeopleHandler);
-reportingRouter.get("/schedules", requireRole("admin"), listReportSchedulesHandler);
-reportingRouter.post("/schedules", requireRole("admin"), validate(createReportScheduleSchema), createReportScheduleHandler);
-reportingRouter.patch("/schedules/:id", requireRole("admin"), validate(updateReportScheduleSchema), updateReportScheduleHandler);
-reportingRouter.delete("/schedules/:id", requireRole("admin"), deleteReportScheduleHandler);
-reportingRouter.post("/schedules/:id/send-now", requireRole("admin"), sendReportScheduleNowHandler);
+reportingRouter.get("/recipient-people", requireRolePermission(ADMIN_CONSOLE_PERMISSION), recipientPeopleHandler);
+reportingRouter.get("/schedules", requireRolePermission(ADMIN_CONSOLE_PERMISSION), listReportSchedulesHandler);
+reportingRouter.post("/schedules", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(createReportScheduleSchema), createReportScheduleHandler);
+reportingRouter.patch("/schedules/:id", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(updateReportScheduleSchema), updateReportScheduleHandler);
+reportingRouter.delete("/schedules/:id", requireRolePermission(ADMIN_CONSOLE_PERMISSION), deleteReportScheduleHandler);
+reportingRouter.post("/schedules/:id/send-now", requireRolePermission(ADMIN_CONSOLE_PERMISSION), sendReportScheduleNowHandler);

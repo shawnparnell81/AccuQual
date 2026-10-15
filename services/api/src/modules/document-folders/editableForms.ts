@@ -1,12 +1,12 @@
+import { FORMS_EDIT_NUMBER_PERMISSION } from "../roles/roleAccess.js";
 import { FAI_VALIDATION_FOLDER_NAME } from "./companyDocumentFolders.js";
 
 /**
- * Who may change a document number: Engineering, a quality manager, and an
- * administrator or owner. Everyone else may read the number.
+ * Who may change a document number: Engineering, and any role Admin gives
+ * forms.edit_number. Everyone else may read the number.
  */
-export function canEditFormNumber(user: { roleName?: string | null; department?: string | null } | null | undefined): boolean {
-  const role = user?.roleName;
-  if (role === "admin" || role === "owner" || role === "quality_manager") return true;
+export function canEditFormNumber(user: { permissions?: readonly string[] | null; department?: string | null } | null | undefined): boolean {
+  if ((user?.permissions ?? []).includes(FORMS_EDIT_NUMBER_PERMISSION)) return true;
   return user?.department === "engineering";
 }
 

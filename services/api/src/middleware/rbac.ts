@@ -1,6 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../utils/appError.js";
-import { isFullAccessRole } from "../modules/roles/roleAccess.js";
+import { ADMIN_CONSOLE_PERMISSION } from "../modules/roles/roleAccess.js";
+import { loadRolePermissions } from "../modules/roles/rolePermissions.js";
+import { db as rootDb } from "../db/index.js";
+import type { Db } from "../lib/requestDb.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 /** Supplier portal logins do not read company settings, roles, or the staff directory. Must run after `requireAuth`. */
 export function rejectSupplierReads(req: Request, _res: Response, next: NextFunction) {
@@ -11,27 +15,15 @@ export function rejectSupplierReads(req: Request, _res: Response, next: NextFunc
   next();
 }
 
-/**
- * Owner and Administrator, the same full-access check that already opens
- * user administration. The route does not list role names.
- */
-export function requireFullAccess(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user) throw AppError.unauthorized();
-  if (!isFullAccessRole(req.user.roleName)) throw AppError.forbidden("Requires an administrator.");
-  next();
+/** Allows the route only when the signed-in person's role carries this permission. Admin assigns it on the Roles page. Must run after `requireAuth`. */
+export function requireRolePermission(permission: string) {
+  return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) throw AppError.unauthorized();
+    const granted = await loadRolePermissions((req.db ?? rootDb) as Db, req.user.roleName);
+    if (!granted.includes(permission)) throw AppError.forbidden("Your role doesn't have permission to do this.");
+    next();
+  });
 }
 
-/** Restricts a route to one of the given role names. Must run after `requireAuth`. Owner satisfies every check that names admin. */
-export function requireRole(...allowedRoles: string[]) {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user) {
-      throw AppError.unauthorized();
-    }
-    const name = req.user.roleName;
-    const allowed = name != null && (allowedRoles.includes(name) || (isFullAccessRole(name) && allowedRoles.includes("admin")));
-    if (!allowed) {
-      throw AppError.forbidden(`Requires one of roles: ${allowedRoles.join(", ")}`);
-    }
-    next();
-  };
-}
+/** Admin console routes. Admin assigns this on the Roles page; Owner and Administrator start with it. */
+export const requireFullAccess = requireRolePermission(ADMIN_CONSOLE_PERMISSION);

@@ -62,6 +62,24 @@ export const FAI_SCAN_PERMISSION = "fai.scan";
 /** Import from file, Phase 3: ask AI to suggest values for fields the deterministic rules and saved mappings left empty. No role gets it by default — ticked per role on the Roles page. */
 export const IMPORT_AI_MAPPING_PERMISSION = "import.ai_mapping";
 
+/** Open the Admin console and use its settings, users, roles, plants and integrations. Granted on the role. Owner and Administrator start with it. */
+export const ADMIN_CONSOLE_PERMISSION = "admin_console";
+
+/** See the list of user accounts. Owner, Administrator and Quality Manager start with it. */
+export const USERS_LIST_PERMISSION = "users.list";
+
+/** Change the quality reminder and escalation settings. Owner, Administrator and Quality Manager start with it. */
+export const QUALITY_AUTOMATION_MANAGE_PERMISSION = "quality_automation.manage";
+
+/** Delete any record, not only your own. Owner, Administrator and Quality Manager start with it. */
+export const RECORDS_DELETE_PERMISSION = "records.delete";
+
+/** Change a form's document number. Owner, Administrator and Quality Manager start with it. Engineering can always change it. */
+export const FORMS_EDIT_NUMBER_PERMISSION = "forms.edit_number";
+
+/** Receive documents waiting for review in the daily digest and approval reminders. Owner, Administrator, President, Vice President and Quality Manager start with it. */
+export const DIGEST_RECEIVE_PERMISSION = "digest.receive";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 
@@ -74,15 +92,14 @@ export const REVIEWER_ROLES = new Set(["admin", "owner", "quality_manager", "pre
 /** See every module at least as read, even with no department grant. Not full edit. */
 export const BROAD_VIEW_ROLES = new Set(["president", "vice_president"]);
 
-/** Who may delete a user-created record even when they did not create it. */
-export const RECORD_DELETE_ROLES = new Set(["admin", "owner", "quality_manager"]);
 
 export function isFullAccessRole(roleName: string | null | undefined): boolean {
   return roleName != null && FULL_ACCESS_ROLES.has(roleName);
 }
 
-export function canDeleteAnyRecord(roleName: string | null | undefined): boolean {
-  return roleName != null && RECORD_DELETE_ROLES.has(roleName);
+/** True when the role's permission list includes records.delete. */
+export function canDeleteAnyRecord(permissions: readonly string[] | null | undefined): boolean {
+  return (permissions ?? []).includes(RECORDS_DELETE_PERMISSION);
 }
 
 export function isReviewerRole(roleName: string | null | undefined): boolean {
