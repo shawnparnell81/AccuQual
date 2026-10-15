@@ -115,7 +115,6 @@ export interface DepartmentMeta {
 
 export const DEPARTMENTS: DepartmentMeta[] = [
   { key: "quality", label: "Quality", icon: ShieldCheck, text: "text-teal-700 dark:text-teal-400", bgSoft: "bg-teal-500/10", ring: "ring-teal-500/30" },
-  { key: "fai_inspection", label: "FAI & AQL", icon: ClipboardCheck, text: "text-cyan-700 dark:text-cyan-400", bgSoft: "bg-cyan-500/10", ring: "ring-cyan-500/30" },
   { key: "engineering", label: "Engineering", icon: Cog, text: "text-amber-700 dark:text-amber-400", bgSoft: "bg-amber-500/10", ring: "ring-amber-500/30" },
   { key: "production", label: "Production", icon: Factory, text: "text-slate-700 dark:text-slate-300", bgSoft: "bg-slate-500/10", ring: "ring-slate-500/30" },
   { key: "customer_service", label: "Customer Service", icon: Headset, text: "text-violet-700 dark:text-violet-400", bgSoft: "bg-violet-500/10", ring: "ring-violet-500/30" },
