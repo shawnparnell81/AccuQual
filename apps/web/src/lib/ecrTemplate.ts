@@ -44,7 +44,7 @@ export const ECR_LABEL_DEFAULTS: Record<string, string> = {
   customerNotice: "Customer Notification Required?",
   ppapImpact: "PPAP or Validation Impact?",
   section5: "SECTION 5: AUTHORIZATION",
-  managerSign: "DMA Engineering/Quality Manager:",
+  managerSign: "Engineering/Quality Manager:",
   signDate: "Date:",
   supplierSign: "Supplier Representative (If Applicable):",
   section6: "SECTION 6: VERIFICATION OF IMPLEMENTATION",

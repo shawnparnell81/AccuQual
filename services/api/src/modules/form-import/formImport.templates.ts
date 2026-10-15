@@ -97,7 +97,7 @@ const CSA_VALIDATION: FormImportTemplate = {
   persist: { kind: "validation_report", formType: "csa", formKey: "frm-val-001", stampKey: "validation:csa" },
   fields: [
     cellField("G2", "Approved By", PART, ["approver"]),
-    cellField("B6", "DMA Part Number", PART, ["part number", "part no", "dma pn", "dma part no"]),
+    cellField("B6", "Part Number", PART, ["part number", "part no", "dma pn", "dma part no"]),
     cellField("F6", "Drawing Number", PART, ["drawing no", "drawing", "dwg"]),
     cellField("B7", "Supplier / Factory", PART, ["supplier", "factory", "supplier factory"]),
     cellField("F7", "Batch Number", PART, ["batch", "lot", "lot number"]),

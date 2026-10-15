@@ -9,7 +9,7 @@ describe("saved import column maps", () => {
   it("keeps O'Reilly's and NAPA as archive imports", () => {
     const oreilly = IMPORT_CATALOG.find((entry) => entry.key === "oreilly_reports");
     const napa = IMPORT_CATALOG.find((entry) => entry.key === "napa_reports");
-    expect(oreilly).toMatchObject({ label: "O'Reilly's Reports", archiveOnly: true });
+    expect(oreilly).toMatchObject({ label: "Customer Reports", archiveOnly: true });
     expect(napa).toMatchObject({ label: "NAPA Reports", archiveOnly: true });
     expect(oreilly?.entity.fields.every((field) => !field.required)).toBe(true);
   });

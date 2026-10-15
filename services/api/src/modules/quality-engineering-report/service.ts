@@ -41,7 +41,7 @@ import { mergeSourceFigures, type SourceMonthFigures } from "./sourceReport.js";
 import { deleteReportImageFiles, storeReportImages } from "./reportImages.js";
 import { loadImportSources, resolveImportPulls } from "../import/import.archive.js";
 
-const SAMPLE_NAME = "quality-engineering-supplier-august-2026.csv";
+const SAMPLE_NAME = "quality-engineering-supplier-template.csv";
 const MISSING_SAMPLE = "The sample supplier CSV is not included in this server build.";
 
 function samplePath(): string {

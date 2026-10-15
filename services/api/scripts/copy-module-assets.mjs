@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const apiRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const fileName = "quality-engineering-supplier-august-2026.csv";
+const fileName = "quality-engineering-supplier-template.csv";
 const fromDir = join(apiRoot, "src/modules/quality-engineering-report/sample");
 const fromFile = join(fromDir, fileName);
 if (!existsSync(fromFile)) {

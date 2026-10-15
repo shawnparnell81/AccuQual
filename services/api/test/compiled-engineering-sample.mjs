@@ -30,11 +30,9 @@ if (expectMissing) {
 } else {
   if (res.status !== 200) problems.push(`status ${res.status}: ${text.slice(0, 300)}`);
   if (!type.includes("text/csv")) problems.push(`content-type ${type}`);
-  if (!disposition.includes('filename="quality-engineering-supplier-august-2026.csv"')) problems.push(`disposition ${disposition}`);
-  if (!text.includes("monthly_metrics,2026-08,459")) problems.push("missing August claims");
-  if (!text.includes("108871.03")) problems.push("missing amount");
-  if (!text.includes("A60076")) problems.push("missing part");
-  if (!text.includes("DMA Parts,150")) problems.push("missing DMA 150");
+  if (!disposition.includes('filename="quality-engineering-supplier-template.csv"')) problems.push(`disposition ${disposition}`);
+  if (!text.includes("monthly_metrics,2026-01,120")) problems.push("missing example claims");
+  if (/DMA|O'Reilly|A60076/.test(text)) problems.push("customer name in template");
 }
 
 server.close();
