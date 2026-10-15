@@ -489,7 +489,7 @@ describe("living controlled lists", () => {
 
     const added = addDataRow("lst-gen-002", sheets, sheetName);
     expect(added?.row).toBe(10);
-    expect(added?.sheets[0]?.cells.A10).toBeUndefined();
+    expect(added?.sheets[0]?.cells.A10?.v ?? null).toBeNull();
     expect(added?.sheets[0]?.maxRow).toBe(36);
     const removed = removeDataRow("lst-gen-002", sheets, sheetName, 6);
     expect(removed?.[0]?.cells.B6?.v).toBe("Quality Department");
@@ -627,7 +627,7 @@ describe("living controlled lists", () => {
 
     const added = addDataRow("lst-eng-001", sheets, sheetName);
     expect(added?.row).toBe(56);
-    expect(added?.sheets[0]?.cells.A56).toBeUndefined();
+    expect(added?.sheets[0]?.cells.A56?.v ?? null).toBeNull();
     expect(listOptions(added!.sheets[0]!, "E56")).toContain("SENSEN");
     expect(listOptions(added!.sheets[0]!, "I56")).toEqual(["Pending", "Approved", "Rejected"]);
 
@@ -737,14 +737,14 @@ describe("living controlled lists", () => {
 
     const inserted = insertDataRow("lst-eng-001", eng, engName, 6);
     expect(inserted?.row).toBe(6);
-    expect(inserted?.sheets[0]?.cells.A6).toBeUndefined();
+    expect(inserted?.sheets[0]?.cells.A6?.v ?? null).toBeNull();
     expect(inserted?.sheets[0]?.cells.A7?.v).toBe("ECR-2026-001");
     expect(Object.values(inserted?.sheets[0]?.cells ?? {}).some((cell) => cell.v === "ECR-2026-051")).toBe(false);
     expect(listOptions(inserted!.sheets[0]!, "E6")).toContain("SENSEN");
 
     const below = insertDataRow("lst-eng-001", eng, engName, 7);
     expect(below?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
-    expect(below?.sheets[0]?.cells.A7).toBeUndefined();
+    expect(below?.sheets[0]?.cells.A7?.v ?? null).toBeNull();
     expect(below?.sheets[0]?.cells.A8?.v).toBe("ECR-2026-002");
 
     const removed = removeDataRows("lst-eng-001", eng, engName, [6, 8]);
@@ -758,7 +758,7 @@ describe("living controlled lists", () => {
     const shifted = insertDataRow("lst-eqp-001", equipment, equipmentName, 6);
     expect(shifted?.sheets[0]?.cells.I6?.f).toBe("H6+(G6*30)");
     expect(shifted?.sheets[0]?.cells.I7?.f).toBe("H7+(G7*30)");
-    expect(shifted?.sheets[0]?.cells.A6).toBeUndefined();
+    expect(shifted?.sheets[0]?.cells.A6?.v ?? null).toBeNull();
     const patched = applyInputPatch("lst-eqp-001", equipment, [{ name: equipmentName, cells: { G6: { v: 99 }, I6: { v: 99 } } }]);
     expect(patched.sheets[0]?.cells.I6?.f).toBe("H6+(G6*30)");
     expect(patched.sheets[0]?.cells.G6?.v).toBe(99);

@@ -88,6 +88,9 @@
 .controlled-list-pick {
   display: block;
   width: 100%;
+  /* Fill the cell, so a blank cell (only a space) is still something to click. */
+  align-self: stretch;
+  min-height: 1em;
   overflow: hidden;
   border: 0;
   background: transparent;

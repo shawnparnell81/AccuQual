@@ -953,6 +953,13 @@
       "when": 1795734000000,
       "tag": "0137_role_permission_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1795820400000,
+      "tag": "0138_remove_placeholder_equipment",
+      "breakpoints": true
     }
   ]
 }

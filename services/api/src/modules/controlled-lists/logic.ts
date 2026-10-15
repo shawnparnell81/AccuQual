@@ -418,6 +418,43 @@ export function appendDocuments(sheets: StoredSheet[], rows: DocumentAppend[]): 
   return { sheets: next, added };
 }
 
+// Opening the blank Calibration forms used to create equipment rows named after the form.
+// Those were never real gages.
+export const PLACEHOLDER_EQUIPMENT_NAMES = new Set(["", "calibration record", "calibration equipment register"]);
+
+/**
+ * Master Equipment List rows that were copied from a blank Calibration placeholder whose equipment
+ * record no longer exists (removed by migration 0138). A row goes only when it still holds exactly
+ * what was copied in: the numeric id, the form name, blank text, the default 12-month interval and
+ * Active. Any typed value keeps the row.
+ */
+export function dropPlaceholderEquipmentRows(sheets: StoredSheet[], liveIds: Set<string>): { sheets: StoredSheet[]; removed: string[] } {
+  const spec = LISTS["lst-eqp-001"];
+  const name = spec.formula?.sheet ?? EQUIPMENT_SHEET;
+  const start = spec.dataStart[name] ?? 6;
+  const sheet = sheets.find((item) => item.name === name);
+  if (!sheet) return { sheets, removed: [] };
+  const value = (col: string, row: number) => textOf(sheet.cells[cellAddr(col, row)]?.v).trim();
+  const drop: number[] = [];
+  const removed: string[] = [];
+  for (let row = start; row <= sheet.maxRow; row += 1) {
+    const id = value("A", row);
+    if (!/^\d+$/.test(id) || liveIds.has(id)) continue;
+    if (!PLACEHOLDER_EQUIPMENT_NAMES.has(value("B", row).toLowerCase())) continue;
+    if (["C", "D", "E", "F", "H"].some((col) => value(col, row))) continue;
+    if (!["", "12"].includes(value("G", row)) || !["", "active"].includes(value("J", row).toLowerCase())) continue;
+    let other = false;
+    for (let col = 11; col <= sheet.maxCol; col += 1) if (value(columnLetter(col), row)) other = true;
+    if (other || Object.entries(sheet.cells).some(([addr, cell]) => parseAddr(addr).row === row && cell.kept)) continue;
+    drop.push(row);
+    removed.push(id);
+  }
+  if (drop.length === 0) return { sheets, removed };
+  let current = sheet;
+  for (const row of drop.sort((a, b) => b - a)) current = deleteSheetRow(current, row);
+  return { sheets: sheets.map((item) => (item.name === name ? current : item)), removed: removed.sort((a, b) => Number(a) - Number(b)) };
+}
+
 /** Equipment records whose asset id is not already in column A. */
 export function appendEquipment(sheets: StoredSheet[], rows: EquipmentAppend[]): { sheets: StoredSheet[]; added: string[] } {
   const spec = LISTS["lst-eqp-001"];
@@ -574,7 +611,8 @@ export function dropEmptyDataRows(key: ListKey, sheets: StoredSheet[]): { sheets
       const { row } = parseAddr(addr);
       if (row < start) continue;
       const slot = byRow.get(row) ?? { values: false, formula: false };
-      if (cell.f || cell.kind === "formula") slot.formula = true;
+      if (cell.kept) slot.values = true;
+      else if (cell.f || cell.kind === "formula") slot.formula = true;
       else if (textOf(cell.v)) slot.values = true;
       byRow.set(row, slot);
     }
@@ -618,7 +656,14 @@ export function addDataRow(key: ListKey, sheets: StoredSheet[], sheetName: strin
   } else if (formula && !sheet.cells[cellAddr(formula.column, row)]?.f) {
     sheet.cells[cellAddr(formula.column, row)] = { f: formula.build(row), nf: formula.nf, kind: "formula" };
   }
+  keepRow(next.find((item) => item.name === sheetName)!, row);
   return { sheets: next, row };
+}
+
+/** A row added in the app stays on the list while it is still blank, until someone deletes it. */
+function keepRow(sheet: StoredSheet, row: number) {
+  const addr = cellAddr("A", row);
+  sheet.cells = { ...sheet.cells, [addr]: { ...(sheet.cells[addr] ?? { kind: "input", v: null }), kept: true } };
 }
 
 /** Insert a blank row above or below a data row. Nothing in the new row is numbered. */
@@ -642,7 +687,9 @@ export function insertDataRow(key: ListKey, sheets: StoredSheet[], sheetName: st
         },
       };
     }
-    return coverRow(grown, atRow);
+    const covered = { ...coverRow(grown, atRow) };
+    keepRow(covered, atRow);
+    return covered;
   });
   if (!placed) return null;
   return { sheets: next, row: atRow };

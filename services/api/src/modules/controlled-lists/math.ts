@@ -19,6 +19,8 @@ export interface StoredCell {
   font?: string;
   /** ARGB font color when the cell is not the theme default. */
   color?: string;
+  /** Set on a row someone added in the app, so the blank-row clean-up on open keeps it. */
+  kept?: boolean;
 }
 
 /** An Excel list dropdown covering a rectangle of cells. */
