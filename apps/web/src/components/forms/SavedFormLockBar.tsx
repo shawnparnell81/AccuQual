@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { SavedFormMode } from "../../lib/savedFormLock";
+import { useConfirm } from "../shared/ConfirmDialog";
 
 /** Edit, Save, Cancel, and Done for a saved form that opens locked. */
 export function SavedFormLockBar({
@@ -25,6 +26,16 @@ export function SavedFormLockBar({
   const openingRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const showOpening = opening || busy;
+  const confirm = useConfirm();
+
+  async function done() {
+    const ok = await confirm({
+      title: "Save and lock this record?",
+      message: "Done saves your changes, files this record in its Saved Form Folders folder and locks it. Use Edit to change it later.",
+      confirmLabel: "Save and lock",
+    });
+    if (ok) onDone();
+  }
 
   async function edit() {
     if (showOpening || openingRef.current || mode === "editing") return;
@@ -54,7 +65,7 @@ export function SavedFormLockBar({
       <button type="button" data-testid="form-cancel-edit" onClick={onCancel} disabled={pending} className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground disabled:opacity-60">
         Cancel
       </button>
-      <button type="button" data-testid="form-done-editing" onClick={onDone} disabled={pending} className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground disabled:opacity-60">
+      <button type="button" data-testid="form-done-editing" onClick={() => void done()} disabled={pending} className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground disabled:opacity-60">
         Done
       </button>
     </>

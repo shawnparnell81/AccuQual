@@ -9,6 +9,7 @@ import { EDITABLE_FORM_KEYS, FILEABLE_FORM_KEYS, canEditFormNumber } from "../..
 import { documentsFolderHref, filingLocation, SAVED_FORM_FOLDERS_ROOT, type BrowseFolder, type FiledLocation } from "../../lib/folderBrowse";
 import { defaultSaveDestination, type FormFolderChoice } from "../../lib/saveDestination";
 import { SaveAsFolderDialog } from "./SaveAsFolderDialog";
+import { useConfirm } from "../shared/ConfirmDialog";
 
 export type { FiledLocation };
 export type SaveResultState = FiledLocation | "saved" | "unfiled" | "error" | "file-error" | null;
@@ -152,6 +153,7 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
   const [value, setValue] = useState(current);
   const [seen, setSeen] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   useEffect(() => {
     if (seen === current) return;
@@ -182,7 +184,15 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
       onSubmit={(event) => {
         event.preventDefault();
         setMessage(null);
-        save.mutate(value.trim());
+        const next = value.trim();
+        if (next === current.trim()) return;
+        void confirm({
+          title: "Change the form number?",
+          message: `This changes the number on the blank master for every new copy, to ${next || "no number"}. Copies already filled keep their number.`,
+          confirmLabel: "Change number",
+        }).then((ok) => {
+          if (ok) save.mutate(next);
+        });
       }}
     >
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">

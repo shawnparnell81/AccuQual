@@ -171,7 +171,22 @@ export function BlankFormsListPage() {
                     </>
                   )}
                 </span>
-                <span role="gridcell" className="truncate text-muted-foreground">{blankTemplateTopic(form.isoPath)}</span>
+                <span role="gridcell" className="flex items-center justify-between gap-2 truncate text-muted-foreground">
+                  <span className="truncate">{blankTemplateTopic(form.isoPath)}</span>
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      data-testid="blank-form-open"
+                      className="shrink-0 rounded border border-border px-2 py-0.5 text-xs text-foreground hover:bg-muted"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openForm(form);
+                      }}
+                    >
+                      Open
+                    </button>
+                  )}
+                </span>
               </div>
             );
           })}
@@ -226,7 +241,8 @@ export function StartBlankFormPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const form = templates.data?.find((row) => row.formKey === formKey);
+  // A link can name the form by its number (tmp-eng-001) instead of its key (rpt-eng-001).
+  const form = templates.data?.find((row) => row.formKey === formKey) ?? templates.data?.find((row) => row.formId.trim().toLowerCase() === formKey.toLowerCase());
 
   // Workspace tabs keep this page mounted (hidden) after it hands off to the form. Without this guard,
   // any later templates refetch re-ran the effect and yanked Back, Delete, and links back onto the blank.
@@ -252,15 +268,10 @@ export function StartBlankFormPage() {
       // Pass formKey as query param too, so the blank page can recover if location.state is lost.
       const base = unsavedBlankPath(start.openPath);
       const sep = base.includes("?") ? "&" : "?";
-      navigate(`${base}${sep}formKey=${encodeURIComponent(formKey)}`, { replace: true, state: deferred });
+      navigate(`${base}${sep}formKey=${encodeURIComponent(form.formKey)}`, { replace: true, state: deferred });
       return;
     }
-    void apiClient.post<{ id: number }>(start.createPath, start.body).then(
-      (created) => {
-        navigate(start.openPath.replaceAll("{id}", String(created.data.id)), { replace: true, state: { freshForm: true } });
-      },
-      () => setError(`Couldn't start ${form.title}.`),
-    );
+    // No record is created here. It is created on the first Save below, so opening a blank never uses a number.
   }, [form, formKey, navigate, templates.data, templates.isError, templates.isLoading]);
 
   async function saveCopy() {
