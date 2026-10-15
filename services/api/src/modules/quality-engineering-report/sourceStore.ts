@@ -27,6 +27,20 @@ export interface SourcePreview {
   removed: number;
   /** Rows dated in months whose report is already verified. They are not stored (that month is final). */
   skippedVerified: { month: string; rows: number }[];
+  /** Rows worth a second look before importing: future dates, rows dated today, repeated keys. Nothing is blocked. */
+  warnings: string[];
+}
+
+/** Plain warnings for the import preview. Today is the server's calendar day (YYYY-MM-DD). */
+export function sourceWarnings(rows: SourceRow[], today: string): string[] {
+  const future = rows.filter((row) => typeof row.data.__date === "string" && row.data.__date > today).length;
+  const datedToday = rows.filter((row) => row.data.__date === today).length;
+  const repeated = rows.filter((row) => /#\d+$/.test(row.rowKey)).length;
+  const out: string[] = [];
+  if (future > 0) out.push(`${future} row${future === 1 ? " is" : "s are"} dated in the future. Check the dates before importing.`);
+  if (datedToday > 0) out.push(`${datedToday} row${datedToday === 1 ? " is" : "s are"} dated today. A date the file filled in automatically can look like this.`);
+  if (repeated > 0) out.push(`${repeated} row${repeated === 1 ? " repeats" : "s repeat"} a number already in the file. Each one is kept as its own row.`);
+  return out;
 }
 
 async function verifiedMonths(db: Db): Promise<Set<string>> {
@@ -83,7 +97,7 @@ async function plan(db: Db, fileName: string, rows: SourceRow[], sheets: SheetRe
     }
     kinds.push(summary);
   }
-  return { fileName, sheets, kinds, added, updated, removed, skippedVerified };
+  return { fileName, sheets, kinds, added, updated, removed, skippedVerified, warnings: sourceWarnings(rows, new Date().toISOString().slice(0, 10)) };
 }
 
 export async function previewSourceFile(db: Db, input: { fileName: string; buffer: Buffer }): Promise<SourcePreview> {

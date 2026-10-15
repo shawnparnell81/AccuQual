@@ -81,7 +81,7 @@ interface ReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
-  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean };
+  verification?: { verifiedAt: string | null; verifiedBy: number | null; canVerify: boolean; locked?: boolean; canUnlock?: boolean };
   recipients?: string[];
   narrative: Narrative;
   executive: {
@@ -554,6 +554,15 @@ export function EngineeringMonthlyReport() {
     onError: (err) => setVerifyError(extractErrorMessage(err, "The report wasn't verified.")),
   });
 
+  const unlockReport = useMutation({
+    mutationFn: async () => (await apiClient.post<ReportView>("/reports/engineering/unlock", {}, { params: { year, month } })).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
+      toast.success("Report unlocked for editing. The audit log records the unlock.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "The report wasn't unlocked.")),
+  });
+
   const deleteReport = useMutation({
     mutationFn: async (pin: string) => (await apiClient.delete<ReportView>("/reports/engineering", { params: { year, month }, data: { pin } })).data,
     onSuccess: async (fresh) => {
@@ -740,6 +749,18 @@ export function EngineeringMonthlyReport() {
               Verify report
             </button>
           )}
+          {view?.verification?.canUnlock && (
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              disabled={unlockReport.isPending}
+              onClick={() => {
+                if (window.confirm("This month is verified and locked. Unlock it for editing? The unlock is recorded in the audit log.")) unlockReport.mutate();
+              }}
+            >
+              Unlock report
+            </button>
+          )}
           {canDelete && view?.saved && (
             <button
               type="button"
@@ -756,7 +777,7 @@ export function EngineeringMonthlyReport() {
             {helpOpen ? "Hide column help" : "Supplier column help"}
           </button>
         </div>
-        {view?.verification?.verifiedAt && <p className="text-sm text-muted-foreground">Verified {new Date(view.verification.verifiedAt).toLocaleString()}. This month's raw source rows were deleted; its totals are kept.</p>}
+        {view?.verification?.verifiedAt && <p className="text-sm text-muted-foreground">Verified {new Date(view.verification.verifiedAt).toLocaleString()}. This month's raw source rows were deleted; its totals are kept.{view.verification.locked ? " The report is locked." : ""}</p>}
         {view && !locked && <SourceImportPanel disabled={locked} />}
         {view?.uploadFileName && <p className="text-sm text-muted-foreground">Last supplier file: {view.uploadFileName}</p>}
         {locked && view && <p className="text-sm text-muted-foreground">You can read this report. Saving and uploading need edit access on a quality module an admin has granted.</p>}

@@ -221,6 +221,22 @@ describe("verify a month", () => {
     expect((await request(app).post("/reports/engineering/verify").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({})).status).toBe(400);
   });
 
+  it("locks a verified month until someone unlocks it, with an audit entry and no PIN", async () => {
+    const before = await report(editorToken, 1);
+    expect(before.body.verification.locked).toBe(true);
+    expect(before.body.canEdit).toBe(false);
+    const save = () => request(app).put("/reports/engineering").set(bearer(editorToken)).send({ year: YEAR, month: 1, narrative: { ...before.body.narrative, rca: "after verify" } });
+    expect((await save()).status).toBe(409);
+    const unlock = await request(app).post("/reports/engineering/unlock").query({ year: YEAR, month: 1 }).set(bearer(editorToken)).send({});
+    expect(unlock.status).toBe(200);
+    expect(unlock.body.verification.locked).toBe(false);
+    expect(unlock.body.canEdit).toBe(true);
+    expect((await save()).status).toBe(200);
+    const [row] = await db.select().from(qualityEngineeringReports).where(and(eq(qualityEngineeringReports.year, YEAR), eq(qualityEngineeringReports.month, 1)));
+    const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "QualityEngineeringReport"), eq(auditTrail.entityId, row!.id)));
+    expect(entries.map((entry) => String((entry.changes as { summary?: string }).summary)).join(" ")).toMatch(/unlocked the verified January 2031 report for editing/);
+  });
+
   it("a later upload skips rows dated in a verified month", async () => {
     const preview = await send("/reports/engineering/sources/preview", editorToken, FIRST);
     expect(preview.body.skippedVerified).toEqual([{ month: "2031-01", rows: 3 }]);

@@ -232,7 +232,8 @@ export async function buildEngineeringReport(
     // A month whose uploaded Word report already carries the 6.9 picture of this table shows that picture only.
     techCalls: narrative.images.some((image) => image.sectionKey === "6.9") ? [] : sources.techCalls,
   });
-  return { ...view, verification: { ...verified, canVerify } };
+  const locked = verified.verifiedAt != null && !stored.unlockedAt;
+  return { ...view, canEdit: view.canEdit && !locked, verification: { ...verified, canVerify, locked, canUnlock: locked && access.canEdit } };
 }
 
 /**
@@ -348,7 +349,39 @@ function keepServerOwned(existing: EngineeringNarrative, incoming: EngineeringNa
     ncrNotes: incoming.ncrNotes ?? existing.ncrNotes,
     ncrTableRows: incoming.ncrTableRows ?? existing.ncrTableRows,
     images: existing.images,
+    unlockedAt: existing.unlockedAt,
   };
+}
+
+/** A verified month is locked until someone unlocks it (plain confirm, audit-logged). */
+async function assertMonthEditable(db: Db, year: number, month: number): Promise<void> {
+  const verified = await isSourceMonthVerified(db, monthKey(year, month));
+  if (verified.verifiedAt == null) return;
+  const row = await loadRow(db, year, month);
+  if (normalizeNarrative(row?.narrative).unlockedAt) return;
+  throw new AppError(`The ${periodName(year, month)} report is verified and locked. Unlock it to make changes.`, 409);
+}
+
+/** Unlocks a verified month for editing. Same edit access as the rest of the report; no PIN. The audit log records who and when. */
+export async function unlockEngineeringReport(
+  db: Db,
+  input: { year: number; month: number; user: Actor; siteIds: number[]; plantId?: number | null },
+): Promise<EngineeringReportView> {
+  const access = await engineeringAccess(db, input.user);
+  if (!access.canEdit) throw AppError.forbidden("This report is read-only for your access.");
+  const verified = await isSourceMonthVerified(db, monthKey(input.year, input.month));
+  if (verified.verifiedAt == null) throw AppError.badRequest("This month's report isn't verified, so it isn't locked.");
+  const row = await loadRow(db, input.year, input.month);
+  if (!row) throw AppError.notFound("Report");
+  const narrative = normalizeNarrative(row.narrative);
+  if (narrative.unlockedAt) throw AppError.badRequest("This month's report is already unlocked.");
+  narrative.unlockedAt = new Date().toISOString();
+  await db
+    .update(qualityEngineeringReports)
+    .set({ narrative: narrative as unknown as Record<string, unknown>, updatedBy: input.user.id, updatedAt: new Date() })
+    .where(eq(qualityEngineeringReports.id, row.id));
+  await auditReport(db, { ...input, userId: input.user.id, what: `unlocked the verified ${periodName(input.year, input.month)} report for editing`, extra: { action: "unlock" } });
+  return buildEngineeringReport(db, input);
 }
 
 export async function saveEngineeringNarrative(
@@ -365,6 +398,7 @@ export async function saveEngineeringNarrative(
 ): Promise<EngineeringReportView> {
   const access = await engineeringAccess(db, input.user);
   if (!access.canEdit) throw AppError.forbidden("This report is read-only for your access.");
+  await assertMonthEditable(db, input.year, input.month);
   const before = normalizeNarrative((await loadRow(db, input.year, input.month))?.narrative);
   const narrative = keepServerOwned(before, input.narrative);
   const now = new Date();
@@ -438,6 +472,7 @@ export async function applyReportImport(
     plantId?: number | null;
   },
 ): Promise<{ report: EngineeringReportView; summary: ImportSummary }> {
+  await assertMonthEditable(db, input.year, input.month);
   const before = normalizeNarrative((await loadRow(db, input.year, input.month))?.narrative);
   const narrative = mergeUploadNarrative(before, input.supplierData, input.replaceNotes);
   let report = await saveEngineeringSupplierData(db, { ...input, narrative, supplierData: input.supplierData, uploadFileName: input.fileName.slice(0, 200) });
@@ -508,6 +543,7 @@ async function loadEditableRow(db: Db, input: { year: number; month: number; use
   if (!access.canEdit) throw AppError.forbidden("This report is read-only for your access.");
   const row = await loadRow(db, input.year, input.month);
   if (!row) throw AppError.notFound("Report");
+  await assertMonthEditable(db, input.year, input.month);
   return { row, narrative: normalizeNarrative(row.narrative) };
 }
 
