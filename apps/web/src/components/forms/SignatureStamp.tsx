@@ -204,8 +204,8 @@ export function SignatureStamp({
           disabled={busy}
           className={
             sheet
-              ? "rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
-              : "rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
+              ? "min-h-[28px] min-w-[40px] rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+              : "min-h-[32px] min-w-[44px] rounded bg-primary px-3 py-1 text-sm font-medium text-primary-foreground disabled:opacity-60"
           }
         >
           {busy ? "Signing…" : "Sign"}

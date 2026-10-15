@@ -86,6 +86,27 @@ export function RegistrySheet({ module, cells, readOnly = false, onChange, docum
     return out;
   }, [layout]);
 
+  // Screen readers name each field by the nearest label to its left, not its cell address.
+  const names = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const addr of Object.keys(layout.cells)) {
+      const kind = module.kinds[addr];
+      if (!kind || kind === "label" || kind === "spacer") continue;
+      const pos = parseAddr(addr);
+      if (!pos) continue;
+      for (let col = pos.col - 1; col >= 1; col -= 1) {
+        const left = `${columnLetters(col)}${pos.row}`;
+        if (module.kinds[left] !== "label") continue;
+        const text = String(layout.cells[left]?.v ?? "").replace(/[:*]+\s*$/, "").trim();
+        if (text) {
+          out[addr] = text;
+          break;
+        }
+      }
+    }
+    return out;
+  }, [layout, module]);
+
   const styleAt = (col: number, row: number): LayoutStyle | undefined => layout.styles[layout.cells[`${columnLetters(col)}${row}`]?.s ?? 0];
 
   /** Borders are drawn once per edge: a cell draws its right and bottom edge (its own, or the neighbor's left/top). */
@@ -154,6 +175,7 @@ export function RegistrySheet({ module, cells, readOnly = false, onChange, docum
               <CellBody
                 module={module}
                 addr={cell.addr}
+                name={names[cell.addr] ?? cell.addr}
                 kind={kind}
                 raw={layoutCell.v}
                 value={values[cell.addr]}
@@ -187,6 +209,7 @@ export function RegistrySheet({ module, cells, readOnly = false, onChange, docum
 function CellBody({
   module,
   addr,
+  name,
   kind,
   raw,
   value,
@@ -201,6 +224,7 @@ function CellBody({
 }: {
   module: FormModule;
   addr: string;
+  name: string;
   kind: string;
   raw: string | number | boolean | undefined;
   value: Value | undefined;
@@ -221,7 +245,7 @@ function CellBody({
 
   if (kind === "calc") {
     // A formula that gives TRUE or FALSE is a tick box the form ticks for you.
-    if (typeof value === "boolean") return <input type="checkbox" className="vf-check" aria-label={addr} checked={value} readOnly disabled />;
+    if (typeof value === "boolean") return <input type="checkbox" className="vf-check" aria-label={name} checked={value} readOnly disabled />;
     const shown = module.display(addr, value);
     return <span data-result={def.resultCells.includes(addr) ? shown : undefined}>{shown}</span>;
   }
@@ -230,15 +254,15 @@ function CellBody({
     return <span>{placeText(text, module, addr, documentNumber, revision)}</span>;
   }
   if (kind === "input") {
-    return <input className="vf-in" style={inheritFont} aria-label={addr} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)} />;
+    return <input className="vf-in" style={inheritFont} aria-label={name} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)} />;
   }
   if (kind === "area") {
-    return <textarea className="vf-in" style={inheritFont} aria-label={addr} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)} />;
+    return <textarea className="vf-in" style={inheritFont} aria-label={name} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)} />;
   }
   if (kind === "select") {
     const options = module.lists[addr] ?? [];
     return (
-      <select className="vf-in" style={inheritFont} aria-label={addr} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)}>
+      <select className="vf-in" style={inheritFont} aria-label={name} value={inputValue} disabled={readOnly} onChange={(event) => edit(event.target.value)}>
         <option value="" />
         {options.map((option) => (
           <option key={option} value={option}>
@@ -254,13 +278,13 @@ function CellBody({
     const on = typed === true;
     const label = String(raw ?? "").replace(/^\[\s*[xX]?\s*\]/, on ? "[X]" : "[ ]");
     return (
-      <button type="button" className="vf-tick" aria-pressed={on} aria-label={addr} disabled={readOnly} onClick={() => onChange(addr, !on)}>
+      <button type="button" className="vf-tick" aria-pressed={on} aria-label={name} disabled={readOnly} onClick={() => onChange(addr, !on)}>
         {label}
       </button>
     );
   }
   if (kind === "check") {
-    return <input type="checkbox" className="vf-check" aria-label={addr} checked={typed === true} disabled={readOnly} onChange={(event) => onChange(addr, event.target.checked)} />;
+    return <input type="checkbox" className="vf-check" aria-label={name} checked={typed === true} disabled={readOnly} onChange={(event) => onChange(addr, event.target.checked)} />;
   }
   if (kind === "signature") {
     const slot = def.signatures?.find((item) => item.addr === addr);
