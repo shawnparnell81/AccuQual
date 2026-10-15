@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { faiInspectionApi, type FaiCharacteristic } from "../../api/faiInspection";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -13,7 +13,9 @@ const emptyChar = (): FaiCharacteristic => ({
 
 export function FaiPlanDetailPage() {
   const { id } = useParams();
-  const isNew = id === "new";
+  // /plans/new has no :id, so a missing id means a new plan.
+  const isNew = id === undefined || id === "new";
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
@@ -45,11 +47,12 @@ export function FaiPlanDetailPage() {
         ? faiInspectionApi.plans.create(body)
         : faiInspectionApi.plans.update(Number(id), body);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["fai-inspection", "plans"] });
       queryClient.invalidateQueries({ queryKey: ["fai-inspection", "plan", id] });
       setForm(null);
       setError(null);
+      if (isNew && saved?.id) navigate(`/fai-inspection/plans/${saved.id}`);
     },
     onError: (err) => setError(extractErrorMessage(err, "Could not save the plan.")),
   });
@@ -59,7 +62,7 @@ export function FaiPlanDetailPage() {
   return (
     <div className="p-6 max-w-5xl">
       <h1 className="text-2xl font-semibold mb-4">
-        {isNew ? "New AQL Plan" : `Plan ${current.partNumber} — rev ${current.revision}`}
+        {isNew ? "New AQL Plan" : `Plan ${current.partNumber} — rev ${current.revision ?? 1}`}
       </h1>
       {error && <div className="bg-red-50 text-red-700 p-3 rounded mb-4">{error}</div>}
       <div className="grid grid-cols-2 gap-4 mb-6">

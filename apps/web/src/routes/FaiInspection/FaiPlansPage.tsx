@@ -42,6 +42,9 @@ export function FaiPlansPage() {
             </tr>
           </thead>
           <tbody>
+            {(data ?? []).length === 0 && (
+              <tr><td colSpan={5} className="p-4 text-gray-500">No AQL plans yet. Use New Plan to add one.</td></tr>
+            )}
             {(data ?? []).map((p) => (
               <tr key={p.id} className="border-b hover:bg-gray-50">
                 <td className="p-2">

@@ -79,3 +79,22 @@ describe("FaiRecordDetailPage — attach by product family", () => {
     assert.doesNotMatch(html, /Attach Shock Validation/);
   });
 });
+
+describe("FaiRecordDetailPage — new record", () => {
+  it("treats /records/new as a new record with an editable FAI number", () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(["fai-inspection", "plans"], []);
+    const html = renderToString(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/fai-inspection/records/new"]}>
+          <Routes>
+            <Route path="/fai-inspection/records/new" element={<FaiRecordDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    assert.match(html, /New FAI Record/);
+    assert.doesNotMatch(html, /Loading…/);
+    assert.doesNotMatch(html, /FAI number\*<input[^>]* disabled=""/);
+  });
+});
