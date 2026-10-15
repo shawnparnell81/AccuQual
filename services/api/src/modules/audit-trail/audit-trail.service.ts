@@ -154,6 +154,7 @@ const ENTITY_TABLE: Record<string, string> = {
   "Change request": "change_requests",
   RiskAssessment: "risk_assessments",
   WorkOrder: "work_orders",
+  "PPAP package": "ppap_packages",
   PurchaseOrder: "erp_purchase_orders",
   Rma: "rma",
   RmaLog: "rma_log",
