@@ -22,14 +22,11 @@ import { AppError } from "../src/utils/appError.js";
 
 const apiRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const samplePath = join(dirname(fileURLToPath(import.meta.url)), "../src/modules/quality-engineering-report/sample/quality-engineering-supplier-august-2026.csv");
+const samplePath = join(dirname(fileURLToPath(import.meta.url)), "fixtures/quality-engineering-supplier-august-2026.csv");
 
 describe("quality engineering supplier upload", () => {
   it("fills August charts and tables from the sample file and does not invent claims from NCR", async () => {
-    const downloaded = supplierTemplateFile();
-    expect(downloaded.fileName).toBe("quality-engineering-supplier-august-2026.csv");
-    expect(downloaded.body.equals(readFileSync(samplePath))).toBe(true);
-    const parsed = await parseSupplierFile(downloaded.body, downloaded.fileName, 2026);
+    const parsed = await parseSupplierFile(readFileSync(samplePath), "quality-engineering-supplier-august-2026.csv", 2026);
     expect(parsed.warnings).toEqual([]);
     const augustClaims = parsed.data.monthlyMetrics.find((row) => row.month === "2026-08");
     expect(augustClaims).toMatchObject({ totalClaims: 459, totalProductAlerts: 19 });
@@ -194,13 +191,22 @@ describe("quality engineering sample download", () => {
     }
   });
 
-  it("returns the August 2026 CSV from the compiled API bundle", () => {
+  it("downloads a made-up template with no customer data", async () => {
+    const downloaded = supplierTemplateFile();
+    expect(downloaded.fileName).toBe("quality-engineering-supplier-template.csv");
+    const text = downloaded.body.toString("utf8");
+    expect(text).not.toMatch(/DMA|O'Reilly|A60076|108871/);
+    const parsed = await parseSupplierFile(downloaded.body, downloaded.fileName, 2026);
+    expect(parsed.data.monthlyMetrics.find((row) => row.month === "2026-01")).toMatchObject({ totalClaims: 120 });
+  });
+
+  it("returns the template CSV from the compiled API bundle", () => {
     const sampleDir = join(apiRoot, "dist/modules/quality-engineering-report/sample");
     rmSync(sampleDir, { recursive: true, force: true });
     run("npm", ["run", "build"]);
     expect(run(process.execPath, ["test/compiled-engineering-sample.mjs"], testEnv()).trim()).toBe("ok");
 
-    rmSync(join(sampleDir, "quality-engineering-supplier-august-2026.csv"), { force: true });
+    rmSync(join(sampleDir, "quality-engineering-supplier-template.csv"), { force: true });
     expect(run(process.execPath, ["test/compiled-engineering-sample.mjs", "--missing"], testEnv()).trim()).toBe("ok");
     run(process.execPath, ["scripts/copy-module-assets.mjs"]);
   }, 180_000);

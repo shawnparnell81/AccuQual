@@ -670,7 +670,7 @@ function ChangeRequest(props: SheetProps) {
       </tr>
       <Section cols={props.cols}>{line("section5", "SECTION 5: AUTHORIZATION")}</Section>
       <tr>
-        <td>{line("managerSign", "DMA Engineering/Quality Manager:")}</td>
+        <td>{line("managerSign", "Engineering/Quality Manager:")}</td>
         <td colSpan={3}>
           <SignatureStamp
             value={props.managerSignature ?? ""}

@@ -130,7 +130,7 @@ describe("new blank forms", () => {
     expect(SUGGESTED_SUBJECT_PATH["frm-gen-001"]).toEqual(["ISO Compliance Documents", "Audits"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-trn-001"]).toEqual(["ISO Compliance Documents", "Quality", "Training"]);
     expect(FILEABLE_FORM_KEYS.has("frm-trp-002")).toBe(true);
-    expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("DMA Laboratory Visitor Log");
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("Laboratory Visitor Log");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "rpt-eng-001")?.title).toBe("MONTHLY ENGINEERING DEVELOPMENT REPORT");
   });
 });

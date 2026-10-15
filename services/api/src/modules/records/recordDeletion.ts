@@ -815,7 +815,7 @@ const ISO_FORM_LABELS: Record<string, string> = {
   customer_scorecard: "Customer Scorecard",
   failure_effectiveness: "Failure Action Effectiveness Chart",
   audit_summary: "INTERNAL AUDIT SUMMARY REPORT",
-  visitor_log: "LST-VIS-001 DMA Laboratory Visitor Log",
+  visitor_log: "LST-VIS-001 Laboratory Visitor Log",
   monthly_engineering: "MONTHLY ENGINEERING DEVELOPMENT REPORT",
   salt_spray: "FRM-TRP-002 SALT SPRAY TEST REPORT (ASTM B117)",
   volume_water: "ASTM E542 Gravimetric Volume Calculator (Water)",

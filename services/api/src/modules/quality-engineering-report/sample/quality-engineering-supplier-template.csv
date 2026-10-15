@@ -1,0 +1,11 @@
+dataset,month,total_claims,total_product_alerts,total_amount_requested,parts_amount_requested,labor_amount_requested,labor_to_parts_ratio,mean_time_to_failure_days,median_time_to_failure_days,date,claims,returns,part_number,description,vehicle,source,count,key,value,category,total_completed,passed,failed,passed_with_deviation,total_issues,or_issues,napa_issues,open_count,hours_spent,avg_days_to_close,total,section,problem,response
+monthly_metrics,2026-01,120,4,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+financials,2026-01,,,25000.00,2000.00,9000.00,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+warranty_metrics,2026-01,,,,,,4.50:1,110.0,90.0,,,,,,,,,,,,,,,,,,,,,,,,,
+claims_series,,,,,,,,,,2026-01-05,30,20,,,,,,,,,,,,,,,,,,,,,,
+top_parts,,5,,,,,,,,,,,PN-1001,Example Part,,,,,,,,,,,,,,,,,,,,
+top_vehicles,,,,,,,,,,,12,,,,Example Vehicle,,,,,,,,,,,,,,,,,,,
+fuel_pump_returns,,,,,,,,,,,,,,,,Example Source,10,,,,,,,,,,,,,,,,,
+executive,,,,,,,,,,,,,,,,,,raw_claim_count,120,,,,,,,,,,,,,,,
+fai_categories,,,,,,,,,,,,,,,,,,,,Example Category,50,40,8,2,,,,,,,,,,
+notes,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,primary_achievement,,Example note.

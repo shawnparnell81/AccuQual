@@ -624,7 +624,7 @@ export function EngineeringMonthlyReport() {
   async function downloadTemplate() {
     try {
       const res = await apiClient.get("/reports/engineering/template.csv", { responseType: "blob" });
-      downloadBlob(res.data as Blob, "quality-engineering-supplier-august-2026.csv");
+      downloadBlob(res.data as Blob, "quality-engineering-supplier-template.csv");
     } catch (err) {
       toast.error(await extractErrorMessageAsync(err, "The template didn't download."));
     }

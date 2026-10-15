@@ -39,8 +39,8 @@ export const retailerReportEntity: AnyImportEntity = {
 export const RETAILER_IMPORTS = [
   {
     key: "oreilly_reports",
-    label: "O'Reilly's Reports",
-    description: "An O'Reilly customer or retailer report (CSV or Excel). Map the columns once. Next month's file uses that map when the headers match.",
+    label: "Customer Reports",
+    description: "A customer or retailer report (CSV or Excel). Map the columns once. Next month's file uses that map when the headers match.",
   },
   {
     key: "napa_reports",

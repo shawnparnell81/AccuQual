@@ -17,11 +17,11 @@ function text(value: CellValue | undefined): string {
 export function VisitorLogSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "A" }: VisitorLogSheetProps) {
   const doc = documentNumber.trim() ? documentNumber.trim() : "";
   return (
-    <table className="dense-log" data-testid="visitor-log-sheet" aria-label="DMA Laboratory Visitor Log">
+    <table className="dense-log" data-testid="visitor-log-sheet" aria-label="Laboratory Visitor Log">
       <tbody>
         <tr>
           <td className="title" colSpan={9}>
-            DMA Laboratory Visitor Log
+            Laboratory Visitor Log
           </td>
         </tr>
         <tr>
