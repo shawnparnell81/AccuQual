@@ -4,6 +4,7 @@ import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
+  approveRevision,
   createBuiltForm,
   deleteBuiltForm,
   exportDocx,
@@ -15,6 +16,7 @@ import {
   listRevisions,
   openBuiltFill,
   publishBuiltForm,
+  rejectRevision,
   beginBuiltFillEdit,
   deleteBuiltFill,
   saveBuiltFill,
@@ -79,6 +81,22 @@ export const deleteHandler = asyncHandler(async (req: Request, res: Response) =>
 
 export const revisionsHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listRevisions(req.db!, actor(req), idOf(req.params.id)));
+});
+
+function revIdOf(value: string | undefined): number {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("That revision could not be found.");
+  return id;
+}
+
+export const approveRevisionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { note?: unknown };
+  res.json(await approveRevision(req.db!, actor(req), idOf(req.params.id), revIdOf(req.params.revId), body));
+});
+
+export const rejectRevisionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { note?: unknown };
+  res.json(await rejectRevision(req.db!, actor(req), idOf(req.params.id), revIdOf(req.params.revId), body));
 });
 
 export const openFillHandler = asyncHandler(async (req: Request, res: Response) => {

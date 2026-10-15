@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LABELS_PRINT_PERMISSION, FAI_SCAN_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
+import { EXECUTIVE_DASHBOARD_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION, FAI_VIEW_PERMISSION, FOLDERS_DELETE_PERMISSION, FOLDERS_RENAME_PERMISSION, FORM_BUILDER_APPROVE_PERMISSION, FORM_BUILDER_PERMISSION, IMPORT_AI_MAPPING_PERMISSION, IMPORT_DATA_PERMISSION, LABELS_PRINT_PERMISSION, FAI_SCAN_PERMISSION, LOGIN_HISTORY_PERMISSION, QUALITY_REPORT_DELETE_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -47,6 +47,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   const effective = Object.fromEntries(entries) as Record<string, AccessLevel>;
   const granted = await rolePermissionSet(db, user.roleName);
   if (granted.has(FORM_BUILDER_PERMISSION)) effective.form_builder = "edit";
+  effective[FORM_BUILDER_APPROVE_PERMISSION] = granted.has(FORM_BUILDER_APPROVE_PERMISSION) ? "edit" : "none";
   effective["folders.delete"] = granted.has(FOLDERS_DELETE_PERMISSION) ? "edit" : "none";
   effective["folders.rename"] = granted.has(FOLDERS_RENAME_PERMISSION) ? "edit" : "none";
   effective.login_history = granted.has(LOGIN_HISTORY_PERMISSION) ? "read" : "none";

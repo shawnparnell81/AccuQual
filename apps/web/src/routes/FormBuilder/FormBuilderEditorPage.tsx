@@ -6,7 +6,7 @@ import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { formatDateTime } from "../../lib/dates";
-import { MAX_REVISION, newRevisionProblem } from "../../lib/formRevision";
+import { formStatusLabel, MAX_REVISION, newRevisionProblem } from "../../lib/formRevision";
 import { BLANK_FORMS_TEMPLATES_FOLDER, type BrowseFolder } from "../../lib/folderBrowse";
 import { bandHasContent, type DocumentBand } from "../../lib/documentBands";
 import { blankDocument, blankFields, blankGrid, downloadGridWorkbook, importGridFile, type BuiltStructure, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
@@ -25,6 +25,11 @@ interface BuiltForm {
   structure: BuiltStructure;
   publishedStructure: BuiltStructure | null;
   folderId: number | null;
+  /** The REV waiting for approval, if one is. */
+  pendingRevision: string | null;
+  pendingRevisionId: number | null;
+  /** The person has the approve permission. */
+  canApprove: boolean;
 }
 
 interface RevisionRow {
@@ -34,6 +39,10 @@ interface RevisionRow {
   description: string;
   savedByName: string | null;
   createdAt: string;
+  status: "pending" | "approved" | "rejected";
+  approvedByName: string | null;
+  approvedAt: string | null;
+  decisionNote: string | null;
 }
 
 interface SaveInput {
@@ -111,6 +120,9 @@ export function FormBuilderEditorPage() {
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, unknown>>({});
   const [publishOpen, setPublishOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
+  const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
+  const [decisionNote, setDecisionNote] = useState("");
+  const [approvedNotice, setApprovedNotice] = useState("");
   const [revisionText, setRevisionText] = useState("");
   const [newRevision, setNewRevision] = useState("");
   const [changeDescription, setChangeDescription] = useState("");
@@ -184,6 +196,24 @@ export function FormBuilderEditorPage() {
     return () => window.clearTimeout(timer);
   }, [structure, title, formNumber, revisionText]);
 
+  const decide = useMutation({
+    mutationFn: async (input: { kind: "approve" | "reject"; revId: number; note: string }) =>
+      (await apiClient.post<{ notice?: string }>(`/form-builder/${formId}/revisions/${input.revId}/${input.kind}`, { note: input.note })).data,
+    onSuccess: (data, input) => {
+      setDecision(null);
+      setDecisionNote("");
+      if (input.kind === "approve") {
+        setApprovedNotice(data.notice ?? "Update the Master Document List with the new revision.");
+        toast.success("Revision approved. It is now live.");
+      } else {
+        toast.success("Revision rejected. The live version is unchanged.");
+      }
+      void queryClient.invalidateQueries({ queryKey: ["form-builder"] });
+      void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Could not record that decision.")),
+  });
+
   const publish = useMutation({
     mutationFn: async (folderId: number) =>
       (
@@ -194,7 +224,7 @@ export function FormBuilderEditorPage() {
         })
       ).data,
     onSuccess: () => {
-      toast.success("Published into Blank Forms Templates.");
+      toast.success(revisionNeeded || draft ? "Submitted for approval." : "Published into Blank Forms Templates.");
       setPublishOpen(false);
       setNewRevision("");
       setChangeDescription("");
@@ -212,7 +242,9 @@ export function FormBuilderEditorPage() {
 
   const draft = form.data?.status !== "published";
   // A published form's structure changed since it was published: saving or publishing it needs a new REV and a description.
-  const revisionNeeded = Boolean(form.data && form.data.status === "published" && structure && JSON.stringify(structure) !== JSON.stringify(form.data.publishedStructure));
+  const pending = form.data?.pendingRevision ?? null;
+  const revisionNeeded = Boolean(!pending && form.data && form.data.status === "published" && structure && JSON.stringify(structure) !== JSON.stringify(form.data.publishedStructure));
+  const badge = form.data ? formStatusLabel({ status: form.data.status, revision: form.data.revision, pendingRevision: pending }) : "Draft";
   const revisionReady = form.data ? newRevisionProblem(form.data.revision, newRevision) === null && changeDescription.trim() !== "" : false;
 
   if (form.isError) return <p className="text-sm text-destructive">{extractErrorMessage(form.error, "That form is not available.")}</p>;
@@ -243,7 +275,10 @@ export function FormBuilderEditorPage() {
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link to="/form-builder" className="text-sm text-primary hover:underline">Form Builder</Link>
-          <p className="text-xs text-muted-foreground">{savedNote}. Publishing files the blank. Filling a copy does not change this revision.</p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className={`rounded-full border px-2 py-0.5 font-medium ${pending ? "border-amber-500 text-amber-700 dark:text-amber-400" : form.data.status === "published" ? "border-emerald-600 text-emerald-700 dark:text-emerald-400" : "border-border"}`} data-testid="form-status">{badge}</span>
+            <span>{savedNote}. Publishing sends the blank for approval. Filling a copy does not change this revision.</span>
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => {
@@ -259,11 +294,26 @@ export function FormBuilderEditorPage() {
             setStructure(next);
           }}>Redo</button>
           <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => setPreview((value) => !value)}>{preview ? "Edit" : "Preview"}</button>
-          <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => (revisionNeeded ? setRevisionOpen(true) : save.mutate({ mode: "save" }))}>Save</button>
-          <button type="button" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground" onClick={() => setPublishOpen(true)}>Publish</button>
+          <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => (revisionNeeded ? setRevisionOpen(true) : save.mutate({ mode: pending && !draft ? "autosave" : "save" }))}>Save</button>
+          <button type="button" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50" disabled={Boolean(pending)} title={pending ? `REV ${pending} is waiting for approval.` : undefined} onClick={() => setPublishOpen(true)}>{draft ? "Publish" : "Publish change"}</button>
+          {pending && form.data.canApprove && form.data.pendingRevisionId != null ? (
+            <>
+              <button type="button" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground" onClick={() => setDecision("approve")}>Approve REV {pending}</button>
+              <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => setDecision("reject")}>Reject</button>
+            </>
+          ) : null}
           <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => remove.mutate()}>Delete</button>
         </div>
       </div>
+      {approvedNotice ? (
+        <p role="status" className="no-print flex items-center justify-between gap-2 rounded border border-emerald-600 bg-card px-3 py-2 text-sm">
+          <span>{approvedNotice}</span>
+          <button type="button" className="text-primary" onClick={() => setApprovedNotice("")}>Dismiss</button>
+        </p>
+      ) : null}
+      {pending && !form.data.canApprove ? (
+        <p className="no-print rounded border border-amber-500 bg-card px-3 py-2 text-sm">REV {pending} is waiting for approval. Fillers still open the last approved version{draft ? ", and there is none yet" : ""}.</p>
+      ) : null}
       <div className="no-print grid gap-2 md:grid-cols-3">
         <label className="text-sm">
           Title
@@ -391,9 +441,19 @@ export function FormBuilderEditorPage() {
           {(revisions.data ?? []).map((row) => (
             <li key={row.id} className="flex flex-wrap gap-x-3 py-1">
               <span className="font-medium">REV {row.revision}</span>
+              <span className={row.status === "pending" ? "text-amber-700 dark:text-amber-400" : row.status === "rejected" ? "text-destructive" : "text-muted-foreground"}>
+                {row.status === "pending" ? "Pending approval" : row.status === "rejected" ? "Rejected" : "Approved"}
+              </span>
               <span className="text-muted-foreground">{formatDateTime(row.createdAt)}</span>
               <span className="text-muted-foreground">{row.savedByName ?? "Unknown"}</span>
-              <span className="min-w-0 flex-1">{row.description}</span>
+              <span className="min-w-0 flex-1">
+                {row.description}
+                {row.status !== "pending" && row.approvedByName ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {row.status === "rejected" ? "Rejected" : "Approved"} by {row.approvedByName}{row.approvedAt ? ` on ${formatDateTime(row.approvedAt)}` : ""}{row.decisionNote ? `: ${row.decisionNote}` : ""}
+                  </span>
+                ) : null}
+              </span>
             </li>
           ))}
           {(revisions.data ?? []).length === 0 ? <li className="py-1 text-muted-foreground">No saved revision yet. Autosave keeps the draft at REV {form.data.revision}.</li> : null}
@@ -402,12 +462,38 @@ export function FormBuilderEditorPage() {
       {revisionOpen && (
         <div className="no-print fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6" onClick={() => setRevisionOpen(false)}>
           <div className="w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-labelledby="revision-title">
-            <h2 id="revision-title" className="text-sm font-medium">Save a new revision</h2>
-            <p className="mt-1 text-sm text-muted-foreground">This form is published. A change to it needs a new revision and a note about what changed. Copies already filled keep the revision they were opened with.</p>
+            <h2 id="revision-title" className="text-sm font-medium">Submit a new revision for approval</h2>
+            <p className="mt-1 text-sm text-muted-foreground">This form is live. A change to it needs a new revision and a note about what changed, then someone with approval permission approves it. Until then fillers open the current version, and copies already filled keep the revision they were opened with.</p>
             <RevisionFields current={form.data.revision} newRevision={newRevision} description={changeDescription} onNewRevision={setNewRevision} onDescription={setChangeDescription} />
             <div className="mt-3 flex gap-2">
-              <button type="button" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50" disabled={!revisionReady || save.isPending} onClick={() => save.mutate({ mode: "save", newRevision: newRevision.trim(), changeDescription: changeDescription.trim() })}>Save revision</button>
+              <button type="button" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50" disabled={!revisionReady || save.isPending} onClick={() => save.mutate({ mode: "save", newRevision: newRevision.trim(), changeDescription: changeDescription.trim() })}>Submit for approval</button>
               <button type="button" className="text-sm text-primary" onClick={() => setRevisionOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {decision && form.data.pendingRevisionId != null && (
+        <div className="no-print fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6" onClick={() => setDecision(null)}>
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-labelledby="decision-title">
+            <h2 id="decision-title" className="text-sm font-medium">{decision === "approve" ? `Approve REV ${pending}` : `Reject REV ${pending}`}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {decision === "approve" ? "Fillers will open this revision once you approve it." : "The live version stays as it is. Say why, so the author knows what to fix."}
+            </p>
+            <label className="mt-3 block text-sm">
+              {decision === "approve" ? "Note (optional)" : "Note (required)"}
+              <textarea className="mt-1 h-20 w-full rounded border border-border bg-background px-2 py-1" value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} />
+            </label>
+            {decision === "reject" && decisionNote.trim() === "" ? <p role="alert" className="text-xs text-destructive">Enter a note explaining why this revision is rejected.</p> : null}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={decide.isPending || (decision === "reject" && decisionNote.trim() === "")}
+                onClick={() => decide.mutate({ kind: decision, revId: form.data.pendingRevisionId!, note: decisionNote.trim() })}
+              >
+                {decision === "approve" ? "Approve" : "Reject"}
+              </button>
+              <button type="button" className="text-sm text-primary" onClick={() => setDecision(null)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -415,8 +501,8 @@ export function FormBuilderEditorPage() {
       {publishOpen && (
         <div className="no-print fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6" onClick={() => setPublishOpen(false)}>
           <div className="w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-labelledby="publish-title">
-            <h2 id="publish-title" className="text-sm font-medium">Publish blank template</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Choose Blank Forms Templates, or a folder under it. The template stays blank when someone fills a copy.</p>
+            <h2 id="publish-title" className="text-sm font-medium">{draft ? "Publish blank template" : "Publish this change"}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Choose Blank Forms Templates, or a folder under it. The blank goes live once it is approved, and it stays blank when someone fills a copy.</p>
             {revisionNeeded ? <RevisionFields current={form.data.revision} newRevision={newRevision} description={changeDescription} onNewRevision={setNewRevision} onDescription={setChangeDescription} /> : null}
             <ul className="mt-3 max-h-64 overflow-auto text-sm">
               {blankFolders.map((folder) => (

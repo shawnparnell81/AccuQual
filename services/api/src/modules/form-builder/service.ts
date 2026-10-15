@@ -1,4 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { company } from "../../drizzle/schema/company.js";
 import { builtFormFills, builtFormRevisions, builtForms } from "../../drizzle/schema/builtForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -13,7 +14,8 @@ import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordN
 import { stampRecordSite } from "../sites/recordSite.js";
 import { BLANK_FORMS_FOLDER } from "../document-folders/formFiling.js";
 import { folderLocationLabel, folderPathParts, joinFolderPath } from "../document-folders/mainIsoFolders.js";
-import { FORM_BUILDER_PERMISSION } from "../roles/roleAccess.js";
+import { FORM_BUILDER_APPROVE_PERMISSION, FORM_BUILDER_PERMISSION } from "../roles/roleAccess.js";
+import { roleHasPermission } from "../roles/rolePermissions.js";
 import { formatSignatureStamp } from "../signatures/signaturePin.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
@@ -31,6 +33,8 @@ const TEMPLATE_PREFIX = "/form-builder/template/";
 const FILL_PREFIX = "/form-builder/fills/";
 const MAX_STRUCTURE = 1_500_000;
 const MAX_PHOTO = 1_200_000;
+/** Shown to the approver after a revision goes live. The list is not updated for them. */
+export const MASTER_LIST_NOTICE = "Update the Master Document List with the new revision.";
 
 export type FormKind = "grid" | "document" | "fields";
 
@@ -69,6 +73,12 @@ async function requireReader(db: Db, actor: Actor) {
   const access = await formBuilderAccess(db, actor);
   if (!canReadFormBuilder(access)) throw AppError.forbidden("Form Builder is not turned on for you. An administrator can turn it on under Users & Roles or Roles & Permissions.");
   return access;
+}
+
+async function requireApprover(db: Db, actor: Actor) {
+  if (!(await roleHasPermission(db, actor.roleName, FORM_BUILDER_APPROVE_PERMISSION))) {
+    throw AppError.forbidden("Approving a form revision is not turned on for you. An administrator can turn it on under Roles & Permissions.");
+  }
 }
 
 async function requireFiller(db: Db, actor: Actor) {
@@ -136,8 +146,20 @@ function blankStructure(kind: FormKind): unknown {
   return { kind: "fields", sections: [{ id: "general", title: "General" }], fields: [] };
 }
 
-function publicForm(row: typeof builtForms.$inferSelect) {
+type Pending = { id: number; revision: string } | null;
+
+async function pendingRevisionFor(db: Db, formId: number): Promise<Pending> {
+  const [row] = await db
+    .select({ id: builtFormRevisions.id, revision: builtFormRevisions.revision })
+    .from(builtFormRevisions)
+    .where(and(eq(builtFormRevisions.formId, formId), eq(builtFormRevisions.status, "pending")));
+  return row ?? null;
+}
+
+function publicForm(row: typeof builtForms.$inferSelect, pending: Pending = null) {
   return {
+    pendingRevision: pending?.revision ?? null,
+    pendingRevisionId: pending?.id ?? null,
     id: row.id,
     kind: row.kind,
     title: row.title,
@@ -156,7 +178,15 @@ function publicForm(row: typeof builtForms.$inferSelect) {
 export async function listBuiltForms(db: Db, actor: Actor) {
   await requireReader(db, actor);
   const rows = await db.select().from(builtForms).orderBy(desc(builtForms.updatedAt));
+  const pendingRows = rows.length
+    ? await db
+        .select({ formId: builtFormRevisions.formId, revision: builtFormRevisions.revision })
+        .from(builtFormRevisions)
+        .where(and(inArray(builtFormRevisions.formId, rows.map((row) => row.id)), eq(builtFormRevisions.status, "pending")))
+    : [];
+  const pendingByForm = new Map(pendingRows.map((row) => [row.formId, row.revision]));
   return rows.map((row) => ({
+    pendingRevision: pendingByForm.get(row.id) ?? null,
     id: row.id,
     kind: row.kind,
     title: row.title,
@@ -198,26 +228,36 @@ export async function getBuiltForm(db: Db, actor: Actor, id: number) {
   await requireReader(db, actor);
   const [row] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!row) throw AppError.notFound("Form");
-  return publicForm(row);
+  const canApprove = await roleHasPermission(db, actor.roleName, FORM_BUILDER_APPROVE_PERMISSION);
+  return { ...publicForm(row, await pendingRevisionFor(db, id)), canApprove };
 }
 
 export async function listRevisions(db: Db, actor: Actor, id: number) {
   await requireReader(db, actor);
   const [row] = await db.select({ id: builtForms.id }).from(builtForms).where(eq(builtForms.id, id));
   if (!row) throw AppError.notFound("Form");
+  const approver = alias(users, "approver");
   const rows = await db
     .select({
       id: builtFormRevisions.id,
       revision: builtFormRevisions.revision,
       summary: builtFormRevisions.summary,
+      status: builtFormRevisions.status,
       savedBy: builtFormRevisions.savedBy,
       createdAt: builtFormRevisions.createdAt,
+      approvedBy: builtFormRevisions.approvedBy,
+      approvedAt: builtFormRevisions.approvedAt,
+      decisionNote: builtFormRevisions.decisionNote,
       name: users.name,
       email: users.email,
       isActive: users.isActive,
+      approverName: approver.name,
+      approverEmail: approver.email,
+      approverActive: approver.isActive,
     })
     .from(builtFormRevisions)
     .leftJoin(users, eq(users.id, builtFormRevisions.savedBy))
+    .leftJoin(approver, eq(approver.id, builtFormRevisions.approvedBy))
     .where(eq(builtFormRevisions.formId, id))
     .orderBy(desc(builtFormRevisions.createdAt), desc(builtFormRevisions.id));
   return rows.map((row) => ({
@@ -228,9 +268,14 @@ export async function listRevisions(db: Db, actor: Actor, id: number) {
     savedBy: row.savedBy,
     savedByName: row.savedBy == null ? null : formatUserLabel(row.email == null ? undefined : { name: row.name, email: row.email, isActive: row.isActive ?? true }, row.savedBy),
     createdAt: row.createdAt,
+    status: row.status,
+    approvedBy: row.approvedBy,
+    approvedByName:
+      row.approvedBy == null ? null : formatUserLabel(row.approverEmail == null ? undefined : { name: row.approverName, email: row.approverEmail, isActive: row.approverActive ?? true }, row.approvedBy),
+    approvedAt: row.approvedAt,
+    decisionNote: row.decisionNote,
   }));
 }
-
 
 export async function saveBuiltForm(
   db: Db,
@@ -256,6 +301,12 @@ export async function saveBuiltForm(
     newRevision: input.newRevision,
     changeDescription: input.changeDescription,
   });
+  if (decision.submit) {
+    const waiting = await pendingRevisionFor(db, id);
+    if (waiting) {
+      throw new AppError(`REV ${waiting.revision} is waiting for approval. Approve or reject it before submitting another revision.`, 409);
+    }
+  }
   const [updated] = await db
     .update(builtForms)
     .set({
@@ -272,11 +323,32 @@ export async function saveBuiltForm(
     .returning();
   if (!updated) throw AppError.notFound("Form");
   const person = await who(db, actor);
-  if (decision.recordHistory) {
-    const name = formNumber ? `${formNumber} ${title}` : title;
+  const name = formNumber ? `${formNumber} ${title}` : title;
+  if (decision.submit && decision.submitRevision) {
+    // The structure goes to approval. Fillers keep opening the last approved version until someone approves it.
     const summary = decision.change
       ? `${person.label} changed ${name} from REV ${decision.change.from} to REV ${decision.change.to} on ${person.when}: ${endSentence(decision.change.description)}`
-      : decision.revision !== current.revision
+      : `${person.label} submitted ${name} REV ${decision.submitRevision} for approval on ${person.when}.`;
+    await db.insert(builtFormRevisions).values({
+      formId: id,
+      revision: decision.submitRevision,
+      structure,
+      summary,
+      savedBy: actor.id,
+      status: "pending",
+    });
+    await recordAuditTrail(db, {
+      entityType: AUDIT,
+      entityId: id,
+      action: "update",
+      changes: decision.change
+        ? { summary, revision: decision.submitRevision, previousRevision: decision.change.from, description: decision.change.description, title, status: "pending" }
+        : { summary, revision: decision.submitRevision, title, status: "pending" },
+      performedBy: actor.id,
+    });
+  } else if (decision.recordHistory) {
+    const summary =
+      decision.revision !== current.revision
         ? `${person.label} set the revision of "${title}" to ${decision.revision} on ${person.when}.`
         : `${person.label} saved the structure of "${title}" on ${person.when}. Revision stays ${decision.revision}.`;
     await db.insert(builtFormRevisions).values({
@@ -290,9 +362,7 @@ export async function saveBuiltForm(
       entityType: AUDIT,
       entityId: id,
       action: "update",
-      changes: decision.change
-        ? { summary, revision: decision.revision, previousRevision: decision.change.from, description: decision.change.description, title }
-        : { summary, revision: decision.revision, title },
+      changes: { summary, revision: decision.revision, title },
       performedBy: actor.id,
     });
   } else if (mode === "save" && (title !== current.title || formNumber !== current.formNumber)) {
@@ -306,7 +376,7 @@ export async function saveBuiltForm(
     });
   }
   if (formNumber !== current.formNumber || title !== current.title) await renameTemplateLeaf(db, updated);
-  return publicForm(updated);
+  return publicForm(updated, await pendingRevisionFor(db, id));
 }
 
 async function foldersOf(db: Db) {
@@ -351,6 +421,7 @@ export async function publishBuiltForm(
   if (!underBlank(folders, chosen.id)) throw AppError.badRequest("Publish the blank into Blank Forms Templates, or a folder under it.");
   const parentId = chosen.linkedPath ? chosen.parentId : chosen.id;
   if (parentId == null) throw AppError.badRequest("Choose a folder under Blank Forms Templates.");
+  const hadPending = await pendingRevisionFor(db, id);
   const saved = await saveBuiltForm(db, actor, id, {
     structure: structure ?? current.structure,
     mode: "publish",
@@ -359,33 +430,118 @@ export async function publishBuiltForm(
   });
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!form) throw AppError.notFound("Form");
-  const path = `${TEMPLATE_PREFIX}${form.id}`;
-  const name = form.formNumber?.trim() ? `${form.formNumber.trim()} ${form.title}` : form.title;
-  const existing = folders.find((folder) => folder.linkedPath === path);
-  let leafId = existing?.id;
-  if (existing) {
-    await db.update(documentFolders).set({ name, parentId, updatedAt: new Date() }).where(eq(documentFolders.id, existing.id));
-  } else {
-    const siblings = folders.filter((folder) => folder.parentId === parentId);
-    const [created] = await db
-      .insert(documentFolders)
-      .values({ name, parentId, sortOrder: siblings.length, linkedPath: path })
-      .returning();
-    leafId = created?.id;
-  }
-  await db.update(builtForms).set({ folderId: parentId, publishedAt: new Date(), status: "published" }).where(eq(builtForms.id, id));
+  const submitted = saved.pendingRevisionId != null && saved.pendingRevisionId !== hadPending?.id;
+  const live = form.status === "published";
+  // A form that is already live keeps its blank in the folder. A first publish files the blank when it is approved.
+  const leafId = live ? await fileTemplateLeaf(db, form, parentId, folders) : null;
+  await db.update(builtForms).set({ folderId: parentId, ...(live && !submitted ? { publishedAt: new Date() } : {}) }).where(eq(builtForms.id, id));
   const person = await who(db, actor);
   const place = folderLocationLabel(folders, parentId);
-  const numberLine = form.formNumber?.trim() ? `Form number ${form.formNumber.trim()}.` : "The form number is still blank.";
-  const summary = `${person.label} published "${form.title}" revision ${form.revision} into ${place} on ${person.when}. ${numberLine} Opening that blank starts a fresh copy.`;
+  if (submitted) {
+    const summary = `${person.label} chose ${place} for "${form.title}" REV ${saved.pendingRevision}. The blank is filed there once the revision is approved. ${person.when}.`;
+    await recordAuditTrail(db, {
+      entityType: AUDIT,
+      entityId: id,
+      action: "update",
+      changes: { summary, revision: saved.pendingRevision, folderId: parentId, folder: place, status: "pending" },
+      performedBy: actor.id,
+    });
+  } else {
+    const numberLine = form.formNumber?.trim() ? `Form number ${form.formNumber.trim()}.` : "The form number is still blank.";
+    const summary = `${person.label} published "${form.title}" revision ${form.revision} into ${place} on ${person.when}. ${numberLine} Opening that blank starts a fresh copy.`;
+    await recordAuditTrail(db, {
+      entityType: AUDIT,
+      entityId: id,
+      action: "status_change",
+      changes: { summary, revision: form.revision, folderId: parentId, folder: place },
+      performedBy: actor.id,
+    });
+  }
+  return { ...saved, status: form.status, folderId: parentId, leafId, submitted };
+}
+
+/** Puts a published form's blank in Blank Forms Templates, or moves and renames the one that is already there. */
+async function fileTemplateLeaf(db: Db, form: typeof builtForms.$inferSelect, parentId: number, folders?: Awaited<ReturnType<typeof foldersOf>>): Promise<number | null> {
+  const all = folders ?? (await foldersOf(db));
+  const path = `${TEMPLATE_PREFIX}${form.id}`;
+  const name = form.formNumber?.trim() ? `${form.formNumber.trim()} ${form.title}` : form.title;
+  const existing = all.find((folder) => folder.linkedPath === path);
+  if (existing) {
+    await db.update(documentFolders).set({ name, parentId, updatedAt: new Date() }).where(eq(documentFolders.id, existing.id));
+    return existing.id;
+  }
+  const siblings = all.filter((folder) => folder.parentId === parentId);
+  const [created] = await db.insert(documentFolders).values({ name, parentId, sortOrder: siblings.length, linkedPath: path }).returning();
+  return created?.id ?? null;
+}
+
+function decisionNote(value: unknown): string {
+  return typeof value === "string" ? value.trim().slice(0, 1000) : "";
+}
+
+async function loadPendingRevision(db: Db, formId: number, revId: number) {
+  const [form] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
+  if (!form) throw AppError.notFound("Form");
+  const [row] = await db.select().from(builtFormRevisions).where(and(eq(builtFormRevisions.id, revId), eq(builtFormRevisions.formId, formId)));
+  if (!row) throw AppError.notFound("Revision");
+  if (row.status !== "pending") throw new AppError(`REV ${row.revision} was already ${row.status}.`, 409);
+  return { form, row };
+}
+
+/** Makes a pending revision the one fillers open. The REV is the one its author typed. */
+export async function approveRevision(db: Db, actor: Actor, formId: number, revId: number, input: { note?: unknown }) {
+  await requireApprover(db, actor);
+  const { form, row } = await loadPendingRevision(db, formId, revId);
+  const note = decisionNote(input.note);
+  const [decided] = await db
+    .update(builtFormRevisions)
+    .set({ status: "approved", approvedBy: actor.id, approvedAt: new Date(), decisionNote: note || null })
+    .where(and(eq(builtFormRevisions.id, revId), eq(builtFormRevisions.status, "pending")))
+    .returning();
+  if (!decided) throw new AppError(`REV ${row.revision} was already decided.`, 409);
+  const [live] = await db
+    .update(builtForms)
+    .set({ revision: row.revision, status: "published", publishedStructure: row.structure, publishedAt: new Date(), updatedAt: new Date() })
+    .where(eq(builtForms.id, formId))
+    .returning();
+  if (!live) throw AppError.notFound("Form");
+  if (live.folderId != null) await fileTemplateLeaf(db, live, live.folderId);
+  const person = await who(db, actor);
+  const name = live.formNumber?.trim() ? `${live.formNumber.trim()} ${live.title}` : live.title;
+  const summary = `${person.label} approved ${name} REV ${row.revision} on ${person.when}${note ? `: ${endSentence(note)}` : "."}`;
   await recordAuditTrail(db, {
     entityType: AUDIT,
-    entityId: id,
+    entityId: formId,
     action: "status_change",
-    changes: { summary, revision: form.revision, folderId: parentId, folder: place },
+    changes: { summary, revision: row.revision, previousRevision: form.revision, decision: "approved", note: note || null },
     performedBy: actor.id,
   });
-  return { ...saved, status: "published" as const, folderId: parentId, leafId: leafId ?? null };
+  return { form: publicForm(live, null), notice: MASTER_LIST_NOTICE };
+}
+
+/** Turns a pending revision down. The live version and its REV stay as they were. */
+export async function rejectRevision(db: Db, actor: Actor, formId: number, revId: number, input: { note?: unknown }) {
+  await requireApprover(db, actor);
+  const note = decisionNote(input.note);
+  if (!note) throw AppError.badRequest("Enter a note explaining why this revision is rejected.");
+  const { form, row } = await loadPendingRevision(db, formId, revId);
+  const [decided] = await db
+    .update(builtFormRevisions)
+    .set({ status: "rejected", approvedBy: actor.id, approvedAt: new Date(), decisionNote: note })
+    .where(and(eq(builtFormRevisions.id, revId), eq(builtFormRevisions.status, "pending")))
+    .returning();
+  if (!decided) throw new AppError(`REV ${row.revision} was already decided.`, 409);
+  const person = await who(db, actor);
+  const name = form.formNumber?.trim() ? `${form.formNumber.trim()} ${form.title}` : form.title;
+  const summary = `${person.label} rejected ${name} REV ${row.revision} on ${person.when}: ${endSentence(note)}`;
+  await recordAuditTrail(db, {
+    entityType: AUDIT,
+    entityId: formId,
+    action: "status_change",
+    changes: { summary, revision: row.revision, decision: "rejected", note },
+    performedBy: actor.id,
+  });
+  return { form: publicForm(form, null) };
 }
 
 export async function deleteBuiltForm(db: Db, actor: Actor, id: number) {
@@ -411,7 +567,10 @@ export async function openBuiltFill(db: Db, actor: Actor, formId: number, record
   await requireFiller(db, actor);
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
   if (!form) throw AppError.notFound("Form");
-  if (form.status !== "published" || form.publishedStructure == null) throw AppError.badRequest("Publish the form before filling a copy.");
+  if (form.status !== "published" || form.publishedStructure == null) {
+    const waiting = await pendingRevisionFor(db, formId);
+    throw AppError.badRequest(waiting ? `REV ${waiting.revision} is waiting for approval. A copy can be filled once it is approved.` : "Publish the form before filling a copy.");
+  }
   const template = {
     id: form.id,
     title: form.title,

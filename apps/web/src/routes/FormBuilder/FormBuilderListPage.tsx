@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { formStatusLabel } from "../../lib/formRevision";
 
 interface BuiltFormRow {
   id: number;
@@ -12,8 +13,11 @@ interface BuiltFormRow {
   formNumber: string | null;
   revision: string;
   status: string;
+  /** The REV waiting for approval, if one is. */
+  pendingRevision: string | null;
   updatedAt: string | null;
 }
+
 
 const KINDS = [
   { kind: "grid", label: "Excel-style grid", detail: "Merged cells, formulas, and Pass/Fail colors." },
@@ -26,6 +30,7 @@ export function FormBuilderListPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<(typeof KINDS)[number]["kind"]>("grid");
+  const [pendingOnly, setPendingOnly] = useState(false);
   const forms = useQuery({
     queryKey: ["form-builder"],
     queryFn: async () => (await apiClient.get<BuiltFormRow[]>("/form-builder")).data,
@@ -59,20 +64,25 @@ export function FormBuilderListPage() {
         </button>
         <p className="text-sm text-muted-foreground">{KINDS.find((item) => item.kind === kind)?.detail}</p>
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={pendingOnly} onChange={(event) => setPendingOnly(event.target.checked)} />
+        Pending approvals{forms.data ? ` (${forms.data.filter((form) => form.pendingRevision).length})` : ""}
+      </label>
       {forms.isError ? <p className="text-sm text-destructive">{extractErrorMessage(forms.error, "Form Builder is not turned on for this sign-in.")}</p> : null}
       <ul className="flex flex-col gap-2">
-        {(forms.data ?? []).map((form) => (
+        {(forms.data ?? []).filter((form) => !pendingOnly || form.pendingRevision).map((form) => (
           <li key={form.id}>
             <button type="button" className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left hover:bg-muted" onClick={() => navigate(`/form-builder/${form.id}`)}>
               <span>
                 <span className="font-medium">{form.title}</span>
-                <span className="ml-2 text-xs text-muted-foreground">{form.kind === "grid" ? "Grid" : form.kind === "document" ? "Document" : "Form"} · Rev {form.revision} · {form.status}</span>
+                <span className="ml-2 text-xs text-muted-foreground">{form.kind === "grid" ? "Grid" : form.kind === "document" ? "Document" : "Form"} · {formStatusLabel(form)}</span>
               </span>
               <span className="text-xs text-muted-foreground">{form.formNumber?.trim() || "No form number"}</span>
             </button>
           </li>
         ))}
         {forms.data && forms.data.length === 0 ? <li className="text-sm text-muted-foreground">No forms yet. Start with a grid, a document, or a regular form.</li> : null}
+        {forms.data && forms.data.length > 0 && pendingOnly && !forms.data.some((form) => form.pendingRevision) ? <li className="text-sm text-muted-foreground">Nothing is waiting for approval.</li> : null}
       </ul>
     </div>
   );
