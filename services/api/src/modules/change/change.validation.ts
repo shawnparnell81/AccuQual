@@ -9,5 +9,8 @@ export const createChangeSchema = z.object({
 });
 
 export const updateChangeSchema = createChangeSchema.partial().extend({
+  // A cleared box is sent as null.
+  description: z.string().nullable().optional(),
+  impactAssessment: z.string().nullable().optional(),
   status: z.enum(["submitted", "under_review", "approved", "rejected", "implemented"]).optional(),
 });

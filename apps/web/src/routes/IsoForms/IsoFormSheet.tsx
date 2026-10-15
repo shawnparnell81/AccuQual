@@ -133,7 +133,10 @@ function Cell({
         <input className="iso-in" type="date" aria-label={spec.addr} value={inputValue} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.value)} />
       )}
       {spec.kind === "number" && (
-        <input className="iso-in" inputMode="decimal" aria-label={spec.addr} placeholder={spec.placeholder} value={inputValue} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.value === "" ? "" : Number(event.target.value))} />
+        <input className="iso-in" inputMode="decimal" aria-label={spec.addr} placeholder={spec.placeholder} value={inputValue} disabled={readOnly} title="Numbers only" onChange={(event) => {
+            const next = numberCellValue(event.target.value);
+            if (next !== undefined) onChange(spec.addr, next);
+          }} />
       )}
       {spec.kind === "select" && (
         <select className="iso-in" aria-label={spec.addr} value={inputValue} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.value)}>
@@ -183,4 +186,13 @@ function Cell({
       {(spec.kind === "label" || spec.kind === "calc") && text}
     </td>
   );
+}
+
+/** Number cells take digits only. Text is refused as it is typed, so nothing is silently dropped on Save. */
+export function numberCellValue(typed: string): CellValue | undefined {
+  const value = typed.trim().replace(/,/g, "");
+  if (value === "") return "";
+  if (!/^-?\d*\.?\d*$/.test(value)) return undefined;
+  if (value === "-" || value === "." || value === "-." || value.endsWith(".")) return value;
+  return Number(value);
 }

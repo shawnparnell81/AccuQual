@@ -93,8 +93,8 @@ export function LaborClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen: b
         <TextField label="Customer" value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} />
         <TextField label="Part / product" value={form.partName} onChange={(event) => setForm({ ...form, partName: event.target.value })} />
         <div className="grid grid-cols-3 gap-3">
-          <TextField label="Labor hours" type="number" min="0" step="0.01" value={form.laborHours} onChange={(event) => setForm({ ...form, laborHours: event.target.value })} />
-          <TextField label="Labor rate" type="number" min="0" step="0.01" value={form.laborRate} onChange={(event) => setForm({ ...form, laborRate: event.target.value })} />
+          <TextField label="Labor hours" type="number" min="0" step="0.01" value={form.laborHours} onChange={(event) => setForm(withLaborTotal({ ...form, laborHours: event.target.value }))} />
+          <TextField label="Labor rate" type="number" min="0" step="0.01" value={form.laborRate} onChange={(event) => setForm(withLaborTotal({ ...form, laborRate: event.target.value }))} />
           <TextField label="Total labor cost" type="number" min="0" step="0.01" value={form.totalLaborCost} onChange={(event) => setForm({ ...form, totalLaborCost: event.target.value })} />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -108,4 +108,12 @@ export function LaborClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen: b
       </form>
     </Modal>
   );
+}
+
+/** Hours times rate, filled in as either is typed. A total typed by hand stays until hours or rate change. */
+export function withLaborTotal<T extends { laborHours: string; laborRate: string; totalLaborCost: string }>(form: T): T {
+  const hours = Number(form.laborHours);
+  const rate = Number(form.laborRate);
+  if (form.laborHours.trim() === "" || form.laborRate.trim() === "" || !Number.isFinite(hours) || !Number.isFinite(rate)) return form;
+  return { ...form, totalLaborCost: (Math.round(hours * rate * 100) / 100).toFixed(2) };
 }
