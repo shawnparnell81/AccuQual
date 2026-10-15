@@ -15,7 +15,6 @@ import { attachments } from "../src/drizzle/schema/attachments.js";
 import { qualityEngineeringReports } from "../src/drizzle/schema/qualityEngineeringReport.js";
 import { signAccessToken } from "../src/utils/jwt.js";
 import { seedDefaultPermissions, seedTestRoles } from "./helpers/seedDefaults.js";
-import { setTestPin, TEST_PIN } from "./helpers/signaturePin.js";
 import { updateRoleSchema } from "../src/modules/roles/roles.validation.js";
 
 const docx = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "monthly-quality-report-september-2026.docx"));
@@ -38,7 +37,6 @@ async function makeUser(roleName: string, label: string) {
     .values({ email: `qr-del-${label}-${suffix}@test.local`, passwordHash: "unused", department: "quality", roleId: role?.id ?? null, name: `Delete Tester ${label}` })
     .returning();
   userIds.push(user!.id);
-  await setTestPin(user!.id);
   return { id: user!.id, token: await signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: "quality" }) };
 }
 
@@ -104,17 +102,11 @@ describe("delete a month's Monthly Quality Report", () => {
     expect(none.body[PERMISSION]).toBe("none");
   });
 
-  it("refuses a user without the permission, a wrong PIN and a missing PIN, and deletes nothing", async () => {
+  it("refuses a user without the permission and deletes nothing", async () => {
     expect((await upload(deleterToken, DELETE_MONTH)).status).toBe(200);
     expect((await upload(deleterToken, OTHER_MONTH)).status).toBe(200);
 
-    expect((await remove(plainToken, DELETE_MONTH, { pin: TEST_PIN })).status).toBe(403);
-    const wrong = await remove(deleterToken, DELETE_MONTH, { pin: TEST_PIN === "1234" ? "4321" : "1234" });
-    expect(wrong.status).toBeGreaterThanOrEqual(400);
-    expect(wrong.status).toBeLessThan(500);
-    expect(wrong.status).not.toBe(200);
-    expect((await remove(deleterToken, DELETE_MONTH, {})).status).toBe(400);
-    expect((await remove(deleterToken, DELETE_MONTH, { pin: "12" })).status).toBe(400);
+    expect((await remove(plainToken, DELETE_MONTH, {})).status).toBe(403);
 
     const row = await activeRow(DELETE_MONTH);
     expect(row).toBeTruthy();
@@ -130,7 +122,7 @@ describe("delete a month's Monthly Quality Report", () => {
     expect(files.every((path) => existsSync(path))).toBe(true);
     const ncrBefore = (await db.select({ id: ncr.id }).from(ncr)).length;
 
-    const res = await remove(deleterToken, DELETE_MONTH, { pin: TEST_PIN });
+    const res = await remove(deleterToken, DELETE_MONTH, {});
     expect(res.status).toBe(200);
     // The month reads as a fresh, empty report.
     expect(res.body.saved).toBe(false);
@@ -176,7 +168,7 @@ describe("delete a month's Monthly Quality Report", () => {
 
   it("lets the month be filled again after a delete, and says so when there is nothing to delete", async () => {
     const deleted = await allRows(DELETE_MONTH);
-    expect((await remove(deleterToken, DELETE_MONTH, { pin: TEST_PIN })).status).toBe(404);
+    expect((await remove(deleterToken, DELETE_MONTH, {})).status).toBe(404);
 
     expect((await upload(deleterToken, DELETE_MONTH)).status).toBe(200);
     const rows = await allRows(DELETE_MONTH);

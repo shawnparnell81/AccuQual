@@ -2,7 +2,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { roleHasPermission } from "../roles/rolePermissions.js";
 import { QUALITY_REPORT_DELETE_PERMISSION } from "../roles/roleAccess.js";
-import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { extractFileWithImages, type ExtractedImage } from "../form-import/extract.js";
 import { importedMonthTotals } from "./importMonths.js";
 import { proposeMonthlyQuality, toSupplierData } from "../form-import/reportTargets/monthlyQuality.js";
@@ -563,14 +562,13 @@ function hasSupplierContent(value: unknown): boolean {
  */
 export async function deleteEngineeringReport(
   db: Db,
-  input: { year: number; month: number; pin: string; user: Actor; siteIds: number[]; plantId?: number | null },
+  input: { year: number; month: number; user: Actor; siteIds: number[]; plantId?: number | null },
 ): Promise<EngineeringReportView> {
   if (!(await roleHasPermission(db, input.user.roleName, QUALITY_REPORT_DELETE_PERMISSION))) {
     throw AppError.forbidden("You don't have permission to delete monthly quality reports. An administrator can give it to your role on the Roles page.");
   }
   const access = await engineeringAccess(db, input.user);
   if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
-  await verifySignaturePin(input.user.id, input.pin);
 
   const row = await loadRow(db, input.year, input.month);
   if (!row) throw AppError.notFound("A saved report for that month");

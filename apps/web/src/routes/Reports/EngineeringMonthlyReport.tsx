@@ -555,7 +555,7 @@ export function EngineeringMonthlyReport() {
   });
 
   const deleteReport = useMutation({
-    mutationFn: async (pin: string) => (await apiClient.delete<ReportView>("/reports/engineering", { params: { year, month }, data: { pin } })).data,
+    mutationFn: async () => (await apiClient.delete<ReportView>("/reports/engineering", { params: { year, month } })).data,
     onSuccess: async (fresh) => {
       // The month reads as a fresh, empty report that can be filled again.
       setNarrative(fresh.narrative);
@@ -775,7 +775,7 @@ export function EngineeringMonthlyReport() {
             pending={deleteReport.isPending}
             error={deleteError}
             onCancel={() => setDeleteOpen(false)}
-            onConfirm={(pin) => deleteReport.mutate(pin)}
+            onConfirm={() => deleteReport.mutate()}
           />
         )}
         {verifyOpen && (

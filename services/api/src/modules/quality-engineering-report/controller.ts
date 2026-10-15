@@ -126,11 +126,10 @@ export const engineeringImageDeleteHandler = asyncHandler(async (req: Request, r
   res.json(await deleteReportImage(req.db!, { ...actor(req), ...period, attachmentId: Number(req.params.attachmentId) }));
 });
 
-/** DELETE /reports/engineering?year=&month= { pin } — deletes that month's report. Needs the delete permission and the person's PIN. */
+/** DELETE /reports/engineering?year=&month= — deletes that month's report. Needs the delete permission; the page asks for a plain confirm. */
 export const engineeringDeleteHandler = asyncHandler(async (req: Request, res: Response) => {
   const period = periodFrom(req.query);
-  const { pin } = req.body as { pin: string };
-  res.json(await deleteEngineeringReport(req.db!, { ...actor(req), ...period, pin }));
+  res.json(await deleteEngineeringReport(req.db!, { ...actor(req), ...period }));
 });
 
 export const engineeringPdfHandler = asyncHandler(async (req: Request, res: Response) => {
