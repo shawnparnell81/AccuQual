@@ -50,10 +50,19 @@ export interface EquipmentSummary {
 }
 
 /** Latest finished calibration and the open schedule for each piece of equipment. */
-export function summarize(items: Equipment[], cals: Calibration[], now: Date = new Date()): Map<number, EquipmentSummary> {
+type SummaryCalibration = Pick<Calibration, "id" | "equipmentId" | "performedAt" | "status" | "scheduledAt" | "result" | "nextDueAt">;
+
+export function summarize(items: Equipment[], cals: SummaryCalibration[], now: Date = new Date()): Map<number, EquipmentSummary> {
   const out = new Map<number, EquipmentSummary>();
+  // Group once so a long register is not scanned once per piece of equipment.
+  const byEquipment = new Map<number, SummaryCalibration[]>();
+  for (const c of cals) {
+    const list = byEquipment.get(c.equipmentId);
+    if (list) list.push(c);
+    else byEquipment.set(c.equipmentId, [c]);
+  }
   for (const item of items) {
-    const mine = cals.filter((c) => c.equipmentId === item.id);
+    const mine = byEquipment.get(item.id) ?? [];
     const done = mine.filter((c) => c.status !== "scheduled" && c.performedAt).sort((a, b) => b.performedAt!.getTime() - a.performedAt!.getTime() || b.id - a.id);
     const latest = done[0] ?? null;
     const open = mine.filter((c) => c.status === "scheduled" && c.scheduledAt).sort((a, b) => a.scheduledAt!.getTime() - b.scheduledAt!.getTime())[0] ?? null;
@@ -116,7 +125,18 @@ async function emit(event: string, equipmentId: number, extra: Record<string, un
 
 export async function listEquipmentWithSummary(db: Db) {
   const items = await db.select().from(equipment);
-  const cals = await db.select().from(calibrations);
+  // Only the columns the summary reads; results, notes and certificate fields stay out of the list query.
+  const cals = await db
+    .select({
+      id: calibrations.id,
+      equipmentId: calibrations.equipmentId,
+      performedAt: calibrations.performedAt,
+      status: calibrations.status,
+      scheduledAt: calibrations.scheduledAt,
+      result: calibrations.result,
+      nextDueAt: calibrations.nextDueAt,
+    })
+    .from(calibrations);
   const summaries = summarize(items, cals);
   return items.map((item) => ({ ...item, ...summaries.get(item.id)! }));
 }

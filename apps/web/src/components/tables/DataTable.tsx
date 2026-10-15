@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, Inbox } from "lucide-react";
 import { FilterBar, SummaryCards, summarizeRecords } from "../layout/PageHeader";
 
@@ -44,6 +44,9 @@ interface DataTableProps<T> {
   listChrome?: boolean;
 }
 
+/** Rows drawn at first; a long register shows the rest a page at a time instead of building every row on open. */
+export const LIST_PAGE_ROWS = 200;
+
 /** Generic list table shared by every module's list page (NCR, CAPA, Audits, ...). */
 export function DataTable<T>({
   columns,
@@ -65,6 +68,8 @@ export function DataTable<T>({
     if (!listChrome || !needle) return rows;
     return rows.filter((row) => recordText(row).includes(needle));
   }, [filter, listChrome, rows]);
+  const [pageRows, setPageRows] = useState(LIST_PAGE_ROWS);
+  useEffect(() => setPageRows(LIST_PAGE_ROWS), [shown]);
   if (isLoading) {
     return (
       <div className="overflow-hidden rounded-xl border border-border bg-card" aria-busy="true" aria-label="Loading">
@@ -158,7 +163,7 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {shown.map((row, rowIndex) => {
+            {shown.slice(0, pageRows).map((row, rowIndex) => {
               const id = rowKey(row);
               return (
                 <tr
@@ -183,6 +188,19 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+      {shown.length > pageRows && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <span>
+            Showing {pageRows} of {shown.length}
+          </span>
+          <button type="button" className="rounded-md border border-border px-3 py-1.5 hover:bg-muted" onClick={() => setPageRows((count) => count + LIST_PAGE_ROWS)}>
+            Show {Math.min(LIST_PAGE_ROWS, shown.length - pageRows)} more
+          </button>
+          <button type="button" className="rounded-md border border-border px-3 py-1.5 hover:bg-muted" onClick={() => setPageRows(shown.length)}>
+            Show all
+          </button>
+        </div>
+      )}
     </div>
   );
 }

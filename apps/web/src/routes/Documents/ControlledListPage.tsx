@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { isAxiosError } from "axios";
+import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { RecordFrame } from "../../components/records/RecordFrame";
@@ -11,11 +12,14 @@ import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
 import { commitAndReload, gestureFromKey, gestureSavesEdit, headerBandEnd, moveAddr, moveTab, placedCells, type EditGesture, type GridMove } from "../../lib/controlledListGrid";
 import { useAuthStore } from "../../store/authStore";
+import { useDirtyPathStore } from "../../store/dirtyPathStore";
+import { draftKey } from "../../lib/sectionKeepAlive";
 import { siteHeaderValue } from "../../store/siteStore";
 import { isLocationLine } from "../../lib/folderPath";
 import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
 import { clickOpensCell, keyOpensCell } from "../../lib/controlledListOpen";
+import { rowWindow, sameWindow, type RowWindow } from "../../lib/controlledListWindow";
 import {
   columnLetter,
   listOptions,
@@ -110,6 +114,7 @@ function SheetGrid({
   onChange,
   onRename,
   onLeave,
+  onTyping,
 }: {
   sheet: StoredSheet;
   listKey: ControlledListKey;
@@ -128,10 +133,67 @@ function SheetGrid({
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
   onLeave: (target: EventTarget | null, gesture?: EditGesture) => void;
+  onTyping: () => void;
 }) {
   const long = !band && sheet.maxRow > 200;
   const headerRow = Math.max(1, dataStart - 1);
-  const cells = placedCells(sheet.merges, sheet.maxCol, fromRow, toRow).map((place) => {
+  const rowPx = useMemo(
+    () => Array.from({ length: Math.max(0, toRow - fromRow + 1) }, (_, index) => Number(((sheet.rowHeights[String(fromRow + index)] ?? (band ? 18 : 15)) * 1.33).toFixed(1))),
+    [sheet.rowHeights, fromRow, toRow, band],
+  );
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [shownRows, setShownRows] = useState<RowWindow>({ from: fromRow, to: long ? Math.min(toRow, fromRow + 80) : toRow });
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    // Long lists only build the rows near the screen. The grid keeps every row's height, so scrolling and the
+    // scroll bar behave the same; rows are built as they come into view. Printing builds them all.
+    if (!long) {
+      setShownRows((prev) => (prev.from === fromRow && prev.to === toRow ? prev : { from: fromRow, to: toRow }));
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const el = gridRef.current;
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      const next = rowWindow(rowPx, -box.top, window.innerHeight, fromRow, 40);
+      setShownRows((prev) => (sameWindow(prev, next) ? prev : next));
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    const beforePrint = () => setPrinting(true);
+    const afterPrint = () => setPrinting(false);
+    update();
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("resize", schedule);
+    window.addEventListener("beforeprint", beforePrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, { capture: true });
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+    };
+  }, [long, rowPx, fromRow, toRow]);
+  const windowed = long && !printing;
+  const winFrom = windowed ? Math.max(fromRow, shownRows.from) : fromRow;
+  const winTo = windowed ? Math.min(toRow, shownRows.to) : toRow;
+  // The open cell and the selected cell stay built while scrolled away, so a half-typed value is never dropped.
+  const keepRows = windowed
+    ? [editing, activeAddr]
+        .map((addr) => (addr ? Number(addr.replace(/^[A-Z]+/i, "")) : NaN))
+        .filter((row, index, all) => Number.isFinite(row) && row >= fromRow && row <= toRow && (row < winFrom || row > winTo) && all.indexOf(row) === index)
+    : [];
+  const placed = [
+    // Column titles above the data stay built.
+    ...(windowed && winFrom > fromRow && dataStart > fromRow ? placedCells(sheet.merges, sheet.maxCol, fromRow, Math.min(dataStart - 1, winFrom - 1)) : []),
+    ...placedCells(sheet.merges, sheet.maxCol, winFrom, winTo),
+    ...keepRows.flatMap((row) => placedCells(sheet.merges, sheet.maxCol, row, row)),
+  ];
+  const cells = placed.map((place) => {
     const { addr, col, row, cols, rows } = place;
     const cell = sheet.cells[addr];
     const shown = shownCell(sheet, addr);
@@ -197,6 +259,7 @@ function SheetGrid({
             onChange={onChange}
             onRename={onRename}
             onLeave={onLeave}
+            onTyping={onTyping}
           />
         )}
       </div>
@@ -205,6 +268,7 @@ function SheetGrid({
   const rowCount = Math.max(0, toRow - fromRow + 1);
   return (
     <div
+      ref={gridRef}
       className={band ? "controlled-list-sheet controlled-list-header-band" : long ? "controlled-list-sheet controlled-list-long" : "controlled-list-sheet"}
       data-testid={band ? `controlled-list-header-${sheet.name.trim()}` : `controlled-list-${sheet.name.trim()}`}
       data-paste-grid=""
@@ -213,10 +277,7 @@ function SheetGrid({
       aria-label={band ? `${sheet.name.trim()} header` : sheet.name.trim()}
       style={{
         gridTemplateColumns: band ? sheet.colWidths.map((width) => `minmax(0, ${width}fr)`).join(" ") : sheet.colWidths.map((width) => `${width * 8}px`).join(" "),
-        gridTemplateRows: Array.from({ length: rowCount }, (_, index) => {
-          const height = ((sheet.rowHeights[String(fromRow + index)] ?? (band ? 18 : 15)) * 1.33).toFixed(1);
-          return band ? `minmax(${height}px, auto)` : `${height}px`;
-        }).join(" "),
+        gridTemplateRows: Array.from({ length: rowCount }, (_, index) => (band ? `minmax(${rowPx[index]}px, auto)` : `${rowPx[index]}px`)).join(" "),
         ["--print-cols" as string]: sheet.colWidths.map((width) => `${width}fr`).join(" "),
       }}
     >
@@ -240,6 +301,7 @@ function CellBody({
   onChange,
   onRename,
   onLeave,
+  onTyping,
 }: {
   addr: string;
   column: string;
@@ -255,6 +317,7 @@ function CellBody({
   onChange: (addr: string, value: string | number | null) => void;
   onRename: (col: string, name: string) => void;
   onLeave: (target: EventTarget | null) => void;
+  onTyping: () => void;
 }) {
   const stored = typeof cell?.v === "string" || typeof cell?.v === "number" ? String(cell.v) : "";
   // Typing stays in this cell until Tab, Enter, an arrow out or a click away commits it (persistField reads the
@@ -273,6 +336,7 @@ function CellBody({
   // Paste (GridClipboard) fills fields with synthetic events and no keyboard commit; save those straight away.
   const typed = (value: string, trusted: boolean) => {
     setDraft(value);
+    onTyping();
     if (!trusted) onChange(addr, parseEdited(value, cell?.nf));
   };
   if (!editable || quiet) {
@@ -308,7 +372,10 @@ function CellBody({
           aria-label={`${addr} column title`}
           data-column-title="true"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            onTyping();
+          }}
           onBlur={(event) => {
             onLeave(event.currentTarget);
             const next = draft.trim();
@@ -407,6 +474,13 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const [sheetName, setSheetName] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const typingField = useRef(false);
+  const inflight = useRef<Promise<boolean> | null>(null);
+  const setDirtyPath = useDirtyPathStore((state) => state.setDirtyPath);
+  const draftPath = draftKey(useLocation().pathname);
   const [editing, setEditing] = useState<string | null>(null);
   const [active, setActive] = useState<{ sheet: string; addr: string; row: number } | null>(null);
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
@@ -455,9 +529,18 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     });
   }
 
-  async function flush() {
+  function flush(): Promise<boolean> {
+    const run = send();
+    inflight.current = run;
+    void run.finally(() => {
+      if (inflight.current === run) inflight.current = null;
+    });
+    return run;
+  }
+
+  async function send(): Promise<boolean> {
     const current = viewRef.current;
-    if (!current || pending.current.size === 0) return;
+    if (!current || pending.current.size === 0) return true;
     const id = ++saveSeq.current;
     const sheets = takePending();
     inflightBody.current = sheets;
@@ -468,16 +551,27 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     try {
       const next = (await apiClient.put<ControlledListView>(`/controlled-lists/${listKey}`, { sheets })).data;
       if (inflightBody.current === sheets) inflightBody.current = null;
-      if (!mounted.current || id !== saveSeq.current) return;
+      if (!mounted.current || id !== saveSeq.current) return true;
       setView((local) => {
         if (!local || pending.current.size > 0) return local;
         return next;
       });
       setSaved(true);
+      setSaveError(null);
+      setSavedAt(new Date());
+      setDirty(pending.current.size > 0 || typingField.current);
       void queryClient.setQueryData(["controlled-list", listKey], next);
+      return true;
     } catch (err) {
       if (inflightBody.current === sheets) inflightBody.current = null;
-      if (mounted.current) toast.error(errorMessage(err));
+      // Keep the edits queued so the next Save sends them again.
+      for (const sheet of sheets) pending.current.set(sheet.name, { ...sheet.cells, ...(pending.current.get(sheet.name) ?? {}) });
+      if (mounted.current) {
+        toast.error(errorMessage(err));
+        setSaveError(errorMessage(err));
+        setDirty(true);
+      }
+      return false;
     } finally {
       if (mounted.current) setSaving(false);
     }
@@ -508,6 +602,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     const sheet = pending.current.get(name) ?? {};
     sheet[addr] = { v: value };
     pending.current.set(name, sheet);
+    setDirty(true);
     if (timer.current != null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       void flush();
@@ -553,6 +648,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
 
   function persistField(target: EventTarget | null, gesture: EditGesture) {
     if (!gestureSavesEdit(gesture)) return;
+    typingField.current = false;
     const field = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement ? target : null;
     if (field && field.getAttribute("data-column-title") !== "true" && !field.closest(".controlled-list-inactive")) {
       const addr = field.closest("[data-addr]")?.getAttribute("data-addr");
@@ -674,6 +770,31 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     }
   }
 
+  /** Save button: commit the open cell, then send every queued edit now instead of waiting for autosave. */
+  async function saveAll() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest(".controlled-list-print")) persistField(active, "click");
+    if (timer.current != null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setSaving(true);
+    if (inflight.current) await inflight.current;
+    const ok = await flush();
+    if (!mounted.current) return;
+    setSaving(false);
+    if (ok && pending.current.size === 0) {
+      setSaveError(null);
+      setDirty(typingField.current);
+      setSavedAt(new Date());
+    }
+  }
+
+  // The app's unsaved-changes guard (leaving the tab, closing or reloading the window) follows this list's own state,
+  // so it clears once the edits reach the server instead of staying on after autosave.
+  useEffect(() => {
+    setDirtyPath(draftPath, dirty);
+  }, [dirty, draftPath, setDirtyPath]);
+  useEffect(() => () => setDirtyPath(draftPath, false), [draftPath, setDirtyPath]);
+
   const sheet = view?.sheets.find((item) => item.name === sheetName) ?? view?.sheets[0];
   const home = listKey === "lst-eqp-001" ? { label: "Calibration", to: "/calibration" } : { label: "Documents", to: "/documents" };
   const dataStart = sheet ? (view?.dataStart?.[sheet.name] ?? DATA_START[listKey][sheet.name] ?? sheet.maxRow + 1) : 1;
@@ -757,12 +878,34 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl font-semibold">{view?.title ?? "Controlled list"}</h1>
-              <p className="text-sm text-muted-foreground">
-                {view ? `${view.docId} · Rev ${view.revision}` : "Loading"}
-                {saving ? " · Saving…" : saved ? " · Saved" : ""}
-              </p>
+              <p className="text-sm text-muted-foreground">{view ? `${view.docId} · Rev ${view.revision}` : "Loading"}</p>
             </div>
             <div className="controlled-list-tools flex flex-wrap items-center gap-2">
+              {canEdit && (
+                <>
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    data-testid="controlled-list-save-status"
+                    className={saveError ? "text-sm text-destructive" : dirty && !saving ? "text-sm font-medium text-amber-700 dark:text-amber-400" : "text-sm text-muted-foreground"}
+                  >
+                    {saving
+                      ? "Saving…"
+                      : saveError
+                        ? `Not saved: ${saveError}`
+                        : dirty
+                          ? "Unsaved changes"
+                          : savedAt
+                            ? `All changes saved at ${savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                            : saved
+                              ? "All changes saved"
+                              : ""}
+                  </span>
+                  <button type="button" onClick={() => void saveAll()} disabled={saving} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+                    Save
+                  </button>
+                </>
+              )}
               <button type="button" onClick={() => void download()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
                 Download
               </button>
@@ -828,6 +971,10 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               onChange: (addr: string, value: string | number | null) => edit(item.name, addr, value),
               onRename: (col: string, name: string) => void changeColumn({ op: "rename", col, name }),
               onLeave: (target: EventTarget | null, gesture: EditGesture = "blur") => persistField(target, gesture),
+              onTyping: () => {
+                typingField.current = true;
+                setDirty(true);
+              },
             };
             return (
               <div key={item.name} className={shown ? "mb-2" : "controlled-list-inactive"}>
