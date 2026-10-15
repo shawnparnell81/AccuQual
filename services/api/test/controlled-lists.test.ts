@@ -717,7 +717,7 @@ describe("living controlled lists", () => {
     expect(validations).toContain("Closed");
   });
 
-  it("edits seeded rows, inserts and deletes without numbering, and bumps revision only for columns", () => {
+  it("edits seeded rows, inserts and deletes without numbering, and never moves the revision for a column change", () => {
     const engName = "LST-ENG-001 - ECR Tracker - Rev";
     const eng = freshSheets("lst-eng-001");
     expect(eng[0]?.cells.H2?.v).toBe("Maxwell Tollefson");
@@ -766,30 +766,30 @@ describe("living controlled lists", () => {
 
     const renamed = renameListColumn("lst-eng-001", eng, "A", engName, "A", "Request");
     expect(renamed?.bumped).toBe(true);
-    expect(renamed?.revision).toBe("B");
+    expect(renamed?.revision).toBe("A");
     expect(renamed?.sheets[0]?.cells.A5?.v).toBe("Request");
-    expect(renamed?.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(renamed?.sheets[0]?.cells.D2?.v).toBe("A");
     expect(renamed?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
     const same = renameListColumn("lst-eng-001", renamed!.sheets, renamed!.revision, engName, "A", "Request");
     expect(same?.bumped).toBe(false);
     const added = addListColumn("lst-eng-001", eng, "A", engName, "K");
-    expect(added?.revision).toBe("B");
+    expect(added?.revision).toBe("A");
     expect(added?.sheets[0]?.maxCol).toBe(12);
     expect(added?.sheets[0]?.cells.L5?.v ?? null).toBeNull();
     expect(added?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
     expect(added?.sheets[0]?.merges).toEqual(expect.arrayContaining(["A1:L1"]));
     const dropped = removeListColumn("lst-eng-001", added!.sheets, added!.revision, engName, "L");
-    expect(dropped?.revision).toBe("C");
+    expect(dropped?.revision).toBe("A");
     expect(dropped?.sheets[0]?.maxCol).toBe(11);
     expect(dropped?.sheets[0]?.cells.A5?.v).toBe("ECR Number");
 
     const schedule = renameListColumn("lst-gen-002", freshSheets("lst-gen-002"), "A", "LST-GEN-002 - Internal Audit Sc", "H", "Findings");
     expect(schedule?.sheets[0]?.cells.H5?.v).toBe("Findings");
-    expect(schedule?.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(schedule?.sheets[0]?.cells.D2?.v).toBe("A");
     expect(schedule?.sheets[0]?.cells.F3?.v).toBe("Ron Wertz & Maxwell Tollefson");
     const ncrColumn = renameListColumn("lst-ncr-001", freshSheets("lst-ncr-001"), "G", "LST-NCR-001 - NCR", "A", "NCR No.");
-    expect(ncrColumn?.revision).toBe("H");
-    expect(ncrColumn?.sheets[0]?.cells.B2?.v).toBe("Rev: H");
+    expect(ncrColumn?.revision).toBe("G");
+    expect(ncrColumn?.sheets[0]?.cells.B2?.v).toBe("Rev: E");
     expect(ncrColumn?.sheets[0]?.cells.A5?.v).toBe("NCR-2026-001");
     expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.maxCol).toBe(12);
     expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.cells.H2?.v).toBe("Maxwell Tollefson");

@@ -22,6 +22,13 @@ const suffix = Date.now();
 
 let token: string;
 
+/** Every controlled list needs Edit before a change. */
+async function editList(key: string, action: "start" | "save" | "cancel", as = token) {
+  const res = await request(app).post(`/controlled-lists/${key}/edit`).set("Authorization", `Bearer ${as}`).send({ action });
+  expect(res.status).toBe(200);
+  return res;
+}
+
 describe("living controlled lists API", () => {
   beforeAll(async () => {
     const co = await ensureTestCompany();
@@ -30,7 +37,9 @@ describe("living controlled lists API", () => {
       .insert(users)
       .values({ email: `controlled-lists-${suffix}@test.local`, name: "Shawn", passwordHash: "unused" })
       .returning();
-    token = signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department: "quality" });
+    // The master lists need Edit master lists and an open Edit before a change. The log tests below use the same person.
+    await db.insert(roles).values({ name: `list-editor-${suffix}`, description: "Edits master lists", hierarchyLevel: 80, isProtected: false, permissions: ["controlled_lists.edit"] });
+    token = signAccessToken({ sub: String(user!.id), roleId: null, roleName: `list-editor-${suffix}`, department: "quality" });
   });
 
   it("saves a data edit without changing Rev, downloads formulas, and removes the old copies once", async () => {
@@ -43,6 +52,8 @@ describe("living controlled lists API", () => {
     expect(JSON.stringify(internal.cells)).not.toContain("FRM-TST-001");
     expect(JSON.stringify(internal.cells)).not.toContain("FRM-TST-002");
 
+    const started = await request(app).post("/controlled-lists/lst-gen-001/edit").set("Authorization", `Bearer ${token}`).send({ action: "start" });
+    expect(started.status).toBe(200);
     const saved = await request(app)
       .put("/controlled-lists/lst-gen-001")
       .set("Authorization", `Bearer ${token}`)
@@ -52,6 +63,7 @@ describe("living controlled lists API", () => {
     expect(saved.body.sheets[0].cells.B4.v).toBe(`Supplier CAR ${suffix}`);
     expect(saved.body.sheets[0].cells.D2.v).toBe("B");
 
+    expect((await request(app).post("/controlled-lists/lst-gen-001/edit").set("Authorization", `Bearer ${token}`).send({ action: "save" })).status).toBe(200);
     const again = await request(app).get("/controlled-lists/lst-gen-001").set("Authorization", `Bearer ${token}`);
     expect(again.body.sheets[0].cells.B4.v).toBe(`Supplier CAR ${suffix}`);
     expect(again.body.revision).toBe("B");
@@ -295,6 +307,7 @@ describe("living controlled lists API", () => {
       subjectRoute: "/documents/internal-audit-schedule",
     });
 
+    await editList("lst-gen-002", "start");
     const saved = await request(app)
       .put("/controlled-lists/lst-gen-002")
       .set("Authorization", `Bearer ${token}`)
@@ -347,7 +360,8 @@ describe("living controlled lists API", () => {
     const opened = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`);
     expect(opened.status).toBe(200);
     // Quality's department grant for form_builder is edit, same rule as Form Builder.
-    expect(opened.body.canEditStructure).toBe(true);
+    expect(opened.body.canEditStructure).toBe(false);
+    expect((await editList("lst-eng-001", "start")).body.canEditStructure).toBe(true);
     expect(opened.body.dataStart[engName]).toBe(6);
     expect(opened.body.sheets[0].cells.H2.v).toBe("Maxwell Tollefson");
     expect(opened.body.revision).toBe("A");
@@ -405,6 +419,7 @@ describe("living controlled lists API", () => {
     expect(ws?.getCell("F6").value).toBe(`Height ${suffix}`);
     expect(ws?.getCell("A6").value).toBe("ECR-2026-001");
 
+    await editList("lst-gen-002", "start");
     const schedule = await request(app)
       .put("/controlled-lists/lst-gen-002")
       .set("Authorization", `Bearer ${token}`)
@@ -414,6 +429,7 @@ describe("living controlled lists API", () => {
     expect(schedule.body.sheets[0].cells.F3.v).toBe(`Owner ${suffix}`);
     expect(schedule.body.sheets[0].cells.D2.v).toBe("A");
 
+    await editList("lst-ncr-001", "start");
     const ncr = await request(app)
       .put("/controlled-lists/lst-ncr-001")
       .set("Authorization", `Bearer ${token}`)
@@ -438,6 +454,7 @@ describe("living controlled lists API", () => {
     expect(ncrDelete.body.sheets[0].cells.A5.v).toBe("NCR-2026-001");
     expect(ncrDelete.body.sheets[0].cells.D5.v).toBe(`Defect ${suffix}`);
 
+    for (const key of ["lst-eng-001", "lst-gen-002", "lst-ncr-001"]) await editList(key, "save");
     await db.insert(roles).values({ name: `list-reader-${suffix}`, description: "No structure edits", hierarchyLevel: 80, isProtected: false, permissions: [] });
     const [reader] = await db.insert(users).values({ email: `list-reader-${suffix}@test.local`, name: "List Reader", passwordHash: "unused" }).returning();
     const readerToken = signAccessToken({ sub: String(reader!.id), roleId: null, roleName: `list-reader-${suffix}`, department: "production" });
@@ -462,23 +479,25 @@ describe("living controlled lists API", () => {
     expect(qualityDenied.status).toBe(403);
     expect((await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`)).body.canEditStructure).toBe(false);
 
-    await db.insert(roles).values({ name: `list-builder-${suffix}`, description: "Builds forms", hierarchyLevel: 70, isProtected: false, permissions: ["form_builder"] });
+    await db.insert(roles).values({ name: `list-builder-${suffix}`, description: "Builds forms", hierarchyLevel: 70, isProtected: false, permissions: ["form_builder", "controlled_lists.edit"] });
     const [builder] = await db.insert(users).values({ email: `list-builder-${suffix}@test.local`, name: "List Builder", passwordHash: "unused" }).returning();
     const builderToken = signAccessToken({ sub: String(builder!.id), roleId: null, roleName: `list-builder-${suffix}`, department: "quality" });
+    await editList("lst-eng-001", "start", builderToken);
     const renamed = await request(app)
       .post("/controlled-lists/lst-eng-001/columns")
       .set("Authorization", `Bearer ${builderToken}`)
       .send({ sheet: engName, op: "rename", col: "A", name: `Request ${suffix}` });
     expect(renamed.status).toBe(200);
     expect(renamed.body.canEditStructure).toBe(true);
-    expect(renamed.body.revision).toBe("B");
+    // A column change never moves Rev on its own.
+    expect(renamed.body.revision).toBe("A");
     expect(renamed.body.sheets[0].cells.A5.v).toBe(`Request ${suffix}`);
-    expect(renamed.body.sheets[0].cells.D2.v).toBe("B");
+    expect(renamed.body.sheets[0].cells.D2.v).toBe("A");
     expect(renamed.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
     expect(renamed.body.sheets[0].cells.H2.v).toBe(`Ada ${suffix}`);
     const structureAudit = (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ControlledList"), eq(auditTrail.entityId, opened.body.id)))).find((row) =>
       String((row.changes as { summary?: string } | null)?.summary ?? "").includes(`Request ${suffix}`),
     );
-    expect(String((structureAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("Revision moved from A to B");
+    expect(String((structureAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("Revision stayed A");
   });
 });

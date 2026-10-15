@@ -17,6 +17,8 @@ import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 import { listMasterDocuments } from "../documents/masterDocumentList.js";
 import { purgeExistingRecord } from "../records/recordDeletion.js";
 import { canEditFormBuilder } from "../form-builder/access.js";
+import { CONTROLLED_LISTS_EDIT_PERMISSION } from "../roles/roleAccess.js";
+import { roleHasPermission } from "../roles/rolePermissions.js";
 import { formBuilderAccess } from "../form-builder/service.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
@@ -74,6 +76,12 @@ export interface ControlledListView {
   dataStart: Record<string, number>;
   /** Adding, renaming, or removing a column. Same permission as Form Builder structure edits. */
   canEditStructure: boolean;
+  /** Master lists open read-only. True when this person may click Edit (Edit master lists, plus edit access to the area). */
+  canEditList: boolean;
+  /** True for the master lists, which need Edit before any change. */
+  locked: boolean;
+  /** Who has the list open for editing, if anyone. `mine` is true for the person asking. */
+  editSession: { byId: number; byName: string; startedAt: string; mine: boolean } | null;
   sheets: StoredSheet[];
 }
 
@@ -96,7 +104,9 @@ async function structureAllowed(req: Request): Promise<boolean> {
   return canEditFormBuilder(access);
 }
 
-function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, key: ListKey, canEditStructure: boolean): ControlledListView {
+type ListRow = { id: number; revision: string; sheets: StoredSheet[]; editBy?: number | null; editStartedAt?: Date | null; editSnapshot?: StoredSheet[] | null; editRevision?: string | null };
+
+function viewOf(row: ListRow, key: ListKey, canEditStructure: boolean, extra: Pick<ControlledListView, "canEditList" | "locked" | "editSession">): ControlledListView {
   const spec = LISTS[key];
   return {
     id: row.id,
@@ -110,12 +120,63 @@ function viewOf(row: { id: number; revision: string; sheets: StoredSheet[] }, ke
     statuses: key === "lst-eqp-001" ? EQUIPMENT_STATUSES : [],
     dataStart: spec.dataStart,
     canEditStructure,
+    ...extra,
     sheets: row.sheets,
   };
 }
 
-async function present(req: Request, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }): Promise<ControlledListView> {
-  return viewOf(row, key, await structureAllowed(req));
+async function present(req: Request, key: ListKey, row: ListRow): Promise<ControlledListView> {
+  const locked = isLockedList(key);
+  const canEditList = locked ? await canEditMasterList(req, key) : false;
+  // A save or row change returns the updated row without the edit columns. Read them so the page does not re-lock by mistake.
+  let session: { editBy: number | null; editStartedAt: Date | null; editSnapshot: StoredSheet[] | null; editRevision: string | null } = {
+    editBy: row.editBy ?? null,
+    editStartedAt: row.editStartedAt ?? null,
+    editSnapshot: row.editSnapshot ?? null,
+    editRevision: row.editRevision ?? null,
+  };
+  if (locked && row.editBy === undefined) {
+    const [stored] = await req
+      .db!.select({ editBy: controlledLists.editBy, editStartedAt: controlledLists.editStartedAt, editSnapshot: controlledLists.editSnapshot, editRevision: controlledLists.editRevision })
+      .from(controlledLists)
+      .where(eq(controlledLists.id, row.id));
+    if (stored) session = stored;
+  }
+  const editSession =
+    locked && session.editBy != null && session.editStartedAt
+      ? { byId: session.editBy, byName: await personName(req.db!, session.editBy), startedAt: session.editStartedAt.toISOString(), mine: session.editBy === req.user?.id }
+      : null;
+  // Everyone else sees the list as it was when Edit was clicked. Edits in progress are not the controlled copy until Save.
+  const shown = editSession && !editSession.mine && session.editSnapshot ? { ...row, sheets: session.editSnapshot, revision: session.editRevision ?? row.revision } : row;
+  return viewOf(shown, key, (await structureAllowed(req)) && (!locked || Boolean(editSession?.mine)), { canEditList, locked, editSession });
+}
+
+/** Every controlled list (the master lists and the LST logs) opens read-only and needs Edit before any change. */
+const LOCKED_LISTS: ReadonlySet<ListKey> = new Set<ListKey>(Object.keys(LISTS) as ListKey[]);
+
+export function isLockedList(key: ListKey): boolean {
+  return LOCKED_LISTS.has(key);
+}
+
+/** An edit left open longer than this (closed browser, lost connection) no longer blocks someone else from starting one. */
+export const EDIT_SESSION_STALE_MS = 8 * 60 * 60 * 1000;
+
+const EDIT_DENIED = "Editing controlled lists needs the Edit master lists and logs permission. An administrator can turn it on under Users & Roles.";
+
+async function canEditMasterList(req: Request, key: ListKey): Promise<boolean> {
+  if (!req.db || !req.user) return false;
+  const access = await getUserAccessLevel(req.db, req.user, LISTS[key].resource);
+  if (access !== "edit") return false;
+  return roleHasPermission(req.db, req.user.roleName, CONTROLLED_LISTS_EDIT_PERMISSION);
+}
+
+/** Every change to a master list needs the permission and an Edit this person started. */
+async function requireListWrite(req: Request, key: ListKey) {
+  await requireLevel(req, key, "edit");
+  if (!isLockedList(key)) return;
+  if (!(await canEditMasterList(req, key))) throw AppError.forbidden(EDIT_DENIED);
+  const row = await loadRow(req.db!, key);
+  if (!row || row.editBy !== req.user!.id) throw AppError.forbidden(`Click Edit before changing ${LISTS[key].title}.`);
 }
 
 function revisionAfterEdits(key: ListKey, current: string, changes: Array<{ sheet: string; addr: string; next: string }>): string {
@@ -612,7 +673,7 @@ async function ensureListExists(req: Request, key: ListKey): Promise<void> {
 }
 
 export async function saveControlledList(req: Request, key: ListKey, patches: Array<{ name: string; cells: Record<string, CellPatch> }>): Promise<ControlledListView> {
-  await requireLevel(req, key, "edit");
+  await requireListWrite(req, key);
   await ensureListExists(req, key);
   const row = await loadRow(req.db!, key);
   if (!row) throw AppError.notFound(LISTS[key].title);
@@ -639,7 +700,7 @@ export async function saveControlledList(req: Request, key: ListKey, patches: Ar
 
 /** Puts the list's current folder path into Location cells. Does nothing until this is called. */
 export async function insertControlledListLocation(req: Request, key: ListKey, sheetName: string, path: string): Promise<ControlledListView> {
-  await requireLevel(req, key, "edit");
+  await requireListWrite(req, key);
   const trimmed = path.trim();
   if (!trimmed) throw AppError.badRequest("The folder path is empty.");
   if (trimmed.length > 500) throw AppError.badRequest("That path is too long.");
@@ -676,7 +737,7 @@ export async function changeControlledListRows(
   rows?: number[],
   place?: "above" | "below",
 ): Promise<ControlledListView> {
-  await requireLevel(req, key, "edit");
+  await requireListWrite(req, key);
   await ensureListExists(req, key);
   const current = await loadRow(req.db!, key);
   if (!current) throw AppError.notFound(LISTS[key].title);
@@ -731,7 +792,7 @@ export async function changeControlledListColumns(
   col?: string,
   name?: string,
 ): Promise<ControlledListView> {
-  await requireLevel(req, key, "edit");
+  await requireListWrite(req, key);
   if (!(await structureAllowed(req))) throw AppError.forbidden(STRUCTURE_DENIED);
   await ensureListExists(req, key);
   const current = await loadRow(req.db!, key);
@@ -744,6 +805,7 @@ export async function changeControlledListColumns(
         : removeListColumn(key, current.sheets, current.revision, sheetName, col ?? "");
   if (!edited) throw AppError.badRequest("That column could not be changed.");
   if (!edited.bumped) return present(req, key, current);
+  // Rev is never changed by a column edit; edited.revision is the current one.
   const [updated] = await req
     .db!.update(controlledLists)
     .set({ sheets: edited.sheets, revision: edited.revision, updatedAt: new Date() })
@@ -764,4 +826,89 @@ export async function changeControlledListColumns(
 export async function downloadControlledList(req: Request, key: ListKey): Promise<{ filename: string; body: Buffer }> {
   const opened = await openControlledList(req, key);
   return { filename: workbookFileName(key), body: await buildListWorkbook(key, opened.sheets) };
+}
+
+function cellText(value: unknown): string {
+  return value == null ? "" : String(value);
+}
+
+/** Plain summary of what changed between Edit and Save, per sheet. */
+export function editSessionSummary(before: StoredSheet[], after: StoredSheet[]): string {
+  const parts: string[] = [];
+  for (const sheet of after) {
+    const old = before.find((item) => item.name === sheet.name);
+    if (!old) continue;
+    const addrs = new Set([...Object.keys(old.cells), ...Object.keys(sheet.cells)]);
+    let changed = 0;
+    for (const addr of addrs) if (cellText(old.cells[addr]?.v) !== cellText(sheet.cells[addr]?.v)) changed += 1;
+    const rows = sheet.maxRow - old.maxRow;
+    const bits: string[] = [];
+    if (changed > 0) bits.push(`${changed} cell${changed === 1 ? "" : "s"} changed`);
+    if (rows > 0) bits.push(`${rows} row${rows === 1 ? "" : "s"} added`);
+    if (rows < 0) bits.push(`${-rows} row${rows === -1 ? "" : "s"} removed`);
+    if (bits.length > 0) parts.push(`${sheet.name.trim()}: ${bits.join(", ")}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "no changes";
+}
+
+/** Edit, Save and Cancel for a master list. Each one is recorded in the audit trail. */
+export async function editControlledList(req: Request, key: ListKey, action: "start" | "save" | "cancel"): Promise<ControlledListView> {
+    await requireLevel(req, key, "edit");
+  if (!(await canEditMasterList(req, key))) throw AppError.forbidden(EDIT_DENIED);
+  await ensureListExists(req, key);
+  const row = await loadRow(req.db!, key);
+  if (!row) throw AppError.notFound(LISTS[key].title);
+  const db = req.db!;
+  const userId = req.user!.id;
+  const title = LISTS[key].title === LISTS[key].docId ? LISTS[key].docId : `${LISTS[key].docId} ${LISTS[key].title}`;
+  const { who, when } = await acted(db, userId);
+  const clear = { editSnapshot: null, editRevision: null, editBy: null, editStartedAt: null };
+  if (action === "start") {
+    if (row.editBy === userId) return present(req, key, row);
+    const fresh = row.editStartedAt && Date.now() - row.editStartedAt.getTime() < EDIT_SESSION_STALE_MS;
+    if (row.editBy != null && fresh) {
+      throw new AppError(`${await personName(db, row.editBy)} is editing ${LISTS[key].title}. Try again after they save or cancel.`, 409);
+    }
+    const [updated] = await db
+      .update(controlledLists)
+      .set({ editSnapshot: row.sheets, editRevision: row.revision, editBy: userId, editStartedAt: new Date() })
+      .where(eq(controlledLists.id, row.id))
+      .returning();
+    await recordAuditTrail(db, {
+      entityType: "ControlledList",
+      entityId: row.id,
+      action: "update",
+      performedBy: userId,
+      changes: { summary: `${who} started editing ${title} on ${when}. Revision ${row.revision}.` },
+    });
+    return present(req, key, updated!);
+  }
+  if (row.editBy !== userId) throw AppError.forbidden(`You do not have ${LISTS[key].title} open for editing.`);
+  if (action === "save") {
+    const summary = editSessionSummary(row.editSnapshot ?? row.sheets, row.sheets);
+    const [updated] = await db.update(controlledLists).set(clear).where(eq(controlledLists.id, row.id)).returning();
+    await recordAuditTrail(db, {
+      entityType: "ControlledList",
+      entityId: row.id,
+      action: "update",
+      performedBy: userId,
+      changes: { summary: `${who} saved edits to ${title} on ${when}: ${summary}. Revision ${row.revision}. The list is locked again.` },
+    });
+    return present(req, key, updated!);
+  }
+  const discarded = editSessionSummary(row.editSnapshot ?? row.sheets, row.sheets);
+  const restored = { sheets: row.editSnapshot ?? row.sheets, revision: row.editRevision ?? row.revision };
+  const [updated] = await db
+    .update(controlledLists)
+    .set({ ...restored, ...clear, updatedAt: new Date() })
+    .where(eq(controlledLists.id, row.id))
+    .returning();
+  await recordAuditTrail(db, {
+    entityType: "ControlledList",
+    entityId: row.id,
+    action: "update",
+    performedBy: userId,
+    changes: { summary: `${who} canceled editing ${title} on ${when}. Discarded: ${discarded}. Revision ${restored.revision}. The list is locked again.` },
+  });
+  return present(req, key, updated!);
 }

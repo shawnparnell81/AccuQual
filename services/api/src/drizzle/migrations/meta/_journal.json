@@ -967,6 +967,13 @@
       "when": 1795906800000,
       "tag": "0139_form_revision_records",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1795993200000,
+      "tag": "0140_master_list_edit_lock",
+      "breakpoints": true
     }
   ]
 }

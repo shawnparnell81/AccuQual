@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { isListKey, type CellPatch } from "./logic.js";
-import { changeControlledListColumns, changeControlledListRows, downloadControlledList, insertControlledListLocation, openControlledList, saveControlledList } from "./service.js";
+import { editControlledList, changeControlledListColumns, changeControlledListRows, downloadControlledList, insertControlledListLocation, openControlledList, saveControlledList } from "./service.js";
 
 function keyFrom(req: Request) {
   const key = String(req.params.key ?? "");
@@ -51,4 +51,10 @@ export const downloadControlledListHandler = asyncHandler(async (req: Request, r
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${file.filename.replace(/"/g, "")}"`);
   res.send(file.body);
+});
+
+export const editControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const action = (req.body as { action?: string }).action;
+  if (action !== "start" && action !== "save" && action !== "cancel") throw AppError.badRequest("Choose start, save, or cancel.");
+  res.json(await editControlledList(req, keyFrom(req), action));
 });

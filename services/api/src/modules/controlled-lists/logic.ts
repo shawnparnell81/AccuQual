@@ -3,7 +3,6 @@ import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
 import auditSchedule from "./seeds/lst-gen-002.json" with { type: "json" };
 import engLog from "./seeds/lst-eng-001.json" with { type: "json" };
 import ncrLog from "./seeds/lst-ncr-001.json" with { type: "json" };
-import { bumpRevision } from "../form-builder/revision.js";
 import {
   appendSheetRow,
   cellAddr,
@@ -241,12 +240,6 @@ export function revisionLetter(value: string): string | null {
   if (prefixed?.[1]) return prefixed[1].toUpperCase();
   if (/^[A-Za-z]+$/.test(trimmed)) return trimmed.toUpperCase();
   return null;
-}
-
-function replaceRevisionText(current: string, revision: string): string {
-  const trimmed = current.trim();
-  if (/^rev:\s*[A-Za-z]+$/i.test(trimmed)) return trimmed.replace(/[A-Za-z]+$/, revision);
-  return revision;
 }
 
 /** A blank document revision takes the catalog letter. A saved letter, including workbook Rev G, stays. */
@@ -739,25 +732,12 @@ function withSheet(sheets: StoredSheet[], sheetName: string, sheet: StoredSheet)
   return sheets.map((item) => (item.name === sheetName ? sheet : item));
 }
 
-function bumpSheetRevision(key: ListKey, sheets: StoredSheet[], sheetName: string, revision: string): { sheets: StoredSheet[]; revision: string } {
-  const nextRevision = bumpRevision(revision);
-  const locks = revCells(key).filter((item) => item.sheet === sheetName);
-  return {
-    revision: nextRevision,
-    sheets: sheets.map((sheet) => {
-      if (sheet.name !== sheetName) return sheet;
-      const cells = { ...sheet.cells };
-      for (const lock of locks) {
-        const current = cells[lock.addr];
-        if (!current) continue;
-        cells[lock.addr] = { ...current, v: replaceRevisionText(textOf(current.v), nextRevision), kind: "rev" };
-      }
-      return { ...sheet, cells };
-    }),
-  };
+/** A column change keeps the revision. Rev is only ever changed by hand (type it in the Rev cell, or start a revision). */
+function bumpSheetRevision(_key: ListKey, sheets: StoredSheet[], _sheetName: string, revision: string): { sheets: StoredSheet[]; revision: string } {
+  return { sheets, revision };
 }
 
-/** Rename the column title. This is a structure change and moves the revision forward. */
+/** Rename the column title. This is a structure change. The revision is not changed. */
 export function renameListColumn(key: ListKey, sheets: StoredSheet[], revision: string, sheetName: string, col: string, name: string): ColumnEdit | null {
   const spec = LISTS[key];
   const start = spec.dataStart[sheetName];
@@ -859,7 +839,7 @@ export function rowsDeletedSummary(who: string, sheet: string, rows: Array<{ row
 
 export function structureSummary(who: string, detail: string, fromRevision: string, toRevision: string, when?: string): string {
   const dated = when ? ` on ${when}` : "";
-  return `${who} ${detail}${dated}. Revision moved from ${fromRevision} to ${toRevision}.`;
+  return fromRevision === toRevision ? `${who} ${detail}${dated}. Revision stayed ${toRevision}; change it by hand if this needs a new revision.` : `${who} ${detail}${dated}. Revision moved from ${fromRevision} to ${toRevision}.`;
 }
 
 export const RETIRED_LIST_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities"]);

@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
-import { columnsControlledListHandler, downloadControlledListHandler, getControlledListHandler, locationControlledListHandler, rowsControlledListHandler, saveControlledListHandler } from "./controller.js";
+import { editControlledListHandler, columnsControlledListHandler, downloadControlledListHandler, getControlledListHandler, locationControlledListHandler, rowsControlledListHandler, saveControlledListHandler } from "./controller.js";
 
 export const controlledListsRouter = Router();
 
 controlledListsRouter.use(requireAuth, withDb);
 controlledListsRouter.get("/:key/xlsx", downloadControlledListHandler);
+controlledListsRouter.post("/:key/edit", editControlledListHandler);
 controlledListsRouter.post("/:key/rows", rowsControlledListHandler);
 controlledListsRouter.post("/:key/columns", columnsControlledListHandler);
 controlledListsRouter.post("/:key/location", locationControlledListHandler);

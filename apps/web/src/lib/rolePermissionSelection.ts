@@ -51,6 +51,11 @@ export const ROLE_PERMISSION_GROUPS: {
         hint: "Approve or reject a form's new revision before it goes live, signing with your own PIN. This covers Form Builder forms and the revision history of the built-in forms. Until it is approved, people filling a copy keep opening the last approved version. Anyone with this can approve any revision, including their own. Stored on the role; a role name does not grant it.",
       },
       {
+        key: "controlled_lists.edit",
+        label: "Edit master lists and logs",
+        hint: "Shows Edit on the Master Equipment List, Master Document List (Internal and External), Scope of Laboratory Activities and the LST logs (Internal Audit Schedule, Development Log, Nonconformance Log, Engineering Request Log). They open read-only. Save keeps the edits and locks the list again; Cancel discards them. Edit access to Documents or Calibration is still needed. Stored on the role; a role name does not grant it.",
+      },
+      {
         key: "ncr.closure_signoff",
         label: "Can sign NCR closure sign-off",
         hint: "Sign the required Quality Manager row on NCR closure. Stored on the role; a role name does not grant it.",
