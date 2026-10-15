@@ -26,7 +26,7 @@ describe("refresh rate limit", () => {
   it("fits a normal session and blocks a tight loop within a minute", () => {
     expect(REFRESH_RATE_WINDOW_MS).toBe(60_000);
     expect(REFRESH_RATE_LIMIT_MAX).toBeGreaterThanOrEqual(8);
-    expect(REFRESH_RATE_LIMIT_MAX).toBeLessThanOrEqual(20);
+    expect(REFRESH_RATE_LIMIT_MAX).toBeLessThanOrEqual(60);
   });
 
   it("returns 429 with Retry-After inside that minute once the budget is spent", async () => {
