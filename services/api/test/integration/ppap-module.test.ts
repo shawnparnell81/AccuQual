@@ -3,7 +3,6 @@ import { ensureTestCompany } from "../helpers/company.js";
 // Full-System Audit finding L2: PPAP had zero dedicated test coverage — no
 // coverage of its RBAC gate (Phase 3's own fix, engineering: edit) at all.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
@@ -22,11 +21,12 @@ let companyId: number;
 const userIds: number[] = [];
 let engineeringToken: string;
 let productionToken: string;
+let adminToken: string;
 
-async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ email: `ppap-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(department: string | null, roleName = "operator", name: string | null = null) {
+  const [user] = await db.insert(users).values({ email: `ppap-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", name }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("PPAP module (real DB + real HTTP path)", () => {
@@ -35,7 +35,8 @@ describe("PPAP module (real DB + real HTTP path)", () => {
     companyId = co!.id;
     await seedDefaultPermissions(companyId);
 
-    engineeringToken = await makeUser("engineering");
+    engineeringToken = await makeUser("engineering", "operator", "Pat Engineer");
+    adminToken = await makeUser(null, "admin", "Alex Admin");
     productionToken = await makeUser("production"); // ppap's default permissions are engineering-only
   });
 
@@ -71,5 +72,36 @@ describe("PPAP module (real DB + real HTTP path)", () => {
   it("creating a PPAP package with no part number is rejected by validation", async () => {
     const res = await request(app).post("/ppap").set("Authorization", `Bearer ${engineeringToken}`).send({ customer: "Acme Co" });
     expect(res.status).toBe(400);
+  });
+
+  it("create, update and delete each leave an audit entry with who, what, when and a description", async () => {
+    const eng = { Authorization: `Bearer ${engineeringToken}` };
+    const create = await request(app).post("/ppap").set(eng).send({ partNumber: "PN-2001", partName: "Hinge" });
+    expect(create.status).toBe(201);
+    const id = create.body.id as number;
+    expect((await request(app).patch(`/ppap/${id}`).set(eng).send({ partName: "Hinge Assembly" })).status).toBe(200);
+    expect((await request(app).delete(`/ppap/${id}`).set({ Authorization: `Bearer ${adminToken}` })).status).toBe(204);
+
+    const history = await request(app).get(`/audit-trail/${encodeURIComponent("PPAP package")}/${id}`).set({ Authorization: `Bearer ${adminToken}` });
+    expect(history.status).toBe(200);
+    const rows = history.body as { action: string; performedByName: string | null; createdAt: string | null; changes: Record<string, unknown> | null; fieldChanges: { table: string; changes: Record<string, { from?: unknown; to?: unknown }> }[] }[];
+    const byAction = (action: string) => rows.find((r) => r.action === action);
+
+    const created = byAction("create");
+    expect(created?.performedByName).toBe("Pat Engineer");
+    expect(created?.createdAt).toBeTruthy();
+    expect(created?.changes).toMatchObject({ partNumber: "PN-2001", partName: "Hinge" });
+
+    const updated = byAction("update");
+    expect(updated?.performedByName).toBe("Pat Engineer");
+    expect(updated?.createdAt).toBeTruthy();
+    const partName = updated?.fieldChanges.find((f) => f.table === "ppap_packages")?.changes.part_name;
+    expect(partName).toMatchObject({ from: "Hinge", to: "Hinge Assembly" });
+
+    const deleted = byAction("delete");
+    expect(deleted?.performedByName).toBe("Alex Admin");
+    expect(deleted?.createdAt).toBeTruthy();
+    expect(String(deleted?.changes?.summary)).toContain("Deleted PPAP");
+    expect(String(deleted?.changes?.summary)).toContain("PN-2001");
   });
 });

@@ -68,6 +68,10 @@ jobs:
           npx tsc --noEmit
           npm run db:migrate
 
+      - name: Type-check (Web)
+        working-directory: apps/web
+        run: npx tsc --noEmit -p .
+
       - name: Test
         env:
           DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual_test
