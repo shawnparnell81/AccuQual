@@ -47,7 +47,10 @@ if (!isMarketingHost(window.location.hostname)) {
     <React.StrictMode>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
+          {/* Navigation updates render at once. With transitions on, the old
+              record stayed on screen under the new address until the next
+              page finished loading, and a click could land on the wrong record. */}
+          <BrowserRouter useTransitions={false}>
             <ToastProvider>
               <ConfirmProvider>
                 <UnsavedChangesProvider>
