@@ -25,6 +25,7 @@ import { sanitizeBandHtml } from "./bandSanitize.js";
 import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
+import { recomputeGridAnswers } from "./gridFill.js";
 import { validateGridStructure } from "./gridStructure.js";
 import { decideStructureSave, descriptionOf, type SaveMode } from "./revision.js";
 
@@ -649,7 +650,9 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
   if (!current) throw AppError.notFound("Filled form");
   const [template] = await db.select().from(builtForms).where(eq(builtForms.id, current.formId));
   const previousAnswers = (current.answers ?? {}) as Record<string, unknown>;
-  const answers = input.answers ? mergeAnswers(previousAnswers, input.answers) : previousAnswers;
+  const merged = input.answers ? mergeAnswers(previousAnswers, input.answers) : previousAnswers;
+  // Formula cells are worked out here from the copy's own layout. A value sent for one is not kept.
+  const answers = (input.answers ? recomputeGridAnswers(current.structure, merged) : null) ?? merged;
   const kept = saveFillAnswers(
     {
       templateId: current.formId,

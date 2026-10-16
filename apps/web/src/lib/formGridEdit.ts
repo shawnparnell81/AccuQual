@@ -3,6 +3,7 @@
  * Every function returns a new sheet and leaves the one it was given alone.
  */
 import { addressOf, blankCell, MAX_GRID_COLS, MAX_GRID_ROWS, type FormCell, type FormSheet } from "./formGrid";
+import { rewriteFormula, type GridChange } from "../../../../services/api/src/modules/form-builder/formulaEngine";
 
 export interface CellBox {
   r1: number;
@@ -68,6 +69,16 @@ function rebuild(sheet: FormSheet, rowAxis: Axis, colAxis: Axis, widths: number[
   };
 }
 
+/** Every formula on the sheet follows the cells it points at, as in Excel. A reference to a deleted cell becomes #REF!. */
+function rewriteAll(sheet: FormSheet, change: GridChange): FormSheet {
+  sheet.cells.forEach((line) => {
+    line.forEach((cell) => {
+      if (cell?.formula) cell.formula = rewriteFormula(cell.formula, change);
+    });
+  });
+  return sheet;
+}
+
 /** Blank rows go in before row `at` (0 is the top, the row count is the bottom). Null when the sheet is full. */
 export function insertRows(sheet: FormSheet, at: number, count = 1): FormSheet | null {
   const rows = sheet.rowHeights.length;
@@ -75,7 +86,7 @@ export function insertRows(sheet: FormSheet, at: number, count = 1): FormSheet |
   const copy = cloneSheet(sheet);
   const height = copy.rowHeights[Math.min(Math.max(at - 1, 0), rows - 1)] ?? 24;
   const heights = [...copy.rowHeights.slice(0, at), ...Array<number>(count).fill(height), ...copy.rowHeights.slice(at)];
-  return rebuild(copy, insertAxis(at, count), keep, copy.colWidths, heights);
+  return rewriteAll(rebuild(copy, insertAxis(at, count), keep, copy.colWidths, heights), { axis: "row", kind: "insert", at: at + 1, count });
 }
 
 export function insertColumns(sheet: FormSheet, at: number, count = 1): FormSheet | null {
@@ -84,7 +95,7 @@ export function insertColumns(sheet: FormSheet, at: number, count = 1): FormShee
   const copy = cloneSheet(sheet);
   const width = copy.colWidths[Math.min(Math.max(at - 1, 0), cols - 1)] ?? 110;
   const widths = [...copy.colWidths.slice(0, at), ...Array<number>(count).fill(width), ...copy.colWidths.slice(at)];
-  return rebuild(copy, keep, insertAxis(at, count), widths, copy.rowHeights);
+  return rewriteAll(rebuild(copy, keep, insertAxis(at, count), widths, copy.rowHeights), { axis: "col", kind: "insert", at: at + 1, count });
 }
 
 /** Rows from..to (0-based, inclusive) are removed. Null when that would leave no rows. */
@@ -93,7 +104,7 @@ export function deleteRows(sheet: FormSheet, from: number, to: number): FormShee
   if (from < 0 || to >= rows || from > to || to - from + 1 >= rows) return null;
   const copy = cloneSheet(sheet);
   const heights = copy.rowHeights.filter((_, index) => index < from || index > to);
-  return rebuild(copy, deleteAxis(from, to), keep, copy.colWidths, heights);
+  return rewriteAll(rebuild(copy, deleteAxis(from, to), keep, copy.colWidths, heights), { axis: "row", kind: "delete", from: from + 1, to: to + 1 });
 }
 
 export function deleteColumns(sheet: FormSheet, from: number, to: number): FormSheet | null {
@@ -101,7 +112,7 @@ export function deleteColumns(sheet: FormSheet, from: number, to: number): FormS
   if (from < 0 || to >= cols || from > to || to - from + 1 >= cols) return null;
   const copy = cloneSheet(sheet);
   const widths = copy.colWidths.filter((_, index) => index < from || index > to);
-  return rebuild(copy, keep, deleteAxis(from, to), widths, copy.rowHeights);
+  return rewriteAll(rebuild(copy, keep, deleteAxis(from, to), widths, copy.rowHeights), { axis: "col", kind: "delete", from: from + 1, to: to + 1 });
 }
 
 function columnNumber(letters: string): number {
@@ -115,7 +126,7 @@ const RANGE_REF = /(?<![A-Za-z0-9_.!])\$?([A-Z]{1,3})\$?(\d+):\$?([A-Z]{1,3})\$?
 
 /**
  * Cells whose formula mentions a row or column that is about to be deleted (0-based, inclusive).
- * Formulas are not rewritten when rows move, so the editor warns about these.
+ * Their references to the deleted cells turn into #REF!, so the editor names them.
  */
 export function formulasReferencing(sheet: FormSheet, axis: "row" | "col", from: number, to: number): string[] {
   const hits: string[] = [];

@@ -31,6 +31,7 @@ import {
   type BorderTarget,
   type StyleFlag,
 } from "../../lib/formGridEdit";
+import { formulaProblem } from "../../../../../services/api/src/modules/form-builder/formulaEngine";
 import "./formBuilder.css";
 
 interface Selection {
@@ -257,7 +258,7 @@ export function GridFormEditor({
     commitSheet(next);
     const row = Math.min(box.r1, next.rowHeights.length - 1);
     setSelection({ sheet: sheetIndex, r1: row, c1: box.c1, r2: row, c2: box.c1 });
-    setNote(referenced.length ? `Formulas are not updated when rows move. Check ${referenced.join(", ")}: they refer to a row you deleted or to the old row numbers.` : "");
+    setNote(referenced.length ? `Formulas follow the rows that moved. ${referenced.join(", ")} referred to a deleted row and now show #REF! where it was.` : "");
   }
 
   function deleteSelectedColumns() {
@@ -270,7 +271,7 @@ export function GridFormEditor({
     commitSheet(next);
     const col = Math.min(box.c1, next.colWidths.length - 1);
     setSelection({ sheet: sheetIndex, r1: box.r1, c1: col, r2: box.r1, c2: col });
-    setNote(referenced.length ? `Formulas are not updated when columns move. Check ${referenced.join(", ")}: they refer to a column you deleted or to the old column letters.` : "");
+    setNote(referenced.length ? `Formulas follow the columns that moved. ${referenced.join(", ")} referred to a deleted column and now show #REF! where it was.` : "");
   }
 
   function toggle(flag: StyleFlag) {
@@ -326,6 +327,8 @@ export function GridFormEditor({
   const anchorCell = sheet.cells[box.r1]?.[box.c1] ?? null;
   const anchorType = anchorCell ? effectiveCellType(anchorCell) : "text";
   const barProblem = anchorCell ? cellValueProblem({ ...anchorCell, value: anchorCell.value }) : null;
+  const typedFormula = bar.trim().startsWith("=") ? bar.trim() : anchorCell?.formula ? `=${anchorCell.formula}` : "";
+  const formulaError = mode === "design" && typedFormula ? formulaProblem(typedFormula) : null;
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid="grid-editor">
@@ -494,6 +497,11 @@ export function GridFormEditor({
           />
         </label>
       )}
+      {formulaError ? (
+        <p role="alert" className="no-print text-xs text-destructive" data-testid="formula-error">
+          {addressOf(selection.c1 + 1, selection.r1 + 1)}: {formulaError}
+        </p>
+      ) : null}
       {mode === "design" && barProblem ? (
         <p role="alert" className="no-print text-xs text-destructive">
           {barProblem}. This {anchorType} cell keeps what you typed, but the value does not fit its type.
@@ -527,7 +535,7 @@ export function GridFormEditor({
                   const text = isSignature ? "Signature" : cell.folderPath && !folderPath && mode === "design" ? "Folder path" : shownCell(cell, calculated, colIndex + 1, rowIndex + 1, answer, folderPath);
                   const paint = cellPaint(cell, text);
                   const inSelection = mode === "design" && rowIndex >= box.r1 && rowIndex <= box.r2 && colIndex >= box.c1 && colIndex <= box.c2;
-                  const problem = mode === "design" ? cellValueProblem(cell) : null;
+                  const problem = mode === "design" ? (cell.formula ? formulaProblem(cell.formula) : cellValueProblem(cell)) : null;
                   const editable = mode === "fill" && !cell.locked && !cell.formula && !cell.folderPath && !isSignature;
                   const left = colIndex > 0 ? row[colIndex - 1] : null;
                   const locationInsert = editable ? gridLocationInsert(cell.value, answer, folderPath, Boolean(left && !left.formula && isExactLocationLabel(left.value))) : null;

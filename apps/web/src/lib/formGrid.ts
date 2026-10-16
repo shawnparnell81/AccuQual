@@ -1,6 +1,7 @@
 import { checkCellInput } from "../../../../services/api/src/modules/form-builder/cellInput";
 import { columnLetter } from "./spreadsheetFormat";
-import { displayFormulaValue, evaluateCells, passFailFill, type FormulaValue } from "./excelFormulas";
+import { passFailFill } from "./excelFormulas";
+import { displayValue, evaluateGrid, type FormulaValue } from "../../../../services/api/src/modules/form-builder/formulaEngine";
 import { loadEditableSpreadsheet, type EditableImportSheet } from "./spreadsheetPreview";
 import type { DocumentBand } from "./documentBands";
 
@@ -203,13 +204,14 @@ export function formulaInputs(sheet: FormSheet, answers: Record<string, string> 
   return cells;
 }
 
+/** Calculated values for one sheet, from the shared engine the API also uses when a copy is saved. */
 export function evaluatedSheet(sheet: FormSheet, answers?: Record<string, string>, sheetKey = "0"): Record<string, FormulaValue> {
-  return evaluateCells(formulaInputs(sheet, answers, sheetKey));
+  return evaluateGrid(formulaInputs(sheet, answers, sheetKey), { rows: sheet.cells.length, cols: sheet.colWidths.length });
 }
 
 export function shownCell(cell: FormCell, calculated: Record<string, FormulaValue>, col: number, row: number, answer?: string, folderPath?: string): string {
   if (cell.folderPath) return folderPath ?? "";
-  if (cell.formula) return displayFormulaValue(calculated[addressOf(col, row)]);
+  if (cell.formula) return displayValue(calculated[addressOf(col, row)], cell.decimals);
   if (!cell.locked && answer != null) return answer;
   return cell.value;
 }
