@@ -38,3 +38,15 @@ describe("exact-layout PDF", () => {
     expect(pages).toBeGreaterThan(3);
   });
 });
+
+describe("page header", () => {
+  it("cuts a long header to fit", async () => {
+    const { PDFDocument, StandardFonts } = await import("pdf-lib");
+    const { fitText } = await import("../../src/modules/records/layoutPdf.js");
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    const cut = fitText("FRM-VAL-004 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", font, 9, 100);
+    expect(cut.endsWith("...")).toBe(true);
+    expect(font.widthOfTextAtSize(cut, 9)).toBeLessThanOrEqual(100);
+    expect(fitText("Rev C", font, 9, 100)).toBe("Rev C");
+  });
+});

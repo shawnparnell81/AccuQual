@@ -331,18 +331,28 @@ export async function renderLayoutPdf(input: LayoutPdfInput): Promise<{ bytes: U
   return { bytes, pages: slices.length };
 }
 
+/** Cut text with an ellipsis so it fits the width. */
+export function fitText(text: string, font: PDFFont, size: number, width: number): string {
+  if (!text || font.widthOfTextAtSize(text, size) <= width) return text;
+  let cut = text;
+  while (cut.length > 1 && font.widthOfTextAtSize(`${cut}...`, size) > width) cut = cut.slice(0, -1);
+  return cut.length > 1 ? `${cut.trimEnd()}...` : "";
+}
+
 function drawChrome(page: PDFPage, fonts: FontSet, frame: ControlledPdfFrame, title: string, pageNo: number, pages: number, pageW: number, pageH: number) {
   const bold = fonts["sans-b"]!;
   const regular = fonts.sans!;
   const top = pageH - MARGIN;
   const left = MARGIN;
   const right = pageW - MARGIN;
-  page.drawText(printable(title).slice(0, 90), { x: left, y: top - 12, size: 10, font: bold, color: INK });
-  const ids = [frame.formNumber ? `Doc ID ${frame.formNumber}` : "", frame.revision ? `Rev ${frame.revision}` : "", frame.recordNumber ? `Record ${frame.recordNumber}` : ""].filter(Boolean).join("   ");
-  if (ids) {
-    const text = printable(ids);
-    page.drawText(text, { x: right - regular.widthOfTextAtSize(text, 9), y: top - 12, size: 9, font: regular, color: INK });
-  }
+  // Validation documents use their title as the document number; print it once.
+  const docId = frame.formNumber && frame.formNumber.trim() !== title.trim() ? `Doc ID ${frame.formNumber}` : "";
+  const ids = [docId, frame.revision ? `Rev ${frame.revision}` : "", frame.recordNumber ? `Record ${frame.recordNumber}` : ""].filter(Boolean).join("   ");
+  const idText = fitText(printable(ids), regular, 9, (right - left) / 2);
+  const idWidth = idText ? regular.widthOfTextAtSize(idText, 9) : 0;
+  if (idText) page.drawText(idText, { x: right - idWidth, y: top - 12, size: 9, font: regular, color: INK });
+  const titleText = fitText(printable(title), bold, 10, right - left - idWidth - 16);
+  if (titleText) page.drawText(titleText, { x: left, y: top - 12, size: 10, font: bold, color: INK });
   const notes = [frame.marking ? printable(frame.marking) : "", frame.legalHold ? "LEGAL HOLD" : ""].filter(Boolean).join("   ");
   if (notes) page.drawText(notes, { x: left, y: top - 26, size: 8, font: bold, color: rgb(0.7, 0.1, 0.1) });
   page.drawLine({ start: { x: left, y: top - HEADER + 8 }, end: { x: right, y: top - HEADER + 8 }, thickness: 0.5, color: MUTED });
