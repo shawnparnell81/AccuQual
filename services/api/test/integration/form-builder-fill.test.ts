@@ -141,7 +141,7 @@ describe("form builder: filling a grid copy", () => {
     expect(unchecked.status).toBe(400);
     expect(message(unchecked.body)).toBe("Tick the certification box to sign.");
     const wrong = await request(app).post(`/form-builder/fills/${fillId}/sign`).set(as(editor)).send({ fieldId: "0!D2", pin: "0000", certified: true });
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(403);
     const notSignature = await request(app).post(`/form-builder/fills/${fillId}/sign`).set(as(editor)).send({ fieldId: "0!A2", pin: TEST_PIN, certified: true });
     expect(notSignature.status).toBe(400);
     expect(message(notSignature.body)).toBe("That cell is not a signature on this form.");

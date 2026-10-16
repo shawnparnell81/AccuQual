@@ -102,7 +102,7 @@ describe("built-in form revisions: typed REV, PIN-signed approval, history", () 
   it("approves only with the approve permission, the certification box and a correct PIN", async () => {
     const pending = (await load()).pendingRevisionId!;
     expect((await approve(editor, pending)).status).toBe(403);
-    expect((await approve(approver, pending, { pin: "0000" })).status).toBe(401);
+    expect((await approve(approver, pending, { pin: "0000" })).status).toBe(403);
     const unchecked = await approve(approver, pending, { certified: false });
     expect(unchecked.status).toBe(400);
     expect((await load()).pendingRevision).toBe("A");

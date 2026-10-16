@@ -125,13 +125,13 @@ describe("NCR closure sign-off", () => {
     expect(res.status).toBe(400);
   });
 
-  it("wrong PIN → 401", async () => {
+  it("wrong PIN → 403 (not a session failure)", async () => {
     const id = await createNcr(managerToken);
     const res = await request(app)
       .post(`/forms/ncr/${id}/sign`)
       .set("Authorization", `Bearer ${managerToken}`)
       .send({ pin: "0000", certified: true, path: "closureApprovals.0.signature", description: "QM sign-off" });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 
   it("close succeeds with row 0 signed and rows 1-3 marked Not required", async () => {
