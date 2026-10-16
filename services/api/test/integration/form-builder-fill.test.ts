@@ -171,4 +171,19 @@ describe("form builder: filling a grid copy", () => {
     const blank = await db.select().from(documentFolders).where(eq(documentFolders.linkedPath, `/form-builder/fills/${fillId}`));
     expect(blank).toHaveLength(1);
   });
+
+  it("downloads a PDF of the copy, logs it, and refuses someone who cannot view it", async () => {
+    const res = await request(app).get(`/form-builder/fills/${fillId}/pdf`).set(as(editor)).buffer(true).parse((response, done) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => chunks.push(chunk));
+      response.on("end", () => done(null, Buffer.concat(chunks)));
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(res.headers["content-disposition"]).toMatch(/attachment; filename=".+_Rev-A\.pdf"/);
+    expect((res.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
+    const audit = (await audits("pdf_export"))[0]!;
+    expect((audit.changes as { summary: string }).summary).toMatch(/^Fill Tester downloaded a PDF of filled form .+ \(REV A, 1 page\) on .+\.$/);
+    expect((await request(app).get(`/form-builder/fills/${fillId}/pdf`).set(as(outsider))).status).toBe(403);
+  });
 });

@@ -1,3 +1,5 @@
+import { DownloadRecordPdfButton } from "../../components/records/DownloadRecordPdfButton";
+import { formBuilderFillPdfSource } from "../../lib/recordPdf";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -74,6 +76,13 @@ export function FormFillPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save this copy.")),
   });
 
+  function pdfAllowed() {
+    if (formLock.mode !== "editing") return true;
+    toast.error("Save your changes first. The PDF shows the saved copy.");
+    return false;
+  }
+
+
   async function signCell(fieldId: string, pin: string, certified: boolean) {
     // Unsaved typing is saved first, so the stamp is placed on what was actually entered.
     if (formLock.mode === "editing") await save.mutateAsync();
@@ -146,6 +155,9 @@ export function FormFillPage() {
           <DeleteRecordButton resource="form-builder/fills" id={id} kind="Filled form" title={fill.data.title} number={fill.data.recordNumber} navigateTo="/documents/folders" allowed={permitted} assignedOnly />
           {permitted ? (
             <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
+          ) : null}
+          {structure.kind === "grid" ? (
+            <DownloadRecordPdfButton source={formBuilderFillPdfSource(id)} allowed beforeDownload={pdfAllowed} onDownloaded={() => void queryClient.invalidateQueries({ queryKey: ["workflow-history"] })} />
           ) : null}
         </div>
       </div>

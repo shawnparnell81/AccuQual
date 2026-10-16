@@ -283,3 +283,21 @@
     color: #1a1a1a;
   }
 }
+
+/* A printed copy matches the PDF: the A/B/C and 1/2/3 headers are design aids, and fills print in color. */
+@media print {
+  .fb-grid-fill thead,
+  .fb-grid-fill tbody th,
+  .fb-grid-fill col:first-child {
+    display: none;
+  }
+  .fb-grid-fill td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid;
+  }
+  .fb-grid-fill select {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+}

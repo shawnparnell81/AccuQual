@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { canPrintAccess, isPdfBytes, PRINT_NOT_DOCUMENT } from "../../lib/printDocument";
-import { recordPdfSource } from "../../lib/recordPdf";
+import { recordPdfSource, type RecordPdfSource } from "../../lib/recordPdf";
 import { recordSurface } from "../../lib/recordSurface";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
@@ -14,19 +14,29 @@ import { useToast } from "../shared/ToastProvider";
  * view the record can download it, the same rule as Print. It works while
  * the record is locked.
  */
-export function DownloadRecordPdfButton() {
+export function DownloadRecordPdfButton({ source: given, allowed, beforeDownload, onDownloaded }: {
+  /** A page that renders the button itself passes its source; otherwise the address picks it. */
+  source?: RecordPdfSource;
+  /** The page already knows the person can view the record (its own access rule); skip the surface check. */
+  allowed?: boolean;
+  /** Return false to stop, for example when the page has unsaved changes. */
+  beforeDownload?: () => boolean;
+  onDownloaded?: () => void;
+} = {}) {
   const { pathname } = useLocation();
   const toast = useToast();
   const { effective, isLoading } = useEffectivePermissions();
   const [busy, setBusy] = useState(false);
-  const source = recordPdfSource(pathname);
+  const source = given ?? recordPdfSource(pathname);
   if (!source) return null;
   const surface = recordSurface(pathname);
   const level = !surface || surface.access === "any" ? "any" : effective?.[surface.access];
-  if (!isLoading && !canPrintAccess(level)) return null;
+  if (allowed === false) return null;
+  if (allowed === undefined && !isLoading && !canPrintAccess(level)) return null;
 
   async function download() {
     if (!source) return;
+    if (beforeDownload && !beforeDownload()) return;
     setBusy(true);
     try {
       const response = source.method === "post"
@@ -37,11 +47,13 @@ export function DownloadRecordPdfButton() {
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = source.fileName;
+      const disposition = String(response.headers?.["content-disposition"] ?? "");
+      link.download = /filename="([^"]+)"/.exec(disposition)?.[1] ?? source.fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      onDownloaded?.();
     } catch (err) {
       toast.error(err instanceof Error && err.message === PRINT_NOT_DOCUMENT ? err.message : await extractErrorMessageAsync(err, "Couldn't download this PDF."));
     } finally {

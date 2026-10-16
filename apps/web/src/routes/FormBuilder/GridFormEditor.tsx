@@ -519,7 +519,7 @@ export function GridFormEditor({
         </p>
       ) : null}
       <div className={wide ? "aq-print-wide overflow-auto" : "overflow-auto"} data-testid="grid-sheet">
-        <table className="fb-grid">
+        <table className={mode === "fill" ? "fb-grid fb-grid-fill" : "fb-grid"}>
           <colgroup>
             <col style={{ width: 36 }} />
             {sheet.colWidths.map((width, index) => (

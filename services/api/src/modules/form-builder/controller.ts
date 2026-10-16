@@ -4,6 +4,7 @@ import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
+  exportBuiltFillPdf,
   approveRevision,
   createBuiltForm,
   deleteBuiltForm,
@@ -126,6 +127,13 @@ export const fileFillHandler = asyncHandler(async (req: Request, res: Response) 
   const folderId = Number((req.body as { folderId?: number }).folderId);
   if (!Number.isInteger(folderId) || folderId < 1) throw AppError.badRequest("Choose a Documents folder.");
   res.json(await fileBuiltFill(req.db!, actor(req), idOf(req.params.fillId), folderId));
+});
+
+export const fillPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const file = await exportBuiltFillPdf(req.db!, actor(req), idOf(req.params.fillId));
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+  res.send(Buffer.from(file.bytes));
 });
 
 export const signFillHandler = asyncHandler(async (req: Request, res: Response) => {

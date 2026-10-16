@@ -7,6 +7,7 @@ import {
   deleteHandler,
   exportDocxHandler,
   fileFillHandler,
+  fillPdfHandler,
   getFillHandler,
   getHandler,
   importDocxHandler,
@@ -35,6 +36,7 @@ formBuilderRouter.post("/fills/:fillId/begin-edit", beginFillEditHandler);
 formBuilderRouter.delete("/fills/:fillId", deleteFillHandler);
 formBuilderRouter.post("/fills/:fillId/file", fileFillHandler);
 formBuilderRouter.post("/fills/:fillId/sign", signFillHandler);
+formBuilderRouter.get("/fills/:fillId/pdf", fillPdfHandler);
 formBuilderRouter.get("/:id/docx", exportDocxHandler);
 formBuilderRouter.get("/:id/revisions", revisionsHandler);
 formBuilderRouter.post("/:id/publish", publishHandler);

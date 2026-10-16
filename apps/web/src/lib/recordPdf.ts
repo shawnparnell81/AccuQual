@@ -1,6 +1,8 @@
 /**
  * Records whose controlled PDF is built by the API. The Download PDF button
- * beside Print uses this list. Pages that already carry their own Download PDF
+ * beside Print uses this list. Form Builder fills render the button inside
+ * the fill page (grid copies only) with formBuilderFillPdfSource, so they
+ * are not in this list. Pages that already carry their own Download PDF
  * button (NCR, FAI inspection, CSA, Fuel Pump, FAI records, forms built on
  * FormEditor) are not listed, so the page never shows the button twice.
  */
@@ -25,4 +27,9 @@ export function recordPdfSource(pathname: string): RecordPdfSource | null {
     if (match) return source.build(Number(match[1]));
   }
   return null;
+}
+
+/** The grid PDF of a Form Builder fill. The fill page passes it to the button itself. */
+export function formBuilderFillPdfSource(id: number): RecordPdfSource {
+  return { method: "get", url: `/form-builder/fills/${id}/pdf`, fileName: `form-${id}.pdf` };
 }

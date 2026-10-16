@@ -26,6 +26,7 @@ import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
 import { gridCellKinds, recomputeGridAnswers } from "./gridFill.js";
+import { renderGridPdf } from "./gridPdf.js";
 import { validateGridStructure } from "./gridStructure.js";
 import { decideStructureSave, descriptionOf, type SaveMode } from "./revision.js";
 
@@ -828,6 +829,46 @@ export async function signBuiltFill(db: Db, actor: Actor, id: number, input: { f
     performedBy: actor.id,
   });
   return updated;
+}
+
+/** A PDF of a filled grid copy that matches the screen. Anyone who can view the copy can download it; each download is logged. */
+export async function exportBuiltFillPdf(db: Db, actor: Actor, id: number): Promise<{ bytes: Uint8Array; filename: string }> {
+  await requireFiller(db, actor);
+  const [fill] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
+  if (!fill) throw AppError.notFound("Filled form");
+  const structure = fill.structure as { kind?: unknown } | null;
+  if (structure?.kind !== "grid") throw AppError.badRequest("Use Print for this form. Download PDF is for grid forms.");
+  const folders = await foldersOf(db);
+  const folderPath = fill.folderId == null ? null : folderLocationLabel(folders, fill.folderId);
+  const person = await who(db, actor);
+  const [profile] = await db.select({ name: company.name }).from(company).limit(1);
+  const { bytes, layout } = await renderGridPdf({
+    title: fill.title,
+    formNumber: fill.templateFormNumber,
+    revision: fill.templateRevision,
+    recordNumber: fill.recordNumber,
+    structure: fill.structure,
+    answers: (fill.answers ?? {}) as Record<string, unknown>,
+    folderPath,
+    printedBy: person.label,
+    printedAt: person.when,
+    companyName: profile?.name ?? null,
+  });
+  const safe = (text: string) => text.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const filename = `${[safe(fill.templateFormNumber ?? "") || "Form", safe(fill.recordNumber ?? "") || String(fill.id), `Rev-${safe(fill.templateRevision) || "A"}`].join("_")}.pdf`;
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: {
+      event: "pdf_export",
+      summary: `${person.label} downloaded a PDF of ${fillLabel(fill.title, fill.recordNumber)} (REV ${fill.templateRevision}, ${layout.pages} page${layout.pages === 1 ? "" : "s"}) on ${person.when}.`,
+      filename,
+      pages: layout.pages,
+    },
+    performedBy: actor.id,
+  });
+  return { bytes, filename };
 }
 
 export async function importDocx(db: Db, actor: Actor, file: Buffer) {
