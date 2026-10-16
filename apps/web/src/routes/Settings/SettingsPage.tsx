@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { isFullAccessRole } from "../../lib/fullAccess";
-import { NETSUITE_PRESETS_PATH, NETSUITE_SYNC_ERRORS_PATH } from "../Erp/erpPaths";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
@@ -10,7 +10,7 @@ import { ChangePasswordSection } from "./ChangePasswordSection";
 import { SignaturePinSection } from "./SignaturePinSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
-import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
+import { NetSuiteConnectorPanel } from "./NetSuiteConnectorPanel";
 import { KeptPanes, UnsavedDot } from "../../components/layout/sectionDraft";
 
 const BASE_TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "Feasibility", "Navigation"] as const;
@@ -52,7 +52,10 @@ function CompanySettingsLinks() {
 export function SettingsPage() {
   const [searchParams] = useSearchParams();
   const user = useCurrentUser();
-  const isAdmin = isFullAccessRole(user?.roleName);
+  const { effective } = useEffectivePermissions();
+  // Same gate the server uses for /settings/netsuite: the Admin console permission.
+  const adminConsole = effective?.admin_console;
+  const isAdmin = isFullAccessRole(user?.roleName) || adminConsole === "read" || adminConsole === "edit";
   const tabs: Tab[] = isAdmin ? [...BASE_TABS, NETSUITE_TAB] : [...BASE_TABS];
   const [tab, setTab] = useState<Tab>("User Preferences");
 
@@ -152,18 +155,10 @@ export function SettingsPage() {
           <div>
             <h2 className="text-lg font-medium">ERP / NetSuite</h2>
             <p className="text-sm text-muted-foreground">
-              Oracle NetSuite is the company ERP. Connection settings, a connection test, and sync status are here. Purchase orders and requisitions stay in NetSuite.
+              Oracle NetSuite is the company ERP. AccuQual connects to it read-only to look up FAI, Product Alert and inventory location records. Purchase orders and requisitions stay in NetSuite.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link to={NETSUITE_PRESETS_PATH} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40">
-              Connection presets
-            </Link>
-            <Link to={NETSUITE_SYNC_ERRORS_PATH} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40">
-              Sync error log
-            </Link>
-          </div>
-          <ERPSyncSettingsPanel />
+          <NetSuiteConnectorPanel />
         </div>
                   ),
                 },

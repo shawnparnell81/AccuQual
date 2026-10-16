@@ -29,6 +29,7 @@ import { FaiRecordDetailPage } from "./FaiInspection/FaiRecordDetailPage";
 import { FaiRandomPullsPage } from "./FaiInspection/FaiRandomPullsPage";
 import { FaiDistributionListsPage } from "./FaiInspection/FaiDistributionListsPage";
 import { FaiReportsPage } from "./FaiInspection/FaiReportsPage";
+import { NETSUITE_SETTINGS_PATH } from "./Erp/erpPaths";
 import {
   AdminAiSettingsPage,
   AdminAiUsagePage,
@@ -78,9 +79,6 @@ import {
   DocumentsPage,
   EightDDetailPage,
   EightDPage,
-  ErpPresetEditorPage,
-  ErpPresetsListPage,
-  ErpSyncErrorsPage,
   ValidationReportDetailPage,
   IsoFormListPage,
   IsoFormDetailPage,
@@ -300,9 +298,9 @@ export function workspaceRouteElements() {
     <Route key="/ai" path="/ai" element={<AiInsightsPage />} />,
     <Route key="/digital-twin" path="/digital-twin" element={<DigitalTwinGate><DigitalTwinPage /></DigitalTwinGate>} />,
     <Route key="/settings" path="/settings" element={<SettingsPage />} />,
-    <Route key="/settings/erp/presets" path="/settings/erp/presets" element={<ErpPresetsListPage />} />,
-    <Route key="/settings/erp/presets/:id" path="/settings/erp/presets/:id" element={<ErpPresetEditorPage />} />,
-    <Route key="/settings/erp/sync-errors" path="/settings/erp/sync-errors" element={<ErpSyncErrorsPage />} />,
+    <Route key="/settings/erp/presets" path="/settings/erp/presets" element={<Navigate to={NETSUITE_SETTINGS_PATH} replace />} />,
+    <Route key="/settings/erp/presets/:id" path="/settings/erp/presets/:id" element={<Navigate to={NETSUITE_SETTINGS_PATH} replace />} />,
+    <Route key="/settings/erp/sync-errors" path="/settings/erp/sync-errors" element={<Navigate to={NETSUITE_SETTINGS_PATH} replace />} />,
     <Route key="/settings/navigation" path="/settings/navigation" element={<NavigationSettingsPage />} />,
     <Route key="/admin/company-ai" path="/admin/company-ai" element={<AdminCompanyAiConfigPage />} />,
     <Route key="/admin/ai-usage" path="/admin/ai-usage" element={<AdminAiUsagePage />} />,
