@@ -1,3 +1,5 @@
+import { LoadMore } from "../../components/tables/LoadMore";
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -70,7 +72,7 @@ export function ValidationReportsPanel({ currentFolderId = null }: { currentFold
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
-  const { data: rows = [], isLoading, isError } = hooks.useList();
+  const { rows: rows, isLoading, isError, server } = useServerTable<ValidationReport>("/validation-reports", { root: "validation-reports", });
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
   const [copyPart, setCopyPart] = useState("");
@@ -218,6 +220,7 @@ export function ValidationReportsPanel({ currentFolderId = null }: { currentFold
               })}
             </tbody>
           </table>
+          <LoadMore shown={rows.length} total={server.total} loading={server.loadingMore} onMore={server.loadMore} noun="reports" />
         </div>
       )}
     </section>

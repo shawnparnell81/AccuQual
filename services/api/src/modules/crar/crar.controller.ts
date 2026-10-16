@@ -1,5 +1,6 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
-import { and, eq, ilike, desc, type SQL } from "drizzle-orm";
+import { and, eq, desc, type SQL } from "drizzle-orm";
 import { crarClaims } from "../../drizzle/schema/crar.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -99,13 +100,17 @@ async function loadCrar(req: Request, id: number) {
 }
 
 export const listCrarHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, warrantyId, q } = req.query as Record<string, string | undefined>;
+  const { status, warrantyId } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(crarClaims.status, status));
   if (warrantyId) conditions.push(eq(crarClaims.warrantyId, Number(warrantyId)));
-  if (q) conditions.push(ilike(crarClaims.customerClaim, `%${q}%`));
 
-  const rows = await req
+  const rows = await pagedList(req, res, {
+    table: crarClaims,
+    conditions,
+    defaultOrder: [desc(crarClaims.createdAt)],
+    statusColumn: crarClaims.status,
+    select: (where, order, limit, offset) => req
     .db!.select({
       id: crarClaims.id,
       status: crarClaims.status,
@@ -119,8 +124,11 @@ export const listCrarHandler = asyncHandler(async (req: Request, res: Response) 
       updatedAt: crarClaims.updatedAt,
     })
     .from(crarClaims)
-    .where(and(...conditions))
-    .orderBy(desc(crarClaims.createdAt));
+    .where(where)
+    .orderBy(...order)
+    .limit(limit)
+    .offset(offset),
+  });
   res.json(rows);
 });
 

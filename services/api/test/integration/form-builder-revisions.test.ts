@@ -134,7 +134,7 @@ describe("form builder: manual revisions, approval and change history", () => {
   it("approves the first revision: it goes live at the typed REV and the approver is told to update the master list", async () => {
     const pending = (await load()).pendingRevisionId!;
     const wrongPin = await approve(approver, pending, "Checked", "0000");
-    expect(wrongPin.status).toBe(401);
+    expect(wrongPin.status).toBe(403);
     const unchecked = await request(app).post(`/form-builder/${formId}/revisions/${pending}/approve`).set(as(approver)).send({ pin: TEST_PIN });
     expect(unchecked.status).toBe(400);
     expect(message(unchecked.body)).toBe("Check the certification box before approving.");

@@ -1,3 +1,4 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -37,7 +38,7 @@ export function RmaLogListPage() {
     return p;
   }, [status, partNumber, customerName, q]);
 
-  const { data: rows = [], isLoading, isError } = rmaLogHooks.useList(params);
+  const { rows: rows, isLoading, isError, server } = useServerTable<RmaLogRecord>("/rma-log", { root: "rma-log", params: params, });
   const createRecord = rmaLogHooks.useCreate();
 
   return (
@@ -73,16 +74,17 @@ export function RmaLogListPage() {
       </div>
 
       <DataTable<RmaLogRecord>
+server={server}
         columns={[
-          { header: "RMA #", accessor: (r) => showRecordNumber(r.rmaNumber) },
-          { header: "Date Issued", accessor: (r) => formatDate(r.dateIssued) },
-          { header: "Customer", accessor: (r) => r.customerName ?? "—" },
-          { header: "Part #", accessor: (r) => r.partNumber ?? "—" },
+          { header: "RMA #", sortKey: "rmaNumber", accessor: (r) => showRecordNumber(r.rmaNumber) },
+          { header: "Date Issued", sortKey: "dateIssued", accessor: (r) => formatDate(r.dateIssued) },
+          { header: "Customer", sortKey: "customerName", accessor: (r) => r.customerName ?? "—" },
+          { header: "Part #", sortKey: "partNumber", accessor: (r) => r.partNumber ?? "—" },
           { header: "Part Description", accessor: (r) => r.partDescription ?? "—" },
-          { header: "Qty Returned", accessor: (r) => r.quantityReturned ?? "—" },
-          { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
+          { header: "Qty Returned", sortKey: "quantityReturned", accessor: (r) => r.quantityReturned ?? "—" },
+          { header: "Status", sortKey: "status", accessor: (r) => <StatusBadge value={r.status} /> },
           { header: "Disposition", accessor: (r) => r.dispositionAction ?? "—" },
-          { header: "Date Closed", accessor: (r) => formatDate(r.dateClosed) },
+          { header: "Date Closed", sortKey: "dateClosed", accessor: (r) => formatDate(r.dateClosed) },
         ]}
         rows={rows}
         rowKey={(r) => r.id}

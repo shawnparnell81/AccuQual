@@ -146,7 +146,7 @@ describe("FAI scheduling — Phase 2", () => {
 
       const wrongPin = await request(app).post(`/fai-inspection/random-pulls/batches/${gen.body.id}/approve`).set("Authorization", `Bearer ${schedulerToken}`)
         .send({ pin: "0000", certified: true, description: "Approve pick list" });
-      expect(wrongPin.status).toBe(401);
+      expect(wrongPin.status).toBe(403);
 
       const approve = await request(app).post(`/fai-inspection/random-pulls/batches/${gen.body.id}/approve`).set("Authorization", `Bearer ${schedulerToken}`)
         .send({ pin: TEST_PIN, certified: true, description: "Approve annual pick list" });

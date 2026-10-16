@@ -12,6 +12,8 @@ export interface AppUser {
   mfaEnabled?: boolean;
   /** Set while the account is locked out after repeated failed sign-ins. */
   lockedUntil?: string | null;
+  /** Signature PIN locked after 5 wrong PINs in a row; an administrator unlocks it. */
+  pinLocked?: boolean;
   createdAt: string;
   preferredName?: string | null;
   jobTitle?: string | null;

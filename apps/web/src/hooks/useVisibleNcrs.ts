@@ -13,12 +13,14 @@ const ncrHooks = createResourceHooks<Ncr>("ncr");
  * The list request does not drop a status, and each plant is asked on its own
  * so a closed issue on another plant still turns up in search.
  */
-export function useVisibleNcrs(): { rows: NcrSearchRow[]; isLoading: boolean } {
+/** Pass `enabled` false until the picker is open, so a list page does not read every NCR on arrival. */
+export function useVisibleNcrs(enabled = true): { rows: NcrSearchRow[]; isLoading: boolean } {
   const plants = useSites();
   const sites = plants.data?.sites ?? [];
-  const current = ncrHooks.useList(undefined, { enabled: sites.length === 0 });
+  const current = ncrHooks.useList(undefined, { enabled: enabled && sites.length === 0 });
   const queries = useQueries({
     queries: sites.map((site) => ({
+      enabled,
       queryKey: ["ncr", "visible-site", site.id],
       queryFn: async () =>
         (await apiClient.get<Ncr[]>("/ncr", { headers: { "X-AccuQual-Site": String(site.id) } })).data,

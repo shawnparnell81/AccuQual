@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { UserAvatar } from "../shared/UserAvatar";
@@ -98,6 +98,8 @@ export function SignatureStamp({
   const [certified, setCertified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Blocks a second submit (Enter twice, double click) before the busy state renders, so one PIN is one attempt.
+  const sending = useRef(false);
   const user = useCurrentUser();
   const stamped = (value ?? "").trim();
   const ownStamp = Boolean(user?.name && user.avatarUrl && stamped.startsWith(user.name));
@@ -152,6 +154,7 @@ export function SignatureStamp({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (sending.current) return;
     setError(null);
     if (!certified) {
       setError("Check the certification box before signing.");
@@ -161,6 +164,7 @@ export function SignatureStamp({
       setError("Enter a 4-digit PIN.");
       return;
     }
+    sending.current = true;
     setBusy(true);
     const attempt = pin;
     const wasCertified = certified;
@@ -171,6 +175,7 @@ export function SignatureStamp({
     } catch (err) {
       setError(extractErrorMessage(err, "Couldn't record that signature."));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }

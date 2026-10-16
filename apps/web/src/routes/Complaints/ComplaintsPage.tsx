@@ -21,11 +21,11 @@ export function ComplaintsPage() {
       onRowClick={(c) => navigate(`/complaints/${c.id}`)}
       onCreated={(c) => navigate(`/complaints/${c.id}`)}
       columns={[
-        { header: "Complaint No.", accessor: (c) => showRecordNumber(c.recordNumber) },
-        { header: "Customer", accessor: (c) => c.customerName ?? "—" },
+        { header: "Complaint No.", sortKey: "recordNumber", accessor: (c) => showRecordNumber(c.recordNumber) },
+        { header: "Customer", sortKey: "customerName", accessor: (c) => c.customerName ?? "—" },
         { header: "Description", accessor: (c) => c.description },
-        { header: "Severity", accessor: (c) => <StatusBadge value={c.severity} /> },
-        { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
+        { header: "Severity", sortKey: "severity", accessor: (c) => <StatusBadge value={c.severity} /> },
+        { header: "Status", sortKey: "status", accessor: (c) => <StatusBadge value={c.status} /> },
       ]}
       createFields={[
         { name: "recordNumber", label: "Complaint No." },

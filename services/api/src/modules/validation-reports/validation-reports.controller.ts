@@ -104,6 +104,7 @@ export const copyValidationHandler = asyncHandler(async (req: Request, res: Resp
 
 export const validationPdfHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.notFound("Validation Report");
   const [row] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!row) throw AppError.notFound("Validation Report");
   const data = { ...asRecord(row.data), recordNumber: typeof row.recordNumber === "string" ? row.recordNumber.trim() : "" };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type HTMLAttributes, type ReactNo
 import { Link, useNavigate } from "react-router-dom";
 import { File, FileText, Folder, LayoutTemplate, List, MoreHorizontal } from "lucide-react";
 import { StatusBadge } from "../tables/StatusBadge";
+import { LIST_STEP, LoadMore } from "../tables/LoadMore";
 import { formatDate } from "../../lib/dates";
 import { fileThumbnailKind, storedFileName, type ExplorerView } from "../../lib/explorerView";
 import {
@@ -163,6 +164,12 @@ export function FolderContentsList<T extends FolderDetailNode>({
   const navigate = useNavigate();
   const [sort, setSort] = useState<FolderDetailSort>({ key: "name", direction: "asc" });
   const rows = useMemo(() => sortFolderDetails(items, sort), [items, sort]);
+  // A folder can hold thousands of saved files. Draw them a step at a time.
+  const [limit, setLimit] = useState(LIST_STEP);
+  const firstId = items[0]?.node.id;
+  useEffect(() => setLimit(LIST_STEP), [testId, firstId, sort.key, sort.direction]);
+  const visible = rows.length > limit ? rows.slice(0, limit) : rows;
+  const more = rows.length > LIST_STEP ? <LoadMore shown={visible.length} total={rows.length} noun="items" onMore={() => setLimit((current) => current + LIST_STEP)} /> : null;
   const grid = leading
     ? "grid-cols-[1.75rem_minmax(0,1.8fr)_minmax(0,8.5rem)_minmax(0,3.75rem)_minmax(0,9rem)_minmax(0,8rem)_2rem]"
     : "grid-cols-[minmax(0,1.8fr)_minmax(0,8.5rem)_minmax(0,3.75rem)_minmax(0,9rem)_minmax(0,8rem)_2rem]";
@@ -187,7 +194,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
     return (
       <div className="explorer-icons" data-testid={testId} data-explorer-view={view} role="list" aria-label="Folder contents">
         {rows.length === 0 && empty}
-        {rows.map((item) => {
+        {visible.map((item) => {
           const { extraClass, rest, status } = rowShell(item);
           return (
             <div
@@ -220,6 +227,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
             </div>
           );
         })}
+        {more}
       </div>
     );
   }
@@ -228,7 +236,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
     return (
       <div className="explorer-list rounded-lg border border-border bg-card text-sm text-foreground" data-testid={testId} data-explorer-view="list" role="list" aria-label="Folder contents">
         {rows.length === 0 && empty}
-        {rows.map((item, index) => {
+        {visible.map((item, index) => {
           const { extraClass, rest, status } = rowShell(item);
           return (
             <div key={item.node.id} className="border-b border-border last:border-b-0">
@@ -262,6 +270,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
             </div>
           );
         })}
+        {more}
       </div>
     );
   }
@@ -292,7 +301,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
           </span>
         </div>
         {rows.length === 0 && empty}
-        {rows.map((item, index) => {
+        {visible.map((item, index) => {
           const extra = rowProps?.(item) ?? {};
           const { className: extraClass = "", ...rest } = extra;
           const status = item.node.documentExpirationStatus ?? item.node.documentStatus;
@@ -360,6 +369,7 @@ export function FolderContentsList<T extends FolderDetailNode>({
             </div>
           );
         })}
+        {more}
       </div>
     </div>
   );

@@ -22,11 +22,11 @@ export function PpapListPage() {
       onRowClick={(p) => navigate(`/ppap/${p.id}`)}
       onCreated={(p) => navigate(`/ppap/${p.id}`)}
       columns={[
-        { header: "PPAP No.", accessor: (p) => showRecordNumber(p.recordNumber) },
-        { header: "Part Number", accessor: (p) => p.partNumber },
-        { header: "Part Name", accessor: (p) => p.partName ?? "—" },
-        { header: "Customer", accessor: (p) => p.customer ?? "—" },
-        { header: "Status", accessor: (p) => <StatusBadge value={p.status} /> },
+        { header: "PPAP No.", sortKey: "recordNumber", accessor: (p) => showRecordNumber(p.recordNumber) },
+        { header: "Part Number", sortKey: "partNumber", accessor: (p) => p.partNumber },
+        { header: "Part Name", sortKey: "partName", accessor: (p) => p.partName ?? "—" },
+        { header: "Customer", sortKey: "customer", accessor: (p) => p.customer ?? "—" },
+        { header: "Status", sortKey: "status", accessor: (p) => <StatusBadge value={p.status} /> },
       ]}
       createFields={[
         { name: "recordNumber", label: "PPAP No." },

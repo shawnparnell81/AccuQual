@@ -1,11 +1,31 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, Inbox } from "lucide-react";
-import { FilterBar, SummaryCards, summarizeRecords } from "../layout/PageHeader";
+import { AlertTriangle, ArrowDown, ArrowUp, Inbox } from "lucide-react";
+import { FilterBar, SummaryCards, summarizeCounts, summarizeRecords } from "../layout/PageHeader";
+import { LoadMore } from "./LoadMore";
+import type { ListSort } from "../../api/usePagedList";
 
 export interface Column<T> {
   header: string;
   accessor: (row: T) => ReactNode;
   className?: string;
+  /** Server column the header sorts by. Only read when the table is server-paged. */
+  sortKey?: string;
+}
+
+/** A list read from the server a page at a time (see usePagedList). */
+export interface ServerPaging {
+  total: number | null;
+  statusCounts?: Record<string, number> | null;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
+  sort?: ListSort | null;
+  onSort?: (sort: ListSort) => void;
+  /** The chrome's filter box searches the server instead of the loaded rows. */
+  search?: string;
+  onSearch?: (value: string) => void;
+  /** True while a new search or sort is on its way. */
+  refreshing?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -42,6 +62,8 @@ interface DataTableProps<T> {
    * page already draws its own summary and filters.
    */
   listChrome?: boolean;
+  /** Rows come from the server in pages. Search, sort and counts are the server's. */
+  server?: ServerPaging;
 }
 
 /** Rows drawn at first; a long register shows the rest a page at a time instead of building every row on open. */
@@ -60,14 +82,18 @@ export function DataTable<T>({
   selectedIds,
   onSelectionChange,
   listChrome = true,
+  server,
 }: DataTableProps<T>) {
   const selectable = selectedIds !== undefined && onSelectionChange !== undefined;
-  const [filter, setFilter] = useState("");
+  const [localFilter, setLocalFilter] = useState("");
+  const serverSearch = server?.onSearch !== undefined;
+  const filter = serverSearch ? (server?.search ?? "") : localFilter;
+  const setFilter = serverSearch ? server!.onSearch! : setLocalFilter;
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!listChrome || !needle) return rows;
+    if (server || !listChrome || !needle) return rows;
     return rows.filter((row) => recordText(row).includes(needle));
-  }, [filter, listChrome, rows]);
+  }, [filter, listChrome, rows, server]);
   const [pageRows, setPageRows] = useState(LIST_PAGE_ROWS);
   useEffect(() => setPageRows(LIST_PAGE_ROWS), [shown]);
   if (isLoading) {
@@ -96,7 +122,7 @@ export function DataTable<T>({
 
   const chrome = listChrome ? (
     <div className="flex flex-col gap-6">
-      <SummaryCards items={summarizeRecords(shown)} />
+      <SummaryCards items={server?.total != null ? summarizeCounts(server.total, server.statusCounts) : summarizeRecords(shown)} />
       <FilterBar>
         <input
           value={filter}
@@ -106,7 +132,7 @@ export function DataTable<T>({
           className="w-64 border border-border bg-background px-3 py-1.5 text-sm"
         />
         <span className="text-sm text-muted-foreground">
-          {shown.length} of {rows.length}
+          {server ? `${rows.length.toLocaleString()} of ${(server.total ?? rows.length).toLocaleString()}` : `${shown.length} of ${rows.length}`}
         </span>
       </FilterBar>
     </div>
@@ -156,14 +182,28 @@ export function DataTable<T>({
                 </th>
               )}
               {columns.map((col) => (
-                <th key={col.header} className="text-left">
-                  {col.header}
+                <th key={col.header} className="text-left" aria-sort={sortState(server, col)}>
+                  {server?.onSort && col.sortKey ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-inherit hover:underline"
+                      onClick={() => {
+                        const current = server.sort;
+                        server.onSort!({ key: col.sortKey!, dir: current?.key === col.sortKey && current?.dir === "asc" ? "desc" : "asc" });
+                      }}
+                    >
+                      {col.header}
+                      {server.sort?.key === col.sortKey && (server.sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                    </button>
+                  ) : (
+                    col.header
+                  )}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {shown.slice(0, pageRows).map((row, rowIndex) => {
+            {(server ? shown : shown.slice(0, pageRows)).map((row, rowIndex) => {
               const id = rowKey(row);
               return (
                 <tr
@@ -188,7 +228,8 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {shown.length > pageRows && (
+      {server && <LoadMore shown={rows.length} total={server.total} loading={server.loadingMore} onMore={server.loadMore} noun="records" />}
+      {!server && shown.length > pageRows && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>
             Showing {pageRows} of {shown.length}
@@ -203,6 +244,11 @@ export function DataTable<T>({
       )}
     </div>
   );
+}
+
+function sortState<T>(server: ServerPaging | undefined, col: Column<T>): "ascending" | "descending" | undefined {
+  if (!server?.sort || !col.sortKey || server.sort.key !== col.sortKey) return undefined;
+  return server.sort.dir === "asc" ? "ascending" : "descending";
 }
 
 function recordText(row: unknown): string {

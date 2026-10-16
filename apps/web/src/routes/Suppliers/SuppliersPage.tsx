@@ -23,10 +23,10 @@ export function SuppliersPage() {
       onCreated={(s) => navigate(`/suppliers/${s.id}`)}
       searchable={(s) => `${s.name} ${s.status ?? ""} ${s.riskLevel ?? ""}`}
       columns={[
-        { header: "ID", accessor: (s) => `#${s.id}` },
-        { header: "Name", accessor: (s) => s.name },
-        { header: "Status", accessor: (s) => <StatusBadge value={s.status} /> },
-        { header: "Risk Level", accessor: (s) => <StatusBadge value={s.riskLevel} /> },
+        { header: "ID", sortKey: "id", accessor: (s) => `#${s.id}` },
+        { header: "Name", sortKey: "name", accessor: (s) => s.name },
+        { header: "Status", sortKey: "status", accessor: (s) => <StatusBadge value={s.status} /> },
+        { header: "Risk Level", sortKey: "riskLevel", accessor: (s) => <StatusBadge value={s.riskLevel} /> },
         {
           header: "Scorecard",
           accessor: (s) => (

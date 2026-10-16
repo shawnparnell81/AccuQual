@@ -2,7 +2,7 @@ import net from "node:net";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import { env } from "../config/env.js";
-import { verifyRefreshToken } from "../utils/jwt.js";
+import { verifyAccessToken, verifyRefreshToken } from "../utils/jwt.js";
 import { openRefreshCookie } from "../modules/auth/refreshCookie.js";
 import { registerRefreshFlight } from "../modules/auth/refreshFlight.js";
 
@@ -36,16 +36,41 @@ export function skipApiRateLimit(req: Request): boolean {
   return req.path.startsWith(DEVICE_INGEST_PATH) || req.path === "/auth/refresh";
 }
 
+/** Requests per 15 minutes for one signed-in person, and for one address before sign-in. */
+export const API_RATE_LIMIT_PER_PERSON = 3000;
+export const API_RATE_LIMIT_PER_ADDRESS = 600;
+
+/**
+ * Signed-in requests count per person (the user id from a verified access token), so people in one plant behind one
+ * address do not share a budget, and a person reloading record pages does not run out and see "Couldn't load".
+ * A missing or invalid token counts by address.
+ */
+export function apiRateLimitKey(req: Request): string {
+  const header = req.header("authorization") ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (token) {
+    try {
+      const sub = verifyAccessToken(token).sub;
+      if (sub) return `api-user-${sub}`;
+    } catch {
+      // expired or tampered: fall through to the address
+    }
+  }
+  return `api-ip-${visitorIp(req)}`;
+}
+
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   // One integration file walks every saved form. That is more than a person's 15-minute budget.
-  limit: env.NODE_ENV === "test" ? 100_000 : 600,
+  limit: (req) => (env.NODE_ENV === "test" ? 100_000 : apiRateLimitKey(req).startsWith("api-user-") ? API_RATE_LIMIT_PER_PERSON : API_RATE_LIMIT_PER_ADDRESS),
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => apiRateLimitKey(req),
   // Devices are throttled by the two dedicated limiters below instead: a
   // whole plant's sensors usually share one public IP, so the per-IP budget
   // meant for people would cut them off almost immediately.
   skip: (req) => skipApiRateLimit(req),
+  message: { error: "TooManyRequests", message: "Too many requests right now. The page will try again in a moment." },
 });
 
 export const authRateLimiter = rateLimit({

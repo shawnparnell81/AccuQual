@@ -1,3 +1,4 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { QualityInspectionReport } from "../../api/types";
@@ -10,16 +11,16 @@ const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspec
 
 export function QualityInspectionReportsPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading, isError } = reportHooks.useList();
+  const { rows: rows, isLoading, isError, server } = useServerTable<QualityInspectionReport>("/quality-inspection-reports", { root: "quality-inspection-reports", });
   const createReport = reportHooks.useCreate();
 
   const columns: Column<QualityInspectionReport>[] = [
-    { header: "Report No.", accessor: (r) => showRecordNumber(r.recordNumber) },
-    { header: "Type", accessor: (r) => r.inspectionType?.replace(/_/g, " ") ?? "—" },
-    { header: "Part / Material #", accessor: (r) => r.partMaterialNo ?? "—" },
-    { header: "Supplier / Vendor", accessor: (r) => r.supplierVendor ?? "—" },
-    { header: "Inspector", accessor: (r) => r.inspectorName ?? "—" },
-    { header: "Final Status", accessor: (r) => (r.finalStatus ? <StatusBadge value={r.finalStatus} /> : "—") },
+    { header: "Report No.", sortKey: "recordNumber", accessor: (r) => showRecordNumber(r.recordNumber) },
+    { header: "Type", sortKey: "inspectionType", accessor: (r) => r.inspectionType?.replace(/_/g, " ") ?? "—" },
+    { header: "Part / Material #", sortKey: "partMaterialNo", accessor: (r) => r.partMaterialNo ?? "—" },
+    { header: "Supplier / Vendor", sortKey: "supplierVendor", accessor: (r) => r.supplierVendor ?? "—" },
+    { header: "Inspector", sortKey: "inspectorName", accessor: (r) => r.inspectorName ?? "—" },
+    { header: "Final Status", sortKey: "finalStatus", accessor: (r) => (r.finalStatus ? <StatusBadge value={r.finalStatus} /> : "—") },
   ];
 
   return (
@@ -41,7 +42,7 @@ export function QualityInspectionReportsPage() {
         />
       </div>
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/quality-inspection-reports/${r.id}`)} />
+      <DataTable server={server} columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/quality-inspection-reports/${r.id}`)} />
     </div>
   );
 }

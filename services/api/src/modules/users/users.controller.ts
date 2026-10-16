@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { and, eq, ne, sql } from "drizzle-orm";
+import { formatUserLabel } from "./userDisplay.js";
+import { isPinLocked } from "../signatures/signaturePin.service.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
@@ -40,6 +42,8 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       isActive: users.isActive,
       mfaEnabled: users.mfaEnabled,
       lockedUntil: users.lockedUntil,
+      pinFailedCount: users.pinFailedCount,
+      pinLockedUntil: users.pinLockedUntil,
       createdAt: users.createdAt,
       roleRank: roles.hierarchyLevel,
     })
@@ -53,7 +57,10 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
     req.user?.id,
     (person) => person.roleRank,
   );
-  const listed = ordered.map(({ roleRank: _roleRank, ...person }) => person);
+  const listed = ordered.map(({ roleRank: _roleRank, pinFailedCount, pinLockedUntil, ...person }) => ({
+    ...person,
+    pinLocked: isPinLocked({ pinFailedCount, pinLockedUntil }),
+  }));
   if (isFullAccessRole(req.user?.roleName)) {
     res.json(await attachListProfiles(req.db!, listed));
     return;
@@ -491,15 +498,38 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ outcome: "deactivated", message });
 });
 
-/** Admin clears a sign-in lockout without waiting for it to expire (the user can also clear it by resetting their password). */
+/** Admin clears a sign-in lockout and a signature PIN lock (the user can also clear the sign-in lockout by resetting their password). */
 export const unlockUser = asyncHandler(async (req: Request, res: Response) => {
-  const [updated] = await req
+  const id = Number(req.params.id);
+  const [before] = await req
+    .db!.select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive, lockedUntil: users.lockedUntil, pinFailedCount: users.pinFailedCount, pinLockedUntil: users.pinLockedUntil })
+    .from(users)
+    .where(eq(users.id, id));
+  if (!before) throw AppError.notFound("User");
+  await req
     .db!.update(users)
-    .set({ lockedUntil: null, failedLoginCount: 0, firstFailedLoginAt: null })
-    .where(and(eq(users.id, Number(req.params.id))))
-    .returning({ id: users.id });
-  if (!updated) throw AppError.notFound("User");
-  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "account_unlocked" }, performedBy: req.user?.id });
+    .set({ lockedUntil: null, failedLoginCount: 0, firstFailedLoginAt: null, pinFailedCount: 0, pinLockedUntil: null })
+    .where(eq(users.id, id));
+  const [actor] = req.user ? await req.db!.select({ email: users.email, name: users.name, isActive: users.isActive }).from(users).where(eq(users.id, req.user.id)) : [];
+  const pinWasLocked = isPinLocked(before);
+  const signInWasLocked = before.lockedUntil != null && before.lockedUntil.getTime() > Date.now();
+  const unlocked = [signInWasLocked ? "sign-in" : null, pinWasLocked ? "signature PIN" : null].filter(Boolean).join(" and ") || "account";
+  await recordAuditTrail(req.db!, {
+    entityType: "User",
+    entityId: before.id,
+    action: "status_change",
+    changes: {
+      action: "account_unlocked",
+      pinUnlocked: pinWasLocked,
+      who: formatUserLabel(actor, req.user?.id ?? 0),
+      what: `Unlocked ${unlocked} for ${formatUserLabel(before, before.id)}`,
+      when: new Date().toISOString(),
+      description: pinWasLocked
+        ? `Administrator unlocked the signature PIN for ${formatUserLabel(before, before.id)}; the wrong-PIN count is back to 0.`
+        : `Administrator unlocked ${formatUserLabel(before, before.id)}.`,
+    },
+    performedBy: req.user?.id,
+  });
   res.status(204).send();
 });
 

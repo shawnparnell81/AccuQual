@@ -17,6 +17,7 @@
  * folded in. Engineering product trees that duplicate that drawer are moved
  * onto it and then removed (see retireNamedDocumentFolders).
  */
+import { folderById, hasChildren } from "./folderIndex.js";
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { company } from "../../drizzle/schema/company.js";
@@ -162,7 +163,7 @@ function uniqueSeedNames(nodes: DefaultFolderSeed[]): Set<string> {
 const UNIQUE_SEED_NAMES = uniqueSeedNames(COMPANY_DOCUMENT_FOLDERS);
 
 export function inTemplateLibrary(folder: FolderIdentity, folders: FolderIdentity[]): boolean {
-  const byId = new Map(folders.map((row) => [row.id, row]));
+  const byId = folderById(folders);
   let current: FolderIdentity | undefined = folder;
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
@@ -209,7 +210,7 @@ export interface QualityTrainingRepair {
 }
 
 function descendsFrom(folders: FolderIdentity[], nodeId: number, ancestorId: number): boolean {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const byId = folderById(folders);
   let current = byId.get(nodeId);
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
@@ -234,7 +235,7 @@ function parentName(folders: FolderIdentity[], folder: FolderIdentity): string |
 
 /** Blank Form Templates only. A company folder under ISO is not in that shelf. */
 function inBlankTemplates(folder: FolderIdentity, folders: FolderIdentity[]): boolean {
-  const byId = new Map(folders.map((row) => [row.id, row]));
+  const byId = folderById(folders);
   let current: FolderIdentity | undefined = folder;
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
@@ -397,7 +398,7 @@ export interface FolderContentMove {
 }
 
 function containerRow(list: FolderRow[], folder: FolderRow): boolean {
-  if (list.some((row) => row.parentId === folder.id)) return true;
+  if (hasChildren(list, folder.id)) return true;
   return !hasFolderPayload(folder);
 }
 
@@ -512,7 +513,7 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
 }
 
 function folderDepth(folders: FolderRow[], id: number): number {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const byId = folderById(folders);
   let depth = 0;
   let current = byId.get(id);
   const seen = new Set<number>();

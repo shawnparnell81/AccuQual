@@ -31,7 +31,7 @@ export function EightDPage() {
   const toast = useToast();
   const createReport = eightDHooks.useCreate();
   const [createOpen, setCreateOpen] = useState(false);
-  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs();
+  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs(createOpen);
   const [ncrId, setNcrId] = useState<number | null>(null);
   const [capaChoice, setCapaChoice] = useState<number | "none" | "pending">("pending");
   const [recordNumber, setRecordNumber] = useState("");
@@ -91,9 +91,9 @@ export function EightDPage() {
         canCreate={false}
         onRowClick={(row) => navigate(`/8d/${row.id}`)}
         columns={[
-          { header: "8D No.", accessor: (row) => showRecordNumber(row.recordNumber) },
+          { header: "8D No.", sortKey: "recordNumber", accessor: (row) => showRecordNumber(row.recordNumber) },
           { header: "Linked NCR", accessor: (row) => (row.ncrId ? "Linked" : "—") },
-          { header: "Current step", accessor: (row) => (row.currentStep >= 9 ? "Closed" : `D${row.currentStep}`) },
+          { header: "Current step", sortKey: "currentStep", accessor: (row) => (row.currentStep >= 9 ? "Closed" : `D${row.currentStep}`) },
         ]}
         headerActions={
           canEdit ? (

@@ -27,10 +27,10 @@ export function QualityPage() {
       onRowClick={(d) => navigate(`/quality/${d.id}`)}
       onCreated={(d) => navigate(`/quality/${d.id}`)}
       columns={[
-        { header: "Record No.", accessor: (d) => showRecordNumber(d.recordNumber) },
-        { header: "Title", accessor: (d) => d.title },
-        { header: "Severity", accessor: (d) => <StatusBadge value={d.severity} /> },
-        { header: "Status", accessor: (d) => <StatusBadge value={d.status} /> },
+        { header: "Record No.", sortKey: "recordNumber", accessor: (d) => showRecordNumber(d.recordNumber) },
+        { header: "Title", sortKey: "title", accessor: (d) => d.title },
+        { header: "Severity", sortKey: "severity", accessor: (d) => <StatusBadge value={d.severity} /> },
+        { header: "Status", sortKey: "status", accessor: (d) => <StatusBadge value={d.status} /> },
         { header: "Source", accessor: (d) => (d.sourceAuditId ? "Opened from an audit" : "Manual") },
       ]}
       createFields={[

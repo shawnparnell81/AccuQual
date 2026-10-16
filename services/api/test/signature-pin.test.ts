@@ -6,7 +6,8 @@ import {
   hashPin,
   missingPinBlocks,
   pinMatches,
-  registerPinFailure,
+  PinRepeatGuard,
+  pinLockActive,
   retainSignatureValues,
   writeSignatureValue,
 } from "../src/modules/signatures/signaturePin.js";
@@ -23,19 +24,35 @@ describe("signature PIN", () => {
     expect(await bcrypt.compare("1357", hash)).toBe(true);
   });
 
-  it("does not stamp after repeated wrong PINs and locks on the fifth", () => {
-    let state = { count: 0, lockedUntil: null as Date | null };
+  it("locks at the fifth wrong PIN in a row and stays locked until reset", () => {
     const now = new Date("2026-09-30T12:00:00Z");
-    for (let attempt = 0; attempt < PIN_MAX_ATTEMPTS - 1; attempt++) {
-      const next = registerPinFailure(state, now);
-      expect(next.justLocked).toBe(false);
-      expect(next.lockedUntil).toBeNull();
-      state = next;
-    }
-    const locked = registerPinFailure(state, now);
-    expect(locked.justLocked).toBe(true);
-    expect(locked.count).toBe(0);
-    expect(locked.lockedUntil!.getTime() - now.getTime()).toBe(15 * 60 * 1000);
+    for (let count = 0; count < PIN_MAX_ATTEMPTS; count++) expect(pinLockActive({ count, lockedUntil: null }, now)).toBe(false);
+    expect(PIN_MAX_ATTEMPTS).toBe(5);
+    expect(pinLockActive({ count: 5, lockedUntil: null }, new Date("2030-01-01T00:00:00Z"))).toBe(true);
+    expect(pinLockActive({ count: 0, lockedUntil: new Date("2026-09-30T12:05:00Z") }, now)).toBe(true);
+    expect(pinLockActive({ count: 0, lockedUntil: new Date("2026-09-30T11:55:00Z") }, now)).toBe(false);
+  });
+
+  it("treats the same wrong PIN repeated within seconds as one attempt and shares overlapping checks", async () => {
+    const guard = new PinRepeatGuard();
+    const key = guard.key(7, "1111");
+    expect(key).not.toContain("1111");
+    expect(guard.key(8, "1111")).not.toBe(key);
+    expect(guard.isRepeat(key, 1000)).toBe(false);
+    guard.remember(key, 1000);
+    expect(guard.isRepeat(key, 5000)).toBe(true);
+    expect(guard.isRepeat(key, 11_000)).toBe(false);
+    guard.forgetUser([key]);
+    expect(guard.isRepeat(key, 2000)).toBe(false);
+    let runs = 0;
+    const work = async () => {
+      runs++;
+      await new Promise((r) => setTimeout(r, 20));
+      return runs;
+    };
+    const [a, b] = await Promise.all([guard.once(key, work), guard.once(key, work)]);
+    expect(runs).toBe(1);
+    expect(a).toBe(b);
   });
 
   it("stamps the display name with the company time and keeps that stamp on a later save", () => {

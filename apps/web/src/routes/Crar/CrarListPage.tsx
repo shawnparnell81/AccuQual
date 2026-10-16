@@ -1,3 +1,4 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -22,7 +23,7 @@ export function CrarListPage() {
     if (q) p.q = q;
     return p;
   }, [status, q]);
-  const { data: rows = [], isLoading, isError } = crarHooks.useList(params);
+  const { rows: rows, isLoading, isError, server } = useServerTable<CrarClaim>("/crar", { root: "crar", params: params, });
   const createCrar = crarHooks.useCreate();
 
   return (
@@ -54,13 +55,14 @@ export function CrarListPage() {
       </div>
 
       <DataTable<CrarClaim>
+server={server}
         columns={[
-          { header: "Customer", accessor: (c) => c.customerName ?? "—" },
-          { header: "RMA #", accessor: (c) => c.rmaNumber ?? "—" },
-          { header: "Customer Claim #", accessor: (c) => c.customerClaim ?? "—" },
-          { header: "Part #", accessor: (c) => c.partNumber ?? "—" },
-          { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
-          { header: "Created", accessor: (c) => formatDate(c.createdAt) },
+          { header: "Customer", sortKey: "customerName", accessor: (c) => c.customerName ?? "—" },
+          { header: "RMA #", sortKey: "rmaNumber", accessor: (c) => c.rmaNumber ?? "—" },
+          { header: "Customer Claim #", sortKey: "customerClaim", accessor: (c) => c.customerClaim ?? "—" },
+          { header: "Part #", sortKey: "partNumber", accessor: (c) => c.partNumber ?? "—" },
+          { header: "Status", sortKey: "status", accessor: (c) => <StatusBadge value={c.status} /> },
+          { header: "Created", sortKey: "createdAt", accessor: (c) => formatDate(c.createdAt) },
         ]}
         rows={rows}
         rowKey={(c) => c.id}

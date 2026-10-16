@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, eq, asc, desc } from "drizzle-orm";
 import { qualityInspectionReports, qualityInspectionItems } from "../../drizzle/schema/qualityInspectionReports.js";
@@ -23,7 +24,13 @@ export const listReportsHandler = asyncHandler(async (req: Request, res: Respons
   const conditions = [];
   if (finalStatus) conditions.push(eq(qualityInspectionReports.finalStatus, finalStatus));
   if (supplierId) conditions.push(eq(qualityInspectionReports.supplierId, Number(supplierId)));
-  const rows = await req.db!.select().from(qualityInspectionReports).where(and(...conditions)).orderBy(desc(qualityInspectionReports.createdAt));
+  const rows = await pagedList(req, res, {
+    table: qualityInspectionReports,
+    conditions,
+    defaultOrder: [desc(qualityInspectionReports.createdAt)],
+    statusColumn: qualityInspectionReports.finalStatus,
+    select: (where, order, limit, offset) => req.db!.select().from(qualityInspectionReports).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   res.json(rows);
 });
 

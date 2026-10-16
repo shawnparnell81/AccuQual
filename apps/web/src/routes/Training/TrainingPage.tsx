@@ -36,10 +36,10 @@ export function TrainingPage() {
         onRowClick={(c) => navigate(`/training/${c.id}`)}
         onCreated={(c) => navigate(`/training/${c.id}`)}
         columns={[
-          { header: "Course", accessor: (c) => c.title },
+          { header: "Course", sortKey: "title", accessor: (c) => c.title },
           { header: "Description", accessor: (c) => c.description ?? "—" },
           { header: "Required for", accessor: (c) => (c.requiredForDepartment ? departmentLabel(c.requiredForDepartment) : "—") },
-          { header: "Valid for", accessor: (c) => (c.validityMonths ? `${c.validityMonths} months` : "Doesn't expire") },
+          { header: "Valid for", sortKey: "validityMonths", accessor: (c) => (c.validityMonths ? `${c.validityMonths} months` : "Doesn't expire") },
           { header: "", accessor: (c) => (c.active ? "" : "Retired") },
         ]}
         createFields={[

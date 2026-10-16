@@ -112,7 +112,7 @@ describe("engineering change request", () => {
       expect(blocked.status).toBe(403);
 
       const missing = await request(app).post("/iso-quality-forms/structure/engineering-change/unlock").set("Authorization", `Bearer ${engineeringToken}`).send({ pin: "0000", certified: true });
-      expect(missing.status).toBe(401);
+      expect(missing.status).toBe(403);
 
       const unlocked = await request(app).post("/iso-quality-forms/structure/engineering-change/unlock").set("Authorization", `Bearer ${engineeringToken}`).send({ pin: TEST_PIN, certified: true });
       expect(unlocked.status).toBe(200);

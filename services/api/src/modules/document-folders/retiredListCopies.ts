@@ -79,8 +79,7 @@ function qualityManualId(folders: QualityManualNode[]): number | null {
   return folders.find((folder) => folder.parentId === iso.id && folder.name === QUALITY_MANUAL)?.id ?? null;
 }
 
-function underQualityManual(folders: QualityManualNode[], manualId: number, id: number): boolean {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+function underQualityManual(byId: Map<number, QualityManualNode>, manualId: number, id: number): boolean {
   let current = byId.get(id);
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
@@ -102,7 +101,10 @@ export function planQualityManualCopyCleanup(folders: QualityManualNode[]): Qual
   const manualId = qualityManualId(folders);
   if (manualId == null) return [];
   const childIds = new Set(folders.map((folder) => folder.parentId).filter((id): id is number => id != null));
-  const inManual = (folder: QualityManualNode) => folder.id !== manualId && underQualityManual(folders, manualId, folder.id);
+  // One lookup map for the whole pass. Building it per row made a 5,000-row tree take seconds.
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const inManualIds = new Set(folders.filter((folder) => folder.id !== manualId && underQualityManual(byId, manualId, folder.id)).map((folder) => folder.id));
+  const inManual = (folder: QualityManualNode) => inManualIds.has(folder.id);
   const livingByRoute = new Map<string, QualityManualNode[]>();
   for (const folder of folders) {
     if (!inManual(folder)) continue;

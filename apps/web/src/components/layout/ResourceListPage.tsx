@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { createResourceHooks } from "../../api/resourceHooks";
+import { useEffect, useState, type ReactNode } from "react";
+import { createResourceHooks, isSiteScopedResource } from "../../api/resourceHooks";
+import { usePagedList, type ListSort } from "../../api/usePagedList";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { duplicateNumberError } from "../forms/RecordNumberField";
 import { useToast } from "../shared/ToastProvider";
 import { useSavedViews } from "../../hooks/useSavedViews";
 import { DataTable, type Column } from "../tables/DataTable";
-import { FilterBar, PageHeader, SummaryCards, summarizeRecords } from "./PageHeader";
+import { FilterBar, PageHeader, SummaryCards, summarizeCounts } from "./PageHeader";
 import { Modal } from "../modals/Modal";
 import { GenericCreateForm, type FieldSpec } from "../forms/GenericCreateForm";
 import { Search, Bookmark, X } from "lucide-react";
@@ -21,10 +22,8 @@ interface ResourceListPageProps<T extends { id: number }> {
   /**
    * Opts into a free-text search box + saved-views ("save current search" /
    * load a saved one), keyed by `resource` — e.g. `(r) => \`${r.title} ${r.status}\``.
-   * Filtering stays client-side over the already-fetched list (this
-   * component has never paginated server-side), matching a plain
-   * substring, case-insensitive. Omitted entirely by default, so every
-   * existing caller renders exactly as before.
+   * The search runs on the server over the record's text fields, so it
+   * finds rows that are not loaded yet. Omitted, the page has no search box.
    */
   searchable?: (row: T) => string;
   /** When false, the create button stays hidden. Omit it to keep the old always-on create button. */
@@ -35,8 +34,10 @@ interface ResourceListPageProps<T extends { id: number }> {
   headerActions?: ReactNode;
   /** Extra controls above the table, such as a list filter. Omitted callers are unchanged. */
   extraFilters?: ReactNode;
-  /** Drops rows before search. Omitted callers show every fetched row. */
-  rowPredicate?: (row: T) => boolean;
+  /** Server filters for the list, such as `{ statusNot: "obsolete" }`. */
+  listParams?: Record<string, string | number | boolean | undefined | null>;
+  /** Sort on first open. Defaults to newest first. */
+  defaultSort?: ListSort;
   /** Open the create dialog on arrival, used by the dashboard's Schedule audit button. */
   createOnMount?: boolean;
   /** Dialog title. Defaults to "Create {title}". */
@@ -63,7 +64,8 @@ export function ResourceListPage<T extends { id: number }>({
   createOnMount,
   createTitle,
   extraFilters,
-  rowPredicate,
+  listParams,
+  defaultSort,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -73,16 +75,19 @@ export function ResourceListPage<T extends { id: number }>({
   const [search, setSearch] = useState("");
   const toast = useToast();
   const hooks = createResourceHooks<T>(resource);
-  const { data: rows = [], isLoading, isError } = hooks.useList();
+  const [sort, setSort] = useState<ListSort | null>(defaultSort ?? null);
+  // A page at a time from the server: a 5,000-row register opens on its first 150.
+  const list = usePagedList<T>(`/${resource}`, {
+    root: resource,
+    params: listParams,
+    search: searchable ? search : "",
+    sort,
+    siteScoped: isSiteScopedResource(resource),
+    counts: true,
+  });
   const createMutation = hooks.useCreate();
   const { views, saveView, removeView } = useSavedViews(resource);
-
-  const visibleRows = useMemo(() => {
-    const base = rowPredicate ? rows.filter(rowPredicate) : rows;
-    if (!searchable || !search.trim()) return base;
-    const needle = search.trim().toLowerCase();
-    return base.filter((r) => searchable(r).toLowerCase().includes(needle));
-  }, [rows, search, searchable, rowPredicate]);
+  const total = list.total ?? list.rows.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,7 +106,7 @@ export function ResourceListPage<T extends { id: number }>({
           </>
         }
       />
-      <SummaryCards items={summarizeRecords(visibleRows)} />
+      <SummaryCards items={summarizeCounts(total, list.statusCounts)} />
       {(searchable || extraFilters) && (
         <FilterBar>
           {searchable && (
@@ -142,7 +147,17 @@ export function ResourceListPage<T extends { id: number }>({
         </FilterBar>
       )}
 
-      <DataTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} listChrome={false} emptyMessage={searchable && search.trim() ? "No records match this search." : undefined} />
+      <DataTable
+        columns={columns}
+        rows={list.rows}
+        rowKey={(r) => r.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRowClick={onRowClick}
+        listChrome={false}
+        emptyMessage={searchable && search.trim() ? "No records match this search." : undefined}
+        server={{ total: list.total, hasMore: list.hasMore, loadingMore: list.loadingMore, loadMore: list.loadMore, sort, onSort: setSort }}
+      />
 
       {createFields && (
         <Modal title={createTitle ?? `Create ${title}`} isOpen={createOpen} onClose={() => { setCreateError(null); setCreateOpen(false); }}>

@@ -2,6 +2,7 @@ import type { FormLayout, TableColumn } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
 import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
+import { FORCE_GRAPH_SPECS, drawForceGraph, graphFromData } from "./forceGraphPdf.js";
 import { NOT_REQUIRED_LABEL, signatureBlocksFor, signaturePdfValue } from "../signatures/signatureRequired.js";
 
 /** Titles and revisions already used by the validation sheets in the app. */
@@ -69,6 +70,7 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
     const waived = printed === NOT_REQUIRED_LABEL;
     approvals.push({ name: printed, role: "", action: waived ? NOT_REQUIRED_LABEL : "Signed", at: "", status: waived ? NOT_REQUIRED_LABEL : "Approved" });
   }
+  const graphSpec = FORCE_GRAPH_SPECS[kind];
   const layout: FormLayout = {
     formType: `validation_${kind}`,
     title: meta.title,
@@ -92,6 +94,7 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
         title: "Sheet",
         blocks: [{ type: "table", name: "rows", columns: tableColumns.length > 1 ? tableColumns : [{ key: "row", label: "Row", kind: "text" }, { key: "value", label: "Value", kind: "text" }] }],
       },
+      ...(graphSpec ? [{ number: "3", title: "Force Graph", blocks: [] }] : []),
     ],
   };
   const built = emptyFrame({
@@ -112,5 +115,12 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
       rows,
     },
     frame,
+    graphSpec
+      ? {
+          afterSection: async (ctx, section) => {
+            if (section.number === "3") drawForceGraph(ctx, graphSpec, graphFromData(data));
+          },
+        }
+      : {},
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { queryRetryDelay, shouldRetryQuery } from "./lib/queryRetry";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
@@ -39,7 +40,7 @@ if (!isMarketingHost(window.location.hostname)) {
 
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { retry: 1, staleTime: 30_000 },
+      queries: { retry: shouldRetryQuery, retryDelay: queryRetryDelay, staleTime: 30_000 },
     },
   });
 

@@ -1,3 +1,5 @@
+import { LoadMore } from "../../components/tables/LoadMore";
+import { useServerTable } from "../../api/usePagedList";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -70,7 +72,7 @@ export function IsoFormListPage() {
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
-  const { data: rows = [], isLoading, isError } = hooks.useList();
+  const { rows: rows, isLoading, isError, server } = useServerTable<IsoQualityForm>("/iso-quality-forms", { root: "iso-quality-forms", params: { formType: meta?.formType } });
   const filing = useFormTemplates();
   const createForm = hooks.useCreate();
   const [pending, setPending] = useState(false);
@@ -149,6 +151,7 @@ export function IsoFormListPage() {
               ))}
             </tbody>
           </table>
+          <LoadMore shown={rows.length} total={server.total} loading={server.loadingMore} onMore={server.loadMore} noun="records" />
         </div>
       )}
     </div>

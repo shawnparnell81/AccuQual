@@ -1,6 +1,7 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { mkdir, writeFile } from "node:fs/promises";
-import { and, eq, gte, lte, ilike, desc, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, lte, desc, sql, type SQL } from "drizzle-orm";
 import { warrantyClaims, warrantyClaimCosts, warrantyClaimWorkflow } from "../../drizzle/schema/warranty.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { customers } from "../../drizzle/schema/customers.js";
@@ -89,16 +90,20 @@ async function loadClaim(req: Request, id: number) {
 }
 
 export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, customerId, supplierId, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
+  const { status, customerId, supplierId, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(warrantyClaims.status, status));
   if (customerId) conditions.push(eq(warrantyClaims.customerId, Number(customerId)));
   if (supplierId) conditions.push(eq(warrantyClaims.supplierId, Number(supplierId)));
   if (dateFrom) conditions.push(gte(warrantyClaims.createdAt, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(warrantyClaims.createdAt, new Date(dateTo)));
-  if (q) conditions.push(ilike(warrantyClaims.claimNumber, `%${q}%`));
 
-  const rows = await req
+  const rows = await pagedList(req, res, {
+    table: warrantyClaims,
+    conditions,
+    defaultOrder: [desc(warrantyClaims.createdAt)],
+    statusColumn: warrantyClaims.status,
+    select: (where, order, limit, offset) => req
     .db!.select({
       id: warrantyClaims.id,
       claimNumber: warrantyClaims.claimNumber,
@@ -113,8 +118,11 @@ export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: 
       updatedAt: warrantyClaims.updatedAt,
     })
     .from(warrantyClaims)
-    .where(and(...conditions))
-    .orderBy(desc(warrantyClaims.createdAt));
+    .where(where)
+    .orderBy(...order)
+    .limit(limit)
+    .offset(offset),
+  });
 
   // site_id arrived in 0118. A database that has not migrated yet still lists claims.
   const sites =

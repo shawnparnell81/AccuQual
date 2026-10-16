@@ -109,7 +109,7 @@ describe("FAI & Inspection endpoints", () => {
     expect(got.body.aqlSampleSize).toBe(50);
   });
 
-  it("wrong PIN on sign-off returns 401", async () => {
+  it("wrong PIN on sign-off returns 403 (not a session failure)", async () => {
     const rec = await request(app).post("/fai-inspection/records")
       .set("Authorization", `Bearer ${managerToken}`)
       .send({ faiNumber: "FAI-PIN-001", partNumber: "TEST-001" });
@@ -117,6 +117,6 @@ describe("FAI & Inspection endpoints", () => {
     const res = await request(app).post(`/fai-inspection/records/${rec.body.id}/sign`)
       .set("Authorization", `Bearer ${managerToken}`)
       .send({ pin: "1357", certified: true, outcome: "passed", description: "FAI sign-off test" });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 });

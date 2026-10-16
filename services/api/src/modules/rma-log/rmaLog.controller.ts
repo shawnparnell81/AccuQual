@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, eq, ilike, gte, lte, desc, type SQL } from "drizzle-orm";
 import { rmaLogRecords } from "../../drizzle/schema/rmaLog.js";
@@ -53,16 +54,20 @@ async function validateLinks(req: Request, body: Record<string, unknown>) {
 
 /** GET /rma-log?status=&partNumber=&customerName=&dateFrom=&dateTo=&q= (q searches rmaNumber). */
 export const listRmaLogHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, partNumber, customerName, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
+  const { status, partNumber, customerName, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(rmaLogRecords.status, status));
   if (partNumber) conditions.push(ilike(rmaLogRecords.partNumber, `%${partNumber}%`));
   if (customerName) conditions.push(ilike(rmaLogRecords.customerName, `%${customerName}%`));
   if (dateFrom) conditions.push(gte(rmaLogRecords.dateIssued, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(rmaLogRecords.dateIssued, new Date(dateTo)));
-  if (q) conditions.push(ilike(rmaLogRecords.rmaNumber, `%${q}%`));
 
-  const rows = await req
+  const rows = await pagedList(req, res, {
+    table: rmaLogRecords,
+    conditions,
+    defaultOrder: [desc(rmaLogRecords.createdAt)],
+    statusColumn: rmaLogRecords.status,
+    select: (where, order, limit, offset) => req
     .db!.select({
       id: rmaLogRecords.id,
       rmaNumber: rmaLogRecords.rmaNumber,
@@ -77,8 +82,11 @@ export const listRmaLogHandler = asyncHandler(async (req: Request, res: Response
       createdAt: rmaLogRecords.createdAt,
     })
     .from(rmaLogRecords)
-    .where(and(...conditions))
-    .orderBy(desc(rmaLogRecords.createdAt));
+    .where(where)
+    .orderBy(...order)
+    .limit(limit)
+    .offset(offset),
+  });
   res.json(rows);
 });
 

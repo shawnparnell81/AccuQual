@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -22,7 +23,12 @@ import { displayName, sortByDisplayOrder } from "../users/userDisplayOrder.js";
 const AUDIT_ENTITY_TYPE = "TrainingAssignment";
 
 export const listCourses = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await req.db!.select().from(trainingCourses));
+  res.json(await pagedList(req, res, {
+    table: trainingCourses,
+    conditions: [],
+    defaultOrder: [],
+    select: (where, order, limit, offset) => req.db!.select().from(trainingCourses).where(where).orderBy(...order).limit(limit).offset(offset),
+  }));
 });
 
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {

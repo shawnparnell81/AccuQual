@@ -1,6 +1,6 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createResourceHooks } from "../../api/resourceHooks";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
@@ -9,7 +9,6 @@ import { WarrantyClaimCreateForm } from "./WarrantyClaimCreateForm";
 import { formatDate } from "../../lib/dates";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 
-const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
 
 const STATUSES: WarrantyStatus[] = ["new", "inspection", "supplier_review", "approved", "rejected", "replaced", "repaired", "closed"];
 
@@ -30,7 +29,7 @@ export function WarrantyClaimsList() {
     if (dateTo) p.dateTo = dateTo;
     return p;
   }, [status, q, dateFrom, dateTo]);
-  const { data: rows = [], isLoading, isError } = claimHooks.useList(params);
+  const { rows: rows, isLoading, isError, server } = useServerTable<WarrantyClaim>("/warranty/claims", { root: "warranty/claims", params: params, });
   // Subscribe so a top-bar plant change redraws this list, then read the store.
   // The hook's server snapshot stays at the first value, so the filter uses getState.
   const plantKey = useSiteStore((s) => (s.siteScope === "all" ? "all" : s.currentSiteId));
@@ -66,13 +65,14 @@ export function WarrantyClaimsList() {
       </div>
 
       <DataTable<WarrantyClaim>
+server={server}
         columns={[
-          { header: "Claim #", accessor: (c) => c.claimNumber?.trim() || "" },
-          { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
-          { header: "Serial #", accessor: (c) => c.serialNumber ?? "—" },
-          { header: "Failure Date", accessor: (c) => formatDate(c.failureDate) },
-          { header: "Est. Cost", accessor: (c) => (c.warrantyCostEstimate ? `$${Number(c.warrantyCostEstimate).toFixed(2)}` : "—") },
-          { header: "Actual Cost", accessor: (c) => (c.warrantyActualCost ? `$${Number(c.warrantyActualCost).toFixed(2)}` : "—") },
+          { header: "Claim #", sortKey: "claimNumber", accessor: (c) => c.claimNumber?.trim() || "" },
+          { header: "Status", sortKey: "status", accessor: (c) => <StatusBadge value={c.status} /> },
+          { header: "Serial #", sortKey: "serialNumber", accessor: (c) => c.serialNumber ?? "—" },
+          { header: "Failure Date", sortKey: "failureDate", accessor: (c) => formatDate(c.failureDate) },
+          { header: "Est. Cost", sortKey: "warrantyCostEstimate", accessor: (c) => (c.warrantyCostEstimate ? `$${Number(c.warrantyCostEstimate).toFixed(2)}` : "—") },
+          { header: "Actual Cost", sortKey: "warrantyActualCost", accessor: (c) => (c.warrantyActualCost ? `$${Number(c.warrantyActualCost).toFixed(2)}` : "—") },
         ]}
         rows={visible}
         rowKey={(c) => c.id}

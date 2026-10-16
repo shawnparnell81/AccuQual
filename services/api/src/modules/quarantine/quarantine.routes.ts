@@ -38,7 +38,7 @@ quarantineRouter.get(
   view,
   asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await service.listQuarantine(dbOf(req), { status: q.status, itemType: q.itemType, q: q.q, olderThanDays: q.olderThanDays ? Number(q.olderThanDays) : undefined }));
+    res.json(await service.listQuarantinePage(req, res, { status: q.status, itemType: q.itemType, olderThanDays: q.olderThanDays ? Number(q.olderThanDays) : undefined }));
   }),
 );
 quarantineRouter.get(
@@ -55,7 +55,7 @@ quarantineRouter.get(
     const viewName = req.query.view === "released" ? "released" : "active";
     const ncrId = typeof req.query.ncrId === "string" && req.query.ncrId ? Number(req.query.ncrId) : undefined;
     if (ncrId !== undefined && (!Number.isInteger(ncrId) || ncrId < 1)) throw AppError.badRequest("Invalid NCR id");
-    res.json(await service.listQuarantineItems(dbOf(req), viewName, ncrId));
+    res.json(await service.listQuarantineItemsPage(req, res, viewName, ncrId));
   }),
 );
 quarantineRouter.get(

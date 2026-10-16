@@ -1,6 +1,6 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createResourceHooks } from "../../api/resourceHooks";
 import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
@@ -9,7 +9,6 @@ import { formatDate } from "../../lib/dates";
 import { LaborClaimCreateForm } from "./LaborClaimCreateForm";
 import type { LaborClaim, LaborClaimStatus } from "./laborClaim";
 
-const claimHooks = createResourceHooks<LaborClaim>("labor-claims");
 
 const STATUSES: LaborClaimStatus[] = ["open", "pending", "approved", "denied", "closed"];
 
@@ -36,7 +35,7 @@ export function LaborClaimsList() {
     if (dateTo) next.dateTo = dateTo;
     return next;
   }, [status, q, dateFrom, dateTo]);
-  const { data: rows = [], isLoading, isError } = claimHooks.useList(params);
+  const { rows: rows, isLoading, isError, server } = useServerTable<LaborClaim>("/labor-claims", { root: "labor-claims", params: params, });
   const plantKey = useSiteStore((s) => (s.siteScope === "all" ? "all" : s.currentSiteId));
   const { currentSiteId, siteScope } = useSiteStore.getState();
   const visible = useMemo(() => claimsForPlant(rows, currentSiteId, siteScope), [rows, currentSiteId, siteScope, plantKey]);
@@ -65,14 +64,15 @@ export function LaborClaimsList() {
       </div>
 
       <DataTable<LaborClaim>
+server={server}
         columns={[
-          { header: "Claim #", accessor: (row) => row.claimNumber?.trim() || "" },
-          { header: "Status", accessor: (row) => <StatusBadge value={row.status} /> },
-          { header: "Customer", accessor: (row) => row.customerName ?? "—" },
-          { header: "Part", accessor: (row) => row.partName ?? "—" },
-          { header: "Date", accessor: (row) => formatDate(row.claimDate) },
-          { header: "Hours", accessor: (row) => row.laborHours ?? "—" },
-          { header: "Labor Cost", accessor: (row) => money(row.totalLaborCost) },
+          { header: "Claim #", sortKey: "claimNumber", accessor: (row) => row.claimNumber?.trim() || "" },
+          { header: "Status", sortKey: "status", accessor: (row) => <StatusBadge value={row.status} /> },
+          { header: "Customer", sortKey: "customerName", accessor: (row) => row.customerName ?? "—" },
+          { header: "Part", sortKey: "partName", accessor: (row) => row.partName ?? "—" },
+          { header: "Date", sortKey: "claimDate", accessor: (row) => formatDate(row.claimDate) },
+          { header: "Hours", sortKey: "laborHours", accessor: (row) => row.laborHours ?? "—" },
+          { header: "Labor Cost", sortKey: "totalLaborCost", accessor: (row) => money(row.totalLaborCost) },
         ]}
         rows={visible}
         rowKey={(row) => row.id}
