@@ -131,9 +131,6 @@ export const ReportsPage = lazyNamed("/reports", () => import("./Reports/Reports
 export const VerifyExportPage = lazyNamed("/verify", () => import("./Pdf/VerifyExportPage"), "VerifyExportPage");
 export const NavigationSettingsPage = lazyNamed("/settings/navigation", () => import("./Settings/NavigationSettingsPage"), "NavigationSettingsPage");
 export const SettingsPage = lazyNamed("/settings", () => import("./Settings/SettingsPage"), "SettingsPage");
-export const ErpPresetsListPage = lazyNamed("/settings/erp/presets", () => import("./Erp/ErpPresetsListPage"), "ErpPresetsListPage");
-export const ErpPresetEditorPage = lazyNamed("/settings/erp/presets", () => import("./Erp/ErpPresetEditorPage"), "ErpPresetEditorPage");
-export const ErpSyncErrorsPage = lazyNamed("/settings/erp/sync-errors", () => import("./Erp/ErpSyncErrorsPage"), "ErpSyncErrorsPage");
 export const RmaDetailPage = lazyNamed("/rma", () => import("./Rma/RmaDetailPage"), "RmaDetailPage");
 export const WarrantyClaimsList = lazyNamed("/warranty", () => import("./Warranty/WarrantyClaimsList"), "WarrantyClaimsList");
 export const LaborClaimsList = lazyNamed("/labor-claims", () => import("./LaborClaims/LaborClaimsList"), "LaborClaimsList");

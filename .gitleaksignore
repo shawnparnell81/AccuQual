@@ -1,0 +1,2 @@
+# Fake token in a unit-test fixture (not a real credential), reported by the scan of an earlier commit on this branch.
+7322738fe9fd22e9e4059071e9dd9378a8739067:services/api/test/unit/netsuite-connector.test.ts:generic-api-key:143
