@@ -359,6 +359,7 @@ export function ValidationReportDetailPage() {
       related={<RecordReferences modules={["documents", "validation"]} step={meta.title} entityType="validation_report" entityId={reportId} />}
     >
       <div
+        data-pdf-sheet
         className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4"
         data-print-title={title}
         data-print-number={report.recordNumber ?? ""}

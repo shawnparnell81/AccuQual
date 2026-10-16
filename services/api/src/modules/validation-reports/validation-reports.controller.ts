@@ -1,3 +1,4 @@
+import { renderLayoutRecordPdf, savedLeaves, sendPdf } from "../records/sheetRecordPdf.js";
 import { desc, eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
@@ -9,9 +10,7 @@ import { validationFormKeyFor, validationKind } from "../document-folders/editab
 import { snapshotFormNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { copyValidationCells, validationPartNumber } from "../records/copyPrevious.js";
-import { renderValidationReportPdf, validationExportIdentity } from "./validationReportPdf.js";
-import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
-import { emptyFrame } from "../forms/controlledPdf.js";
+import { validationExportIdentity } from "./validationReportPdf.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { diffSignatureRequired, flushSignatureRequiredAudit, rememberSignatureRequiredAudit, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
@@ -108,16 +107,15 @@ export const validationPdfHandler = asyncHandler(async (req: Request, res: Respo
   const [row] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!row) throw AppError.notFound("Validation Report");
   const data = { ...asRecord(row.data), recordNumber: typeof row.recordNumber === "string" ? row.recordNumber.trim() : "" };
-  const chrome = await loadPdfChrome(req.db!, "validation_report", id, data);
-  const bytes = await renderValidationReportPdf(data, "AccuQual", chrome);
   const identity = validationExportIdentity(data, "AccuQual");
-  const frame = applyChrome(emptyFrame(identity), chrome);
-  await persistPdfExport(req.db!, bytes, frame, { entityType: "validation_report", entityId: id, actorId: req.user?.id });
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("X-Export-Id", chrome.exportId);
-  const fileNumber = identity.recordNumber.replace(/[^a-zA-Z0-9._-]+/g, "-");
-  res.setHeader("Content-Disposition", `attachment; filename="${fileNumber || "validation-report"}.pdf"`);
-  res.send(Buffer.from(bytes));
+  const { bytes, exportId } = await renderLayoutRecordPdf(
+    req.db!,
+    { entityType: "validation_report", entityId: id, title: identity.sourceModule, formNumber: identity.formNumber, recordNumber: identity.recordNumber, revision: identity.revision },
+    req.body,
+    savedLeaves(data),
+    { id: req.user?.id, name: (req.user as { name?: string | null } | undefined)?.name },
+  );
+  sendPdf(res, bytes, exportId, identity.recordNumber || "validation-report");
 });
 
 const SIGNATURE_COPY: Record<string, Record<string, string>> = {

@@ -1,3 +1,4 @@
+import { renderLayoutRecordPdf, savedLeaves, sendPdf } from "../records/sheetRecordPdf.js";
 import { eq, sql } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
@@ -19,7 +20,6 @@ import { canonicalIsoFormType, normalizeIsoFormData } from "./isoFormRead.js";
 import { ISO_TYPE_TO_FORM_KEY } from "../document-folders/editableForms.js";
 import { readTemplateStamp } from "../forms/templateRevision.js";
 import { ISO_SHEET_SIGNATURES, isoSheetCertifications } from "./isoSheetSignatures.js";
-import { cellsTable, renderSheetRecordPdf, sendPdf } from "../records/sheetRecordPdf.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -200,26 +200,11 @@ export const isoQualityFormPdf = asyncHandler(async (req: Request, res: Response
   const title = formType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const recordNumber = typeof row.recordNumber === "string" ? row.recordNumber.trim() : "";
   const revision = readTemplateStamp(data)?.revision ?? "";
-  const { bytes, exportId } = await renderSheetRecordPdf(
+  const { bytes, exportId } = await renderLayoutRecordPdf(
     req.db!,
-    {
-      entityType: "iso_form",
-      entityId: id,
-      title: formKey ? `${formKey} ${title}` : title,
-      formNumber: formKey,
-      recordNumber,
-      revision,
-      header: [
-        { label: "Form", value: formKey || title },
-        { label: "Record No.", value: recordNumber },
-        { label: "Rev.", value: revision },
-        ...Object.keys(FORM_SIGNATURES[formType] ?? {}).map((field) => ({
-          label: ISO_SHEET_SIGNATURES[formType]?.[field]?.label ?? field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
-          value: typeof data[field] === "string" ? (data[field] as string) : "",
-        })),
-      ],
-      tables: [cellsTable(asRecord(data.cells))],
-    },
+    { entityType: "iso_form", entityId: id, title: formKey ? `${formKey} ${title}` : title, formNumber: formKey, recordNumber, revision },
+    req.body,
+    savedLeaves(row.data, recordNumber),
     { id: req.user?.id, name: (req.user as { name?: string | null } | undefined)?.name },
   );
   sendPdf(res, bytes, exportId, recordNumber || `iso-form-${id}`);

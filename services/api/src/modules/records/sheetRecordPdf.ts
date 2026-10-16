@@ -1,3 +1,4 @@
+import { assertSavedCopy, parseSheetLayout, renderLayoutPdf } from "./layoutPdf.js";
 import type { Db } from "../../lib/requestDb.js";
 import type { FormLayout, TableColumn } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
@@ -99,4 +100,46 @@ export function sendPdf(res: { setHeader(k: string, v: string): void; send(b: Bu
   const safe = fileBase.replace(/[^a-zA-Z0-9._-]+/g, "-") || "record";
   res.setHeader("Content-Disposition", `attachment; filename="${safe}.pdf"`);
   res.send(Buffer.from(bytes));
+}
+
+/** Every leaf value of the stored record, for the saved-copy check. */
+export function savedLeaves(...sources: unknown[]): unknown[] {
+  const out: unknown[] = [];
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 12 || value == null) return;
+    if (Array.isArray(value)) value.forEach((v) => walk(v, depth + 1));
+    else if (typeof value === "object") Object.values(value as Record<string, unknown>).forEach((v) => walk(v, depth + 1));
+    else out.push(value);
+  };
+  sources.forEach((s) => walk(s, 0));
+  return out;
+}
+
+/**
+ * Draws the form exactly as it was laid out on screen. The browser sends the
+ * captured layout; the chrome, record number and revision come from the
+ * stored record, and every field value must match what is saved.
+ */
+export async function renderLayoutRecordPdf(
+  db: Db,
+  record: Omit<SheetRecord, "header" | "tables">,
+  body: unknown,
+  saved: unknown[],
+  actor: { id?: number; name?: string | null },
+) {
+  const layout = parseSheetLayout(body);
+  assertSavedCopy(layout, saved);
+  const built = emptyFrame({
+    sourceModule: record.title,
+    recordNumber: record.recordNumber,
+    revision: record.revision,
+    generatedBy: actor.name?.trim() || "AccuQual",
+    formNumber: record.formNumber || null,
+    status: record.status ?? null,
+  });
+  const chrome = await loadPdfChrome(db, record.entityType, record.entityId, {});
+  const frame = applyChrome(built, chrome);
+  const { bytes } = await renderLayoutPdf({ layout, frame, title: record.title });
+  await persistPdfExport(db, bytes, frame, { entityType: record.entityType, entityId: record.entityId, actorId: actor.id });
+  return { bytes, exportId: chrome.exportId };
 }

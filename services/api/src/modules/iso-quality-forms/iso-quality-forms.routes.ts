@@ -19,7 +19,7 @@ isoQualityFormsRouter.use(requireAuth, withDb, withSiteContext, requireDepartmen
 isoQualityFormsRouter.get("/", baseHandlers.list);
 isoQualityFormsRouter.post("/", validate(createIsoQualityFormSchema), baseHandlers.create);
 isoQualityFormsRouter.get("/:id", getIsoQualityForm);
-isoQualityFormsRouter.get("/:id/pdf", isoQualityFormPdf);
+isoQualityFormsRouter.post("/:id/pdf", isoQualityFormPdf);
 isoQualityFormsRouter.patch("/:id", validate(updateIsoQualityFormSchema), baseHandlers.update);
 isoQualityFormsRouter.post("/:id/sign", validate(signIsoQualityFormSchema), signIsoQualityForm);
 isoQualityFormsRouter.post(

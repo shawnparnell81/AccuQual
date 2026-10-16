@@ -9,6 +9,7 @@ describe("recordPdfSource", () => {
     assert.equal(recordPdfSource("/iso-forms/record/5")?.url, "/iso-quality-forms/5/pdf");
     assert.equal(recordPdfSource("/qms-forms/frm-qms-003/9")?.url, "/qms-forms/9/pdf");
     assert.equal(recordPdfSource("/validation-reports/12?tab=x")?.url, "/validation-reports/12/pdf");
+    assert.equal(recordPdfSource("/iso-forms/record/5")?.method, "layout");
   });
   it("leaves new records and pages that already have their own Download PDF alone", () => {
     for (const path of ["/ncr/1", "/fai-inspection/records/1", "/fai/csa/1", "/capa", "/capa/new", "/qms-forms/frm-qms-003/new"]) assert.equal(recordPdfSource(path), null);

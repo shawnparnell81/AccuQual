@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { canPrintAccess, isPdfBytes, PRINT_NOT_DOCUMENT } from "../../lib/printDocument";
 import { recordPdfSource, type RecordPdfSource } from "../../lib/recordPdf";
+import { captureSheetLayout, findPdfSheet } from "../../lib/sheetLayout";
 import { recordSurface } from "../../lib/recordSurface";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
@@ -39,8 +40,14 @@ export function DownloadRecordPdfButton({ source: given, allowed, beforeDownload
     if (beforeDownload && !beforeDownload()) return;
     setBusy(true);
     try {
-      const response = source.method === "post"
-        ? await apiClient.post(source.url, null, { responseType: "arraybuffer" })
+      let layout: unknown = null;
+      if (source.method === "layout") {
+        const sheet = findPdfSheet();
+        if (!sheet) throw new Error("This form isn't on screen yet. Wait for it to load, then try again.");
+        layout = await captureSheetLayout(sheet);
+      }
+      const response = source.method !== "get"
+        ? await apiClient.post(source.url, layout, { responseType: "arraybuffer" })
         : await apiClient.get(source.url, { responseType: "arraybuffer" });
       const bytes = new Uint8Array(response.data as ArrayBuffer);
       if (!isPdfBytes(bytes)) throw new Error(PRINT_NOT_DOCUMENT);
@@ -55,7 +62,7 @@ export function DownloadRecordPdfButton({ source: given, allowed, beforeDownload
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       onDownloaded?.();
     } catch (err) {
-      toast.error(err instanceof Error && err.message === PRINT_NOT_DOCUMENT ? err.message : await extractErrorMessageAsync(err, "Couldn't download this PDF."));
+      toast.error(err instanceof Error && (err.message === PRINT_NOT_DOCUMENT || err.message.startsWith("This form isn't")) ? err.message : await extractErrorMessageAsync(err, "Couldn't download this PDF."));
     } finally {
       setBusy(false);
     }
