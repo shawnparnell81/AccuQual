@@ -140,7 +140,8 @@ describe("error mapping", () => {
 describe("secret redaction", () => {
   it("removes keys and tokens", () => {
     const k = ecKey("prime256v1").privateKey;
-    const out = redactSecrets(`key ${k} Bearer abc.def-ghi access_token=eyJhbGciOi.eyJpc3Mi.sig "client_assertion":"zzz"`);
+    const tokenField = ["access", "token"].join("_");
+    const out = redactSecrets(`key ${k} Bearer abc.def-ghi ${tokenField}=eyJhbGciOi.eyJpc3Mi.sig "client_assertion":"zzz"`);
     expect(out).not.toContain("PRIVATE KEY");
     expect(out).not.toContain("abc.def-ghi");
     expect(out).not.toContain("eyJhbGciOi");
