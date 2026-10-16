@@ -8,6 +8,8 @@ import {
   FAI_CREATE_PERMISSION, FAI_DELETE_PERMISSION, FAI_EDIT_PERMISSION,
   FAI_SIGNOFF_PERMISSION, FAI_VIEW_PERMISSION, FAI_PLANS_MANAGE_PERMISSION, FAI_SOURCES_MANAGE_PERMISSION,
 } from "../roles/roleAccess.js";
+import { ncrIsoDate, syncNcrFormData } from "../ncr/ncr.formSync.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
 import { inspPlans, inspPlanCharacteristics, inspApprovedSources, inspRecords, inspResultLines } from "../../drizzle/schema/faiInspection.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
@@ -270,7 +272,8 @@ export async function getRecord(db: Db, user: any, id: number) {
     const [plan] = await db.select({ productFamily: inspPlans.productFamily, partDescription: inspPlans.partDescription }).from(inspPlans).where(eq(inspPlans.id, rec.planId));
     productType = productTypeFor(plan?.productFamily ?? plan?.partDescription ?? null);
   }
-  return { ...rec, lines, attachedForms: attachedFormsFor(rec), productType, canEdit };
+  const ncrNumber = rec.ncrId ? (await db.select({ recordNumber: ncr.recordNumber }).from(ncr).where(eq(ncr.id, rec.ncrId)))[0]?.recordNumber ?? null : null;
+  return { ...rec, lines, attachedForms: attachedFormsFor(rec), productType, canEdit, ncrNumber };
 }
 
 export async function createRecord(db: Db, user: any, siteId: number | null, input: any) {
@@ -659,18 +662,38 @@ export async function createNcrFromRecord(db: Db, user: any, req: any, id: numbe
     .map((line: any) => ({ measurement: line.characteristicName, spec: lineSpecText(line), actual: line.measuredValue || line.attributeResult || "(blank)" }));
   if (rows.length === 0) rows.push({ measurement: "FAI result", spec: "Pass", actual: "Failed at sign-off" });
   const supplier = rec.supplierId ? (await db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.id, rec.supplierId)))[0]?.name ?? null : null;
+  const [plan] = rec.planId ? await db.select({ partDescription: inspPlans.partDescription, productFamily: inspPlans.productFamily }).from(inspPlans).where(eq(inspPlans.id, rec.planId)) : [];
+  const site = rec.siteId ? (await db.execute(sql`SELECT name FROM sites WHERE id = ${rec.siteId}`)).rows?.[0] as { name?: string } | undefined : undefined;
+  const inspectedOn = rec.dateInspected ?? rec.signedAt ?? rec.updatedAt ?? new Date();
+  const dateText = ncrIsoDate(inspectedOn as Date | string);
+  const sampleSize = rec.aqlSampleSize ?? rec.sampleSize ?? null;
+  const defects = lines.filter((line: any) => line.result === "fail").reduce((sum: number, line: any) => sum + (Number(line.defects) || 1), 0);
+  const aqlText = [
+    rec.inspectionLevel ? `Inspection level ${rec.inspectionLevel}` : null,
+    rec.codeLetter ? `code letter ${rec.codeLetter}` : null,
+    sampleSize ? `sample size ${sampleSize}` : null,
+    rec.majorAql ? `major AQL ${rec.majorAql} (accept ${rec.acMajor ?? "-"}, reject ${rec.reMajor ?? "-"})` : null,
+    rec.minorAql ? `minor AQL ${rec.minorAql} (accept ${rec.acMinor ?? "-"}, reject ${rec.reMinor ?? "-"})` : null,
+    `result ${rec.overallResult ?? "Fail"}`,
+  ].filter(Boolean).join(", ");
+  const partText = plan?.partDescription ? `${rec.partNumber} - ${plan.partDescription}` : rec.partNumber;
   const contextLines = [
-    `FAI record: ${rec.faiNumber}`,
-    `Part number: ${rec.partNumber}`,
+    `FAI record: ${rec.faiNumber} (/fai-inspection/records/${id})`,
+    `Part number: ${partText}`,
+    ...(plan?.productFamily ? [`Product line: ${plan.productFamily}`] : []),
     ...(supplier ? [`Supplier: ${supplier}${rec.supplierFactory ? ` (${rec.supplierFactory})` : ""}`] : []),
     ...(rec.poReference ? [`PO / lot reference: ${rec.poReference}`] : []),
     ...(rec.lotSize ? [`Lot size: ${rec.lotSize}`] : []),
+    `AQL: ${aqlText}`,
+    ...(rec.inspector ? [`Inspector: ${rec.inspector}`] : []),
+    `Inspected: ${dateText}`,
+    ...(site?.name ? [`Plant: ${site.name}`] : []),
   ];
   const created = await openInspectionNcr(
     db,
     {
       formTitle: `FAI ${rec.faiNumber}`,
-      part: rec.partNumber,
+      part: partText,
       path: `/fai-inspection/records/${id}`,
       formType: "first_article",
       sourceId: id,
@@ -680,8 +703,33 @@ export async function createNcrFromRecord(db: Db, user: any, req: any, id: numbe
       fallbackSiteId: req?.siteId,
       rows,
       contextLines,
-      sourceExtra: { faiNumber: rec.faiNumber, poReference: rec.poReference, lotSize: rec.lotSize, supplierFactory: rec.supplierFactory },
+      sourceExtra: { faiNumber: rec.faiNumber, poReference: rec.poReference, lotSize: rec.lotSize, supplierFactory: rec.supplierFactory, productLine: plan?.productFamily ?? null, inspector: rec.inspector ?? null, sampleSize, aql: aqlText },
       sourceAudit: { entityType: ENTITY, entityId: id },
+    },
+    user?.id,
+  );
+  const description = [...contextLines, "", "Failed characteristics:", ...rows.map((row: { measurement: string; spec: string; actual: string }) => `- ${row.measurement}: spec ${row.spec}, actual ${row.actual}`)].join("\n");
+  await db.update(ncr).set({ description }).where(eq(ncr.id, created.id));
+  await syncNcrFormData(
+    db,
+    created.id,
+    {
+      dateIssued: ncrIsoDate(created.createdAt ?? new Date()),
+      documentStatus: "Active",
+      nonconformanceDescription: description,
+      header: {
+        partNumberDescription: partText,
+        customerSupplierName: [supplier, rec.supplierFactory].filter(Boolean).join(" / ") || undefined,
+        poJobNumber: rec.poReference ?? undefined,
+        drawingSpecReference: `FAI plan rev ${rec.planRevision}`,
+        totalQuantityInspected: sampleSize ?? undefined,
+        quantityNonconforming: defects || undefined,
+        reportedBy: rec.inspector ?? undefined,
+        department: "Quality - FAI & AQL",
+        dateReported: dateText,
+        referenceNumber: `FAI ${rec.faiNumber}`,
+        relatedDocuments: `FAI ${rec.faiNumber}: /fai-inspection/records/${id}${plan?.productFamily ? `\nProduct line: ${plan.productFamily}` : ""}${site?.name ? `\nPlant: ${site.name}` : ""}`,
+      },
     },
     user?.id,
   );

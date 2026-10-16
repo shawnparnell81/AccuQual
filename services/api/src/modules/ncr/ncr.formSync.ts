@@ -24,7 +24,22 @@ export interface NcrFormSyncPatch {
   verificationText?: string;
   ncrClosureDate?: string;
   finalDispositionConfirmed?: "Yes" | "No";
+  /** Header fields copied from the record that opened the NCR. Only fills blanks, never overwrites typing. */
+  header?: Partial<Record<NcrHeaderField, string | number>>;
 }
+
+export type NcrHeaderField =
+  | "partNumberDescription"
+  | "customerSupplierName"
+  | "poJobNumber"
+  | "drawingSpecReference"
+  | "totalQuantityInspected"
+  | "quantityNonconforming"
+  | "reportedBy"
+  | "department"
+  | "dateReported"
+  | "referenceNumber"
+  | "relatedDocuments";
 
 /** ncr.severity ("low"|"medium"|"high"|"critical") has no exact 1:1 match in the form's 3-option checkbox — mapped, not dropped. */
 export function mapSeverityToClassification(severity: string | null): NcrFormSyncPatch["ncrClassification"] | undefined {
@@ -100,6 +115,11 @@ export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncP
   if (patch.verificationText !== undefined) data.effectivenessVerification = stagePatch.effectivenessVerification;
   if (patch.dispositionNote !== undefined && stagePatch.suspectMaterialDisposition !== undefined) {
     data.suspectMaterialDisposition = stagePatch.suspectMaterialDisposition;
+  }
+  for (const [key, value] of Object.entries(patch.header ?? {})) {
+    if (value === undefined || value === null || value === "") continue;
+    const current = data[key];
+    if (current === undefined || current === null || current === "") data[key] = value;
   }
   if (patch.ncrClosureDate !== undefined) data.ncrClosureDate = patch.ncrClosureDate;
   if (patch.finalDispositionConfirmed !== undefined) data.finalDispositionConfirmed = patch.finalDispositionConfirmed;

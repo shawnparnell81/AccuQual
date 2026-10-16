@@ -69,12 +69,16 @@ function subjectFor(source: DueSourceRow): string {
   return source.dueStatus === "overdue" ? `${source.partNumber} / ${who} FAI is overdue (was due ${when})` : `${source.partNumber} / ${who} FAI due ${when}`;
 }
 
-/** Already notified today? One check per (source, recipient) so a second sweep the same day is a no-op. */
-async function alreadyNotifiedToday(db: Db, sourceId: number, recipient: string, startOfToday: Date): Promise<boolean> {
+/**
+ * Already notified today? One check per (source, recipient) so a second sweep the same day is a no-op.
+ * created_at is the database's own clock, so "today" is the database's date too. Comparing it with a
+ * UTC midnight sent from Node sent the same notice twice every evening on a database not set to UTC.
+ */
+async function alreadyNotifiedToday(db: Db, sourceId: number, recipient: string): Promise<boolean> {
   const [row] = await db
     .select({ id: notificationLog.id })
     .from(notificationLog)
-    .where(and(eq(notificationLog.relatedEntityType, ENTITY), eq(notificationLog.relatedEntityId, sourceId), eq(notificationLog.recipient, recipient), gte(notificationLog.createdAt, startOfToday)))
+    .where(and(eq(notificationLog.relatedEntityType, ENTITY), eq(notificationLog.relatedEntityId, sourceId), eq(notificationLog.recipient, recipient), sql`${notificationLog.createdAt} >= current_date`))
     .limit(1);
   return !!row;
 }
@@ -88,14 +92,13 @@ export async function sweepFaiDue(): Promise<{ sources: number; notified: number
   try {
     const db = ownerDb as unknown as Db;
     const today = isoToday();
-    const startOfToday = new Date(today + "T00:00:00.000Z");
     const due = await sourcesNeedingAttention(db, today);
     let notified = 0;
     for (const source of due) {
       const recipients = await recipientsForSite(db, source.siteId);
       const toNotify: string[] = [];
       for (const recipient of recipients) {
-        if (!(await alreadyNotifiedToday(db, source.id, recipient, startOfToday))) toNotify.push(recipient);
+        if (!(await alreadyNotifiedToday(db, source.id, recipient))) toNotify.push(recipient);
       }
       if (toNotify.length > 0) {
         const subject = subjectFor(source);

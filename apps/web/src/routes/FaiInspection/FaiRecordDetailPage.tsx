@@ -25,6 +25,7 @@ export function FaiRecordDetailPage() {
   const openTab = useOpenTab();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [signOutcome, setSignOutcome] = useState<"passed" | "failed">("passed");
 
@@ -240,14 +241,28 @@ export function FaiRecordDetailPage() {
           <button onClick={() => setShowDelete(true)} className="rounded border border-red-300 text-red-700 px-4 py-2">Delete…</button>
         )}
         {!isNew && (
-          <a href={faiInspectionApi.records.pdfUrl(Number(id))} target="_blank" rel="noreferrer" className="rounded border px-4 py-2">Download FAI Report PDF</a>
+          <button
+            type="button"
+            data-lock-exempt
+            disabled={downloading}
+            onClick={() => {
+              setDownloading(true);
+              faiInspectionApi.records
+                .downloadPdf(Number(id), `${rec?.faiNumber || `fai-${id}`}.pdf`)
+                .then(() => setError(null), (err) => setError(extractErrorMessage(err, "Couldn't download the FAI report PDF.")))
+                .finally(() => setDownloading(false));
+            }}
+            className="rounded border px-4 py-2 disabled:opacity-50"
+          >
+            {downloading ? "Preparing PDF…" : "Download FAI Report PDF"}
+          </button>
         )}
       </div>
 
       {!isNew && rec && <FaiSampleTags recordId={Number(id)} highlightSample={scannedSample} partNumber={rec.partNumber} />}
 
       {!isNew && !locked && (
-        <div className="border-t pt-6 mb-8">
+        <div className="border-t pt-6 mb-8" data-lock-exempt>
           <h2 className="text-lg font-semibold mb-3">Sign-off</h2>
           <div className="flex gap-4 mb-4">
             <label className="flex items-center gap-2">
@@ -266,15 +281,16 @@ export function FaiRecordDetailPage() {
       )}
 
       {!isNew && rec?.status === "failed" && (
-        <div className="border-t pt-6">
+        <div className="border-t pt-6" data-lock-exempt>
           <button
             onClick={() => createNcr.mutate()}
             disabled={createNcr.isPending}
             className="rounded bg-primary text-primary-foreground px-4 py-2 hover:opacity-90 disabled:opacity-50"
           >
-            {rec.ncrId ? "Open NCR" : "Create NCR"}
+            {rec.ncrId ? `Open NCR${rec.ncrNumber ? ` ${rec.ncrNumber}` : ""}` : "Create NCR"}
           </button>
-          <p className="text-xs text-gray-500 mt-2">Creates a new NCR pre-filled with the part, supplier, lot/PO and this FAI record, then opens it. Needs permission to create NCRs.</p>
+          {rec.ncrId ? <p className="mt-2 text-sm" data-testid="fai-linked-ncr">Linked NCR: {rec.ncrNumber || `NCR #${rec.ncrId} (number not assigned yet)`}</p> : null}
+          <p className="text-xs text-gray-500 mt-2">Creates a new NCR pre-filled with the part, product line, supplier, lot/PO, failed characteristics, AQL result, inspector, date, plant and a link back to this FAI record, then opens it. Needs permission to create NCRs.</p>
         </div>
       )}
 

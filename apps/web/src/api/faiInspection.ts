@@ -183,6 +183,8 @@ export interface FaiRecord {
   /** The family the record's plan points at, which decides the Attach button offered. Null when none matches. */
   productType?: FaiValidationFormType | null;
   ncrId?: number | null;
+  /** The linked NCR's own number, once someone has typed it. */
+  ncrNumber?: string | null;
   signature?: string | null;
   createdAt?: string;
   lines?: FaiResultLine[];
@@ -288,6 +290,18 @@ export const faiInspectionApi = {
     submitForSignoff: (id: number) => apiClient.post(`${base}/records/${id}/submit-signoff`).then((r) => r.data as FaiRecord),
     createNcr: (id: number) => apiClient.post(`${base}/records/${id}/ncr`).then((r) => r.data as { id: number; existing: boolean }),
     pdfUrl: (id: number) => `${base}/records/${id}/pdf`,
+    /** The report needs the signed-in session, so it is fetched through the API client, not opened as a page link. */
+    downloadPdf: async (id: number, fileName: string) => {
+      const response = await apiClient.get(`${base}/records/${id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data as Blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
   },
   randomPulls: {
     getRules: () => apiClient.get(`${base}/random-pulls/rules`).then((r) => r.data as FaiRandomPullRules),

@@ -1,13 +1,14 @@
 import { ensureTestCompany } from "../helpers/company.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
+import { formData } from "../../src/drizzle/schema/forms.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { inspApprovedSources, inspRecords } from "../../src/drizzle/schema/faiInspection.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
@@ -98,8 +99,23 @@ describe("Fix 1 — Create NCR from a failed FAI record", () => {
     expect(text).toContain(rec.faiNumber);
     expect(JSON.stringify((made as any).processData?.validationSource ?? {})).toContain(`/fai-inspection/records/${rec.id}`);
 
+    // What the user sees is the NCR form, not the bare row. It used to open blank.
+    const [form] = await db.select().from(formData).where(and(eq(formData.formType, "ncr"), eq(formData.entityType, "ncr"), eq(formData.entityId, first.body.id)));
+    const fields = (form?.data ?? {}) as Record<string, unknown>;
+    expect(String(fields.partNumberDescription)).toContain("SIX-NCR-1");
+    expect(fields.poJobNumber).toBe("PO-9001");
+    expect(String(fields.referenceNumber)).toContain(rec.faiNumber);
+    expect(String(fields.nonconformanceDescription)).toContain(rec.faiNumber);
+    expect(String(fields.nonconformanceDescription)).toContain("AQL:");
+    expect(String(fields.relatedDocuments)).toContain(`/fai-inspection/records/${rec.id}`);
+    expect(String(fields.customerSupplierName ?? "")).toContain("Plant 7");
+    expect(fields.dateReported).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
     const [linked] = await db.select().from(inspRecords).where(eq(inspRecords.id, rec.id));
     expect(linked!.ncrId).toBe(first.body.id);
+    const shown = await request(app).get(`/fai-inspection/records/${rec.id}`).set(auth(managerToken));
+    expect(shown.body.ncrId).toBe(first.body.id);
+    expect(await lastAudit("NCR", first.body.id)).toBeTruthy();
 
     const again = await request(app).post(`/fai-inspection/records/${rec.id}/ncr`).set(auth(managerToken));
     expect(again.status).toBe(200);
@@ -175,7 +191,8 @@ describe("Fix 3 — Audit log filters and paging", () => {
     expect(byText.body.rows).toHaveLength(5);
     expect(byText.body.rows.every((row: any) => row.entityType === "NCR" && row.performedBy === managerId)).toBe(true);
 
-    const today = new Date().toISOString().slice(0, 10);
+    // The audit trail stores the database's own clock, so "today" is the database's date (UTC midnight is not).
+    const today = String(((await db.execute(sql`SELECT to_char(current_date, 'YYYY-MM-DD') AS d`)).rows[0] as { d: string }).d);
     const inRange = await request(app).get("/audit-trail").query({ paged: 1, q: marker, entityType: "NCR", from: today, to: today }).set(auth(adminToken));
     expect(inRange.body.rows.length).toBe(5);
     const past = await request(app).get("/audit-trail").query({ paged: 1, q: marker, entityType: "NCR", from: "2001-01-01", to: "2001-01-02" }).set(auth(adminToken));
