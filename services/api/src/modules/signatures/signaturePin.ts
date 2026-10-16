@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { safeTimeZone, calendarDay } from "../quality-automation/logic.js";
 
@@ -39,8 +40,10 @@ const DATE_SIBLING: Record<string, string> = {
 
 export { PIN_SETUP_PATHS, missingPinBlocks } from "./signaturePinGate.js";
 
+/** Consecutive wrong PINs before the PIN locks (NIST SP 800-63B 5.2.2 rate limiting). The lock stays until an administrator unlocks it. */
 export const PIN_MAX_ATTEMPTS = 5;
-export const PIN_LOCK_MS = 15 * 60 * 1000;
+/** A repeat of the same wrong PIN inside this window (a double click, Enter pressed twice, two checks in one save) counts once. */
+export const PIN_REPEAT_WINDOW_MS = 10_000;
 
 export function isFourDigitPin(pin: string): boolean {
   return /^\d{4}$/.test(pin);
@@ -61,22 +64,49 @@ export interface PinAttemptState {
   lockedUntil: Date | null;
 }
 
-export function pinLockActive(state: PinAttemptState, now: Date): { locked: true; retryAfterSeconds: number } | { locked: false } {
-  if (state.lockedUntil && state.lockedUntil.getTime() > now.getTime()) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((state.lockedUntil.getTime() - now.getTime()) / 1000));
-    return { locked: true, retryAfterSeconds };
-  }
-  return { locked: false };
+/** Locked when the person has reached the limit of wrong PINs in a row. A timed lock from before this rule still counts until it runs out. */
+export function pinLockActive(state: PinAttemptState, now: Date): boolean {
+  if (state.count >= PIN_MAX_ATTEMPTS) return true;
+  return state.lockedUntil != null && state.lockedUntil.getTime() > now.getTime();
 }
 
-/** Counts a wrong PIN. The fifth failure in a row locks the PIN for 15 minutes. */
-export function registerPinFailure(state: PinAttemptState, now: Date): PinAttemptState & { justLocked: boolean } {
-  const expired = state.lockedUntil != null && state.lockedUntil.getTime() <= now.getTime();
-  const count = (expired ? 0 : state.count) + 1;
-  if (count >= PIN_MAX_ATTEMPTS) {
-    return { count: 0, lockedUntil: new Date(now.getTime() + PIN_LOCK_MS), justLocked: true };
+/**
+ * Remembers recent wrong PINs (as a salted digest, never the PIN) so the same wrong entry repeated within a few
+ * seconds is one attempt, and two checks running at the same moment share one result.
+ */
+export class PinRepeatGuard {
+  private readonly recent = new Map<string, number>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly salt = randomBytes(16).toString("hex");
+
+  key(userId: number, pin: string): string {
+    return createHash("sha256").update(`${this.salt}:${userId}:${pin}`).digest("hex");
   }
-  return { count, lockedUntil: null, justLocked: false };
+
+  isRepeat(key: string, now: number): boolean {
+    const at = this.recent.get(key);
+    return at != null && now - at < PIN_REPEAT_WINDOW_MS;
+  }
+
+  remember(key: string, now: number): void {
+    this.recent.set(key, now);
+    if (this.recent.size > 5000) {
+      for (const [k, at] of this.recent) if (now - at >= PIN_REPEAT_WINDOW_MS) this.recent.delete(k);
+    }
+  }
+
+  forgetUser(keys: string[]): void {
+    for (const k of keys) this.recent.delete(k);
+  }
+
+  /** Runs `work` once for identical checks that overlap in time. */
+  async once<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const running = this.inFlight.get(key) as Promise<T> | undefined;
+    if (running) return running;
+    const p = work().finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, p);
+    return p;
+  }
 }
 
 /** Display name plus the date and time in the company timezone. */

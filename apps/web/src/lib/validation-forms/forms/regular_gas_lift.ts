@@ -4,11 +4,7 @@ import { regularGasLiftLayout } from "../layouts/regular-gas-lift.layout";
 import type { WorkbookLayout } from "../layoutTypes";
 import { withinSpec } from "../tolerance";
 
-/**
- * TODO(Shawn): confirm 012 vs 005. The attached workbook is named Gas-Lift-Support-Regular-FRM-VAL-012-RevA.xlsx but its tab
- * says FRM-VAL-005. The existing gas lift form (type gas_lift, Rev B) is FRM-VAL-005, so this new form uses 012. Change it here
- * (one place) if that is wrong.
- */
+/** Document number of the Regular Gas Lift Support validation form. */
 export const GAS_LIFT_REGULAR_DOC_ID = "FRM-VAL-012";
 
 /**

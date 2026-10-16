@@ -62,7 +62,8 @@ describe("signature PIN on a form (real DB + real HTTP path)", () => {
     scarId = created.body.id;
 
     const wrong = await request(app).post(`/scar-forms/${scarId}/sign`).set("Authorization", `Bearer ${token}`).send({ field: "supplierRep", pin: "0000", certified: true });
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(403);
+    expect(wrong.body.message ?? wrong.body.error).toMatch(/not correct/);
 
     const [row] = await db.select().from(scarForms).where(eq(scarForms.id, scarId));
     expect(row?.supplierRepSignature).toBeNull();

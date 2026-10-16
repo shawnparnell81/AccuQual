@@ -337,6 +337,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                 <div className="flex flex-wrap items-center gap-1">
                   <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
                   {isAdmin && u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="text-xs text-destructive">Locked</span>}
+                  {isAdmin && u.pinLocked && <span className="text-xs text-destructive">PIN locked</span>}
                 </div>
               </td>
               {isAdmin && <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>}
@@ -345,9 +346,12 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
               <tr className={u.isActive ? undefined : "text-muted-foreground"}>
                 <td colSpan={7} className="pb-2 pt-0">
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
-                    {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
-                      <button onClick={() => void adminAction(`/users/${u.id}/unlock`, "Account unlocked.")} className="text-left text-xs text-primary hover:underline">
-                        Unlock
+                    {((u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now()) || u.pinLocked) && (
+                      <button
+                        onClick={() => void adminAction(`/users/${u.id}/unlock`, u.pinLocked ? "Signature PIN unlocked." : "Account unlocked.")}
+                        className="text-left text-xs text-primary hover:underline"
+                      >
+                        {u.pinLocked && !(u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now()) ? "Unlock PIN" : "Unlock"}
                       </button>
                     )}
                     <button

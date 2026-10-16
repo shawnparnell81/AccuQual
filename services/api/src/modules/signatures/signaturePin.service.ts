@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { company } from "../../drizzle/schema/company.js";
@@ -12,13 +12,16 @@ import {
   formatSignatureStamp,
   hashPin,
   isFourDigitPin,
+  PIN_MAX_ATTEMPTS,
+  PinRepeatGuard,
   pinLockActive,
   pinMatches,
-  registerPinFailure,
   signedOnDate,
 } from "./signaturePin.js";
 
-const PIN_LOCK_SECONDS = 15 * 60;
+const repeatGuard = new PinRepeatGuard();
+/** Wrong-PIN digests per user, so a correct PIN clears that person's repeat memory. */
+const userKeys = new Map<number, Set<string>>();
 
 async function loadUser(userId: number) {
   const [user] = await db
@@ -36,34 +39,84 @@ async function loadUser(userId: number) {
   return user;
 }
 
-function lockMessage(retryAfterSeconds: number): string {
-  const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-  return `Too many incorrect PINs. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+export const PIN_LOCKED_MESSAGE = `Your signature PIN is locked after ${PIN_MAX_ATTEMPTS} incorrect tries. Ask an administrator to unlock it in Settings → Users.`;
+
+function wrongPinMessage(count: number): string {
+  const left = PIN_MAX_ATTEMPTS - count;
+  return `That PIN is not correct. ${left} ${left === 1 ? "try" : "tries"} left before your PIN locks.`;
 }
 
-/** Checks the PIN. A wrong PIN does not produce a stamp. Failures are stored outside the request transaction so a rollback cannot erase them. */
+async function auditPinLocked(userId: number, who: string): Promise<void> {
+  const when = new Date();
+  await recordAuditTrail(db, {
+    entityType: "User",
+    entityId: userId,
+    action: "status_change",
+    changes: {
+      action: "signature_pin_locked",
+      who,
+      what: "Signature PIN",
+      when: when.toISOString(),
+      description: `Signature PIN locked after ${PIN_MAX_ATTEMPTS} incorrect PINs in a row. An administrator must unlock it.`,
+    },
+    performedBy: userId,
+  }).catch((err) => logger.error("Failed to audit a signature PIN lock", { userId, err }));
+}
+
+/**
+ * Checks the PIN. A wrong PIN does not produce a stamp. Each wrong PIN counts once: the same wrong PIN sent twice within a
+ * few seconds (double click, Enter twice, a page that checks twice) is one attempt, and overlapping identical checks share
+ * one result. The fifth wrong PIN in a row locks signing until an administrator unlocks it; a correct PIN resets the count.
+ * Failures are stored outside the request transaction so a rollback cannot erase them.
+ */
 export async function verifySignaturePin(userId: number, pin: string): Promise<{ displayName: string }> {
   if (!isFourDigitPin(pin)) throw AppError.badRequest("Enter a 4-digit PIN.");
+  const key = repeatGuard.key(userId, pin);
+  return repeatGuard.once(key, () => checkPin(userId, pin, key));
+}
+
+async function checkPin(userId: number, pin: string, key: string): Promise<{ displayName: string }> {
   const user = await loadUser(userId);
   if (!user) throw AppError.unauthorized("Session is no longer valid");
   if (!user.pinHash) throw AppError.forbidden("Set a 4-digit signature PIN before signing.");
 
   const now = new Date();
-  const lock = pinLockActive({ count: user.pinFailedCount, lockedUntil: user.pinLockedUntil }, now);
-  if (lock.locked) throw new AppError(lockMessage(lock.retryAfterSeconds), 429);
+  if (pinLockActive({ count: user.pinFailedCount, lockedUntil: user.pinLockedUntil }, now)) throw new AppError(PIN_LOCKED_MESSAGE, 423, { code: "pin_locked" });
 
   if (!(await pinMatches(pin, user.pinHash))) {
-    const next = registerPinFailure({ count: user.pinFailedCount, lockedUntil: user.pinLockedUntil }, now);
-    await db
+    if (repeatGuard.isRepeat(key, now.getTime())) throw new AppError(wrongPinMessage(user.pinFailedCount), 403, { code: "pin_incorrect" });
+    repeatGuard.remember(key, now.getTime());
+    let keys = userKeys.get(userId);
+    if (!keys) userKeys.set(userId, (keys = new Set()));
+    keys.add(key);
+    const [row] = await db
       .update(users)
-      .set({ pinFailedCount: next.count, pinLockedUntil: next.lockedUntil, updatedAt: new Date() })
-      .where(eq(users.id, userId));
-    if (next.justLocked) throw new AppError(lockMessage(PIN_LOCK_SECONDS), 429);
-    throw AppError.unauthorized("That PIN is not correct.");
+      .set({ pinFailedCount: sql`${users.pinFailedCount} + 1`, updatedAt: new Date() })
+      .where(and(eq(users.id, userId), lt(users.pinFailedCount, PIN_MAX_ATTEMPTS)))
+      .returning({ count: users.pinFailedCount });
+    if (!row) throw new AppError(PIN_LOCKED_MESSAGE, 423, { code: "pin_locked" });
+    const count = row.count;
+    if (count >= PIN_MAX_ATTEMPTS) {
+      await auditPinLocked(userId, formatUserLabel(user, user.id));
+      throw new AppError(PIN_LOCKED_MESSAGE, 423, { code: "pin_locked" });
+    }
+    throw new AppError(wrongPinMessage(count), 403, { code: "pin_incorrect" });
   }
 
-  await db.update(users).set({ pinFailedCount: 0, pinLockedUntil: null }).where(eq(users.id, userId));
+  const keys = userKeys.get(userId);
+  if (keys) {
+    repeatGuard.forgetUser([...keys]);
+    userKeys.delete(userId);
+  }
+  if (user.pinFailedCount !== 0 || user.pinLockedUntil) {
+    await db.update(users).set({ pinFailedCount: 0, pinLockedUntil: null }).where(eq(users.id, userId));
+  }
   return { displayName: formatUserLabel(user, user.id) };
+}
+
+/** True when this person's signature PIN is locked. */
+export function isPinLocked(row: { pinFailedCount: number; pinLockedUntil: Date | null }): boolean {
+  return pinLockActive({ count: row.pinFailedCount, lockedUntil: row.pinLockedUntil }, new Date());
 }
 
 export async function setSignaturePin(userId: number, pin: string, confirmPin: string): Promise<void> {
