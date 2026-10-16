@@ -1,4 +1,5 @@
 import { AUDIT_RESULTS, COMPETENCY, YES_NO, YN } from "./isoFormLogic";
+import { signRow } from "./isoSheetSignatures";
 
 export type CellKind = "label" | "input" | "date" | "number" | "select" | "check" | "area" | "calc" | "signature";
 
@@ -45,6 +46,7 @@ const S = (col: number, span: number, addr: string, options: readonly string[]):
 const C = (col: number, span: number, addr: string, text: string): FormCell => ({ col, span, addr, kind: "check", text, align: "left" });
 const A = (col: number, span: number, addr: string, placeholder?: string): FormCell => ({ col, span, addr, kind: "area", placeholder });
 const K = (col: number, span: number, addr: string): FormCell => ({ col, span, addr, kind: "calc" });
+
 
 const AUDIT_ROWS: Array<[string, string, string, string]> = [
   ["1.0 Management Review", "9.3", "Verify Top Management (VP of Eng & Quality) has conducted a formal Management Review of the QMS. Check minutes to verify CARs, audit results, and QMS performance were reviewed.", "Select 1 (Most recent Management Review record)"],
@@ -110,7 +112,7 @@ export function ncrLayout(): FormLayout {
   rows[27] = [L(1, 1, "A26", "Time Spent Investigating/Resolving (hours)"), N(2, 3, "B26", "Time in Hours")];
   rows[28] = [];
   rows[29] = [L(1, 4, "A28", "SECTION 6: AUTHORIZATION", "section")];
-  rows[30] = [L(1, 1, "A29", "Engineering Manager Approval:"), I(2, 1, "B29", "Sign Here"), L(3, 1, "C29", "Date:"), D(4, 1, "D29")];
+  rows[30] = [L(1, 1, "A29", "Engineering Manager Approval:"), signRow("ncr_report", 2, 1, "B29"), L(3, 1, "C29", "Date:"), D(4, 1, "D29")];
   rows[31] = [L(1, 1, "A30", "Quality Manger Approval:"), L(2, 1, "B30", "Ron Wertz"), L(3, 1, "C30", "Date:"), L(4, 1, "D30", "2026-04-30")];
   rows[32] = [];
   rows[33] = [L(1, 4, "A32", "SECTION 7: SUPPLIER FEEDBACK", "section")];

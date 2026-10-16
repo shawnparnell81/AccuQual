@@ -183,6 +183,11 @@ function Cell({
           }}
         />
       )}
+      {spec.kind === "signature" && !signatures[spec.signatureKey ?? ""] && typeof cells[spec.addr] === "string" && String(cells[spec.addr]).trim() && (
+        <div className="iso-legacy-sign text-xs text-muted-foreground" data-testid={`legacy-sign-${spec.addr}`}>
+          Typed before PIN signing: {String(cells[spec.addr])}
+        </div>
+      )}
       {(spec.kind === "label" || spec.kind === "calc") && text}
     </td>
   );

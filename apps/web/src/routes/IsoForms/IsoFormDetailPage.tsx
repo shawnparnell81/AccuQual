@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ISO_SHEET_SIGNATURES, sheetSignatures } from "../../lib/isoSheetSignatures";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
@@ -293,7 +294,7 @@ export function IsoFormDetailPage() {
 
   const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : isBatch5(formType) ? summaryBatch5(formType, cells) : isBatch6(formType) ? summaryBatch6(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
   const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
-  const signatures = formType === "audit_summary" ? auditSignatures(record.data) : {};
+  const signatures = formType === "audit_summary" ? auditSignatures(record.data) : sheetSignatures(formType, record.data);
 
   async function signField(field: string, pin: string) {
     await signForm.mutateAsync({ id: recordId, field, pin, certified: true });
@@ -352,7 +353,7 @@ export function IsoFormDetailPage() {
       setMonths={setMonths}
       recordId={recordId}
       signatures={signatures}
-      onSign={fieldsEditable && (formType === "audit_summary" || isBatch4(formType) || changeRequestByFormType(formType)) ? signField : undefined}
+      onSign={fieldsEditable && (formType === "audit_summary" || isBatch4(formType) || changeRequestByFormType(formType) || ISO_SHEET_SIGNATURES[formType]) ? signField : undefined}
       signatureRequired={record.data._signatureRequired}
       onSignatureRequired={fieldsEditable ? setSignatureRequired : undefined}
       ecrView={changeRequestByFormType(formType) ? ecrView.data : undefined}
@@ -668,7 +669,7 @@ function IsoFormDetailBody({
             onSignatureRequired={requestKind ? onSignatureRequired : undefined}
           />
         ) : formType === "first_article" ? (
-          <FaiSheet cells={cells} lines={lines} readOnly={!fieldsEditable} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
+          <FaiSheet cells={cells} lines={lines} readOnly={!fieldsEditable} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} signatures={signatures} onSign={onSign} />
         ) : formType === "customer_scorecard" ? (
           <ScorecardSheet cells={cells} customers={customers} readOnly={!fieldsEditable} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} revision={revision} />
         ) : formType === "failure_effectiveness" ? (

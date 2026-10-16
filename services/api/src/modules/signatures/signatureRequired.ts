@@ -82,6 +82,13 @@ export const RECORD_SIGNATURE_BLOCKS: Record<string, SignatureBlock[]> = {
     { path: "auditeeSignature3", label: "Auditee signature 3" },
     { path: "auditeeSignature4", label: "Auditee signature 4" },
   ],
+  "iso:ncr_report": [{ path: "engineeringManagerSignature", label: "Engineering Manager Approval" }],
+  "iso:psw": [{ path: "organizationSignature", label: "Organization Authorized Signature" }],
+  "iso:quality_alert": [
+    { path: "approverSignature", label: "Quality Manager / Authorized Approver" },
+    { path: "extensionSignature", label: "Quality Manager approval for a duration extension" },
+  ],
+  "iso:first_article": [{ path: "inspectorSignature", label: "Signature" }],
   "iso:salt_spray": [
     { path: "testedSignature", label: "Tested by signature" },
     { path: "approvedSignature", label: "Approved by signature" },

@@ -18,6 +18,7 @@ import { stampRecordSite } from "../sites/recordSite.js";
 import { canonicalIsoFormType, normalizeIsoFormData } from "./isoFormRead.js";
 import { ISO_TYPE_TO_FORM_KEY } from "../document-folders/editableForms.js";
 import { readTemplateStamp } from "../forms/templateRevision.js";
+import { ISO_SHEET_SIGNATURES, isoSheetCertifications } from "./isoSheetSignatures.js";
 import { cellsTable, renderSheetRecordPdf, sendPdf } from "../records/sheetRecordPdf.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
@@ -81,6 +82,7 @@ export const baseHandlers = crudFactory(isoQualityForms, {
 });
 
 const FORM_SIGNATURES: Record<string, Record<string, string>> = {
+  ...isoSheetCertifications(),
   audit_summary: AUDIT_SIGNATURES,
   salt_spray: {
     testedSignature: "I certify that I performed this salt spray test and the record is accurate.",
@@ -157,7 +159,7 @@ export const signIsoQualityForm = asyncHandler(async (req: Request, res: Respons
   const field = String(req.body.field ?? "");
   const [record] = await req.db!.select().from(isoQualityForms).where(eq(isoQualityForms.id, id));
   if (!record) throw AppError.notFound("ISO form");
-  const description = FORM_SIGNATURES[record.formType]?.[field];
+  const description = (FORM_SIGNATURES[record.formType] ?? FORM_SIGNATURES[canonicalIsoFormType(record.formType)])?.[field];
   if (!description) throw AppError.badRequest("That signature field is not recognized.");
   const changeKind = changeRequestByFormType(record.formType);
   if (changeKind) {
@@ -212,7 +214,7 @@ export const isoQualityFormPdf = asyncHandler(async (req: Request, res: Response
         { label: "Record No.", value: recordNumber },
         { label: "Rev.", value: revision },
         ...Object.keys(FORM_SIGNATURES[formType] ?? {}).map((field) => ({
-          label: field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
+          label: ISO_SHEET_SIGNATURES[formType]?.[field]?.label ?? field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
           value: typeof data[field] === "string" ? (data[field] as string) : "",
         })),
       ],
