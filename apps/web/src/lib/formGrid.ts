@@ -1,6 +1,7 @@
 import { checkCellInput } from "../../../../services/api/src/modules/form-builder/cellInput";
 import { columnLetter } from "./spreadsheetFormat";
-import { displayFormulaValue, evaluateCells, passFailFill, type FormulaValue } from "./excelFormulas";
+import { passFailFill } from "./excelFormulas";
+import { cellAddress, displayValue, evaluateGrid, formulaProblem, type FormulaValue } from "../../../../services/api/src/modules/form-builder/formulaEngine";
 import { loadEditableSpreadsheet, type EditableImportSheet } from "./spreadsheetPreview";
 import type { DocumentBand } from "./documentBands";
 
@@ -203,13 +204,14 @@ export function formulaInputs(sheet: FormSheet, answers: Record<string, string> 
   return cells;
 }
 
+/** Calculated values for one sheet, from the shared engine the API also uses when a copy is saved. */
 export function evaluatedSheet(sheet: FormSheet, answers?: Record<string, string>, sheetKey = "0"): Record<string, FormulaValue> {
-  return evaluateCells(formulaInputs(sheet, answers, sheetKey));
+  return evaluateGrid(formulaInputs(sheet, answers, sheetKey), { rows: sheet.cells.length, cols: sheet.colWidths.length });
 }
 
 export function shownCell(cell: FormCell, calculated: Record<string, FormulaValue>, col: number, row: number, answer?: string, folderPath?: string): string {
   if (cell.folderPath) return folderPath ?? "";
-  if (cell.formula) return displayFormulaValue(calculated[addressOf(col, row)]);
+  if (cell.formula) return displayValue(calculated[addressOf(col, row)], cell.decimals);
   if (!cell.locked && answer != null) return answer;
   return cell.value;
 }
@@ -243,37 +245,106 @@ export function screenCellColors(
   };
 }
 
-export function gridFromImport(sheets: EditableImportSheet[]): GridFormStructure {
-  return {
+/** Something in the workbook that the import did not bring over, in words the person importing can act on. */
+export interface ImportNote {
+  sheet: string;
+  /** Cell address such as B4, or empty for a note about the whole sheet. */
+  cell: string;
+  formula?: string;
+  reason: string;
+}
+
+export interface GridImport {
+  structure: GridFormStructure;
+  notes: ImportNote[];
+}
+
+const MAX_IMPORT_SHEETS = 10;
+
+/** Why an imported formula cannot be kept, naming every function the form does not calculate. */
+export function importFormulaProblem(formula: string): string | null {
+  if (formula.length > 2000) return "The formula is longer than 2,000 characters.";
+  const outside = formula.replace(/"[^"]*"/g, "");
+  const names = [...new Set([...outside.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)].map((match) => match[1]!.toUpperCase()))];
+  const unknown = names.filter((name) => /is not a function/.test(formulaProblem(`${name}(1)`) ?? ""));
+  if (unknown.length) return `${unknown.join(", ")} ${unknown.length === 1 ? "is not a function" : "are not functions"} this form can calculate. It can use SUM, AVERAGE, MIN, MAX, IF, ROUND, COUNT, ABS, AND, OR and NOT.`;
+  if (/!/.test(outside) || /\[/.test(outside)) return "It uses a cell on another sheet or workbook, which the form cannot read.";
+  return formulaProblem(formula);
+}
+
+function importedType(cell: EditableImportSheet["rows"][number][number], formula: string | undefined, text: string): Partial<FormCell> {
+  const rule = cell?.validation;
+  if (!rule || formula) return {};
+  if (rule.kind === "list") return { type: "dropdown", options: rule.options.slice(0, 50), locked: false, value: rule.options.includes(text) ? text : "" };
+  if (rule.kind === "date") return { type: "date", locked: false, value: "" };
+  const range: Partial<FormCell> = {};
+  if (rule.min !== undefined) range.min = rule.min;
+  if (rule.max !== undefined) range.max = rule.max;
+  return { type: "number", locked: false, value: "", ...(rule.whole ? { decimals: 0 } : {}), ...range };
+}
+
+/**
+ * Turns workbook sheets into a starting layout. Merges, widths, heights, borders, fills and fonts come across as they
+ * are. A formula the form cannot calculate (an unknown function, another sheet, a named range) is left out and listed
+ * so the person importing can rebuild it; it is never swapped for a guess or its last result.
+ */
+export function gridImportFromSheets(input: EditableImportSheet[]): GridImport {
+  const notes: ImportNote[] = [];
+  const sheets = input.slice(0, MAX_IMPORT_SHEETS);
+  if (input.length > MAX_IMPORT_SHEETS) {
+    notes.push({ sheet: input[MAX_IMPORT_SHEETS]!.name, cell: "", reason: `A form can have ${MAX_IMPORT_SHEETS} sheets. ${input.length - MAX_IMPORT_SHEETS} sheet(s) after the tenth were not imported.` });
+  }
+  const structure: GridFormStructure = {
     kind: "grid",
-    sheets: sheets.map((sheet) => ({
-      name: sheet.name || "Sheet",
-      colWidths: sheet.colWidths.length ? sheet.colWidths.map((width) => clampSize(width, 110)) : [110],
-      rowHeights: sheet.rowHeights.length ? sheet.rowHeights.map((height) => clampSize(height, 24)) : [24],
-      cells: sheet.rows.map((row) =>
-        row.map((cell) => {
-          if (!cell) return null;
-          const text = cell.text ?? "";
-          const formula = cell.formula?.replace(/^=/, "");
-          return {
-            value: formula ? "" : text,
-            formula,
-            locked: Boolean(formula) || Boolean(text),
-            rowSpan: cell.rowSpan || 1,
-            colSpan: cell.colSpan || 1,
-            conditional: formula ? /pass|fail/i.test(formula) : false,
-            style: cell.style ?? {},
-          };
-        }),
-      ),
-    })),
+    sheets: sheets.map((sheet) => {
+      const name = sheet.name || "Sheet";
+      if (sheet.droppedRows) notes.push({ sheet: name, cell: "", reason: `A sheet can have 500 rows. The last ${sheet.droppedRows} row(s) were not imported.` });
+      if (sheet.droppedCols) notes.push({ sheet: name, cell: "", reason: `A sheet can have 60 columns. The last ${sheet.droppedCols} column(s) were not imported.` });
+      return {
+        name,
+        colWidths: sheet.colWidths.length ? sheet.colWidths.map((width) => clampSize(width, 110)) : [110],
+        rowHeights: sheet.rowHeights.length ? sheet.rowHeights.map((height) => clampSize(height, 24)) : [24],
+        cells: sheet.rows.map((row, rowIndex) =>
+          row.map((cell, colIndex) => {
+            if (!cell) return null;
+            const text = cell.text ?? "";
+            let formula = cell.formula?.replace(/^=/, "").trim() || undefined;
+            if (formula) {
+              const problem = importFormulaProblem(formula);
+              if (problem) {
+                notes.push({ sheet: name, cell: cellAddress(colIndex + 1, rowIndex + 1), formula: `=${formula}`, reason: problem });
+                formula = undefined;
+              }
+            }
+            const base: FormCell = {
+              value: cell.formula !== undefined ? "" : text,
+              ...(formula ? { formula } : {}),
+              locked: Boolean(formula) || Boolean(text) || cell.formula !== undefined,
+              rowSpan: cell.rowSpan || 1,
+              colSpan: cell.colSpan || 1,
+              conditional: formula ? /pass|fail/i.test(formula) : false,
+              style: cell.style ?? {},
+            };
+            return { ...base, ...importedType(cell, formula, text) };
+          }),
+        ),
+      };
+    }),
   };
+  return { structure, notes };
+}
+
+export function gridFromImport(sheets: EditableImportSheet[]): GridFormStructure {
+  return gridImportFromSheets(sheets).structure;
+}
+
+export async function importGridWorkbook(file: File): Promise<GridImport> {
+  const data = await file.arrayBuffer();
+  return gridImportFromSheets(await loadEditableSpreadsheet(data, file.name));
 }
 
 export async function importGridFile(file: File): Promise<GridFormStructure> {
-  const data = await file.arrayBuffer();
-  const sheets = await loadEditableSpreadsheet(data, file.name);
-  return gridFromImport(sheets);
+  return (await importGridWorkbook(file)).structure;
 }
 
 function borderOf(edge: string | undefined): { style: "thin"; color: { argb: string } } | undefined {

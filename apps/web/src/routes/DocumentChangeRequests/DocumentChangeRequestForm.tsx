@@ -54,27 +54,27 @@ export function DocumentChangeRequestForm({ dcr, onSaving }: { dcr: DocumentChan
   }, [onSaving, patchHeader.isPending]);
 
   return (
-    <div key={dcr.id} className="overflow-x-auto rounded-md border border-border bg-card print:border-black print:bg-white print:text-black" data-testid="dcr-f001-form">
+    <div key={dcr.id} className="rounded-md border border-border bg-card print:border-black print:bg-white print:text-black" data-testid="dcr-f001-form">
+      {/* The header sits outside the wide table so it always fits the page; only the table scrolls sideways. */}
+      <div className="dcr-form-header-fit border-b border-border p-2 print:border-black">
+        <div className="dma-form-header">
+          <CompanyLogo height={36} />
+          <h1 className="dma-form-title dma-form-title-plain">Document Change Request Form</h1>
+          <dl className="dma-form-meta grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
+            <dt>Document:</dt>
+            <dd className="font-medium">{DOCUMENT_ID}</dd>
+            <dt>Rev. Level:</dt>
+            <dd className="font-medium">{REV_LEVEL}</dd>
+            <dt>Released Date:</dt>
+            <dd className="font-medium">{RELEASED_DATE}</dd>
+            <dt>Rev. Date:</dt>
+            <dd className="font-medium">{REV_DATE}</dd>
+          </dl>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse text-xs">
         <tbody>
-          <tr>
-            <td colSpan={6} className={`${cell} p-2`}>
-              <div className="dma-form-header">
-                <CompanyLogo height={36} />
-                <h1 className="dma-form-title dma-form-title-plain">Document Change Request Form</h1>
-                <dl className="dma-form-meta grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
-                  <dt>Document:</dt>
-                  <dd className="font-medium">{DOCUMENT_ID}</dd>
-                  <dt>Rev. Level:</dt>
-                  <dd className="font-medium">{REV_LEVEL}</dd>
-                  <dt>Released Date:</dt>
-                  <dd className="font-medium">{RELEASED_DATE}</dd>
-                  <dt>Rev. Date:</dt>
-                  <dd className="font-medium">{REV_DATE}</dd>
-                </dl>
-              </div>
-            </td>
-          </tr>
 
           <tr>
             <th colSpan={6} scope="colgroup" className={`${cell} bg-muted px-2 py-1 text-left text-[11px] font-bold print:bg-transparent`}>
@@ -221,6 +221,7 @@ export function DocumentChangeRequestForm({ dcr, onSaving }: { dcr: DocumentChan
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

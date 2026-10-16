@@ -4,6 +4,7 @@ import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
+  exportBuiltFillPdf,
   approveRevision,
   createBuiltForm,
   deleteBuiltForm,
@@ -114,7 +115,7 @@ export const saveFillHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const beginFillEditHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await beginBuiltFillEdit(req.db!, actor(req), idOf(req.params.fillId)));
+  res.json(await beginBuiltFillEdit(req.db!, actor(req), idOf(req.params.fillId), req.body));
 });
 
 export const deleteFillHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -128,9 +129,16 @@ export const fileFillHandler = asyncHandler(async (req: Request, res: Response) 
   res.json(await fileBuiltFill(req.db!, actor(req), idOf(req.params.fillId), folderId));
 });
 
+export const fillPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const file = await exportBuiltFillPdf(req.db!, actor(req), idOf(req.params.fillId));
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+  res.send(Buffer.from(file.bytes));
+});
+
 export const signFillHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { fieldId?: string; pin?: string };
-  res.json(await signBuiltFill(req.db!, actor(req), idOf(req.params.fillId), { fieldId: body.fieldId ?? "", pin: body.pin ?? "" }));
+  const body = req.body as { fieldId?: string; pin?: string; certified?: unknown };
+  res.json(await signBuiltFill(req.db!, actor(req), idOf(req.params.fillId), { fieldId: body.fieldId ?? "", pin: body.pin ?? "", certified: body.certified }));
 });
 
 export const importDocxHandler = [

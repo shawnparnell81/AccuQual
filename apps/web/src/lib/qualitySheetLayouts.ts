@@ -1,4 +1,5 @@
 import type { FormCell, FormLayout } from "./isoFormLayouts";
+import { signRow } from "./isoSheetSignatures";
 
 const L = (col: number, span: number, addr: string, text: string, role?: FormCell["role"], align?: FormCell["align"], paint?: FormCell["paint"]): FormCell => ({
   col,
@@ -96,7 +97,7 @@ export function pswLayout(): FormLayout {
   rows[44] = [L(1, 1, "A44", "Production rate"), N(2, 1, "B44", "Quantity"), L(3, 1, "C44", "per hours"), N(4, 1, "D44", "Hours")];
   rows[45] = [L(1, 1, "A45", "Explanation / Comments"), A(2, 3, "B46")];
   rows[46] = [L(1, 2, "A47", "Is each customer tool properly tagged and numbered?", undefined, "left"), C(3, 1, "C47", "Yes"), C(4, 1, "D47", "No")];
-  rows[47] = [L(1, 1, "A48", "Organization Authorized Signature"), I(2, 1, "B48"), L(3, 1, "C48", "Date"), D(4, 1, "D48")];
+  rows[47] = [L(1, 1, "A48", "Organization Authorized Signature"), signRow("psw", 2, 1, "B48"), L(3, 1, "C48", "Date"), D(4, 1, "D48")];
   rows[48] = [L(1, 1, "A49", "Print Name"), I(2, 1, "B49"), L(3, 1, "C49", "Phone No."), I(4, 1, "D49")];
   rows[49] = [L(1, 1, "A50", "Title"), I(2, 1, "B50"), L(3, 1, "C50", "Fax No."), I(4, 1, "D50")];
   rows[50] = [L(1, 1, "A51", "Email"), I(2, 3, "B51")];
@@ -144,9 +145,9 @@ export function qualityAlertLayout(): FormLayout {
   rows[10] = [L(1, 1, "A10", "Part number / model / name", undefined, "left"), I(2, 1, "B10"), L(3, 1, "C10", "Position"), I(4, 1, "D10")];
   rows[11] = [L(1, 1, "A11", "Person who initiated the Quality Alert", undefined, "left"), I(2, 3, "B11")];
   rows[12] = [L(1, 4, "A12", "APPROVALS REQUIRED", "section")];
-  rows[13] = [L(1, 1, "A13", "Quality Manager / Authorized Approver", undefined, "left"), I(2, 3, "B13", "Signature")];
+  rows[13] = [L(1, 1, "A13", "Quality Manager / Authorized Approver", undefined, "left"), signRow("quality_alert", 2, 3, "B13")];
   rows[14] = [L(1, 1, "A14", "Other personnel", undefined, "left"), I(2, 3, "B14")];
-  rows[15] = [L(1, 1, "A15", "Quality Manager approval for a duration extension", undefined, "left"), I(2, 3, "B15")];
+  rows[15] = [L(1, 1, "A15", "Quality Manager approval for a duration extension", undefined, "left"), signRow("quality_alert", 2, 3, "B15")];
   rows[16] = [L(1, 4, "A16", "PROBLEM DESCRIPTION", "section")];
   rows[17] = [A(1, 4, "A17", "Indicate what the problem is. 5W2H can be used.")];
   rows[18] = [L(1, 4, "A18", "PHOTO OR RELATED DRAWING", "section")];

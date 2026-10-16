@@ -36,7 +36,7 @@ export function FieldsFormEditor({
   mode: "design" | "fill";
   answers?: Record<string, unknown>;
   onAnswer?: (key: string, value: unknown) => void;
-  onSign?: (fieldId: string, pin: string) => Promise<unknown>;
+  onSign?: (fieldId: string, pin: string, certified: boolean) => Promise<unknown>;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const folderPath = useItemFolderPath();
@@ -150,7 +150,7 @@ function FieldControl({
   value: unknown;
   folderPath: string;
   onChange: (value: unknown) => void;
-  onSign?: (fieldId: string, pin: string) => Promise<unknown>;
+  onSign?: (fieldId: string, pin: string, certified: boolean) => Promise<unknown>;
   onOptions: (options: string[]) => void;
 }) {
   if (field.type === "folderPath") {
@@ -216,7 +216,7 @@ function FieldControl({
   if (field.type === "signature") {
     const stamped = value && typeof value === "object" && "text" in value ? String((value as { text?: string }).text ?? "") : "";
     if (mode === "design") return <p className="fb-note">Signature uses the 4-digit PIN and the certification stamp when the form is filled.</p>;
-    return <SignatureStamp value={stamped} certify={DEFAULT_CERTIFY} onSign={(pin) => onSign?.(field.id, pin) ?? Promise.resolve()} />;
+    return <SignatureStamp value={stamped} certify={DEFAULT_CERTIFY} onSign={(pin, certified) => onSign?.(field.id, pin, certified) ?? Promise.resolve()} />;
   }
   if (field.type === "photo") {
     if (mode === "design") return <p className="fb-note">A photo can be attached when the form is filled.</p>;

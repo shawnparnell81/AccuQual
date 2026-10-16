@@ -2,9 +2,10 @@ import { Fragment } from "react";
 import type { CellValue } from "../../lib/isoFormLogic";
 import { sheetRevision } from "../../lib/formDocument";
 import { blankFaiLine, faiFill, faiResult, type FaiLine } from "../../lib/qualitySheetLogic";
+import { SheetSignCell, type SheetSignProps } from "./SheetSignCell";
 import "./isoForm.css";
 
-interface FaiSheetProps {
+interface FaiSheetProps extends SheetSignProps {
   cells: Record<string, CellValue>;
   lines: FaiLine[];
   readOnly?: boolean;
@@ -41,7 +42,7 @@ function visibleLines(lines: FaiLine[]): FaiLine[] {
   return Array.from({ length: 8 }, (_, index) => ({ ...blankFaiLine(), balloon: String(index + 1) }));
 }
 
-export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines, documentNumber = "", revision = "A" }: FaiSheetProps) {
+export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines, documentNumber = "", revision = "A", signatures, onSign }: FaiSheetProps) {
   const rows = visibleLines(lines);
 
   function commit(next: FaiLine[]) {
@@ -131,7 +132,7 @@ export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines, docu
           <tr>
             <td>Signature</td>
             <td>
-              <input className="iso-in" aria-label="Signature" value={textOf(cells.B34)} disabled={readOnly} onChange={(event) => onCell("B34", event.target.value)} />
+              <SheetSignCell formType="first_article" cell="B34" cells={cells} readOnly={readOnly} signatures={signatures} onSign={onSign} />
             </td>
             <td>Title</td>
             <td>

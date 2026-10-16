@@ -17,6 +17,7 @@ import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } fr
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { readRecordSite, stampRecordSite } from "../sites/recordSite.js";
+import { renderSheetRecordPdf, sendPdf } from "../records/sheetRecordPdf.js";
 import { ncrsForPath, openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
 
 async function loadForm(req: Request, id: number) {
@@ -408,4 +409,41 @@ export const createQmsNcrHandler = asyncHandler(async (req: Request, res: Respon
     await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id));
   }
   res.status(201).json({ id: created.id, recordNumber: created.recordNumber, title: created.title, existing: false });
+});
+
+/** Download PDF for a saved QMS form: header fields, then each section's rows under its own columns. */
+export const qmsFormPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadForm(req, Number(req.params.id));
+  const rows = await req.db!.select().from(qmsFormRows).where(eq(qmsFormRows.formId, record.id)).orderBy(asc(qmsFormRows.sectionKey), asc(qmsFormRows.sortOrder), asc(qmsFormRows.id));
+  const definition = getQmsFormDefinition(record.formType);
+  const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : "");
+  const title = definition?.title ?? record.formType;
+  const { bytes, exportId } = await renderSheetRecordPdf(
+    req.db!,
+    {
+      entityType: "qms_form",
+      entityId: record.id,
+      title,
+      formNumber: title,
+      recordNumber: record.formNo ?? "",
+      revision: record.revision ?? "",
+      status: record.status,
+      header: [
+        { label: "Form No.", value: record.formNo ?? "" },
+        { label: "Rev.", value: record.revision ?? "" },
+        { label: "Status", value: record.status },
+        { label: "Effective date", value: day(record.effectiveDate) },
+        { label: "Prepared by", value: record.preparedBy ?? "" },
+        { label: "Approved by", value: record.approvedBy ?? "" },
+        { label: "Comments", value: record.additionalComments ?? "" },
+      ],
+      tables: (definition?.sections ?? []).map((section) => ({
+        title: section.label,
+        columns: section.columns,
+        rows: rows.filter((row) => row.sectionKey === section.key).map((row) => row.data ?? {}),
+      })),
+    },
+    { id: req.user?.id, name: (req.user as { name?: string | null } | undefined)?.name },
+  );
+  sendPdf(res, bytes, exportId, record.formNo || `qms-form-${record.id}`);
 });

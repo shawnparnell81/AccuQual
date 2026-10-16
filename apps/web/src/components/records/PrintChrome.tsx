@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { offersScreenPrint } from "../../lib/printDocument";
+import { DownloadRecordPdfButton } from "./DownloadRecordPdfButton";
 import { PrintRecordButton } from "./PrintRecordButton";
 
 /**
@@ -27,7 +28,8 @@ export function PrintChrome() {
   if (!offer) return null;
 
   return (
-    <div ref={host} className={framed ? "hidden" : "no-print mb-3 flex justify-end"}>
+    <div ref={host} className={framed ? "hidden" : "no-print mb-3 flex justify-end gap-2"}>
+      {!framed && <DownloadRecordPdfButton />}
       {!framed && <PrintRecordButton />}
     </div>
   );

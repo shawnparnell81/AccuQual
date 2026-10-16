@@ -20,11 +20,13 @@ import { formatSignatureStamp } from "../signatures/signaturePin.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder, type FormBuilderAccessInput, type ModuleLevel } from "./access.js";
-import { scalarEdits } from "../forms/formEditAudit.js";
+import { editActionFrom, recordEditSession, scalarEdits } from "../forms/formEditAudit.js";
 import { sanitizeBandHtml } from "./bandSanitize.js";
 import { cleanBand, type DocumentBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
+import { gridCellKinds, recomputeGridAnswers } from "./gridFill.js";
+import { renderGridPdf } from "./gridPdf.js";
 import { validateGridStructure } from "./gridStructure.js";
 import { decideStructureSave, descriptionOf, type SaveMode } from "./revision.js";
 
@@ -85,6 +87,18 @@ async function requireApprover(db: Db, actor: Actor) {
 async function requireFiller(db: Db, actor: Actor) {
   const access = await formBuilderAccess(db, actor);
   if (!canFillBuiltForm(access)) throw AppError.forbidden("You can view this form once Documents is turned on for you.");
+  return access;
+}
+
+/**
+ * Changing a filled copy (typing, Save, signing, filing, Edit) takes the same access as Edit on every other record:
+ * edit on Documents or on Form Builder, both assigned by an administrator. Viewing a copy only needs Documents.
+ */
+async function requireFillEditor(db: Db, actor: Actor, verb = "change") {
+  const access = await formBuilderAccess(db, actor);
+  if (access.documentsLevel !== "edit" && !canEditFormBuilder(access)) {
+    throw AppError.forbidden(`You don't have permission to ${verb} this form. An administrator can give you edit access to Documents under Roles & Permissions.`);
+  }
   return access;
 }
 
@@ -580,7 +594,7 @@ export async function deleteBuiltForm(db: Db, actor: Actor, id: number) {
 }
 
 export async function openBuiltFill(db: Db, actor: Actor, formId: number, recordNumber?: unknown, siteId?: number | null) {
-  await requireFiller(db, actor);
+  await requireFillEditor(db, actor, "fill in");
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, formId));
   if (!form) throw AppError.notFound("Form");
   if (form.status !== "published" || form.publishedStructure == null) {
@@ -627,11 +641,16 @@ export async function getBuiltFill(db: Db, actor: Actor, id: number) {
   await requireFiller(db, actor);
   const [row] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!row) throw AppError.notFound("Filled form");
-  return row;
+  const folder = row.folderId == null ? null : folderLocationLabel(await foldersOf(db), row.folderId);
+  return { ...row, folderLabel: folder };
 }
 
 function mergeAnswers(previous: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = { ...incoming };
+  // A signature stamp only ever comes from the sign step. One sent with a save is dropped.
+  for (const [key, value] of Object.entries(next)) {
+    if (value && typeof value === "object" && (value as { stamped?: boolean }).stamped === true && JSON.stringify(previous[key]) !== JSON.stringify(value)) delete next[key];
+  }
   for (const [key, value] of Object.entries(previous)) {
     if (value && typeof value === "object" && (value as { stamped?: boolean }).stamped === true) next[key] = value;
   }
@@ -644,12 +663,14 @@ function mergeAnswers(previous: Record<string, unknown>, incoming: Record<string
 }
 
 export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { title?: string; answers?: Record<string, unknown>; recordNumber?: unknown }) {
-  await requireFiller(db, actor);
+  await requireFillEditor(db, actor, "save");
   const [current] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!current) throw AppError.notFound("Filled form");
   const [template] = await db.select().from(builtForms).where(eq(builtForms.id, current.formId));
   const previousAnswers = (current.answers ?? {}) as Record<string, unknown>;
-  const answers = input.answers ? mergeAnswers(previousAnswers, input.answers) : previousAnswers;
+  const merged = input.answers ? mergeAnswers(previousAnswers, input.answers) : previousAnswers;
+  // Formula cells are worked out here from the copy's own layout. A value sent for one is not kept.
+  const answers = (input.answers ? recomputeGridAnswers(current.structure, merged) : null) ?? merged;
   const kept = saveFillAnswers(
     {
       templateId: current.formId,
@@ -684,15 +705,17 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
     ...scalarEdits({ title: current.title }, { title: String(patch.title ?? current.title) }, ["title"]),
     ...scalarEdits(previousAnswers, (kept.answers ?? {}) as Record<string, unknown>),
   ];
-  if (edits.length > 0) {
-    await recordAuditTrail(db, {
-      entityType: "BuiltFormFill",
-      entityId: id,
-      action: "update",
-      changes: changesWithNumberEdit({ event: "form_saved", edits }, numberChange),
-      performedBy: actor.id,
-    });
-  }
+  // Every save is in the audit log, with or without changes, so the record shows each time it was saved.
+  const person = await who(db, actor);
+  const label = fillLabel(String(patch.title ?? current.title), (patch.recordNumber as string | null | undefined) ?? current.recordNumber);
+  const changed = edits.length === 0 ? "No values changed." : `${edits.length} value${edits.length === 1 ? "" : "s"} changed.`;
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: changesWithNumberEdit({ event: "form_saved", summary: `${person.label} saved ${label} on ${person.when}. ${changed}`, edits }, numberChange),
+    performedBy: actor.id,
+  });
   if (template) {
     const [after] = await db.select().from(builtForms).where(eq(builtForms.id, template.id));
     if (!after || after.revision !== template.revision || JSON.stringify(after.structure) !== JSON.stringify(template.structure)) {
@@ -702,22 +725,13 @@ export async function saveBuiltFill(db: Db, actor: Actor, id: number, input: { t
   return updated;
 }
 
-export async function beginBuiltFillEdit(db: Db, actor: Actor, id: number) {
-  const documents = await getUserAccessLevel(db, actor, "documents");
-  const access = await formBuilderAccess(db, actor);
-  if (documents !== "edit" && !canEditFormBuilder(access)) {
-    throw AppError.forbidden("You don't have permission to edit this form.");
-  }
+export async function beginBuiltFillEdit(db: Db, actor: Actor, id: number, body?: unknown) {
+  await requireFillEditor(db, actor, "edit");
+  const action = editActionFrom(body);
   const [row] = await db.select({ id: builtFormFills.id }).from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!row) throw AppError.notFound("Filled form");
-  await recordAuditTrail(db, {
-    entityType: "BuiltFormFill",
-    entityId: id,
-    action: "update",
-    changes: { event: "edit_started" },
-    performedBy: actor.id,
-  });
-  return { editing: true };
+  await recordEditSession(db, { entityType: "BuiltFormFill", label: "filled form", id, userId: actor.id, action });
+  return { editing: action === "start" };
 }
 
 export async function deleteBuiltFill(db: Db, actor: Actor, id: number) {
@@ -743,7 +757,7 @@ export async function deleteBuiltFill(db: Db, actor: Actor, id: number) {
 }
 
 export async function fileBuiltFill(db: Db, actor: Actor, id: number, folderId: number) {
-  await requireFiller(db, actor);
+  await requireFillEditor(db, actor, "save");
   const [fill] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!fill) throw AppError.notFound("Filled form");
   const folders = await foldersOf(db);
@@ -760,23 +774,101 @@ export async function fileBuiltFill(db: Db, actor: Actor, id: number, folderId: 
     const siblings = folders.filter((folder) => folder.parentId === parentId);
     await db.insert(documentFolders).values({ name: fill.title, parentId, sortOrder: siblings.length, linkedPath: path });
   }
-  const [updated] = await db.update(builtFormFills).set({ folderId: parentId, updatedAt: new Date() }).where(eq(builtFormFills.id, id)).returning();
-  return { fill: updated, folder: folderLocationLabel(folders, parentId) };
+  const [updated] = await db.update(builtFormFills).set({ folderId: parentId, updatedBy: actor.id, updatedAt: new Date() }).where(eq(builtFormFills.id, id)).returning();
+  const folder = folderLocationLabel(folders, parentId);
+  const previous = fill.folderId == null ? null : folderLocationLabel(folders, fill.folderId);
+  const person = await who(db, actor);
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: {
+      event: "form_filed",
+      summary: `${person.label} saved ${fillLabel(fill.title, fill.recordNumber)} to ${folder} on ${person.when}.${previous && previous !== folder ? ` It was in ${previous}.` : ""}`,
+      folder,
+      ...(previous ? { previousFolder: previous } : {}),
+    },
+    performedBy: actor.id,
+  });
+  return { fill: updated, folder };
 }
 
-export async function signBuiltFill(db: Db, actor: Actor, id: number, input: { fieldId: string; pin: string }) {
-  await requireFiller(db, actor);
+function fillLabel(title: string, recordNumber: string | null | undefined): string {
+  return recordNumber ? `filled form ${recordNumber} ("${title}")` : `filled form "${title}"`;
+}
+
+/** Stamps one signature with the signer's PIN. The certification box must be ticked. A stamp is never replaced. */
+export async function signBuiltFill(db: Db, actor: Actor, id: number, input: { fieldId: string; pin: string; certified?: unknown }) {
+  await requireFillEditor(db, actor, "sign");
   const fieldId = input.fieldId.trim();
   if (!fieldId) throw AppError.badRequest("Choose the signature to stamp.");
-  const verified = await verifySignaturePin(actor.id, input.pin);
+  if (input.certified !== true) throw AppError.badRequest("Tick the certification box to sign.");
   const [fill] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
   if (!fill) throw AppError.notFound("Filled form");
+  const kinds = gridCellKinds(fill.structure);
+  if (kinds.length > 0 && !kinds.some((item) => item.key === fieldId && item.kind === "signature")) {
+    throw AppError.badRequest("That cell is not a signature on this form.");
+  }
+  const current = ((fill.answers ?? {}) as Record<string, unknown>)[fieldId];
+  if (current && typeof current === "object" && (current as { stamped?: boolean }).stamped === true) {
+    throw AppError.badRequest("That signature is already stamped. A signature is not replaced.");
+  }
+  const verified = await verifySignaturePin(actor.id, input.pin);
   const [profile] = await db.select({ profile: company.profile }).from(company).limit(1);
   const stamp = formatSignatureStamp(verified.displayName, new Date(), profile?.profile?.timezone || "UTC");
   const text = `${stamp}. ${CERTIFY}`;
   const answers = { ...((fill.answers ?? {}) as Record<string, unknown>), [fieldId]: { stamped: true, text } };
   const [updated] = await db.update(builtFormFills).set({ answers, updatedBy: actor.id, updatedAt: new Date() }).where(and(eq(builtFormFills.id, id))).returning();
+  const cell = fieldId.includes("!") ? `cell ${fieldId.split("!")[1]}` : "a signature";
+  const person = await who(db, actor);
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: { event: "form_signed", summary: `${person.label} signed ${cell} on ${fillLabel(fill.title, fill.recordNumber)} with their PIN on ${person.when}. Stamp: ${stamp}.`, field: fieldId },
+    performedBy: actor.id,
+  });
   return updated;
+}
+
+/** A PDF of a filled grid copy that matches the screen. Anyone who can view the copy can download it; each download is logged. */
+export async function exportBuiltFillPdf(db: Db, actor: Actor, id: number): Promise<{ bytes: Uint8Array; filename: string }> {
+  await requireFiller(db, actor);
+  const [fill] = await db.select().from(builtFormFills).where(eq(builtFormFills.id, id));
+  if (!fill) throw AppError.notFound("Filled form");
+  const structure = fill.structure as { kind?: unknown } | null;
+  if (structure?.kind !== "grid") throw AppError.badRequest("Use Print for this form. Download PDF is for grid forms.");
+  const folders = await foldersOf(db);
+  const folderPath = fill.folderId == null ? null : folderLocationLabel(folders, fill.folderId);
+  const person = await who(db, actor);
+  const [profile] = await db.select({ name: company.name }).from(company).limit(1);
+  const { bytes, layout } = await renderGridPdf({
+    title: fill.title,
+    formNumber: fill.templateFormNumber,
+    revision: fill.templateRevision,
+    recordNumber: fill.recordNumber,
+    structure: fill.structure,
+    answers: (fill.answers ?? {}) as Record<string, unknown>,
+    folderPath,
+    printedBy: person.label,
+    printedAt: person.when,
+    companyName: profile?.name ?? null,
+  });
+  const safe = (text: string) => text.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  const filename = `${[safe(fill.templateFormNumber ?? "") || "Form", safe(fill.recordNumber ?? "") || String(fill.id), `Rev-${safe(fill.templateRevision) || "A"}`].join("_")}.pdf`;
+  await recordAuditTrail(db, {
+    entityType: "BuiltFormFill",
+    entityId: id,
+    action: "update",
+    changes: {
+      event: "pdf_export",
+      summary: `${person.label} downloaded a PDF of ${fillLabel(fill.title, fill.recordNumber)} (REV ${fill.templateRevision}, ${layout.pages} page${layout.pages === 1 ? "" : "s"}) on ${person.when}.`,
+      filename,
+      pages: layout.pages,
+    },
+    performedBy: actor.id,
+  });
+  return { bytes, filename };
 }
 
 export async function importDocx(db: Db, actor: Actor, file: Buffer) {

@@ -1,3 +1,4 @@
+import { ncrIsoDate, syncNcrFormData } from "./ncr.formSync.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response } from "express";
@@ -91,6 +92,8 @@ export async function openInspectionNcr(db: Db, input: OpenInspectionNcrInput, p
     .returning();
   if (!created) throw AppError.badRequest("Couldn't create the NCR.");
   if (siteId == null) await stampRecordSite(db, "ncr", created.id, input.fallbackSiteId);
+  // The NCR form is its own document. Without this it opened blank.
+  await syncNcrFormData(db, created.id, { dateIssued: ncrIsoDate(created.createdAt ?? new Date()), documentStatus: "Active", nonconformanceDescription: [...(input.contextLines ?? []), "", description].join("\n").trim(), header: { partNumberDescription: input.part ?? undefined, referenceNumber: input.formTitle, relatedDocuments: `${input.formTitle}: ${input.path}` } }, performedBy);
   await recordAuditTrail(db, {
     entityType: "NCR",
     entityId: created.id,

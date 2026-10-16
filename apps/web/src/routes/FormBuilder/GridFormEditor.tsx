@@ -31,6 +31,9 @@ import {
   type BorderTarget,
   type StyleFlag,
 } from "../../lib/formGridEdit";
+import { formulaProblem } from "../../../../../services/api/src/modules/form-builder/formulaEngine";
+import { checkCellInput } from "../../../../../services/api/src/modules/form-builder/cellInput";
+import { DEFAULT_CERTIFY, SignatureStamp } from "../../components/forms/SignatureStamp";
 import "./formBuilder.css";
 
 interface Selection {
@@ -91,12 +94,21 @@ export function GridFormEditor({
   mode,
   answers,
   onAnswer,
+  readOnly = false,
+  stamps,
+  onSign,
 }: {
   structure: GridFormStructure;
   onChange?: (next: GridFormStructure) => void;
   mode: "design" | "fill";
   answers?: Record<string, string>;
   onAnswer?: (key: string, value: string) => void;
+  /** Fill view while the copy is locked: values show but cannot be typed. Signing still works. */
+  readOnly?: boolean;
+  /** Signature stamps by answer key (sheet!A1). */
+  stamps?: Record<string, string>;
+  /** Signs one signature cell with the PIN. Missing means signing is not available to this person. */
+  onSign?: (key: string, pin: string, certified: boolean) => Promise<unknown>;
 }) {
   const [sheetIndex, setSheetIndex] = useState(0);
   const [selection, setSelection] = useState<Selection>({ sheet: 0, r1: 0, c1: 0, r2: 0, c2: 0 });
@@ -257,7 +269,7 @@ export function GridFormEditor({
     commitSheet(next);
     const row = Math.min(box.r1, next.rowHeights.length - 1);
     setSelection({ sheet: sheetIndex, r1: row, c1: box.c1, r2: row, c2: box.c1 });
-    setNote(referenced.length ? `Formulas are not updated when rows move. Check ${referenced.join(", ")}: they refer to a row you deleted or to the old row numbers.` : "");
+    setNote(referenced.length ? `Formulas follow the rows that moved. ${referenced.join(", ")} referred to a deleted row and now show #REF! where it was.` : "");
   }
 
   function deleteSelectedColumns() {
@@ -270,7 +282,7 @@ export function GridFormEditor({
     commitSheet(next);
     const col = Math.min(box.c1, next.colWidths.length - 1);
     setSelection({ sheet: sheetIndex, r1: box.r1, c1: col, r2: box.r1, c2: col });
-    setNote(referenced.length ? `Formulas are not updated when columns move. Check ${referenced.join(", ")}: they refer to a column you deleted or to the old column letters.` : "");
+    setNote(referenced.length ? `Formulas follow the columns that moved. ${referenced.join(", ")} referred to a deleted column and now show #REF! where it was.` : "");
   }
 
   function toggle(flag: StyleFlag) {
@@ -326,6 +338,8 @@ export function GridFormEditor({
   const anchorCell = sheet.cells[box.r1]?.[box.c1] ?? null;
   const anchorType = anchorCell ? effectiveCellType(anchorCell) : "text";
   const barProblem = anchorCell ? cellValueProblem({ ...anchorCell, value: anchorCell.value }) : null;
+  const typedFormula = bar.trim().startsWith("=") ? bar.trim() : anchorCell?.formula ? `=${anchorCell.formula}` : "";
+  const formulaError = mode === "design" && typedFormula ? formulaProblem(typedFormula) : null;
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid="grid-editor">
@@ -472,7 +486,7 @@ export function GridFormEditor({
                 />
               </label>
             ) : null}
-            {anchorType === "signature" ? <span className="text-muted-foreground">A signature placeholder. Signing comes later.</span> : null}
+            {anchorType === "signature" ? <span className="text-muted-foreground">Signed with the 4-digit PIN and the certification box when the form is filled.</span> : null}
             <button type="button" className={button} onClick={() => updateSelected({ locked: true })}>Lock label</button>
             <button type="button" className={button} onClick={() => updateSelected({ locked: false, formula: undefined })}>Input cell</button>
           </div>
@@ -494,13 +508,18 @@ export function GridFormEditor({
           />
         </label>
       )}
+      {formulaError ? (
+        <p role="alert" className="no-print text-xs text-destructive" data-testid="formula-error">
+          {addressOf(selection.c1 + 1, selection.r1 + 1)}: {formulaError}
+        </p>
+      ) : null}
       {mode === "design" && barProblem ? (
         <p role="alert" className="no-print text-xs text-destructive">
           {barProblem}. This {anchorType} cell keeps what you typed, but the value does not fit its type.
         </p>
       ) : null}
       <div className={wide ? "aq-print-wide overflow-auto" : "overflow-auto"} data-testid="grid-sheet">
-        <table className="fb-grid">
+        <table className={mode === "fill" ? "fb-grid fb-grid-fill" : "fb-grid"}>
           <colgroup>
             <col style={{ width: 36 }} />
             {sheet.colWidths.map((width, index) => (
@@ -524,10 +543,11 @@ export function GridFormEditor({
                   const answerKey = `${sheetIndex}!${addressOf(colIndex + 1, rowIndex + 1)}`;
                   const answer = answers?.[answerKey];
                   const isSignature = cell.type === "signature";
-                  const text = isSignature ? "Signature" : cell.folderPath && !folderPath && mode === "design" ? "Folder path" : shownCell(cell, calculated, colIndex + 1, rowIndex + 1, answer, folderPath);
+                  const stamp = isSignature ? stamps?.[answerKey] : undefined;
+                  const text = isSignature ? (stamp ?? "Signature") : cell.folderPath && !folderPath && mode === "design" ? "Folder path" : shownCell(cell, calculated, colIndex + 1, rowIndex + 1, answer, folderPath);
                   const paint = cellPaint(cell, text);
                   const inSelection = mode === "design" && rowIndex >= box.r1 && rowIndex <= box.r2 && colIndex >= box.c1 && colIndex <= box.c2;
-                  const problem = mode === "design" ? cellValueProblem(cell) : null;
+                  const problem = mode === "design" ? (cell.formula ? formulaProblem(cell.formula) : cellValueProblem(cell)) : fillProblem(cell, answer);
                   const editable = mode === "fill" && !cell.locked && !cell.formula && !cell.folderPath && !isSignature;
                   const left = colIndex > 0 ? row[colIndex - 1] : null;
                   const locationInsert = editable ? gridLocationInsert(cell.value, answer, folderPath, Boolean(left && !left.formula && isExactLocationLabel(left.value))) : null;
@@ -559,10 +579,21 @@ export function GridFormEditor({
                         select(rowIndex, colIndex, event.shiftKey);
                       }}
                     >
-                      {editable ? (
+                      {mode === "fill" && isSignature ? (
+                        <div data-testid={`grid-signature-${answerKey}`}>
+                          <SignatureStamp
+                            variant="sheet"
+                            value={stamp ?? null}
+                            certify={DEFAULT_CERTIFY}
+                            disabled={!onSign}
+                            onSign={(pin, certified) => onSign?.(answerKey, pin, certified) ?? Promise.resolve()}
+                          />
+                        </div>
+                      ) : editable ? (
                         <span className="flex min-w-0 flex-col">
-                          <input aria-label={answerKey} value={answers?.[answerKey] ?? cell.value} onChange={(event) => onAnswer?.(answerKey, event.target.value)} />
-                          {locationInsert ? (
+                          <FillInput cell={cell} label={answerKey} value={answers?.[answerKey] ?? cell.value} readOnly={readOnly} onChange={(value) => onAnswer?.(answerKey, value)} />
+                          {problem ? <span role="alert" className="no-print px-1 text-[10px] text-destructive">{problem}</span> : null}
+                          {locationInsert && !readOnly ? (
                             <button type="button" className="no-print px-1 text-left text-[10px] text-[#0A3C7B]" onClick={() => onAnswer?.(answerKey, locationInsert)}>
                               Insert current path
                             </button>
@@ -605,5 +636,46 @@ export function GridFormEditor({
         )}
       </div>
     </div>
+  );
+}
+
+/** What is wrong with a typed answer, or null. The answer itself is always kept as typed. */
+function fillProblem(cell: FormCell, answer: string | undefined): string | null {
+  if (answer == null || answer === "" || cell.locked || cell.formula || cell.folderPath) return null;
+  const type = effectiveCellType(cell);
+  if (type !== "number" && type !== "date" && type !== "dropdown" && type !== "passfail") return null;
+  const result = checkCellInput(cell, answer);
+  return result.ok ? null : result.message;
+}
+
+const VALID_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** One input per cell type. Text that does not fit stays in the box with a message under it. */
+function FillInput({ cell, label, value, readOnly, onChange }: { cell: FormCell; label: string; value: string; readOnly: boolean; onChange: (value: string) => void }) {
+  const type = effectiveCellType(cell);
+  if (type === "passfail" || type === "dropdown") {
+    const options = type === "passfail" ? ["Pass", "Fail"] : (cell.options ?? []);
+    const extra = value !== "" && !options.includes(value) ? [value] : [];
+    return (
+      <select aria-label={label} value={value} disabled={readOnly} onChange={(event) => onChange(event.target.value)}>
+        <option value="" />
+        {[...options, ...extra].map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+    );
+  }
+  if (type === "date" && (value === "" || VALID_DATE.test(value))) {
+    return <input aria-label={label} type="date" value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />;
+  }
+  return (
+    <input
+      aria-label={label}
+      inputMode={type === "number" ? "decimal" : undefined}
+      placeholder={type === "date" ? "YYYY-MM-DD" : undefined}
+      value={value}
+      readOnly={readOnly}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }

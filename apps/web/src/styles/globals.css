@@ -1274,6 +1274,21 @@ body.nav-top .aq-menu-btn {
   width: 60px;
   min-width: 60px;
 }
+/* DCR header: in a narrow pane (phone, tablet or split view) the document block drops under the title instead of being cut off. */
+.dcr-form-header-fit {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .dcr-form-header-fit .dma-form-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 6px;
+  }
+  .dcr-form-header-fit .dma-form-meta {
+    grid-column: 1 / -1;
+    justify-self: start;
+    max-width: 100%;
+  }
+}
 .dma-form-meta {
   justify-self: end;
   width: max-content;

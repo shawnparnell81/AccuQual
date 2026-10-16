@@ -1,3 +1,5 @@
+import { DownloadRecordPdfButton } from "../../components/records/DownloadRecordPdfButton";
+import { formBuilderFillPdfSource } from "../../lib/recordPdf";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +34,7 @@ interface FillRecord {
   structure: BuiltStructure;
   answers: Record<string, unknown>;
   folderId: number | null;
+  folderLabel?: string | null;
 }
 
 export function FormFillPage() {
@@ -61,19 +64,43 @@ export function FormFillPage() {
     setReady(true);
   }, [fill.data, ready]);
 
+  const [savedTo, setSavedTo] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: async () => (await apiClient.patch(`/form-builder/fills/${id}`, { answers })).data,
-    onSuccess: () => {
+    mutationFn: async () => (await apiClient.patch<FillRecord>(`/form-builder/fills/${id}`, { answers })).data,
+    onSuccess: (row) => {
+      // The server works out formula cells, so its copy of the answers is the one to show.
+      setAnswers(row.answers ?? {});
       void queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
     },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save this copy.")),
   });
+
+  function pdfAllowed() {
+    if (formLock.mode !== "editing") return true;
+    toast.error("Save your changes first. The PDF shows the saved copy.");
+    return false;
+  }
+
+
+  async function signCell(fieldId: string, pin: string, certified: boolean) {
+    // Unsaved typing is saved first, so the stamp is placed on what was actually entered.
+    if (formLock.mode === "editing") await save.mutateAsync();
+    const saved = await apiClient.post<FillRecord>(`/form-builder/fills/${id}/sign`, { fieldId, pin, certified });
+    setAnswers(saved.data.answers ?? {});
+    void queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
+    void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
+  }
 
   const file = useMutation({
     mutationFn: async (folderId: number) => (await apiClient.post<{ folder: string }>(`/form-builder/fills/${id}/file`, { folderId })).data,
     onSuccess: (result) => {
-      toast.success(`Saved in ${result.folder}. The blank template was not changed.`);
+      toast.success(`Saved to ${result.folder}. The blank template was not changed.`);
+      setSavedTo(result.folder);
       setSaveAs(false);
       void queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+      void queryClient.invalidateQueries({ queryKey: ["form-builder-fill", id] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history"] });
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't file that copy.")),
   });
@@ -84,12 +111,17 @@ export function FormFillPage() {
   const document: DocumentFormStructure = structure.kind === "document" ? structure : blankDocument();
   const fields: FieldFormStructure = structure.kind === "fields" ? structure : blankFields();
   const textAnswers = Object.fromEntries(Object.entries(answers).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+  const stamps = Object.fromEntries(
+    Object.entries(answers).flatMap(([key, value]) => (value && typeof value === "object" && (value as { stamped?: boolean }).stamped ? [[key, String((value as { text?: unknown }).text ?? "")]] : [])),
+  );
+  const folderShown = savedTo ?? fill.data.folderLabel ?? null;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="no-print flex flex-wrap items-end justify-between gap-2">
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">This is a new copy of revision {fill.data.templateRevision}. The blank template is not changed.</p>
+          <p className="text-sm" data-testid="fill-saved-to">{folderShown ? <>Saved to <span className="font-medium">{folderShown}</span></> : <span className="text-muted-foreground">Not in a folder yet. Use Save as to choose one.</span>}</p>
           <RecordNumberEditor
             label="Record No."
             value={fill.data.recordNumber}
@@ -106,23 +138,31 @@ export function FormFillPage() {
             mode={formLock.mode}
             canEdit={permitted}
             pending={save.isPending}
+            opening={formLock.opening}
+            saveLocks
             onEdit={() => formLock.onEdit()}
             onSave={() => {
-              void save.mutateAsync().then(() => formLock.lock());
+              void save.mutateAsync().then(() => formLock.endSession("save"), () => undefined);
             }}
             onCancel={() => {
               setAnswers(fill.data.answers ?? {});
-              formLock.lock();
+              formLock.endSession("cancel");
             }}
             onDone={() => {
-              void save.mutateAsync().then(() => formLock.lock());
+              void save.mutateAsync().then(() => formLock.endSession("save"), () => undefined);
             }}
           />
           <DeleteRecordButton resource="form-builder/fills" id={id} kind="Filled form" title={fill.data.title} number={fill.data.recordNumber} navigateTo="/documents/folders" allowed={permitted} assignedOnly />
-          <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
+          {permitted ? (
+            <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
+          ) : null}
+          {structure.kind === "grid" ? (
+            <DownloadRecordPdfButton source={formBuilderFillPdfSource(id)} allowed beforeDownload={pdfAllowed} onDownloaded={() => void queryClient.invalidateQueries({ queryKey: ["workflow-history"] })} />
+          ) : null}
         </div>
       </div>
-      <SavedFormFields locked={!formLock.fieldsEditable}>
+      {formLock.editError ? <p role="alert" className="no-print text-sm text-destructive">{formLock.editError}</p> : null}
+      <SavedFormFields locked={!formLock.fieldsEditable && structure.kind !== "grid"}>
       <Paper
         wide={structure.kind === "grid"}
         docId={structure.kind === "document" ? fill.data.templateFormNumber : undefined}
@@ -136,6 +176,9 @@ export function FormFillPage() {
             structure={grid}
             mode="fill"
             answers={textAnswers}
+            readOnly={!formLock.fieldsEditable}
+            stamps={stamps}
+            onSign={permitted ? signCell : undefined}
             onAnswer={(key, value) => setAnswers((current) => ({ ...current, [key]: value }))}
           />
         )}
@@ -153,10 +196,7 @@ export function FormFillPage() {
             mode="fill"
             answers={answers}
             onAnswer={(key, value) => setAnswers((current) => ({ ...current, [key]: value }))}
-            onSign={async (fieldId, pin) => {
-              const saved = await apiClient.post<FillRecord>(`/form-builder/fills/${id}/sign`, { fieldId, pin });
-              setAnswers(saved.data.answers ?? {});
-            }}
+            onSign={signCell}
           />
         )}
       </Paper>

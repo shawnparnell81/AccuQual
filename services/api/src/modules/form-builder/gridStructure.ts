@@ -4,6 +4,7 @@
  */
 import { AppError } from "../../utils/appError.js";
 import { CELL_TYPES, MAX_DECIMALS, MAX_DROPDOWN_OPTIONS } from "./cellInput.js";
+import { formulaProblem } from "./formulaEngine.js";
 
 export const MAX_SHEETS = 10;
 export const MAX_GRID_ROWS = 500;
@@ -60,6 +61,10 @@ function checkCell(cell: Record<string, unknown>): string | null {
   if (!isWholeAtLeast(cell.rowSpan, 1)) return "the row span must be a whole number of at least 1.";
   if (!isWholeAtLeast(cell.colSpan, 1)) return "the column span must be a whole number of at least 1.";
   if (cell.formula !== undefined && typeof cell.formula !== "string") return "the formula must be text.";
+  if (typeof cell.formula === "string" && cell.formula.trim() !== "") {
+    const problem = formulaProblem(cell.formula);
+    if (problem) return `the formula =${cell.formula.replace(/^=/, "").slice(0, 60)} cannot be saved. ${problem}`;
+  }
   if (cell.type !== undefined && !(CELL_TYPES as readonly unknown[]).includes(cell.type)) return `the cell type must be one of ${CELL_TYPES.join(", ")}.`;
   if (cell.options !== undefined || cell.type === "dropdown") {
     const options = cell.options;
