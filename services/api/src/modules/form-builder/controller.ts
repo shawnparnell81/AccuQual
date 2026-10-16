@@ -114,7 +114,7 @@ export const saveFillHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const beginFillEditHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await beginBuiltFillEdit(req.db!, actor(req), idOf(req.params.fillId)));
+  res.json(await beginBuiltFillEdit(req.db!, actor(req), idOf(req.params.fillId), req.body));
 });
 
 export const deleteFillHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -129,8 +129,8 @@ export const fileFillHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const signFillHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { fieldId?: string; pin?: string };
-  res.json(await signBuiltFill(req.db!, actor(req), idOf(req.params.fillId), { fieldId: body.fieldId ?? "", pin: body.pin ?? "" }));
+  const body = req.body as { fieldId?: string; pin?: string; certified?: unknown };
+  res.json(await signBuiltFill(req.db!, actor(req), idOf(req.params.fillId), { fieldId: body.fieldId ?? "", pin: body.pin ?? "", certified: body.certified }));
 });
 
 export const importDocxHandler = [
