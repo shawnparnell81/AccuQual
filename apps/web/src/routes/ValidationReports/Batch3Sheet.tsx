@@ -736,9 +736,7 @@ function ElectricSheet(props: SheetProps) {
           </tr>
           <tr>
             <td>Force Graph:</td>
-            <td className="note" colSpan={5}>
-              The Graphs sheet has an empty scatter chart and no plotted points.
-            </td>
+            <td className="note" colSpan={5} />
           </tr>
           <tr>
             <td className="section" colSpan={6}>
@@ -943,9 +941,7 @@ function GasSheet(props: SheetProps) {
           ))}
           <tr>
             <td>Force Diagram:</td>
-            <td className="note" colSpan={7}>
-              The Graphs sheet has an empty scatter chart and no plotted points.
-            </td>
+            <td className="note" colSpan={7} />
           </tr>
           <tr>
             <td className="section" colSpan={8}>
