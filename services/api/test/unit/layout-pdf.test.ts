@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyFrame } from "../../src/modules/forms/controlledPdf.js";
-import { assertSavedCopy, parseSheetLayout, renderLayoutPdf, sliceSheet, unsavedValues } from "../../src/modules/records/layoutPdf.js";
+import { parseSheetLayout, renderLayoutPdf, sliceSheet, unsavedValues } from "../../src/modules/records/layoutPdf.js";
 
 const black = "rgb(0, 0, 0)";
 function layout(height: number, values: string[] = []) {
@@ -25,7 +25,6 @@ describe("exact-layout PDF", () => {
   it("flags values that are not in the saved record", () => {
     expect(unsavedValues(layout(80, ["Lot 7", "12.5"]), ["Lot 7", 12.5])).toEqual([]);
     expect(unsavedValues(layout(80, ["Lot 8"]), ["Lot 7"])).toEqual(["Lot 8"]);
-    expect(() => assertSavedCopy(layout(80, ["Lot 8"]), ["Lot 7"])).toThrow(/Save your changes first/);
   });
 
   it("rejects a malformed layout", () => {

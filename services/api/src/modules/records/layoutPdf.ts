@@ -115,10 +115,6 @@ export function unsavedValues(layout: SheetLayout, saved: unknown[]): string[] {
   return missing;
 }
 
-export function assertSavedCopy(layout: SheetLayout, saved: unknown[]) {
-  const missing = unsavedValues(layout, saved);
-  if (missing.length > 0) throw new AppError("Save your changes first; the PDF shows the saved copy.", 409);
-}
 
 // ---- Drawing ---------------------------------------------------------------------------------------------
 

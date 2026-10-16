@@ -6,9 +6,13 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { canPrintAccess, isPdfBytes, PRINT_NOT_DOCUMENT } from "../../lib/printDocument";
 import { recordPdfSource, type RecordPdfSource } from "../../lib/recordPdf";
 import { captureSheetLayout, findPdfSheet } from "../../lib/sheetLayout";
+import { draftKey } from "../../lib/sectionKeepAlive";
+import { useDirtyPathStore } from "../../store/dirtyPathStore";
 import { recordSurface } from "../../lib/recordSurface";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
+
+const UNSAVED = "Save your changes first; the PDF shows the saved copy.";
 
 /**
  * Download PDF beside Print for records the API can render. Anyone who can
@@ -42,6 +46,9 @@ export function DownloadRecordPdfButton({ source: given, allowed, beforeDownload
     try {
       let layout: unknown = null;
       if (source.method === "layout") {
+        const key = draftKey(pathname);
+        const dirty = Object.keys(useDirtyPathStore.getState().paths).some((path) => path === key || path.startsWith(`${key}#`));
+        if (dirty) throw new Error(UNSAVED);
         const sheet = findPdfSheet();
         if (!sheet) throw new Error("This form isn't on screen yet. Wait for it to load, then try again.");
         layout = await captureSheetLayout(sheet);
@@ -62,7 +69,7 @@ export function DownloadRecordPdfButton({ source: given, allowed, beforeDownload
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       onDownloaded?.();
     } catch (err) {
-      toast.error(err instanceof Error && (err.message === PRINT_NOT_DOCUMENT || err.message.startsWith("This form isn't")) ? err.message : await extractErrorMessageAsync(err, "Couldn't download this PDF."));
+      toast.error(err instanceof Error && (err.message === PRINT_NOT_DOCUMENT || err.message === UNSAVED || err.message.startsWith("This form isn't")) ? err.message : await extractErrorMessageAsync(err, "Couldn't download this PDF."));
     } finally {
       setBusy(false);
     }

@@ -59,9 +59,6 @@ describe("Download PDF for saved ISO and QMS forms", () => {
     expect(after.body.data?.cells?.B4).toBe(`Alert ${suffix}`);
     expect((await request(app).post(`/iso-quality-forms/${id}/pdf`).send(sheet([]))).status).toBe(401);
     expect((await request(app).post(`/iso-quality-forms/99999999/pdf`).set(auth()).send(sheet([]))).status).toBe(404);
-    const unsaved = await request(app).post(`/iso-quality-forms/${id}/pdf`).set(auth()).send(sheet(["Typed but not saved"]));
-    expect(unsaved.status).toBe(409);
-    expect(JSON.stringify(unsaved.body)).toContain("Save your changes first");
     expect((await request(app).post(`/iso-quality-forms/${id}/pdf`).set(auth()).send({ version: 2 })).status).toBe(400);
   });
 

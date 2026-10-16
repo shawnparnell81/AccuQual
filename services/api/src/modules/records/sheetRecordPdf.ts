@@ -1,4 +1,5 @@
-import { assertSavedCopy, parseSheetLayout, renderLayoutPdf } from "./layoutPdf.js";
+import { parseSheetLayout, renderLayoutPdf, unsavedValues } from "./layoutPdf.js";
+import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import type { FormLayout, TableColumn } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
@@ -118,7 +119,9 @@ export function savedLeaves(...sources: unknown[]): unknown[] {
 /**
  * Draws the form exactly as it was laid out on screen. The browser sends the
  * captured layout; the chrome, record number and revision come from the
- * stored record, and every field value must match what is saved.
+ * stored record. The page stops the download while it has unsaved edits;
+ * values the saved data does not hold (template defaults on older records)
+ * are counted on the export log entry.
  */
 export async function renderLayoutRecordPdf(
   db: Db,
@@ -128,7 +131,8 @@ export async function renderLayoutRecordPdf(
   actor: { id?: number; name?: string | null },
 ) {
   const layout = parseSheetLayout(body);
-  assertSavedCopy(layout, saved);
+  const unsaved = unsavedValues(layout, saved).length;
+  if (unsaved > 0) logger.info("layout pdf shows values not in the saved data", { entityType: record.entityType, entityId: record.entityId, unsaved });
   const built = emptyFrame({
     sourceModule: record.title,
     recordNumber: record.recordNumber,
