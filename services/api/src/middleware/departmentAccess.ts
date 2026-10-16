@@ -198,6 +198,15 @@ function isDocumentCommentPost(req: Request): boolean {
   return /^\/\d+\/comments$/.test(req.path);
 }
 
+/**
+ * Download PDF of an ISO form, QMS form or validation report. It posts the on-screen layout but only reads the
+ * record, so read access is enough, the same as Print (it was a GET before the layout PDF).
+ */
+const LAYOUT_PDF_MOUNTS = new Set(["/iso-quality-forms", "/qms-forms", "/validation-reports"]);
+export function isLayoutPdfPost(req: Pick<Request, "method" | "baseUrl" | "path">): boolean {
+  return req.method === "POST" && LAYOUT_PDF_MOUNTS.has(req.baseUrl) && /^\/\d+\/pdf$/.test(req.path);
+}
+
 function isRecordDeleteRequest(req: Request): boolean {
   if (req.method !== "DELETE" || !RECORD_DELETE_MOUNTS.has(req.baseUrl)) return false;
   const parts = req.path.split("/").filter(Boolean);
@@ -303,6 +312,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
     }
     if (level === "read" && resourceKey === "documents" && isDocumentCommentPost(req)) return next();
+    if (level === "read" && isLayoutPdfPost(req)) return next();
     if (level === "read" && !READ_METHODS.has(req.method)) {
       return next(AppError.forbidden(`'${resourceKey}' is read-only for your department`));
     }
