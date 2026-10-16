@@ -16,6 +16,9 @@ import { stampNewEcr } from "../change-requests/ecr.controller.js";
 import { syncQuarantineNotice } from "../quarantine/quarantineNotice.js";
 import { stampRecordSite } from "../sites/recordSite.js";
 import { canonicalIsoFormType, normalizeIsoFormData } from "./isoFormRead.js";
+import { ISO_TYPE_TO_FORM_KEY } from "../document-folders/editableForms.js";
+import { readTemplateStamp } from "../forms/templateRevision.js";
+import { cellsTable, renderSheetRecordPdf, sendPdf } from "../records/sheetRecordPdf.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -181,4 +184,41 @@ export const signIsoQualityForm = asyncHandler(async (req: Request, res: Respons
   const next = { ...previous, [field]: stamp.stamp };
   const [updated] = await req.db!.update(isoQualityForms).set({ data: next, updatedAt: new Date() }).where(eq(isoQualityForms.id, id)).returning();
   res.json(updated);
+});
+
+/** Download PDF for a saved ISO form: header plus every typed cell, with the record's own revision. */
+export const isoQualityFormPdf = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) throw AppError.notFound("ISO form");
+  const [row] = await req.db!.select().from(isoQualityForms).where(eq(isoQualityForms.id, id));
+  if (!row) throw AppError.notFound("ISO form");
+  const formType = canonicalIsoFormType(row.formType);
+  const data = normalizeIsoFormData(row.data);
+  const formKey = (ISO_TYPE_TO_FORM_KEY[formType] ?? "").toUpperCase();
+  const title = formType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const recordNumber = typeof row.recordNumber === "string" ? row.recordNumber.trim() : "";
+  const revision = readTemplateStamp(data)?.revision ?? "";
+  const { bytes, exportId } = await renderSheetRecordPdf(
+    req.db!,
+    {
+      entityType: "iso_form",
+      entityId: id,
+      title: formKey ? `${formKey} ${title}` : title,
+      formNumber: formKey,
+      recordNumber,
+      revision,
+      header: [
+        { label: "Form", value: formKey || title },
+        { label: "Record No.", value: recordNumber },
+        { label: "Rev.", value: revision },
+        ...Object.keys(FORM_SIGNATURES[formType] ?? {}).map((field) => ({
+          label: field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()),
+          value: typeof data[field] === "string" ? (data[field] as string) : "",
+        })),
+      ],
+      tables: [cellsTable(asRecord(data.cells))],
+    },
+    { id: req.user?.id, name: (req.user as { name?: string | null } | undefined)?.name },
+  );
+  sendPdf(res, bytes, exportId, recordNumber || `iso-form-${id}`);
 });

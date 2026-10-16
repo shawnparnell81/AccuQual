@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { RECORD_STEP_ANCHOR } from "../../lib/stepDocuments";
+import { DownloadRecordPdfButton } from "./DownloadRecordPdfButton";
 import { PrintRecordButton } from "./PrintRecordButton";
 
 /**
@@ -29,7 +30,8 @@ export function RecordFrame({
   return (
     <div className={className ? `record-frame flex flex-col gap-4 ${className}` : "record-frame flex flex-col gap-4"}>
       <div className="record-frame-header">
-        <div className="no-print mb-2 flex justify-end">
+        <div className="no-print mb-2 flex justify-end gap-2">
+          <DownloadRecordPdfButton />
           <PrintRecordButton />
         </div>
         {header}

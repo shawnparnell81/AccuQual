@@ -19,6 +19,7 @@ import {
   signQmsFormRowHandler,
   deleteQmsFormRowHandler,
   createQmsNcrHandler,
+  qmsFormPdfHandler,
 } from "./qmsForms.controller.js";
 
 export const qmsFormsRouter = Router();
@@ -40,6 +41,7 @@ qmsFormsRouter.get("/types", listQmsFormTypesHandler);
 qmsFormsRouter.get("/", listQmsFormsHandler);
 qmsFormsRouter.post("/", validate(createQmsFormSchema), createQmsFormHandler);
 qmsFormsRouter.get("/:id", getQmsFormHandler);
+qmsFormsRouter.get("/:id/pdf", qmsFormPdfHandler);
 qmsFormsRouter.post("/:id/ncr", createQmsNcrHandler);
 qmsFormsRouter.post("/:id/begin-edit", beginQmsEditHandler);
 qmsFormsRouter.post("/:id/cancel-edit", cancelQmsEditHandler);
