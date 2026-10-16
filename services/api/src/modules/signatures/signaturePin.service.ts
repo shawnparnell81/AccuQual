@@ -39,7 +39,7 @@ async function loadUser(userId: number) {
   return user;
 }
 
-export const PIN_LOCKED_MESSAGE = `Your signature PIN is locked after ${PIN_MAX_ATTEMPTS} incorrect tries. Ask an administrator to unlock it in Settings → Users.`;
+export const PIN_LOCKED_MESSAGE = `Your signature PIN is locked after ${PIN_MAX_ATTEMPTS} incorrect tries. Ask an administrator to unlock it in Admin → Users & Roles.`;
 
 function wrongPinMessage(count: number): string {
   const left = PIN_MAX_ATTEMPTS - count;
