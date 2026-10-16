@@ -40,7 +40,7 @@ export function DocumentChangeRequestDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <ModuleFormLock
+          <ModuleFormLock session={formLock}
             mode={formLock.mode}
             canEdit={permitted}
             pending={saving}

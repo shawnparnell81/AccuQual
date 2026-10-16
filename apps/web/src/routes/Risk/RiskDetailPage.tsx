@@ -91,7 +91,7 @@ export function RiskDetailPage() {
               AI Risk Analysis
             </button>
           )}
-          <ModuleFormLock
+          <ModuleFormLock session={formLock}
             mode={formLock.mode}
             canEdit={permitted}
             onEdit={() => formLock.onEdit().then(() => setEditOpen(true))}

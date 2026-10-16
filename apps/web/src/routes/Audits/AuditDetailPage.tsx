@@ -117,7 +117,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <ModuleFormLock
+          <ModuleFormLock session={formLock}
             mode={formLock.mode}
             canEdit={permitted}
             pending={headerSaving}

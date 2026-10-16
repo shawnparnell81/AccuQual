@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import type React from "react";
 import { Routes, UNSAFE_LocationContext, UNSAFE_NavigationContext, UNSAFE_RouteContext, type Navigator, type To } from "react-router-dom";
 import { ItemFolderPath } from "../documents/ItemFolderPath";
-import { RecordEditBar } from "../shared/RecordEditBar";
+import { RecordEditBar, useRecordLocked, useRecordPageLock } from "../shared/RecordEditBar";
 import { PrintChrome } from "../records/PrintChrome";
 import { PaneErrorBoundary, RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
@@ -225,9 +226,22 @@ function KeptRoutePane({
           <ItemFolderPath />
           <PrintChrome />
           <RecordEditBar />
-          <SectionRouter entry={entry} onNavigate={onNavigate} onGo={onGo} />
+          <LockedRecord>
+            <SectionRouter entry={entry} onNavigate={onNavigate} onGo={onGo} />
+          </LockedRecord>
         </div>
       </PaneErrorBoundary>
+    </div>
+  );
+}
+
+function LockedRecord({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const locked = useRecordLocked();
+  useRecordPageLock(ref, locked);
+  return (
+    <div ref={ref} data-record-lock={locked ? "locked" : "open"}>
+      {children}
     </div>
   );
 }

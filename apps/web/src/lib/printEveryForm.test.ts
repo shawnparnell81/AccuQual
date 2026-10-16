@@ -22,9 +22,13 @@ describe("every form has Print", () => {
   for (const path of FORM_PATHS) it(path, () => assert.ok(offersScreenPrint(path), path));
 
   it("adding Print did not add a page Edit button to pages that had none", () => {
-    for (const path of ["/validation-reports/new", "/iso-forms/record/new", "/qms-forms/x/new", "/fai-inspection/records/4", "/complaints/5", "/quality/5", "/reporting/imported-data/5", "/reports"]) {
+    for (const path of ["/validation-reports/new", "/iso-forms/record/new", "/qms-forms/x/new", "/quality/5", "/reporting/imported-data/5", "/reports"]) {
       assert.equal(recordSurface(path)?.edit, false, path);
     }
+  });
+
+  it("saved FAI records and complaints open locked with the shared Edit button", () => {
+    for (const path of ["/fai-inspection/records/4", "/fai-inspection/plans/2", "/complaints/5"]) assert.notEqual(recordSurface(path)?.edit, false, path);
   });
 
   it("the Print button lives in the shared workspace chrome", () => {

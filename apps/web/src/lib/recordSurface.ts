@@ -26,8 +26,9 @@ const RULES: SurfaceRule[] = [
   { test: /^\/iso-forms\/record\/new$/, kind: "form", access: "documents", edit: false },
   { test: /^\/qms-forms\/[^/]+\/new$/, kind: "form", access: "qms_forms", edit: false },
   { test: /^\/validation-reports\/new$/, kind: "form", access: "documents", edit: false },
-  { test: /^\/fai-inspection\/(?:records|plans)\/(?:\d+|new)$/, kind: "form", access: "fai", edit: false },
-  { test: /^\/complaints\/\d+$/, kind: "form", access: "complaints", edit: false },
+  { test: /^\/fai-inspection\/(?:records|plans)\/new$/, kind: "form", access: "fai", edit: false },
+  { test: /^\/fai-inspection\/(?:records|plans)\/\d+$/, kind: "form", access: "fai" },
+  { test: /^\/complaints\/\d+$/, kind: "form", access: "complaints" },
   { test: /^\/quality\/\d+$/, kind: "form", access: "any", edit: false },
   { test: /^\/reporting\/imported-data\/\d+$/, kind: "form", access: "any", edit: false },
   { test: /^\/reports$/, kind: "form", access: "any", edit: false },
@@ -70,4 +71,22 @@ export function recordSurface(pathname: string): RecordSurface | null {
   const rule = RULES.find((item) => item.test.test(path));
   if (!rule) return null;
   return { kind: rule.kind, access: rule.access, ...(rule.edit === false ? { edit: false as const } : {}) };
+}
+
+/** Record detail pages that open read-only until Edit. */
+export function isLockedRecordPath(pathname: string): boolean {
+  const surface = recordSurface(pathname);
+  if (!surface || surface.kind !== "form" || surface.access === "any") return false;
+  return /\/\d+$/.test(pathname.split("?")[0] ?? pathname) && !/^\/(?:qms-forms|form-builder|training\/employee|reporting)\//.test(pathname);
+}
+
+/** Where Edit, Save and Cancel are recorded for record pages without a lock of their own. */
+export function recordEditPath(pathname: string): string | null {
+  const path = pathname.split("?")[0] ?? pathname;
+  const complaint = /^\/complaints\/(\d+)$/.exec(path);
+  if (complaint) return `/complaints/${complaint[1]}/begin-edit`;
+  const fai = /^\/fai-inspection\/(records|plans)\/(\d+)$/.exec(path);
+  if (fai) return `/record-edits/fai-${fai[1]}/${fai[2]}`;
+  const generic = /^\/(suppliers|ppap|warranty|crar|rma|work-orders|feasibility|quality-inspection-reports|workers|documents)\/(\d+)$/.exec(path);
+  return generic ? `/record-edits/${generic[1]}/${generic[2]}` : null;
 }

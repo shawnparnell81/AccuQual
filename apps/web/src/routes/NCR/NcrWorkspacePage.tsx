@@ -244,7 +244,7 @@ export function NcrWorkspacePage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={isSaving} onEdit={() => formLock.onEdit()} onSave={saveForm} onLock={formLock.lock} />
+            <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={permitted} pending={isSaving} onEdit={() => formLock.onEdit()} onSave={saveForm} onLock={formLock.lock} />
             <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} number={ncr.recordNumber} ownerIds={[ncr.createdBy]} navigateTo="/ncr" allowed={permitted} assignedOnly />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
             <StatusBadge value={ncr.severity} />

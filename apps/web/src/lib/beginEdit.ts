@@ -7,3 +7,8 @@ export const BEGIN_EDIT_ERROR = "Couldn't open this form for editing. Try again.
 export async function postBeginEdit(path: string, timeoutMs = BEGIN_EDIT_TIMEOUT_MS): Promise<void> {
   await apiClient.post(path, {}, { timeout: timeoutMs });
 }
+
+/** Save or Cancel line for the same record history. */
+export async function postEditSession(path: string, action: "save" | "cancel", timeoutMs = BEGIN_EDIT_TIMEOUT_MS): Promise<void> {
+  await apiClient.post(path, { action }, { timeout: timeoutMs });
+}

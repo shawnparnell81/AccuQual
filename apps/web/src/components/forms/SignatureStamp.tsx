@@ -124,7 +124,7 @@ export function SignatureStamp({
 
   if (stamped) {
     return (
-      <div className={sheet ? "aq-signature-stamp px-2 py-1.5" : "aq-signature-stamp"} data-testid="signature-stamp">
+      <div className={sheet ? "aq-signature-stamp px-2 py-1.5" : "aq-signature-stamp"} data-testid="signature-stamp" data-lock-exempt>
         {choice}
         <p className="flex items-start gap-2 whitespace-pre-wrap break-words text-xs text-foreground">
           {ownStamp && <UserAvatar userId={user?.id} name={user?.name} hasPhoto size={20} />}
@@ -135,7 +135,7 @@ export function SignatureStamp({
   }
   if (waived) {
     return (
-      <div className={sheet ? "px-2 py-1.5" : undefined}>
+      <div data-lock-exempt className={sheet ? "px-2 py-1.5" : undefined}>
         {choice}
         <p className="text-xs text-muted-foreground">{NOT_REQUIRED_LABEL}</p>
       </div>
@@ -143,7 +143,7 @@ export function SignatureStamp({
   }
   if (disabled) {
     return (
-      <div className={sheet ? "px-2 py-1.5" : undefined}>
+      <div data-lock-exempt className={sheet ? "px-2 py-1.5" : undefined}>
         {choice}
         <p className="text-xs text-muted-foreground">—</p>
       </div>
@@ -176,7 +176,7 @@ export function SignatureStamp({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className={sheet ? "flex flex-col gap-1.5 px-2 py-1.5" : "flex flex-col gap-1.5 py-1"}>
+    <form data-lock-exempt onSubmit={(event) => void submit(event)} className={sheet ? "flex flex-col gap-1.5 px-2 py-1.5" : "flex flex-col gap-1.5 py-1"}>
       {choice}
       <label className="flex items-start gap-2 text-[11px] leading-snug text-foreground">
         <input type="checkbox" checked={certified} onChange={(event) => setCertified(event.target.checked)} className="mt-0.5" />

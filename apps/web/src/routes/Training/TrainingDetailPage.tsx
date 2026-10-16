@@ -126,7 +126,7 @@ export function TrainingDetailPage() {
         accessNote={permitted ? null : TRAINING_MANAGE_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
+            <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={permitted} onEdit={() => formLock.onEdit()} onLock={formLock.lock} />
             <DeleteRecordButton resource="training" id={course.id} kind="Training course" title={course.title} navigateTo="/training" allowed={permitted} assignedOnly />
             {mayManage ? (
               <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">

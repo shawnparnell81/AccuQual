@@ -177,7 +177,7 @@ export function CapaDetailPage() {
         accessNote={permitted ? null : READ_ONLY_REASON}
         actions={
           <>
-            <ModuleFormLock mode={formLock.mode} canEdit={permitted} pending={updateCapa.isPending} onEdit={() => formLock.onEdit()} onSave={flushNarrative} onLock={formLock.lock} onCancel={cancelEdit} onDone={doneEdit} />
+            <ModuleFormLock session={formLock} mode={formLock.mode} canEdit={permitted} pending={updateCapa.isPending} onEdit={() => formLock.onEdit()} onSave={flushNarrative} onLock={formLock.lock} onCancel={cancelEdit} onDone={doneEdit} />
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} number={capa.recordNumber} ownerIds={[capa.ownerId]} navigateTo="/capa" allowed={permitted} assignedOnly />
             <OpenFormButton formType="capa" entityId={capa.id} title={`${recordHeading("CAPA", capa.recordNumber)} Form`} />
             <WorkflowActionButton
