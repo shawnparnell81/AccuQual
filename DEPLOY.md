@@ -188,7 +188,7 @@ Security headers on `/*`: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options
 | `ACCUQUAL_REQUIRE_DB_SSL_CA` | Unused for the boot decision. Production already refuses to start when `DATABASE_SSL_CA` is missing. Existing environment files may still set it |
 | `JWT_ACCESS_SECRET` | Render `generateValue: true` |
 | `JWT_REFRESH_SECRET` | Render `generateValue: true` |
-| `AI_CONFIG_ENCRYPTION_KEY` | `openssl rand -hex 32`. Paste once. **Never rotate** — stored company AI keys were encrypted with it |
+| `AI_CONFIG_ENCRYPTION_KEY` | `openssl rand -hex 32`. Paste once. **Never rotate** — stored company AI keys and the NetSuite private key were encrypted with it |
 | `ALLOWED_ORIGINS` | `https://app.accuqualqms.com` |
 | `FRONTEND_URL` | `https://app.accuqualqms.com` |
 | `STORAGE_LOCAL_PATH` | `/var/data/uploads` |
@@ -527,3 +527,19 @@ needed regardless of which port your provider gives you.
 
 - No self-serve signup — this installation belongs to one company and its
   administrator creates every account.
+
+## NetSuite connector (Settings → ERP / NetSuite)
+
+AccuQual signs in to NetSuite with OAuth 2.0 client credentials (machine to
+machine) and only reads. Nothing to set on Render: the Admin enters the
+Account ID, Client ID, Certificate ID and private key on the settings page.
+
+- The private key is encrypted with `AI_CONFIG_ENCRYPTION_KEY` (AES-256-GCM)
+  and never returned to the browser or written to logs. If that variable ever
+  changes, the page says the saved key can't be read; enter it again.
+- Access tokens are kept in server memory only (60 minutes, NetSuite's limit)
+  and are fetched again after a restart.
+- The API service needs outbound HTTPS to `<account>.suitetalk.api.netsuite.com`.
+- No migration: settings live in the existing `erp_sync_settings` column.
+- `NETSUITE_API_BASE_URL_OVERRIDE` exists for local tests against a fake
+  server only and is ignored on Render and in production. Never set it there.
