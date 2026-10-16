@@ -1,3 +1,4 @@
+import { folderPathForRoute } from "./itemPath.js";
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -479,7 +480,8 @@ export const livePaths = asyncHandler(async (req: Request, res: Response) => {
   res.json({ live: await liveRecordPaths(req.db!, paths) });
 });
 
-export const list = asyncHandler(async (req: Request, res: Response) => {
+/** The folder list every Explorer view reads, after the same filing checks. */
+async function listedFolders(req: Request) {
   const db = req.db!;
   await repairSavedFormListings(db, req.user?.id);
 
@@ -495,7 +497,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await ensureLivingControlledLists(req);
     const fresh = await db.select().from(documentFolders);
     const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-    return res.json(await folderListResponse(db, merged, req.user?.id));
+    return folderListResponse(db, merged, req.user?.id);
   }
 
   // Move to… used to wait on this refetch. The filing work below is a hundred
@@ -509,7 +511,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await linkKnownForms(db, withPool);
     const filed = await rehomeStrayBlankShortcuts(db, withPool, settled.blankFormsTemplatesFolderId, req.user?.id);
     const merged = await mergeLooseFolderDuplicates(db, filed, req.user?.id);
-    return res.json(await folderListResponse(db, merged, req.user?.id));
+    return folderListResponse(db, merged, req.user?.id);
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -522,7 +524,22 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   await ensureLivingControlledLists(req);
   const fresh = await db.select().from(documentFolders);
   const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-  res.json(await folderListResponse(db, merged, req.user?.id));
+  return folderListResponse(db, merged, req.user?.id);
+}
+
+export const list = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listedFolders(req));
+});
+
+/**
+ * The folder path line for one open page (a record, a blank, a built form) without sending
+ * the whole tree. Same rows and the same match as the Explorer list.
+ */
+export const itemPath = asyncHandler(async (req: Request, res: Response) => {
+  const route = typeof req.query.route === "string" ? req.query.route.split("?")[0] ?? "" : "";
+  if (!route.startsWith("/") || route.length > 300) throw AppError.badRequest("route must be an app path");
+  const folders = (await listedFolders(req)) as { id: number; name: string; parentId: number | null; linkedPath?: string | null; documentId?: number | null }[];
+  res.json(folderPathForRoute(folders, route));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {

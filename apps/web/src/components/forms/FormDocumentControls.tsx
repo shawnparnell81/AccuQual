@@ -236,11 +236,6 @@ export function RecordFolderField({
   const canEdit = useCanControlDocuments();
   const queryClient = useQueryClient();
   const filing = useFormFiling(formKey, recordId);
-  const folders = useQuery({
-    queryKey: ["document-folders"],
-    queryFn: async () => (await apiClient.get<FolderRow[]>("/document-folders")).data,
-    enabled: FILEABLE_FORM_KEYS.has(formKey),
-  });
   const formFolders = useQuery({
     queryKey: ["form-folders"],
     queryFn: async () => (await apiClient.get<FormFolderChoice[]>("/document-folders/form-folders")).data,
@@ -250,6 +245,12 @@ export function RecordFolderField({
   const [synced, setSynced] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The whole folder tree is only needed by the Save as dialog, so a form opens without it.
+  const folders = useQuery({
+    queryKey: ["document-folders"],
+    queryFn: async () => (await apiClient.get<FolderRow[]>("/document-folders")).data,
+    enabled: FILEABLE_FORM_KEYS.has(formKey) && pickerOpen,
+  });
   const [preparing, setPreparing] = useState(false);
   const signature = `${filing.data?.parentId ?? ""}:${(filing.data?.parentPath ?? []).join("/")}`;
 
