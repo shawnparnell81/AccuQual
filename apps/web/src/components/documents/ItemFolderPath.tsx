@@ -1,25 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { apiClient } from "../../api/client";
-import type { BrowseFolder } from "../../lib/folderBrowse";
-import { folderNodeForRoute, folderNodePath, folderPathLookupEnabled } from "../../lib/folderPath";
+import { folderPathLookupEnabled } from "../../lib/folderPath";
 import { FolderPathBar } from "./FolderPathBar";
 
 /** The open document's folder path, when this person can already see that folder. */
 export function useItemFolderPath(): string {
   const { pathname } = useLocation();
   const enabled = folderPathLookupEnabled(pathname);
-  const folders = useQuery({
-    queryKey: ["document-folders"],
-    queryFn: async () => (await apiClient.get<BrowseFolder[]>("/document-folders")).data,
+  // Only this page's path, not the whole folder tree (over a megabyte on a large company).
+  const found = useQuery({
+    queryKey: ["document-folders", "item-path", pathname],
+    queryFn: async () => (await apiClient.get<{ folderId: number | null; path: string }>("/document-folders/item-path", { params: { route: pathname } })).data,
     enabled,
     retry: false,
     staleTime: 15_000,
   });
-  if (!enabled || !folders.data) return "";
-  const node = folderNodeForRoute(folders.data, pathname);
-  if (!node) return "";
-  return folderNodePath(folders.data, node.id);
+  if (!enabled || !found.data) return "";
+  return found.data.path;
 }
 
 /** Path line at the top of a document or form. Hidden when this page is not a filed item. */

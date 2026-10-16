@@ -21,7 +21,7 @@ validationReportsRouter.get("/", baseHandlers.list);
 validationReportsRouter.get("/previous", listPreviousValidation);
 validationReportsRouter.post("/copy", validate(z.object({ sourceId: z.number().int().positive() })), copyValidationHandler);
 validationReportsRouter.post("/", validate(createValidationReportSchema), baseHandlers.create);
-validationReportsRouter.get("/:id/pdf", validationPdfHandler);
+validationReportsRouter.post("/:id/pdf", validationPdfHandler);
 validationReportsRouter.get("/:id", baseHandlers.getOne);
 validationReportsRouter.patch("/:id", validate(updateValidationReportSchema), baseHandlers.update);
 validationReportsRouter.post("/:id/sign", validate(signValidationReportSchema), signValidationReport);

@@ -1,3 +1,4 @@
+import { sendJson } from "../../utils/sendJson.js";
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -11,7 +12,7 @@ function keyFrom(req: Request) {
 }
 
 export const getControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await openControlledList(req, keyFrom(req)));
+  sendJson(req, res, await openControlledList(req, keyFrom(req)));
 });
 
 export const saveControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -20,7 +21,7 @@ export const saveControlledListHandler = asyncHandler(async (req: Request, res: 
   const patches = sheets
     .filter((sheet) => typeof sheet.name === "string" && sheet.cells && typeof sheet.cells === "object")
     .map((sheet) => ({ name: sheet.name as string, cells: sheet.cells as Record<string, CellPatch> }));
-  res.json(await saveControlledList(req, keyFrom(req), patches));
+  sendJson(req, res, await saveControlledList(req, keyFrom(req), patches));
 });
 
 export const rowsControlledListHandler = asyncHandler(async (req: Request, res: Response) => {

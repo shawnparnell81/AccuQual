@@ -620,6 +620,7 @@ function IsoFormDetailBody({
       </div>
 
       <div
+        data-pdf-sheet
         className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4"
         data-doc-id={typeof documentNumber === "string" && documentNumber.trim() ? documentNumber.trim() : undefined}
         data-doc-rev={revisionToken(revision) || undefined}

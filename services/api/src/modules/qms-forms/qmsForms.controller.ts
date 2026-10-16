@@ -1,3 +1,4 @@
+import { renderLayoutRecordPdf, savedLeaves, sendPdf } from "../records/sheetRecordPdf.js";
 import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
@@ -18,7 +19,6 @@ import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } fr
 import { QMS_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
 import { readRecordSite, stampRecordSite } from "../sites/recordSite.js";
-import { renderSheetRecordPdf, sendPdf } from "../records/sheetRecordPdf.js";
 import { ncrsForPath, openInspectionNcr, requireNcrEdit } from "../ncr/inspectionNcr.js";
 
 async function loadForm(req: Request, id: number) {
@@ -425,31 +425,11 @@ export const qmsFormPdfHandler = asyncHandler(async (req: Request, res: Response
   const definition = getQmsFormDefinition(record.formType);
   const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : "");
   const title = definition?.title ?? record.formType;
-  const { bytes, exportId } = await renderSheetRecordPdf(
+  const { bytes, exportId } = await renderLayoutRecordPdf(
     req.db!,
-    {
-      entityType: "qms_form",
-      entityId: record.id,
-      title,
-      formNumber: title,
-      recordNumber: record.formNo ?? "",
-      revision: record.revision ?? "",
-      status: record.status,
-      header: [
-        { label: "Form No.", value: record.formNo ?? "" },
-        { label: "Rev.", value: record.revision ?? "" },
-        { label: "Status", value: record.status },
-        { label: "Effective date", value: day(record.effectiveDate) },
-        { label: "Prepared by", value: record.preparedBy ?? "" },
-        { label: "Approved by", value: record.approvedBy ?? "" },
-        { label: "Comments", value: record.additionalComments ?? "" },
-      ],
-      tables: (definition?.sections ?? []).map((section) => ({
-        title: section.label,
-        columns: section.columns,
-        rows: rows.filter((row) => row.sectionKey === section.key).map((row) => row.data ?? {}),
-      })),
-    },
+    { entityType: "qms_form", entityId: record.id, title, formNumber: title, recordNumber: record.formNo ?? "", revision: record.revision ?? "", status: record.status },
+    req.body,
+    savedLeaves(record, day(record.effectiveDate), rows.map((row) => row.data)),
     { id: req.user?.id, name: (req.user as { name?: string | null } | undefined)?.name },
   );
   sendPdf(res, bytes, exportId, record.formNo || `qms-form-${record.id}`);
