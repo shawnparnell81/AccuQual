@@ -1,3 +1,5 @@
+import { LoadMore } from "../../components/tables/LoadMore";
+import { useServerTable } from "../../api/usePagedList";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,11 +32,11 @@ export function CapaListPage() {
   const { label } = usePersonDirectory();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { data: capas = [], isLoading, isError } = capaHooks.useList();
-  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs();
+  const { rows: capas, isLoading, isError, server } = useServerTable<Capa>("/capa", { root: "capa", siteScoped: true, });
   const createCapa = capaHooks.useCreate();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
+  const { rows: ncrs, isLoading: ncrsLoading } = useVisibleNcrs(createOpen);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [params, setParams] = useSearchParams();
   useEffect(() => {
@@ -49,11 +51,11 @@ export function CapaListPage() {
   const [numberError, setNumberError] = useState<string | null>(null);
 
   const columns: Column<Capa>[] = [
-    { header: "CAPA No.", accessor: (c) => showRecordNumber(c.recordNumber) },
+    { header: "CAPA No.", sortKey: "recordNumber", accessor: (c) => showRecordNumber(c.recordNumber) },
     { header: "NCR", accessor: (c) => (c.ncrId ? "Linked" : "Not linked") },
-    { header: "State", accessor: (c) => <StatusBadge value={c.status} label={statusPhrase(c.status)} /> },
+    { header: "State", sortKey: "status", accessor: (c) => <StatusBadge value={c.status} label={statusPhrase(c.status)} /> },
     { header: "Owner", accessor: (c) => label(c.ownerId) },
-    { header: "Due", accessor: (c) => duePhrase(c.dueDate, c.status === "closed") },
+    { header: "Due", sortKey: "dueDate", accessor: (c) => duePhrase(c.dueDate, c.status === "closed") },
   ];
 
   return (
@@ -88,9 +90,11 @@ export function CapaListPage() {
         <>
           <p className="text-xs text-muted-foreground">Drag a fix to the next column to move it forward. Each step asks for what it needs first.</p>
           <CapaBoard capas={isLoading ? [] : capas} canEdit={canEdit} />
+          <LoadMore shown={capas.length} total={server.total} loading={server.loadingMore} onMore={server.loadMore} noun="fixes" />
         </>
       ) : (
       <DataTable
+server={server}
         columns={columns}
         rows={capas}
         rowKey={(c) => c.id}

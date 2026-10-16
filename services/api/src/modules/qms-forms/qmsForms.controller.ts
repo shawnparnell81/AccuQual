@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { qmsForms, qmsFormRows } from "../../drizzle/schema/qmsForms.js";
@@ -35,7 +36,13 @@ export const listQmsFormsHandler = asyncHandler(async (req: Request, res: Respon
   const conditions = [];
   if (formType) conditions.push(eq(qmsForms.formType, formType));
   if (status) conditions.push(eq(qmsForms.status, status));
-  const rows = await req.db!.select().from(qmsForms).where(and(...conditions)).orderBy(desc(qmsForms.createdAt));
+  const rows = await pagedList(req, res, {
+    table: qmsForms,
+    conditions,
+    defaultOrder: [desc(qmsForms.createdAt)],
+    statusColumn: qmsForms.status,
+    select: (where, order, limit, offset) => req.db!.select().from(qmsForms).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   res.json(rows);
 });
 

@@ -19,6 +19,7 @@ import { ncrProcessMetrics, type NcrMetricSource } from "./ncrSla.js";
 import { NCR_NUMBER } from "../records/recordNumberSpecs.js";
 import { showRecordNumber } from "../records/userRecordNumber.js";
 import { enrichNcrList } from "./ncr.listFields.js";
+import { ncrListCounts, ncrListFilters } from "./ncr.listFilters.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
@@ -28,6 +29,8 @@ export const baseHandlers = crudFactory(ncr, {
   siteScoped: true,
   recordNumber: NCR_NUMBER,
   expandStatusFilter: ncrStatusAliases,
+  listFilters: ncrListFilters,
+  listCounts: ncrListCounts,
   prepareCreate: (body) => ({ ...body, status: typeof body.status === "string" ? canonicalNcrStep(body.status) : "ncr_created" }),
   // Phase 2 NCR unified-data-model fix — see ncr.formSync.ts's own comment.
   // A brand-new NCR gets its official document seeded immediately (never

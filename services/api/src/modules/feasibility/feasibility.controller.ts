@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
@@ -78,7 +79,13 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
   if (status) conditions.push(eq(feasibilityReviews.status, status));
   if (customerId) conditions.push(eq(feasibilityReviews.customerId, Number(customerId)));
 
-  const rows = await req.db!.select().from(feasibilityReviews).where(and(...conditions)).orderBy(desc(feasibilityReviews.createdAt));
+  const rows = await pagedList(req, res, {
+    table: feasibilityReviews,
+    conditions,
+    defaultOrder: [desc(feasibilityReviews.createdAt)],
+    statusColumn: feasibilityReviews.status,
+    select: (where, order, limit, offset) => req.db!.select().from(feasibilityReviews).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   res.json(rows.map(hideSalesSignoff));
 });
 

@@ -1,5 +1,6 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
-import { and, desc, eq, gte, ilike, lte, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql, type SQL } from "drizzle-orm";
 import { laborClaims } from "../../drizzle/schema/laborClaims.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
@@ -70,14 +71,20 @@ async function assertLink(req: Request, kind: "warranty" | "ncr", id: number | n
 }
 
 export const listLaborClaimsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
+  const { status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(laborClaims.status, status));
-  if (q) conditions.push(ilike(laborClaims.claimNumber, `%${q}%`));
   if (dateFrom) conditions.push(gte(laborClaims.claimDate, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(laborClaims.claimDate, new Date(`${dateTo}T23:59:59.999Z`)));
   try {
-    const rows = await req.db!.select().from(laborClaims).where(and(...conditions)).orderBy(desc(laborClaims.claimDate), desc(laborClaims.id));
+    // q (the search box) matches the claim number and every other text column.
+    const rows = await pagedList(req, res, {
+      table: laborClaims,
+      conditions,
+      defaultOrder: [desc(laborClaims.claimDate), desc(laborClaims.id)],
+      statusColumn: laborClaims.status,
+      select: (where, order, limit, offset) => req.db!.select().from(laborClaims).where(where).orderBy(...order).limit(limit).offset(offset),
+    });
     res.json(rows);
   } catch (err) {
     if (missingRelation(err)) {

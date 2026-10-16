@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { documentChangeRequests, documentChangeItems, documentChangeReviews } from "../../drizzle/schema/documentChangeRequests.js";
@@ -23,7 +24,13 @@ export const listDcrHandler = asyncHandler(async (req: Request, res: Response) =
   const { status } = req.query as Record<string, string | undefined>;
   const conditions = [];
   if (status) conditions.push(eq(documentChangeRequests.status, status));
-  const rows = await req.db!.select().from(documentChangeRequests).where(and(...conditions)).orderBy(desc(documentChangeRequests.createdAt));
+  const rows = await pagedList(req, res, {
+    table: documentChangeRequests,
+    conditions,
+    defaultOrder: [desc(documentChangeRequests.createdAt)],
+    statusColumn: documentChangeRequests.status,
+    select: (where, order, limit, offset) => req.db!.select().from(documentChangeRequests).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   res.json(rows);
 });
 

@@ -1,3 +1,4 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { scarForms } from "../../drizzle/schema/scarForms.js";
@@ -22,7 +23,13 @@ export const listScarFormsHandler = asyncHandler(async (req: Request, res: Respo
   const conditions = [];
   if (status) conditions.push(eq(scarForms.status, status));
   if (supplierId) conditions.push(eq(scarForms.supplierId, Number(supplierId)));
-  const rows = await req.db!.select().from(scarForms).where(and(...conditions)).orderBy(desc(scarForms.createdAt));
+  const rows = await pagedList(req, res, {
+    table: scarForms,
+    conditions,
+    defaultOrder: [desc(scarForms.createdAt)],
+    statusColumn: scarForms.status,
+    select: (where, order, limit, offset) => req.db!.select().from(scarForms).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   res.json(rows);
 });
 

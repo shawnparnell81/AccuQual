@@ -1,4 +1,6 @@
-import { and, eq, inArray, gte, like } from "drizzle-orm";
+import { and, asc, eq, inArray, gte, like } from "drizzle-orm";
+import type { Request, Response } from "express";
+import { pagedList } from "../../utils/pagedList.js";
 import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb } from "../../db/index.js";
 import { equipment, calibrations, type Calibration, type Equipment, type EquipmentStatus } from "../../drizzle/schema/calibration.js";
@@ -137,6 +139,33 @@ export async function listEquipmentWithSummary(db: Db) {
       nextDueAt: calibrations.nextDueAt,
     })
     .from(calibrations);
+  const summaries = summarize(items, cals);
+  return items.map((item) => ({ ...item, ...summaries.get(item.id)! }));
+}
+
+/** The equipment register a page at a time; calibrations are read for that page only. */
+export async function listEquipmentPage(req: Request, res: Response) {
+  const db = req.db as Db;
+  const items = await pagedList(req, res, {
+    table: equipment,
+    conditions: [],
+    defaultOrder: [asc(equipment.id)],
+    statusColumn: equipment.status,
+    select: (where, order, limit, offset) => db.select().from(equipment).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
+  if (items.length === 0) return [];
+  const cals = await db
+    .select({
+      id: calibrations.id,
+      equipmentId: calibrations.equipmentId,
+      performedAt: calibrations.performedAt,
+      status: calibrations.status,
+      scheduledAt: calibrations.scheduledAt,
+      result: calibrations.result,
+      nextDueAt: calibrations.nextDueAt,
+    })
+    .from(calibrations)
+    .where(inArray(calibrations.equipmentId, items.map((item) => item.id)));
   const summaries = summarize(items, cals);
   return items.map((item) => ({ ...item, ...summaries.get(item.id)! }));
 }

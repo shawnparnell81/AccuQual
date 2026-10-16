@@ -86,3 +86,16 @@ export function summarizeRecords(rows: readonly unknown[]): SummaryItem[] {
   }
   return items;
 }
+
+/** The same cards from server totals, for a list that is read a page at a time. */
+export function summarizeCounts(total: number, counts: Record<string, number> | null | undefined): SummaryItem[] {
+  const items: SummaryItem[] = [{ label: "Records", value: total, accent: true }];
+  const merged = new Map<string, number>();
+  for (const [status, value] of Object.entries(counts ?? {})) {
+    if (!status.trim()) continue;
+    const label = status.replace(/_/g, " ");
+    merged.set(label, (merged.get(label) ?? 0) + value);
+  }
+  for (const [label, value] of [...merged.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)) items.push({ label, value });
+  return items;
+}

@@ -1,5 +1,6 @@
+import { pagedList } from "../../utils/pagedList.js";
 import type { Request, Response } from "express";
-import { and, eq, gte, lte, ilike, desc, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, lte, desc, type SQL } from "drizzle-orm";
 import { rma, rmaItems } from "../../drizzle/schema/rma.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -9,7 +10,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { parseLimitOffset } from "../../utils/listQuery.js";
+import { LIST_SAFETY_LIMIT } from "../../utils/listQuery.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { RMA_NUMBER } from "../records/recordNumberSpecs.js";
 import { applyRecordNumber, changesWithNumberEdit } from "../records/userRecordNumber.js";
@@ -76,19 +77,21 @@ async function itemsWithContext(req: Request, rmaId: number) {
 }
 
 export const listRmaHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, supplierId, reasonCode, dateFrom, dateTo, q, linkedNcrId } = req.query as Record<string, string | undefined>;
+  const { status, supplierId, reasonCode, dateFrom, dateTo, linkedNcrId } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(rma.status, status));
   if (supplierId) conditions.push(eq(rma.supplierId, Number(supplierId)));
   if (reasonCode) conditions.push(eq(rma.reasonCode, reasonCode));
   if (dateFrom) conditions.push(gte(rma.createdAt, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(rma.createdAt, new Date(dateTo)));
-  if (q) conditions.push(ilike(rma.rmaNumber, `%${q}%`));
   if (linkedNcrId) conditions.push(eq(rma.linkedNcrId, Number(linkedNcrId)));
-  const { limit, offset, paginated } = parseLimitOffset(req.query as Record<string, unknown>);
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const rows = await req
+  const rows = await pagedList(req, res, {
+    table: rma,
+    conditions,
+    defaultOrder: [desc(rma.createdAt)],
+    statusColumn: rma.status,
+    unpagedLimit: LIST_SAFETY_LIMIT,
+    select: (where, order, limit, offset) => req
     .db!.select({
       id: rma.id,
       rmaNumber: rma.rmaNumber,
@@ -105,13 +108,10 @@ export const listRmaHandler = asyncHandler(async (req: Request, res: Response) =
     .from(rma)
     .innerJoin(suppliers, eq(rma.supplierId, suppliers.id))
     .where(where)
-    .orderBy(desc(rma.createdAt))
+    .orderBy(...order)
     .limit(limit)
-    .offset(offset);
-  if (paginated) {
-    const [countRow] = await req.db!.select({ count: sql<number>`count(*)::int` }).from(rma).where(where);
-    res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
-  }
+    .offset(offset),
+  });
   res.json(rows);
 });
 

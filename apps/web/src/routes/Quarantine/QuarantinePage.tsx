@@ -1,7 +1,7 @@
+import { usePagedList } from "../../api/usePagedList";
+import { LoadMore } from "../../components/tables/LoadMore";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../../api/client";
 import { formatDate } from "../../lib/dates";
 import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { QUARANTINE_NOTICE_PATH } from "../../lib/qualityEntry";
@@ -32,12 +32,11 @@ function qty(value: string) {
  */
 export function QuarantinePage() {
   const [view, setView] = useState<"active" | "released">("active");
-  const query = useQuery<QuarantineItemRow[]>({
-    queryKey: ["quarantine", "items", view],
-    queryFn: async () => (await apiClient.get<QuarantineItemRow[]>("/quarantine/items", { params: { view } })).data,
-  });
+  const [search, setSearch] = useState("");
+  // A page of holds at a time; the search runs on the server.
+  const query = usePagedList<QuarantineItemRow>("/quarantine/items", { root: "quarantine", params: { view }, search });
 
-  const rows = query.data ?? [];
+  const rows = query.rows;
   const showSerial = rows.some((row) => !!row.serialNumber);
 
   return (
@@ -75,9 +74,18 @@ export function QuarantinePage() {
         ))}
       </div>
 
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search quarantined items…"
+        aria-label="Search quarantined items"
+        className="w-64 border border-border bg-background px-3 py-1.5 text-sm"
+      />
+
       {query.isLoading && <LoadingPlaceholder />}
       {query.isError && <p className="text-sm text-destructive">Couldn't load quarantined items. Refresh the page and try again.</p>}
-      {!query.isLoading && !query.isError && rows.length === 0 && (
+      {!query.isLoading && !query.isError && rows.length === 0 && query.search ? <p className="text-sm text-muted-foreground">Nothing matches this search.</p> : null}
+      {!query.isLoading && !query.isError && rows.length === 0 && !query.search && (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground sm:p-8">
           {view === "active" ? (
             <p>
@@ -137,6 +145,7 @@ export function QuarantinePage() {
               ))}
             </tbody>
           </table>
+          <LoadMore shown={rows.length} total={query.total} loading={query.loadingMore} onMore={query.loadMore} noun="items" />
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { ScarForm } from "../../api/types";
@@ -9,14 +10,14 @@ const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
 export function ScarFormsPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading, isError } = scarHooks.useList();
+  const { rows: rows, isLoading, isError, server } = useServerTable<ScarForm>("/scar-forms", { root: "scar-forms", });
   const createScar = scarHooks.useCreate();
 
   const columns: Column<ScarForm>[] = [
-    { header: "SCAR No.", accessor: (r) => r.scarNumber?.trim() || "" },
-    { header: "Supplier", accessor: (r) => r.supplierName ?? "—" },
-    { header: "PO Number", accessor: (r) => r.poNumber ?? "—" },
-    { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
+    { header: "SCAR No.", sortKey: "scarNumber", accessor: (r) => r.scarNumber?.trim() || "" },
+    { header: "Supplier", sortKey: "supplierName", accessor: (r) => r.supplierName ?? "—" },
+    { header: "PO Number", sortKey: "poNumber", accessor: (r) => r.poNumber ?? "—" },
+    { header: "Status", sortKey: "status", accessor: (r) => <StatusBadge value={r.status} /> },
   ];
 
   return (
@@ -38,7 +39,7 @@ export function ScarFormsPage() {
         />
       </div>
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/scar-forms/${r.id}`)} />
+      <DataTable server={server} columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/scar-forms/${r.id}`)} />
     </div>
   );
 }

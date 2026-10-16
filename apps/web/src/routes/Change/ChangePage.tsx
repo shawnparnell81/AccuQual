@@ -24,9 +24,9 @@ export function ChangePage() {
       onRowClick={(c) => navigate(`/change/${c.id}`)}
       onCreated={(c) => navigate(`/change/${c.id}`)}
       columns={[
-        { header: "Change No.", accessor: (c) => showRecordNumber(c.recordNumber) },
-        { header: "Title", accessor: (c) => c.title },
-        { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
+        { header: "Change No.", sortKey: "recordNumber", accessor: (c) => showRecordNumber(c.recordNumber) },
+        { header: "Title", sortKey: "title", accessor: (c) => c.title },
+        { header: "Status", sortKey: "status", accessor: (c) => <StatusBadge value={c.status} /> },
         {
           header: "Action",
           accessor: (c) =>

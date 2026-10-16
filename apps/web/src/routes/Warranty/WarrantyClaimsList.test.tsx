@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { pagedListData, pagedListKey } from "../../api/usePagedList";
 import { ToastProvider } from "../../components/shared/ToastProvider";
 import { useSiteStore } from "../../store/siteStore";
 import type { WarrantyClaim } from "../../api/types";
@@ -40,7 +41,7 @@ function claim(id: number, claimNumber: string, siteId: number | null): Warranty
 
 function renderList(rows: WarrantyClaim[]): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  queryClient.setQueryData(["warranty/claims", {}], rows);
+  queryClient.setQueryData(pagedListKey("warranty/claims", "/warranty/claims", { counts: true }), pagedListData(rows));
   queryClient.setQueryData(["inventory/items", undefined], []);
   queryClient.setQueryData(["suppliers", undefined], []);
   return renderToString(

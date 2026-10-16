@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { and, eq, getTableColumns, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
-import { parseLimitOffset } from "./listQuery.js";
+import { orderByShape, parseLimitOffset, parseListShape, searchWhere, setListHeaders } from "./listQuery.js";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
@@ -59,6 +59,10 @@ interface CrudOptions {
   blankCreatePath?: string;
   /** Adds list-only fields after the rows are loaded. The response stays an array. */
   enrichList?: (rows: Record<string, unknown>[], req: Request) => Promise<Record<string, unknown>[]>;
+  /** Module filters a list page sends, such as NCR severity. */
+  listFilters?: (req: Request) => (SQL | undefined)[];
+  /** Summary-card totals over the whole filtered list, sent as X-List-Counts with `counts=status`. */
+  listCounts?: (db: Db, where: SQL | undefined) => Promise<Record<string, number>>;
 }
 
 /**
@@ -165,14 +169,32 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
         predicates.push(eq(columns[key] as never, parsed));
       }
     }
+    for (const extra of options.listFilters?.(req) ?? []) if (extra) predicates.push(extra);
+    // One form kind of a shared table (ISO forms, QMS forms), so its list page reads only its own rows.
+    const formType = req.query.formType;
+    if (typeof formType === "string" && formType !== "" && columns.formType) predicates.push(eq(columns.formType as never, formType));
     const statusNot = req.query.statusNot;
     if (typeof statusNot === "string" && statusNot !== "" && columns.status) predicates.push(sql`${columns.status as never} <> ${statusNot}`);
+    const shape = parseListShape(req.query as Record<string, unknown>);
+    const search = searchWhere(table, shape.q);
+    if (search) predicates.push(search);
     const where = predicates.length > 0 ? and(...predicates) : undefined;
     const { limit, offset, paginated } = parseLimitOffset(req.query as Record<string, unknown>);
-    const rows = await req.db.select().from(table).where(where).limit(limit).offset(offset);
+    // A paged list page asks for one page in a stable order. Other callers (pickers, dashboards) keep the old shape.
+    const ordered = paginated || shape.sort || shape.q;
+    const query = req.db.select().from(table).where(where);
+    const rows = await (ordered ? query.orderBy(...orderByShape(table, shape)) : query).limit(limit).offset(offset);
     if (paginated) {
       const [countRow] = await req.db.select({ count: sql<number>`count(*)::int` }).from(table).where(where);
-      res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
+      let statusCounts: Record<string, number> | undefined;
+      if (columns.status && req.query.counts === "status") {
+        const grouped = await req.db.select({ status: columns.status as never, count: sql<number>`count(*)::int` }).from(table).where(where).groupBy(columns.status as never);
+        statusCounts = Object.fromEntries((grouped as { status: unknown; count: number }[]).map((row) => [String(row.status ?? ""), row.count]));
+      }
+      setListHeaders(res, countRow?.count ?? rows.length, statusCounts);
+      if (options.listCounts && req.query.counts === "status") {
+        res.setHeader("X-List-Counts", encodeURIComponent(JSON.stringify(await options.listCounts(req.db as Db, where))));
+      }
     }
     const presented = options.enrichList ? await options.enrichList(rows as Record<string, unknown>[], req) : rows;
     res.json(presented);

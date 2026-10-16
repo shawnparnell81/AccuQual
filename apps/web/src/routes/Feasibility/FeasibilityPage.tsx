@@ -1,3 +1,4 @@
+import { useServerTable } from "../../api/usePagedList";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -19,23 +20,23 @@ const STATUSES: FeasibilityStatus[] = ["draft", "final"];
  */
 export function FeasibilityPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading, isError } = feasibilityHooks.useList();
-  const createReview = feasibilityHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
+  const { rows: rows, isLoading, isError, server } = useServerTable<FeasibilityReview>("/feasibility", { root: "feasibility", params: { status: statusFilter || undefined } });
+  const createReview = feasibilityHooks.useCreate();
 
   const filtered = useMemo(() => rows.filter((r) => !statusFilter || r.status === statusFilter), [rows, statusFilter]);
 
   const columns: Column<FeasibilityReview>[] = [
-    { header: "ID", accessor: (r) => `#${r.id}` },
-    { header: "Customer", accessor: (r) => r.customerName ?? "—" },
-    { header: "Part / Project", accessor: (r) => r.partProjectName ?? "—" },
-    { header: "RFQ / Quote #", accessor: (r) => r.rfqQuoteNumber ?? "—" },
+    { header: "ID", sortKey: "id", accessor: (r) => `#${r.id}` },
+    { header: "Customer", sortKey: "customerName", accessor: (r) => r.customerName ?? "—" },
+    { header: "Part / Project", sortKey: "partProjectName", accessor: (r) => r.partProjectName ?? "—" },
+    { header: "RFQ / Quote #", sortKey: "rfqQuoteNumber", accessor: (r) => r.rfqQuoteNumber ?? "—" },
     {
       header: "Determination",
       accessor: (r) =>
         r.determination ? <span className="capitalize">{r.determination.replace(/_/g, " ")}</span> : <span className="text-muted-foreground">not yet decided</span>,
     },
-    { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
+    { header: "Status", sortKey: "status", accessor: (r) => <StatusBadge value={r.status} /> },
   ];
 
   return (
@@ -65,7 +66,7 @@ export function FeasibilityPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/feasibility/${r.id}`)} />
+      <DataTable server={server} columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/feasibility/${r.id}`)} />
     </div>
   );
 }

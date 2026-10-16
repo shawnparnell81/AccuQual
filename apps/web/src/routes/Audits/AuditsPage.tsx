@@ -32,11 +32,11 @@ export function AuditsPage() {
       onRowClick={(a) => navigate(`/audits/${a.id}`)}
       onCreated={(a) => navigate(`/audits/${a.id}`)}
       columns={[
-        { header: "Audit No.", accessor: (a) => showRecordNumber(a.recordNumber) },
-        { header: "Name", accessor: (a) => a.name },
-        { header: "Type", accessor: (a) => a.type ?? "—" },
-        { header: "Status", accessor: (a) => <StatusBadge value={a.status} /> },
-        { header: "Scheduled", accessor: (a) => formatDate(a.scheduledAt) },
+        { header: "Audit No.", sortKey: "recordNumber", accessor: (a) => showRecordNumber(a.recordNumber) },
+        { header: "Name", sortKey: "name", accessor: (a) => a.name },
+        { header: "Type", sortKey: "type", accessor: (a) => a.type ?? "—" },
+        { header: "Status", sortKey: "status", accessor: (a) => <StatusBadge value={a.status} /> },
+        { header: "Scheduled", sortKey: "scheduledAt", accessor: (a) => formatDate(a.scheduledAt) },
         {
           header: "",
           accessor: (a) => <OpenWindowButton type="audit" entityId={a.id} title={`${showRecordNumber(a.recordNumber) ? `Audit ${showRecordNumber(a.recordNumber)} — ` : "Audit — "}${a.name}`} />,

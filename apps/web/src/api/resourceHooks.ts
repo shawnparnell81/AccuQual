@@ -9,6 +9,11 @@ import { useSiteStore } from "../store/siteStore";
  */
 const SITE_SCOPED_RESOURCES = new Set(["ncr", "capa", "audits"]);
 
+/** Lists the server filters by the viewer's current plant. */
+export function isSiteScopedResource(resource: string): boolean {
+  return SITE_SCOPED_RESOURCES.has(resource);
+}
+
 export function createResourceHooks<T extends { id: number }>(resource: string) {
   const key = [resource];
   const siteScoped = SITE_SCOPED_RESOURCES.has(resource);

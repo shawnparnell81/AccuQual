@@ -21,12 +21,12 @@ export function InventoryListPage() {
         onRowClick={(i) => navigate(`/inventory/${i.id}`)}
         onCreated={(i) => navigate(`/inventory/${i.id}`)}
         columns={[
-          { header: "SKU", accessor: (i) => i.sku },
-          { header: "Description", accessor: (i) => i.description ?? "—" },
-          { header: "Type", accessor: (i) => i.itemType.replace(/_/g, " ") },
-          { header: "On Hand", accessor: (i) => i.onHand ?? 0 },
+          { header: "SKU", sortKey: "sku", accessor: (i) => i.sku },
+          { header: "Description", sortKey: "description", accessor: (i) => i.description ?? "—" },
+          { header: "Type", sortKey: "itemType", accessor: (i) => i.itemType.replace(/_/g, " ") },
+          { header: "On Hand", sortKey: "onHand", accessor: (i) => i.onHand ?? 0 },
           { header: "Min / Max", accessor: (i) => `${i.minLevel} / ${i.maxLevel ?? "—"}` },
-          { header: "State", accessor: (i) => <StatusBadge value={i.state} /> },
+          { header: "State", sortKey: "state", accessor: (i) => <StatusBadge value={i.state} /> },
         ]}
         createFields={[
           { name: "sku", label: "SKU" },

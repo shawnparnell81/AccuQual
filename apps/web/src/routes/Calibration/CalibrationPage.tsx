@@ -39,15 +39,15 @@ export function CalibrationPage() {
         onRowClick={(e) => navigate(`/calibration/${e.id}`)}
         onCreated={(e) => navigate(`/calibration/${e.id}`)}
         columns={[
-          { header: "Equipment", accessor: (e) => e.name },
-          { header: "Type", accessor: (e) => e.type ?? "—" },
-          { header: "Serial #", accessor: (e) => e.serialNumber ?? "—" },
-          { header: "Location", accessor: (e) => e.location ?? "—" },
-          { header: "Interval (days)", accessor: (e) => e.calibrationIntervalDays },
-          { header: "Next Due", accessor: (e) => formatDate(e.nextDueAt) },
+          { header: "Equipment", sortKey: "name", accessor: (e) => e.name },
+          { header: "Type", sortKey: "type", accessor: (e) => e.type ?? "—" },
+          { header: "Serial #", sortKey: "serialNumber", accessor: (e) => e.serialNumber ?? "—" },
+          { header: "Location", sortKey: "location", accessor: (e) => e.location ?? "—" },
+          { header: "Interval (days)", sortKey: "calibrationIntervalDays", accessor: (e) => e.calibrationIntervalDays },
+          { header: "Next Due", sortKey: "nextDueAt", accessor: (e) => formatDate(e.nextDueAt) },
           { header: "Scheduled", accessor: (e) => (e.nextScheduledAt ? `${formatDate(e.nextScheduledAt)}${e.scheduleOverdue ? " (late)" : ""}` : "—") },
           // Out of service / inactive outrank the due date; otherwise coloured by the server's due status (60 / 30 day bands, past due, failed).
-          { header: "Status", accessor: (e) => <EquipmentStatusBadge status={e.status} dueStatus={e.dueStatus} /> },
+          { header: "Status", sortKey: "status", accessor: (e) => <EquipmentStatusBadge status={e.status} dueStatus={e.dueStatus} /> },
         ]}
         createFields={[
           { name: "name", label: "Equipment name" },

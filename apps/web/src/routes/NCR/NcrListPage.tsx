@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { usePagedList, type ListSort } from "../../api/usePagedList";
+import { LoadMore } from "../../components/tables/LoadMore";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -13,7 +15,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { formatDate } from "../../lib/dates";
 import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel, peopleForAssignment } from "../../lib/opsLanguage";
-import { NCR_ALL_STATES, ncrMatchesStateFilter } from "../../lib/ncrSearch";
+import { NCR_ALL_STATES } from "../../lib/ncrSearch";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { ncrLogFailure } from "../../lib/ncrCreateError";
@@ -36,16 +38,6 @@ function ncrClassification(n: Ncr): "Minor" | "Major" | "Critical" | null {
   if (n.severity === "low") return "Minor";
   if (n.severity === "medium" || n.severity === "high") return "Major";
   if (n.severity === "critical") return "Critical";
-  return null;
-}
-
-/** Filter bucket for a row whose classification was set on the form and whose severity column is still empty. */
-function listedSeverity(n: Ncr): string | null {
-  if (n.severity) return n.severity;
-  const classification = ncrClassification(n);
-  if (classification === "Minor") return "low";
-  if (classification === "Major") return "high";
-  if (classification === "Critical") return "critical";
   return null;
 }
 
@@ -78,6 +70,7 @@ export function NcrListPage() {
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState(NCR_ALL_STATES);
   const [textFilter, setTextFilter] = useState("");
+  const [ncrSort, setNcrSort] = useState<ListSort | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [params, setParams] = useSearchParams();
@@ -101,7 +94,17 @@ export function NcrListPage() {
   const [logError, setLogError] = useState<{ message: string; retry: boolean } | null>(null);
   const [quarantineRows, setQuarantineRows] = useState([{ partNumber: "", quantity: "", serialNumber: "" }]);
 
-  const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
+  // A page at a time: search, state and severity filter on the server, and the cards count every match.
+  const ncrList = usePagedList<Ncr>("/ncr", {
+    root: "ncr",
+    siteScoped: true,
+    counts: true,
+    search: textFilter,
+    sort: ncrSort,
+    params: { status: view === "list" && statusFilter && statusFilter !== NCR_ALL_STATES ? statusFilter : undefined, severity: severityFilter || undefined },
+  });
+  const ncrs = ncrList.rows;
+  const { isLoading, isError } = ncrList;
   const createNcr = ncrHooks.useCreate();
   const navigate = useNavigate();
   const toast = useToast();
@@ -120,37 +123,23 @@ export function NcrListPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update all of the selected NCRs — none were changed.")),
   });
 
-  const filtered = useMemo(() => {
-    const needle = textFilter.trim().toLowerCase();
-    return ncrs.filter((n) => {
-      if (severityFilter && listedSeverity(n) !== severityFilter) return false;
-      if (!ncrMatchesStateFilter(ncrStepKey(n.status), statusFilter)) return false;
-      if (!needle) return true;
-      return `${showRecordNumber(n.recordNumber)} ${whatHappenedText(n)} ${ncrStepLabel(n.status)}`.toLowerCase().includes(needle);
-    });
-  }, [ncrs, severityFilter, statusFilter, textFilter]);
-  const openCount = ncrs.filter((n) => ncrStepKey(n.status) !== "closed").length;
-  const severeCount = ncrs.filter((n) => {
-    const severity = listedSeverity(n);
-    return severity === "high" || severity === "critical";
-  }).length;
-  const overdueCount = ncrs.filter((n) => {
-    if (ncrStepKey(n.status) === "closed" || !n.dueDate) return false;
-    const due = new Date(n.dueDate);
-    return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
-  }).length;
+  const filtered = ncrs;
+  const matchCount = ncrList.total ?? ncrs.length;
+  const openCount = ncrList.listCounts?.open ?? 0;
+  const severeCount = ncrList.listCounts?.severe ?? 0;
+  const overdueCount = ncrList.listCounts?.overdue ?? 0;
 
   const columns: Column<Ncr>[] = [
-    { header: "NCR No.", accessor: (n) => showRecordNumber(n.recordNumber) || "" },
+    { header: "NCR No.", sortKey: "recordNumber", accessor: (n) => showRecordNumber(n.recordNumber) || "" },
     { header: "What happened", accessor: (n) => whatHappenedText(n) },
     { header: "State", accessor: (n) => <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} /> },
-    { header: "Owner", accessor: (n) => label(n.assignedTo) },
-    { header: "Due", accessor: (n) => duePhrase(n.dueDate, ncrStepKey(n.status) === "closed") },
-    { header: "Severity", accessor: (n) => {
+    { header: "Owner", sortKey: "assignedTo", accessor: (n) => label(n.assignedTo) },
+    { header: "Due", sortKey: "dueDate", accessor: (n) => duePhrase(n.dueDate, ncrStepKey(n.status) === "closed") },
+    { header: "Severity", sortKey: "severity", accessor: (n) => {
       const classification = ncrClassification(n);
       return classification ? <StatusBadge value={classification.toLowerCase()} label={classification} /> : <StatusBadge value={n.severity} />;
     } },
-    { header: "Opened", accessor: (n) => formatDate(n.createdAt) },
+    { header: "Opened", sortKey: "createdAt", accessor: (n) => formatDate(n.createdAt) },
   ];
 
   function exportCsv() {
@@ -200,7 +189,7 @@ export function NcrListPage() {
           { label: "Open", value: openCount, accent: true, detail: "Not closed" },
           { label: "High or critical", value: severeCount },
           { label: "Overdue", value: overdueCount },
-          { label: "Showing", value: filtered.length, detail: `${ncrs.length} in this plant` },
+          { label: "Showing", value: matchCount, detail: `${ncrs.length} loaded` },
         ]}
       />
 
@@ -244,7 +233,8 @@ export function NcrListPage() {
       {view === "board" ? (
         <>
           <p className="text-xs text-muted-foreground">Drag an issue to the next column to move it forward. Each step asks for what it needs first.</p>
-          <NcrBoard ncrs={isLoading ? [] : ncrs.filter((n) => !severityFilter || listedSeverity(n) === severityFilter)} canEdit={canEdit} />
+          <NcrBoard ncrs={isLoading ? [] : ncrs} canEdit={canEdit} />
+          <LoadMore shown={ncrs.length} total={ncrList.total} loading={ncrList.loadingMore} onMore={ncrList.loadMore} noun="NCRs" />
         </>
       ) : (
       <>
@@ -280,6 +270,7 @@ export function NcrListPage() {
         selectedIds={canEdit ? selectedIds : undefined}
         onSelectionChange={canEdit ? setSelectedIds : undefined}
         listChrome={false}
+        server={{ total: ncrList.total, hasMore: ncrList.hasMore, loadingMore: ncrList.loadingMore, loadMore: ncrList.loadMore, sort: ncrSort, onSort: setNcrSort }}
       />
       </>
       )}

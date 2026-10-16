@@ -43,7 +43,7 @@ export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Res
  * see the same answer the screen shows.
  */
 export const listWithStatus = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await service.listEquipmentWithSummary(req.db!));
+  res.json(await service.listEquipmentPage(req, res));
 });
 
 export const getEquipmentHandler = asyncHandler(async (req: Request, res: Response) => {

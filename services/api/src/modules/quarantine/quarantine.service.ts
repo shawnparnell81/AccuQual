@@ -1,4 +1,6 @@
-import { and, asc, desc, eq, ilike, inArray, or, gt } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, gt, lte, type SQL } from "drizzle-orm";
+import type { Request, Response } from "express";
+import { pagedList } from "../../utils/pagedList.js";
 import type { Db } from "../../lib/requestDb.js";
 import {
   quarantineRecords,
@@ -175,6 +177,29 @@ export interface ListFilters {
   itemType?: string;
   q?: string;
   olderThanDays?: number;
+}
+
+/**
+ * The Quarantine list page: one page at a time, searched and sorted on the server.
+ * Same filters as listQuarantine; "older than N days" is a query condition so the count stays right.
+ */
+export async function listQuarantinePage(req: Request, res: Response, filters: ListFilters = {}) {
+  const conditions: SQL[] = [];
+  if (filters.status) conditions.push(eq(quarantineRecords.status, filters.status as QuarantineRecord["status"]));
+  if (filters.itemType) conditions.push(eq(quarantineRecords.itemType, filters.itemType as QuarantineItemType));
+  if (filters.olderThanDays) {
+    conditions.push(eq(quarantineRecords.status, "quarantined"));
+    conditions.push(lte(quarantineRecords.createdAt, new Date(Date.now() - filters.olderThanDays * DAY_MS)));
+  }
+  const rows = await pagedList(req, res, {
+    table: quarantineRecords,
+    conditions,
+    defaultOrder: [desc(quarantineRecords.createdAt), desc(quarantineRecords.id)],
+    statusColumn: quarantineRecords.status,
+    select: (where, order, limit, offset) => (req.db as Db).select().from(quarantineRecords).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
+  const now = new Date();
+  return rows.map((r) => ({ ...r, ageDays: r.status === "quarantined" ? ageDays(r, now) : 0 }));
 }
 
 export async function listQuarantine(db: Db, filters: ListFilters = {}) {
@@ -491,6 +516,27 @@ export async function listQuarantineItems(db: Db, view: "active" | "released", n
   const conditions = [inArray(quarantineRecords.status, [...statuses])];
   if (ncrId !== undefined) conditions.push(eq(quarantineRecords.ncrId, ncrId));
   const rows = await db.select().from(quarantineRecords).where(and(...conditions)).orderBy(desc(quarantineRecords.createdAt), desc(quarantineRecords.id));
+  const resolutions = await latestResolutions(db, rows.map((r) => r.id));
+  return rows.map((r) => {
+    const resolved = resolutions.get(r.id)?.disposition ?? null;
+    const disposition = view === "active" ? (pendingDispositionOf(r) ?? resolved) : resolved;
+    return toItemView(r, disposition, view === "active");
+  });
+}
+
+/** The same list a page at a time, with search and sort (see pagedList). Unpaged calls answer as before. */
+export async function listQuarantineItemsPage(req: Request, res: Response, view: "active" | "released", ncrId?: number): Promise<QuarantineItemView[]> {
+  const db = req.db as Db;
+  const statuses = view === "active" ? (["quarantined"] as const) : (["released", "destroyed"] as const);
+  const conditions: SQL[] = [inArray(quarantineRecords.status, [...statuses])];
+  if (ncrId !== undefined) conditions.push(eq(quarantineRecords.ncrId, ncrId));
+  const rows = await pagedList(req, res, {
+    table: quarantineRecords,
+    conditions,
+    defaultOrder: [desc(quarantineRecords.createdAt), desc(quarantineRecords.id)],
+    statusColumn: quarantineRecords.status,
+    select: (where, order, limit, offset) => db.select().from(quarantineRecords).where(where).orderBy(...order).limit(limit).offset(offset),
+  });
   const resolutions = await latestResolutions(db, rows.map((r) => r.id));
   return rows.map((r) => {
     const resolved = resolutions.get(r.id)?.disposition ?? null;

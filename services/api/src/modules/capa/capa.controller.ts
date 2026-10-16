@@ -17,12 +17,13 @@ export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "i
 /**
  * GET /capa — supplier, owner, status, limit, and offset use the shared list.
  * `ncrId` also matches CAPAs opened from a repeat group (`repeat_ncr_ids`).
- * `q` searches the root cause and the CAPA number for the "attach existing" picker.
+ * Without `ncrId` the shared list answers, and its `q` searches every text
+ * field (number and root cause included) for the list page and the picker.
  */
 export const listHandler = asyncHandler(async (req: Request, res: Response) => {
   const ncrIdRaw = typeof req.query.ncrId === "string" ? req.query.ncrId : "";
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-  if (!ncrIdRaw && !q) return baseHandlers.list(req, res, () => undefined);
+  if (!ncrIdRaw) return baseHandlers.list(req, res, () => undefined);
   if (!req.siteId) {
     res.json([]);
     return;

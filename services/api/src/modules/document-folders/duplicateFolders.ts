@@ -11,6 +11,8 @@
  * lists stay there until their own change.
  */
 
+import { folderById, hasChildren } from "./folderIndex.js";
+
 export interface MergeFolder {
   id: number;
   name: string;
@@ -75,7 +77,7 @@ function savedItem(node: MergeFolder): boolean {
 }
 
 function isContainer(node: MergeFolder, folders: MergeFolder[]): boolean {
-  if (folders.some((folder) => folder.parentId === node.id)) return true;
+  if (hasChildren(folders, node.id)) return true;
   return !savedItem(node);
 }
 
@@ -91,7 +93,7 @@ function childrenByParent(folders: MergeFolder[]): Map<number, MergeFolder[]> {
 }
 
 function subtreeHasPayload(id: number, folders: MergeFolder[], children: Map<number, MergeFolder[]>): boolean {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const byId = folderById(folders);
   const stack = [id];
   const seen = new Set<number>();
   while (stack.length > 0) {
@@ -106,7 +108,7 @@ function subtreeHasPayload(id: number, folders: MergeFolder[], children: Map<num
 }
 
 function inBlankLibrary(folder: MergeFolder, folders: MergeFolder[], names: readonly string[]): boolean {
-  const byId = new Map(folders.map((row) => [row.id, row]));
+  const byId = folderById(folders);
   const blocked = new Set(names);
   let current: MergeFolder | undefined = folder;
   const seen = new Set<number>();
@@ -119,7 +121,7 @@ function inBlankLibrary(folder: MergeFolder, folders: MergeFolder[], names: read
 }
 
 function descendsFrom(folders: MergeFolder[], nodeId: number, ancestorId: number): boolean {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const byId = folderById(folders);
   let current = byId.get(nodeId);
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
@@ -131,7 +133,7 @@ function descendsFrom(folders: MergeFolder[], nodeId: number, ancestorId: number
 }
 
 function ancestorNames(folders: MergeFolder[], id: number): string[] {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const byId = folderById(folders);
   const names: string[] = [];
   let current = byId.get(id);
   const seen = new Set<number>();

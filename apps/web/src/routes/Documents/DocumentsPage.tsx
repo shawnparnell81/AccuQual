@@ -31,7 +31,7 @@ export function DocumentsPage() {
         title="Documents"
         resource="documents"
         onRowClick={(d) => navigate(`/documents/${d.id}`)}
-        rowPredicate={(d) => includeObsolete || d.status !== "obsolete"}
+        listParams={includeObsolete ? undefined : { statusNot: "obsolete" }}
         extraFilters={
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -48,13 +48,13 @@ export function DocumentsPage() {
           </label>
         }
         columns={[
-          { header: "ID", accessor: (d) => `#${d.id}` },
-          { header: "Title", accessor: (d) => d.title },
-          { header: "Category", accessor: (d) => d.category ?? "—" },
+          { header: "ID", sortKey: "id", accessor: (d) => `#${d.id}` },
+          { header: "Title", sortKey: "title", accessor: (d) => d.title },
+          { header: "Category", sortKey: "category", accessor: (d) => d.category ?? "—" },
           { header: "Revision", accessor: (d) => listRevisionLabel(d) },
-          { header: "Effective", accessor: (d) => formatDate(d.effectiveDate) },
-          { header: "Expires", accessor: (d) => formatDate(d.expirationDate) },
-          { header: "Status", accessor: (d) => <StatusBadge value={d.status} /> },
+          { header: "Effective", sortKey: "effectiveDate", accessor: (d) => formatDate(d.effectiveDate) },
+          { header: "Expires", sortKey: "expirationDate", accessor: (d) => formatDate(d.expirationDate) },
+          { header: "Status", sortKey: "status", accessor: (d) => <StatusBadge value={d.status} /> },
           {
             header: "",
             accessor: (d) => <OpenWindowButton type="document" entityId={d.id} title={`Document #${d.id} — ${d.title}`} />,
