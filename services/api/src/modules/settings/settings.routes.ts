@@ -22,6 +22,7 @@ import {
   getQualityAutomationSettingsHandler,
   updateQualityAutomationSettingsHandler,
 } from "./settings.controller.js";
+import { netsuiteRouter } from "../netsuite/netsuite.routes.js";
 
 /**
  * Company-wide configuration for three modules (Feasibility/Inventory/ERP
@@ -47,6 +48,8 @@ settingsRouter.post("/inventory", requireAnyDepartment("production", "purchasing
 settingsRouter.get("/erp-sync", requireRolePermission(ADMIN_CONSOLE_PERMISSION), getErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync/test", requireRolePermission(ADMIN_CONSOLE_PERMISSION), testErpConnectionHandler);
+// NetSuite connector (OAuth 2.0 client credentials, read-only). Admin only.
+settingsRouter.use("/netsuite", requireRolePermission(ADMIN_CONSOLE_PERMISSION), netsuiteRouter);
 settingsRouter.post("/erp-sync/trigger", requireRolePermission(ADMIN_CONSOLE_PERMISSION), validate(triggerErpSyncSchema), triggerErpSyncHandler);
 
 // Supplier Risk formula weights. PATCH-equivalent restricted to

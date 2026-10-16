@@ -156,6 +156,12 @@ export const company = pgTable("company", {
     webhookUrl?: string;
     webhookSecretEncrypted?: string;
     statusHistory?: { at: string; status: "success" | "failed" | "skipped"; modules: string[]; message?: string }[];
+    /**
+     * NetSuite connector (OAuth 2.0 client credentials, read-only). See
+     * modules/netsuite. privateKeyEncrypted is AES-256-GCM via company/crypto.ts
+     * and is never returned by any GET. Access tokens are never stored.
+     */
+    netsuite?: NetSuiteConnectionStored;
   }>().default({}),
   /**
    * Settings → Supplier Risk (Phase 7). Weights for the deterministic
@@ -396,3 +402,22 @@ export const company = pgTable("company", {
 
 export type Company = typeof company.$inferSelect;
 export type NewCompany = typeof company.$inferInsert;
+
+export type NetSuiteModuleKey = "fai" | "productAlert" | "inventory";
+export interface NetSuiteCheckResult {
+  at: string;
+  status: string;
+  message: string;
+  durationMs?: number;
+}
+export interface NetSuiteConnectionStored {
+  accountId?: string;
+  clientId?: string;
+  certificateId?: string;
+  keyAlgorithm?: string;
+  privateKeyEncrypted?: string;
+  publicCertificatePem?: string;
+  modules?: Partial<Record<NetSuiteModuleKey, { recordType?: string; enabled?: boolean }>>;
+  lastTest?: NetSuiteCheckResult & { ok: boolean; code?: string; environment?: string };
+  moduleChecks?: Partial<Record<NetSuiteModuleKey, NetSuiteCheckResult>>;
+}
