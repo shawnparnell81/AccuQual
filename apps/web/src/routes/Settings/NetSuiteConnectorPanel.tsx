@@ -278,7 +278,6 @@ export function NetSuiteConnectorPanel() {
                 rows={5}
                 spellCheck={false}
                 autoComplete="off"
-                className="font-mono"
               />
               <span className="text-xs text-muted-foreground">Paste the whole private.pem. It is encrypted on the server, never shown again and never written to logs.</span>
               {replacingKey && (
@@ -321,7 +320,6 @@ export function NetSuiteConnectorPanel() {
                 placeholder={"-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"}
                 rows={3}
                 spellCheck={false}
-                className="font-mono"
               />
               <span className="text-xs text-muted-foreground">Optional. Paste public.pem so AccuQual can show when the certificate expires (NetSuite allows two years at most) and check it matches the key.</span>
             </>
