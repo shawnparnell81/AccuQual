@@ -239,12 +239,16 @@ function readCsv(data: ArrayBuffer, fileName: string): SpreadsheetBook {
   return { sheets: [gridFromRows(title, parseCsv(text))] };
 }
 
+/** An input rule the workbook itself sets with Data Validation. Nothing is inferred from the look of a cell. */
+export type ImportValidation = { kind: "list"; options: string[] } | { kind: "number"; whole: boolean; min?: number; max?: number } | { kind: "date" };
+
 export interface EditableImportCell {
   text: string;
   formula?: string;
   rowSpan: number;
   colSpan: number;
   style: CellStyle;
+  validation?: ImportValidation;
 }
 
 export interface EditableImportSheet {
@@ -252,13 +256,71 @@ export interface EditableImportSheet {
   rows: Array<Array<EditableImportCell | null>>;
   colWidths: number[];
   rowHeights: number[];
+  /** Rows and columns of the file that did not fit (the grid limits are 500 rows and 60 columns). */
+  droppedRows?: number;
+  droppedCols?: number;
 }
 
-function formulaText(value: ExcelJS.CellValue): string | undefined {
+/** Grid limits; the API checks the same numbers. */
+const IMPORT_MAX_ROWS = 500;
+const IMPORT_MAX_COLS = 60;
+
+/**
+ * The cell's formula. A cell that shares a formula with others (filled down or across in Excel) gets that formula
+ * moved to its own row and column, the way Excel shows it, not the address of the first cell.
+ */
+function formulaText(cell: ExcelJS.Cell): string | undefined {
+  const value = cell.value;
   if (!value || typeof value !== "object") return undefined;
-  if ("formula" in value && typeof value.formula === "string" && value.formula) return value.formula;
-  if ("sharedFormula" in value && typeof value.sharedFormula === "string" && value.sharedFormula) return value.sharedFormula;
+  if ("formula" in value || "sharedFormula" in value) {
+    const text = cell.formula;
+    return typeof text === "string" && text ? text : undefined;
+  }
   return undefined;
+}
+
+function rangeValues(ws: ExcelJS.Worksheet, ref: string): string[] {
+  const match = /^\$?([A-Z]+)\$?(\d+)(?::\$?([A-Z]+)\$?(\d+))?$/i.exec(ref.replace(/^=/, "").trim());
+  if (!match) return [];
+  const c1 = columnIndex(match[1]!);
+  const r1 = Number(match[2]);
+  const c2 = match[3] ? columnIndex(match[3]) : c1;
+  const r2 = match[4] ? Number(match[4]) : r1;
+  const out: string[] = [];
+  for (let r = Math.min(r1, r2); r <= Math.max(r1, r2) && out.length < 60; r += 1) {
+    for (let c = Math.min(c1, c2); c <= Math.max(c1, c2) && out.length < 60; c += 1) {
+      const text = plainValue(ws.getCell(r, c).value).trim();
+      if (text) out.push(text);
+    }
+  }
+  return out;
+}
+
+function validationOf(ws: ExcelJS.Worksheet, cell: ExcelJS.Cell): ImportValidation | undefined {
+  const rule = cell.dataValidation as { type?: string; formulae?: unknown[]; operator?: string } | undefined;
+  if (!rule?.type) return undefined;
+  const formulae = rule.formulae ?? [];
+  if (rule.type === "list") {
+    const first = String(formulae[0] ?? "").trim();
+    const options = /^".*"$/.test(first) ? first.slice(1, -1).split(",").map((item) => item.trim()).filter(Boolean) : rangeValues(ws, first);
+    const unique = [...new Set(options)].slice(0, 50);
+    return unique.length ? { kind: "list", options: unique } : undefined;
+  }
+  if (rule.type === "decimal" || rule.type === "whole") {
+    const nums = formulae.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+    const op = rule.operator ?? "between";
+    const range: { min?: number; max?: number } = {};
+    if (op === "between" && nums.length >= 2) Object.assign(range, { min: Math.min(nums[0]!, nums[1]!), max: Math.max(nums[0]!, nums[1]!) });
+    else if ((op === "greaterThanOrEqual" || op === "greaterThan") && nums.length) range.min = nums[0];
+    else if ((op === "lessThanOrEqual" || op === "lessThan") && nums.length) range.max = nums[0];
+    return { kind: "number", whole: rule.type === "whole", ...range };
+  }
+  if (rule.type === "date") return { kind: "date" };
+  return undefined;
+}
+
+function hasStyle(style: CellStyle): boolean {
+  return Boolean(style.background || style.borderTop || style.borderRight || style.borderBottom || style.borderLeft);
 }
 
 function editableFromWorksheet(ws: ExcelJS.Worksheet): EditableImportSheet {
@@ -269,8 +331,31 @@ function editableFromWorksheet(ws: ExcelJS.Worksheet): EditableImportSheet {
     bottom = Math.max(bottom, merge.bottom);
     right = Math.max(right, merge.right);
   }
-  bottom = Math.min(bottom, MAX_PREVIEW_ROWS);
-  right = Math.min(right, 30);
+  // Trailing rows and columns with nothing in them, no fill and no border are not part of the form.
+  const used = (r: number, c: number) => {
+    const cell = ws.getCell(r, c);
+    return cell.value != null && plainValue(cell.value) !== "" || Boolean(cell.dataValidation) || hasStyle(cellStyle(cell));
+  };
+  const scanCols = Math.min(right, 200);
+  const scanRows = Math.min(bottom, 2000);
+  let lastRow = 1;
+  let lastCol = 1;
+  for (let r = 1; r <= scanRows; r += 1) {
+    for (let c = 1; c <= scanCols; c += 1) {
+      if (used(r, c)) {
+        lastRow = Math.max(lastRow, r);
+        lastCol = Math.max(lastCol, c);
+      }
+    }
+  }
+  for (const merge of merges) {
+    lastRow = Math.max(lastRow, Math.min(merge.bottom, scanRows));
+    lastCol = Math.max(lastCol, Math.min(merge.right, scanCols));
+  }
+  const droppedRows = Math.max(0, lastRow - IMPORT_MAX_ROWS);
+  const droppedCols = Math.max(0, lastCol - IMPORT_MAX_COLS);
+  bottom = Math.min(lastRow, IMPORT_MAX_ROWS);
+  right = Math.min(lastCol, IMPORT_MAX_COLS);
   const covered = new Set<string>();
   const spans = new Map<string, Span>();
   for (const merge of merges) {
@@ -298,20 +383,22 @@ function editableFromWorksheet(ws: ExcelJS.Worksheet): EditableImportSheet {
       }
       const cell = ws.getCell(r, c);
       const span = spans.get(`${r},${c}`);
-      const formula = formulaText(cell.value);
+      const formula = formulaText(cell);
+      const validation = validationOf(ws, cell);
       line.push({
-        text: formula ? plainValue(cell.value, cell.numFmt) : plainValue(cell.value, cell.numFmt),
+        text: plainValue(cell.value, cell.numFmt),
         formula,
         rowSpan: span?.rowSpan ?? 1,
         colSpan: span?.colSpan ?? 1,
         style: cellStyle(cell),
+        ...(validation ? { validation } : {}),
       });
     }
     rows.push(line);
   }
   const colWidths: number[] = [];
   for (let c = 1; c <= right; c += 1) colWidths.push(columnWidthPx(ws.getColumn(c).width));
-  return { name: ws.name || "Sheet", rows, colWidths, rowHeights };
+  return { name: ws.name || "Sheet", rows, colWidths, rowHeights, ...(droppedRows ? { droppedRows } : {}), ...(droppedCols ? { droppedCols } : {}) };
 }
 
 /** Same workbook reader as the preview, keeping formulas so a built form can recalculate them. */

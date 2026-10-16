@@ -9,7 +9,7 @@ import { formatDateTime } from "../../lib/dates";
 import { formStatusLabel, MAX_REVISION, newRevisionProblem } from "../../lib/formRevision";
 import { BLANK_FORMS_TEMPLATES_FOLDER, type BrowseFolder } from "../../lib/folderBrowse";
 import { bandHasContent, type DocumentBand } from "../../lib/documentBands";
-import { blankDocument, blankFields, blankGrid, downloadGridWorkbook, importGridFile, type BuiltStructure, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
+import { blankDocument, blankFields, blankGrid, downloadGridWorkbook, importGridWorkbook, type BuiltStructure, type ImportNote, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
 import { DocumentFormEditor } from "./DocumentFormEditor";
 import { FieldsFormEditor } from "./FieldsFormEditor";
 import { FormMasthead, Paper } from "./FormChrome";
@@ -261,6 +261,8 @@ export function FormBuilderEditorPage() {
   const badge = form.data ? formStatusLabel({ status: form.data.status, revision: form.data.revision, pendingRevision: pending }) : "Draft";
   const revisionReady = form.data ? newRevisionProblem(form.data.revision, newRevision) === null && changeDescription.trim() !== "" : false;
 
+  const [importNotes, setImportNotes] = useState<{ file: string; notes: ImportNote[] } | null>(null);
+
   if (form.isError) return <p className="text-sm text-destructive">{extractErrorMessage(form.error, "That form is not available.")}</p>;
   if (!form.data || !structure) return <p className="text-sm text-muted-foreground">Loading the form…</p>;
 
@@ -278,7 +280,9 @@ export function FormBuilderEditorPage() {
 
   async function onImport(file: File) {
     try {
-      editStructure(await importGridFile(file));
+      const imported = await importGridWorkbook(file);
+      editStructure(imported.structure);
+      setImportNotes({ file: file.name, notes: imported.notes });
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't read that spreadsheet."));
     }
@@ -360,6 +364,28 @@ export function FormBuilderEditorPage() {
           </label>
           <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => void downloadGridWorkbook(asGrid(structure), `${title || "form"}.xlsx`, folderPath)}>Download .xlsx</button>
         </div>
+      )}
+      {form.data.kind === "grid" && !preview && importNotes && (
+        <section className="no-print rounded border border-border bg-card p-2 text-sm" aria-label="Import notes" data-testid="import-notes">
+          <div className="flex items-center justify-between gap-2">
+            <strong>
+              {importNotes.notes.length === 0
+                ? `Imported ${importNotes.file}. Everything came across.`
+                : `Imported ${importNotes.file}. ${importNotes.notes.length} item${importNotes.notes.length === 1 ? "" : "s"} did not come across and need to be rebuilt by hand:`}
+            </strong>
+            <button type="button" className="text-xs text-primary hover:underline" onClick={() => setImportNotes(null)}>Dismiss</button>
+          </div>
+          {importNotes.notes.length > 0 && (
+            <ul className="mt-1 list-disc pl-5">
+              {importNotes.notes.map((note, index) => (
+                <li key={index}>
+                  {note.sheet}{note.cell ? ` ${note.cell}` : ""}: {note.formula ? <code className="rounded bg-muted px-1">{note.formula}</code> : null} {note.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">Nothing is saved until you save the layout. Undo puts the previous layout back.</p>
+        </section>
       )}
       {form.data.kind === "document" && !preview && (
         <div className="no-print flex gap-2">
